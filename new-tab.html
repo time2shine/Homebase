@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>New Tab</title>
+  <link rel="stylesheet" href="new-tab.css">
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="widget-time">
+      <h1 id="current-time">19:12</h1>
+      <p id="current-date">Wednesday, October 29</p>
+    </div>
+    
+    <div class="widget-weather glass-box">
+      <div class="weather-header">
+        <span id="weather-city"></span>
+        <button id="settings-btn" class="icon-btn">⚙️</button>
+      </div>
+      <div class="weather-body">
+        <div class="weather-primary">
+          <div id="weather-icon"></div>
+          <span id="weather-desc"></span>
+          <span id="weather-temp"></span>
+        </div>
+        <div class="weather-stats">
+          <span id="weather-pressure"></span>
+          <span id="weather-humidity"></span>
+          <span id="weather-cloudcover"></span>
+          <span id="weather-precip-prob"></span>
+          <span id="weather-sunrise"></span>
+          <span id="weather-sunset"></span>
+        </div>
+      </div>
+      <button id="set-location-btn">Set current location</button>
+    </div>
+
+    <div id="settings-panel" class="glass-box hidden"> 
+      <div class="settings-content">
+        <div class="settings-header">
+          <h2>Settings</h2>
+          <button id="close-settings-btn" class="icon-btn">✖</button>
+        </div>
+        <div class="setting-item">
+          <label>Temperature unit:</label>
+          <div class="toggle-switch">
+            <input type="checkbox" id="temp-unit-toggle">
+            <label for="temp-unit-toggle" class="toggle-label">
+              <span class="toggle-label-text" data-on="°F" data-off="°C"></span>
+            </label>
+          </div>
+        </div>
+        <div class="setting-item">
+          <label for="location-search-input">Location:</label>
+          <div class="location-search-wrapper">
+            <input type="text" id="location-search-input" placeholder="Search for a city...">
+            <div id="location-results" class="hidden"></div>
+          </div>
+        </div>
+        <button id="save-settings-btn">Save</button>
+      </div>
+    </div>
+    
+    <div class="widget-quote glass-box">
+      <button id="quote-settings-btn" class="icon-btn">⚙️</button>
+      <p id="quote-text">Loading quote...</p>
+      <span id="quote-author"></span>
+    </div>
+    
+    <div id="quote-settings-panel" class="glass-box hidden"> 
+      <div class="settings-content">
+        <div class="settings-header">
+          <h2>Quote Settings</h2>
+          <button id="close-quote-settings-btn" class="icon-btn">✖</button>
+        </div>
+        <div class="setting-item-column">
+          <label>Select categories:</label>
+          <div id="quote-categories-list"></div>
+        </div>
+        <button id="save-quote-settings-btn">Save</button>
+      </div>
+    </div>
+    
+  </aside>
+
+  <main class="main-content">
+
+    <div class="search-area-wrapper">
+      
+      <div class="search-widget-container">
+        
+        <div class="widget-search">
+          <div class="search-container">
+            <select id="search-select"></select>
+            <form id="search-form" autocomplete="off">
+              <input type="text" id="search-input" placeholder="Search" autofocus autocomplete="off">
+            </form>
+          </div>
+        </div>
+        
+        <div id="search-results-panel" class="hidden">
+          <div id="bookmark-results-container"></div>
+          <div id="suggestion-results-container"></div>
+        </div>
+        
+      </div> 
+      
+      <div class="search-toolbar-buttons">
+        <a href="https://chat.openai.com" class="icon-button">
+          <img src="icons/chatgpt_logo.svg"" alt="ChatGPT">
+          <span class="custom-tooltip tooltip-bottom">ChatGPT</span>
+        </a>
+
+        <div class="search-toolbar-divider"></div>
+
+        <button id="google-apps-btn" class="icon-button">
+          <svg focusable="false" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"></path>
+          </svg>
+          <span class="custom-tooltip tooltip-bottom">Google Apps</span>
+        </button>
+      </div>
+
+    </div> 
+    
+    <div class="bookmark-bar-wrapper">
+      <div id="bookmark-folder-tabs"></div>
+
+      <div id="quick-actions-bar" class="glass-box">
+        <button id="quick-add-bookmark" class="quick-action-btn">
+          🔖
+          <span class="custom-tooltip tooltip-bottom">Add New Bookmark</span>
+        </button>
+        <button id="quick-add-folder" class="quick-action-btn">
+          📁+
+          <span class="custom-tooltip tooltip-bottom">Add New Folder</span>
+        </button>
+        <div class="quick-action-divider"></div>
+        <button id="quick-open-bookmarks" class="quick-action-btn">
+          ⋮
+          <span class="custom-tooltip tooltip-bottom">More Bookmarks</span>
+        </button>
+      </div>
+    </div>
+    
+    <div id="bookmarks-grid">
+      </div>
+
+  </main>
+  
+  <nav class="dock glass-box">
+    <a id="dock-bookmarks-btn" href="#" class="dock-item">
+      <img src="icons/bookmark.svg" />
+      <span class="custom-tooltip tooltip-left">Bookmarks</span>
+    </a>
+    <a id="dock-history-btn" href="#" class="dock-item">
+      <img src="icons/history.svg" />
+      <span class="custom-tooltip tooltip-left">History</span>
+    </a>
+    <a id="dock-downloads-btn" href="#" class="dock-item">
+      <img src="icons/download.svg" />
+      <span class="custom-tooltip tooltip-left">Downloads</span>
+    </a>
+    
+    <div class="dock-divider"></div>
+    
+    <a id="dock-addons-btn" href="#" class="dock-item">
+      <img src="icons/extensions.svg" />
+      <span class="custom-tooltip tooltip-left">My Add-ons</span>
+    </a>
+    
+    <a href="https://addons.mozilla.org" class="dock-item">
+      <img src="icons/firefox_logo.svg" />
+      <span class="custom-tooltip tooltip-left">Firefox Add-ons</span>
+    </a>
+    
+    <div class="dock-divider"></div>
+    
+    <button id="main-settings-btn" class="dock-item">
+      <img src="icons/settings.svg" />
+      <span class="custom-tooltip tooltip-left">Settings</span>
+    </button>
+  </nav>
+
+  <div id="google-apps-panel" class="glass-box hidden">
+      <h3>Google Apps</h3>
+      <div id="google-apps-grid">
+          <a href="https://myaccount.google.com/" class="app-item">
+              <img src="google_icons/account.png" alt="Account">
+              <span>Account</span>
+          </a>
+          <a href="https://www.google.com/" class="app-item">
+              <img src="google_icons/search.png" alt="Search">
+              <span>Search</span>
+          </a>
+          <a href="https://maps.google.com/" class="app-item">
+              <img src="google_icons/maps.png" alt="Maps">
+              <span>Maps</span>
+          </a>
+          <a href="https://www.youtube.com/" class="app-item">
+              <img src="google_icons/youtube.png" alt="YouTube">
+              <span>YouTube</span>
+          </a>
+          <a href="https://play.google.com/" class="app-item">
+              <img src="google_icons/play.png" alt="Play">
+              <span>Play</span>
+          </a>
+          <a href="https://news.google.com/" class="app-item">
+              <img src="google_icons/news.png" alt="News">
+              <span>News</span>
+          </a>
+          <a href="https://mail.google.com/mail/" class="app-item">
+              <img src="google_icons/gmail.png" alt="Gmail">
+              <span>Gmail</span>
+          </a>
+          <a href="https://contacts.google.com/" class="app-item">
+              <img src="google_icons/contacts.png" alt="Contacts">
+              <span>Contacts</span>
+          </a>
+          <a href="https://drive.google.com/" class="app-item">
+              <img src="google_icons/drive.png" alt="Drive">
+              <span>Drive</span>
+          </a>
+          <a href="https://www.google.com/calendar" class="app-item">
+              <img src="google_icons/calendar.png" alt="Calendar">
+              <span>Calendar</span>
+          </a>
+          <a href="https://translate.google.com/" class="app-item">
+              <img src="google_icons/translate.png" alt="Translate">
+              <span>Translate</span>
+          </a>
+          <a href="https://photos.google.com/" class="app-item">
+              <img src="google_icons/photos.png" alt="Photos">
+              <span>Photos</span>
+          </a>
+
+          <div class="app-divider"></div>
+
+          <a href="https://docs.google.com/document/" class="app-item">
+              <img src="google_icons/docs.png" alt="Docs">
+              <span>Docs</span>
+          </a>
+          <a href="https://www.blogger.com/" class="app-item">
+              <img src="google_icons/blogger.png" alt="Blogger">
+              <span>Blogger</span>
+          </a>
+          <a href="https://duo.google.com/" class="app-item">
+              <img src="google_icons/duo.png" alt="Duo">
+              <span>Duo</span>
+          </a>
+          <a href="https://hangouts.google.com/" class="app-item">
+              <img src="google_icons/hangouts.png" alt="Hangouts">
+              <span>Hangouts</span>
+          </a>
+          <a href="https://keep.google.com/" class="app-item">
+              <img src="google_icons/keep.png" alt="Keep">
+              <span>Keep</span>
+          </a>
+          <a href="https://jamboard.google.com/" class="app-item">
+              <img src="google_icons/jamboard.png" alt="Jamboard">
+              <span>Jamboard</span>
+          </a>
+          <a href="https://earth.google.com/web/" class="app-item">
+              <img src="google_icons/earth.png" alt="Earth">
+              <span>Earth</span>
+          </a>
+      </div>
+  </div>
+  
+  <div id="bookmark-folder-menu" class="context-menu glass-box hidden">
+    <button id="menu-edit-btn" class="menu-item">Edit</button>
+    <button id="menu-delete-btn" class="menu-item">Delete</button>
+  </div>
+
+  <!-- Context menu for SUBFOLDERS in the grid -->
+  <div id="bookmark-grid-folder-menu" class="context-menu glass-box hidden">
+    <button class="menu-item" data-action="open">Open</button>
+    <div class="menu-divider"></div>
+    <button class="menu-item" data-action="rename">Rename</button>
+    <button class="menu-item" data-action="edit">Edit</button>
+    <button class="menu-item" data-action="move">Move</button>
+    <button class="menu-item" data-action="delete">Delete</button>
+  </div>
+
+  <!-- Context menu for ICONS in the grid -->
+  <div id="bookmark-icon-menu" class="context-menu glass-box hidden">
+    <button class="menu-item" data-action="open-new-tab">Open in New Tab</button>
+    <div class="menu-divider"></div>
+    <button class="menu-item" data-action="rename">Rename</button>
+    <button class="menu-item" data-action="edit">Edit</button>
+    <button class="menu-item" data-action="move">Move</button>
+    <button class="menu-item" data-action="delete">Delete</button>
+  </div>
+
+  <div id="add-bookmark-modal" class="modal-overlay">
+    <div id="add-bookmark-dialog" class="dialog-content glass-box">
+      <h3>Add Bookmark</h3>
+      
+      <div class="form-group">
+        <label for="bookmark-name-input">Name</label>
+        <input type="text" id="bookmark-name-input" class="dialog-input">
+      </div>
+      
+      <div class="form-group">
+        <label for="bookmark-url-input">URL</label>
+        <input type="text" id="bookmark-url-input" class="dialog-input" placeholder="https://...">
+      </div>
+      
+      <div class="dialog-buttons">
+        <button id="bookmark-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="bookmark-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="add-folder-modal" class="modal-overlay">
+    <div id="add-folder-dialog" class="dialog-content glass-box">
+      <h3>Add New Folder</h3>
+      
+      <div class="form-group">
+        <label for="folder-name-input">Folder Name</label>
+        <input type="text" id="folder-name-input" class="dialog-input">
+      </div>
+      
+      <div class="dialog-buttons">
+        <button id="folder-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="folder-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="move-bookmark-modal" class="modal-overlay">
+    <div id="move-bookmark-dialog" class="dialog-content glass-box">
+      <button id="move-folder-close-btn"
+              class="dialog-close-btn"
+              aria-label="Close">
+        A-
+      </button>
+
+      <h3 id="move-dialog-title">Move item</h3>
+
+      <div class="form-group">
+        <label for="move-folder-select">Folder</label>
+        <select id="move-folder-select" class="dialog-input"></select>
+      </div>
+
+      <div class="dialog-buttons">
+        <button id="move-folder-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="move-folder-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="confirm-delete-modal" class="modal-overlay">
+    <div class="dialog-content glass-box">
+      <button id="confirm-delete-close-btn"
+              class="dialog-close-btn"
+              aria-label="Close">
+        ×
+      </button>
+
+      <h3>Delete item</h3>
+      <p id="confirm-delete-message" class="confirm-delete-message">
+        <span id="confirm-delete-icon"></span>
+        <span id="confirm-delete-text">
+          Are you sure you want to delete this item?
+        </span>
+      </p>
+
+      <div class="dialog-buttons">
+        <button id="confirm-delete-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="confirm-delete-ok-btn" class="dialog-btn primary-btn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="Sortable.min.js"></script>
+  <script src="new-tab.js"></script>
+</body>
+</html>

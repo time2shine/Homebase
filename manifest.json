@@ -1,0 +1,36 @@
+{
+  "manifest_version": 2,
+  "name": "Homebase",
+  "version": "1.0",
+  "description": "Replaces the default new tab page with a custom dashboard.",
+
+  "icons": {
+    "48": "icon-48.png"
+  },
+
+  "chrome_url_overrides": {
+    "newtab": "new-tab.html"
+  },
+
+  "permissions": [
+    "https://api.open-meteo.com/*",
+    "https://geocoding-api.open-meteo.com/*",
+    "https://api.quotable.io/*",
+    "https://s2.googleusercontent.com/*",
+    "tabs",
+    "storage",
+    "bookmarks",
+    
+    "https://suggestqueries.google.com/*",
+    "https://duckduckgo.com/ac/*",
+    "https://api.bing.com/osjson.aspx*",
+    "https://ff.search.yahoo.com/*",
+    "https://suggest.yandex.com/*"
+  ],
+
+  "web_accessible_resources": [
+    "icons/*",
+    "google_icons/*",
+    "background.jpg"
+  ]
+}

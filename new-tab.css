@@ -1,0 +1,1443 @@
+/* --- Global Styles --- */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+  color: white;
+  
+  background-image: url('background.jpg');
+  background-size: cover;
+  background-position: center;
+  height: 100vh;
+  box-sizing: border-box;
+
+  /* --- NEW LAYOUT: Use Flexbox row on the body --- */
+  display: flex;
+  flex-direction: row;
+  overflow: hidden; /* Prevent full-page scroll */
+}
+
+:root {
+  --glass-blur: 12px;
+  --glass-bg: rgba(255, 255, 255, 0.14);
+  --overlay-blur: 6px;
+}
+
+/* --- Shared "Glass" Style --- */
+.glass-box {
+  background-color: var(--glass-bg); /* Light, semi-transparent background */
+  backdrop-filter: blur(var(--glass-blur));                /* The blur effect */
+  -webkit-backdrop-filter: blur(var(--glass-blur));        /* For Safari browser compatibility */
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Faint border to catch the light */
+  border-radius: 20px;
+  box-sizing: border-box;
+}
+
+/* Make the right-click context menus white with black text */
+.context-menu.glass-box {
+  background-color: #ffffff;           /* white background */
+  color: #000000;                      /* default text color */
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+/* Buttons inside the menu */
+.context-menu.glass-box .menu-item {
+  color: #000000;                      /* black text on buttons */
+}
+
+/* Hover state on menu items */
+.context-menu.glass-box .menu-item:hover {
+  background-color: rgba(0, 0, 0, 0.06);  /* light gray hover */
+}
+
+/* --- 1. Right Dock (MOVED) --- */
+.dock {
+  flex: 0 0 5px; /* Fixed width for the dock */
+  height: 100vh;
+  padding: 50px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  z-index: 100;
+
+  /* Adjust glass style for vertical bar */
+  border-radius: 0; 
+  border-left: 1px solid rgba(255, 255, 255, 0.15); /* MOVED BORDER */
+  border-right: 0;
+  border-top: 0;
+  border-bottom: 0;
+}
+
+.dock-item {
+  position: relative; /* Added for tooltip positioning */
+  padding: 8px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+.dock-item:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+.dock-item img {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+.dock-item svg {
+  width: 28px;
+  height: 28px;
+  fill: white;
+}
+/* Make button look like a link */
+button.dock-item {
+  background: none;
+  border: none;
+}
+.dock-divider {
+  width: 60%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 5px 0;
+}
+
+/* --- 2. Sidebar (Left Column) --- */
+.sidebar {
+  flex: 0 0 360px; /* Do not grow, do not shrink, base width 360px */
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100vh; /* Full height */
+  overflow-y: auto; /* Allow sidebar to scroll if content overflows */
+}
+
+/* Time Widget (Not a glass box) */
+.widget-time h1 {
+  margin: 0;
+  font-size: 4em;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+}
+.widget-time p {
+  margin: 0;
+  font-size: 1.2em;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+}
+
+/* --- 3. Main Content (Middle Column) --- */
+.main-content {
+  flex: 1; /* Grow to fill remaining space */
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 20px;
+  height: 100vh; /* Full height */
+  overflow-y: auto; /* Allow main content to scroll */
+}
+
+/* --- Search Bar (in main) --- */
+
+.search-area-wrapper {
+  display: flex;
+  align-items: center;
+  max-width: 1100px;
+  
+  /* --- MODIFICATION HERE --- */
+  margin: 0 auto; /* This centers it horizontally */
+  margin-top: 30px; /* This pushes it down from the top */
+  /* --- End Modification --- */
+  
+  width: 100%; /* Ensure it fills the new max-width */
+}
+
+/* This new container holds the search bar AND the results panel */
+.search-widget-container {
+  position: relative; /* So the panel can be positioned absolutely */
+  flex: 1; /* This now grows and shrinks */
+  min-width: 0;
+  /* This container gets the transition, not the search bar */
+  transition: margin-right 0.3s ease-out;
+}
+
+.widget-search {
+  padding: 2px; /* Shorter height */
+  width: 100%;  
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  background-color: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  
+  border: 1px solid #ddd;
+  box-shadow: none; /* Shadow removed per your request */
+  
+  border-radius: 8px; /* Default radius */
+  box-sizing: border-box; 
+}
+
+
+/* This class is added by JS */
+.widget-search.results-open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  box-shadow: none;
+  border-bottom: none; /* Merge with panel */
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  flex: 1;
+}
+
+#search-select {
+  background: #f0f0f0;
+  border-radius: 5px;
+  align-self: stretch;
+  border: none;
+  color: #333;
+  font-size: 14px;
+  padding: 0 10px 0 15px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+#search-select:focus {
+  outline: none;
+}
+
+#search-form {
+  flex: 1;
+  display: flex;
+}
+
+#search-input {
+  padding: 10px 15px; /* Shorter height */
+  font-size: 16px;
+  background-color: transparent;
+  border-radius: 0 5px 5px 0;
+  border: none;
+  color: #333;
+  width: 100%;
+}
+#search-input:focus {
+  outline: none;
+}
+#search-input::placeholder {
+  color: #555;
+}
+
+/* Styles for Search Toolbar Buttons */
+.search-toolbar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: 25px;
+  transition: opacity 0.3s ease-out, max-width 0.3s ease-out, margin-left 0.3s ease-out;
+  opacity: 1;
+  max-width: 100px; /* Needs a max-width for transition */
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.search-area-wrapper.search-focused .search-toolbar-buttons {
+  opacity: 0;
+  max-width: 0;
+  margin-left: 0; /* Remove the margin */
+}
+
+
+.icon-button {
+  position: relative; /* Added for tooltip positioning */
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  
+  border-radius: 50%;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+.icon-button img {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+.icon-button svg {
+  width: 20px;
+  height: 20px;
+  fill: white;
+}
+
+
+/* --- Around line 308 --- */
+
+/* --- NEW: Grid Item Fade-in Animation --- */
+@keyframes item-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* This class will be added by JS in renderBookmarkGrid 
+  to animate items as they load.
+*/
+.bookmark-item.newly-rendered {
+  /* Start items as transparent before animation */
+  opacity: 0; 
+  /* Apply the animation */
+  animation: item-fade-in 0.25s ease-out forwards;
+}
+
+/* ======================================= */
+/* --- BOOKMARKS GRID (FINAL FIX) --- */
+/* ======================================= */
+
+#bookmarks-grid {
+  display: grid; /* <-- CHANGED to grid */
+  
+  /* This creates columns of a fixed 100px, 
+     and as many as can fit on the line. */
+  grid-template-columns: repeat(auto-fill, 100px);
+  
+  /* This adds spacing between items */
+  gap: 5px; 
+  
+  /* This centers the whole grid of items */
+  justify-content: center; 
+  
+  padding: 5px; /* Adds nice spacing around the edge */
+}
+
+
+.bookmark-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0px;
+  text-decoration: none;
+  color: white;
+  text-align: center;
+  height: 110px;
+  gap: 8px;
+  transition: opacity 0.2s ease;
+  background-color: transparent;
+  border-radius: 10px;
+  width: 100px; 
+}
+
+/* Glow around the item while it's a drop target */
+.bookmark-item.drag-over {
+  background-color: rgba(255, 255, 255, 0.12);          /* subtle light bg */
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.55);       /* glow */
+}
+
+/* Make the folder icon larger while it's a drop target */
+.bookmark-item.drag-over[data-is-folder="true"] .bookmark-icon-wrapper {
+  transform: scale(1.15);
+}
+
+/* Dim the folder SVG so text stands out */
+.bookmark-item.drag-over[data-is-folder="true"] .bookmark-folder-icon {
+  opacity: 0.7;
+}
+
+.bookmark-item.drag-over[data-is-folder="true"] .bookmark-icon-wrapper::after {
+  content: "Drop Here";
+  position: absolute;
+
+  /* Center a small pill instead of covering the whole icon */
+  top: 60%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 2px 6px;                 /* controls background size */
+  background: rgba(78, 78, 78, 0.85);  /* medium gray */
+  color: #ffffff;                    /* white text */
+  font-size: 9px;                    /* adjust to taste */
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  border-radius: 4px;
+
+  pointer-events: none;
+}
+
+
+
+
+.bookmark-placeholder {
+  height: 110px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.bookmark-item.sortable-chosen {
+  opacity: 0 !important;
+}
+
+.bookmark-item.sortable-drag {
+  pointer-events: none;
+}
+
+/* Make the item being dragged visually smaller */
+.bookmark-item.sortable-drag .bookmark-icon-wrapper {
+  transform: scale(0.8);  /* dragged icon/folder shrinks */
+  opacity: 0.95;          /* optional, a tiny fade */
+}
+
+
+/* === End new D&D styles === */
+
+
+.bookmark-item span {
+  font-size: 0.8em;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+  
+  width: 100%;
+  line-height: 1.3; /* A bit of space between lines */
+  
+  /* --- New Multi-line Ellipsis --- */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* Max number of lines */
+  -webkit-box-orient: vertical;
+  
+  /* Allow long words to break */
+  overflow-wrap: break-word;
+  
+  /* Set a fixed height to prevent layout jank */
+  /* (font-size * 0.8) * (line-height 1.3) * (2 lines) */
+  height: 2.4em;
+  width: 100%;
+  text-align: center;
+}
+
+/* Make folder wrapper match the big folder icon */
+#bookmarks-grid .bookmark-item[data-is-folder="true"] .bookmark-icon-wrapper {
+  width: 84px;   /* same as .bookmark-folder-icon */
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* center SVG inside wrapper */
+}
+
+/* (Optional) make the folder tile itself this wide so text lines up nicely */
+#bookmarks-grid .bookmark-item[data-is-folder="true"] {
+  width: 84px;
+}
+
+
+/* --- Bookmark Folder Tabs --- */
+#bookmark-folder-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  /* Removed padding, parent has it now */
+}
+.bookmark-folder-tab {
+  padding: 4px 12px; 
+  font-size: 0.85em; 
+  font-weight: 500;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.3); /* Darker semi-transparent */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  cursor: pointer;
+  
+  transition: background-color 0.2s ease, color 0.2s ease, 
+              border-color 0.2s ease, opacity 0.2s ease;
+}
+.bookmark-folder-tab:hover {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+.bookmark-folder-tab.active {
+  background-color: white;
+  color: #333;
+  font-weight: bold;
+  border-color: white;
+}
+
+/* === MODIFIED: Styles for Tab D&D (Using Sortable.js) === */
+
+/* This is the tab being dragged (following cursor) */
+.bookmark-folder-tab.sortable-drag-tab {
+  pointer-events: none;
+}
+
+/* This is the "ghost" placeholder for the tab */
+.sortable-ghost-tab {
+  background-color: white !important;
+  color: #333 !important;
+  opacity: 0.5;
+}
+
+/* This is the tab in its original spot while dragging */
+.bookmark-folder-tab.sortable-chosen-tab {
+  opacity: 0 !important; /* Hide the original tab */
+}
+
+/* === End new Tab D&D styles === */
+
+
+.bookmark-folder-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; 
+  height: 26px; 
+  font-size: 1.1em; 
+  font-weight: bold;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.bookmark-folder-add-btn:hover {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.bookmark-folder-input {
+  padding: 4px 12px; 
+  font-size: 0.85em; 
+  font-weight: 500;
+  color: #333; /* Dark text */
+  background-color: white; /* White background */
+  border: 1px solid white;
+  border-radius: 20px;
+  width: 120px; /* Give it a default width */
+  transition: all 0.2s ease;
+  outline: none;
+  box-sizing: border-box; /* Ensure padding doesn't break layout */
+}
+.bookmark-folder-input::placeholder {
+  color: #777;
+}
+
+.bookmark-folder-save-btn,
+.bookmark-folder-cancel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; 
+  height: 26px; 
+  font-size: 1.1em; 
+  font-weight: bold;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.bookmark-folder-save-btn:hover,
+.bookmark-folder-cancel-btn:hover {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+.bookmark-folder-save-btn {
+  color: #8f8; /* Greenish */
+}
+.bookmark-folder-cancel-btn {
+  color: #f88; /* Reddish */
+}
+
+
+/* --- NEW WRAPPER STYLE --- */
+.bookmark-bar-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px; /* Aligns with grid padding */
+}
+
+
+/* --- Search Results Panel --- */
+#search-results-panel {
+  position: absolute; 
+  z-index: 199;
+  
+  top: calc(100% - 1px); 
+  left: 0;
+  width: 100%; 
+  
+  padding: 0;
+  background-color: #ffffff; 
+  color: #333;
+  
+  border: 1px solid #ddd;
+  border-top: none;
+  box-shadow: none; 
+  
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  
+  box-sizing: border-box; 
+}
+
+
+.result-header {
+  font-size: 0.9em;
+  font-weight: normal;
+  text-transform: capitalize;
+  color: #666;
+  padding: 10px 16px 5px;
+  margin-top: 0;
+  background-color: #f8f8ff;
+  border-bottom: 1px solid #eee;
+}
+.result-header:first-child {
+  margin-top: 0;
+}
+
+
+.result-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 0;
+  text-decoration: none;
+  color: #333;
+  gap: 15px;
+  border-bottom: 1px solid #eee;
+}
+.result-item:last-of-type {
+  border-bottom: none;
+}
+.result-item:hover {
+  background-color: #f0f0f0;
+}
+.result-item img {
+  width: 24px;
+  height: 24px;
+}
+
+.result-item .suggestion-icon {
+  width: 20px;
+  height: 20px;
+  fill: #555;
+  flex-shrink: 0;
+}
+
+.result-item-info {
+  display: flex;
+  align-items: center;
+  overflow: hidden; 
+}
+.result-item-info strong {
+  font-size: 1em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #333;
+  font-weight: normal;
+}
+
+.result-item-suggestion .result-item-info strong {
+  font-weight: bold;
+}
+
+
+#google-apps-panel.open {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+#google-apps-panel h3 {
+  margin: 0 0 15px 0;
+  text-align: center;
+  font-weight: 500;
+}
+#google-apps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+.app-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: white;
+  padding: 10px;
+  border-radius: 10px;
+  transition: background-color 0.2s ease;
+}
+.app-item:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+.app-item img {
+  width: 40px;
+  height: 40px;
+}
+.app-item span {
+  font-size: 0.85em;
+}
+
+
+/* --- Google Apps Panel --- */
+/* 1. Make the Google Apps panel itself white and solid */
+#google-apps-panel {
+  position: absolute; 
+  width: 320px;
+  max-height: 440px; 
+  padding: 15px;
+  z-index: 200;
+  overflow-y: auto;
+
+  opacity: 0;
+  transform: scale(0.95) translateY(-10px);
+  transform-origin: top;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+
+  background-color: #ffffff;         /* Solid white background */
+  color: #333;                      /* Dark text for heading */
+  backdrop-filter: none;           /* Remove the glass blur effect */
+  -webkit-backdrop-filter: none;   /* For Safari */
+  border: 1px solid #ddd;          /* Light grey border */
+}
+
+/* 2. Make the app items inside have dark text */
+#google-apps-panel .app-item {
+  color: #333; /* Override the default 'color: white' */
+}
+
+/* 3. Give the app items a new hover effect for the white background */
+#google-apps-panel .app-item:hover {
+  background-color: #f0f0f0; /* Light grey hover */
+}
+
+
+/* ======================================= */
+/* --- WIDGET-SPECIFIC & SETTINGS STYLES --- */
+/* ======================================= */
+
+.widget-weather,
+#settings-panel,
+.widget-quote,
+#quote-settings-panel {
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  position: relative; /* For settings buttons */
+  min-height: 215px; /* Layout stability */
+}
+
+.widget-quote {
+  font-style: italic;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+  justify-content: center;
+}
+
+/* --- Weather Styles --- */
+.weather-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.weather-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 10px;
+}
+.weather-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+#weather-city { font-size: 1.5em; font-weight: bold; }
+#weather-desc { font-size: 1em; font-style: italic; color: #ddd; margin-top: 5px; }
+#weather-temp { font-size: 2.8em; line-height: 1; margin-top: 5px; }
+.weather-stats {
+  display: flex;
+  flex-direction: column;
+  margin-left: 5px;
+  align-items: flex-start;
+}
+.weather-stats span { font-size: 0.85em; line-height: 1.5; }
+
+/* --- Quote Styles --- */
+.widget-quote:hover #quote-settings-btn { opacity: 1.0; }
+#quote-settings-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+#quote-text {
+  margin: 0 0 10px;
+  max-height: 250px;
+  overflow-y: auto;
+  font-size: 1.1em;
+  scrollbar-width: thin;
+  scrollbar-color: #fff rgba(255,255,255,0.2);
+}
+#quote-text::-webkit-scrollbar { width: 8px; }
+#quote-text::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 4px; }
+#quote-text::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.4); border-radius: 4px; }
+#quote-author { margin: 0; padding-top: 10px; text-align: right; font-size: 0.9em; }
+
+/* --- Button Styles --- */
+.icon-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5em;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.icon-btn:hover { opacity: 1; }
+.widget-weather:hover #settings-btn { opacity: 1; }
+#settings-btn { opacity: 0; transition: opacity 0.2s ease-in-out; }
+
+/* --- Settings Panel Styles --- */
+.hidden { display: none !important; } 
+.settings-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #555;
+  padding-bottom: 4px;
+  margin-bottom: 3px;
+}
+.settings-header h2 { margin: 0; }
+#close-settings-btn { font-size: 1.2em; }
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.setting-item-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+.setting-item-column label { font-weight: bold; margin-bottom: 5px; }
+
+/* Quote Category Pills */
+#quote-categories-list {
+  width: 100%;
+  max-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 5px;
+}
+.quote-category-pill {
+  background-color: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.2s;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.quote-category-pill:not(.selected):hover { background-color: rgba(255, 255, 255, 0.2); }
+.quote-category-pill.selected {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+  font-weight: bold;
+}
+
+/* Location Search */
+.location-search-wrapper { position: relative; width: 65%; }
+#location-search-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #777;
+  background-color: #f0f0f0;
+  color: #333;
+  box-sizing: border-box;
+}
+#location-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background-color: #fff;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 0 0 5px 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 101;
+}
+.location-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+.location-result-item:hover { background-color: #f0f0f0; }
+.location-result-item span { font-size: 0.9em; color: #555; }
+
+/* Temp Toggle Switch */
+.toggle-switch { position: relative; display: inline-block; width: 60px; height: 30px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-label {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #333;
+  border-radius: 30px;
+  transition: .4s;
+  border: 1px solid #888;
+}
+.toggle-label:before {
+  position: absolute;
+  content: "";
+  height: 22px; width: 22px;
+  left: 4px; bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: .4s;
+}
+.toggle-label-text {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: white;
+  font-size: 0.8em;
+  font-weight: bold;
+}
+.toggle-label-text::after { content: attr(data-off); }
+input:checked + .toggle-label { background-color: #f0f0f0; }
+input:checked + .toggle-label:before { transform: translateX(30px); background-color: #333; }
+input:checked + .toggle-label .toggle-label-text { left: 8px; color: #333; }
+input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on); }
+
+/* Save Buttons */
+#set-location-btn,
+#save-settings-btn,
+#save-quote-settings-btn {
+  background-color: #f0f0f0;
+  color: #333;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  width: 100%;
+  font-size: 1em;
+  margin-top: 15px;
+}
+#set-location-btn {
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  padding: 8px 12px;
+  margin-top: auto; /* Push to bottom */
+}
+#set-location-btn:hover,
+#save-settings-btn:hover,
+#save-quote-settings-btn:hover {
+  background-color: #fff;
+}
+#save-quote-settings-btn {
+  margin-top: auto; /* Pushes to bottom of flex container */
+}
+
+/* ======================================= */
+/* --- WHITE BACKGROUND OVERRIDES --- */
+/* ======================================= */
+
+/* --- Style for the new app divider --- */
+.app-divider {
+  grid-column: 1 / -1; /* Makes the divider span all 3 columns */
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.3); /* Faint white line for glass bg */
+  margin: 8px 0;
+}
+
+/* Override for the white panel background */
+#google-apps-panel .app-divider {
+  background-color: #ddd; /* Faint grey line for white bg */
+}
+
+.search-toolbar-divider {
+  width: 2px;
+  height: 28px; /* You can adjust this height */
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ======================================= */
+/* --- CUSTOM TOOLTIPS (with Animation) --- */
+/* ======================================= */
+
+/* This rule must stay to show tooltips on toolbar */
+.search-toolbar-buttons:hover {
+  overflow: visible; /* Allows tooltips to show */
+}
+
+/* 1. Base tooltip style (hidden by default) */
+.custom-tooltip {
+  position: absolute;
+  visibility: hidden; /* Start hidden */
+  opacity: 0;           /* Start transparent */
+  
+  background-color: #555; /* CHANGED: Grey background */
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-family: sans-serif;
+  white-space: nowrap; 
+  z-index: 1000;
+  pointer-events: none; 
+  
+  /* CHANGED: Slight animation */
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+}
+
+/* 2. Show on hover (Opacity/Visibility) */
+.dock-item:hover .custom-tooltip,
+.icon-button:hover .custom-tooltip,
+.quick-action-btn:hover .custom-tooltip { 
+  visibility: visible; /* Show it */
+  opacity: 1;           /* Fade it in */
+}
+
+/* 3. Positioning: LEFT */
+.custom-tooltip.tooltip-left {
+  top: 50%;
+  right: 100%;
+  margin-right: 12px; /* Space from icon */
+  
+  /* ADDED: Start 4px to the right and centered */
+  transform: translateY(-50%) translateX(4px); 
+}
+
+/* 4. Positioning: BOTTOM */
+.custom-tooltip.tooltip-bottom {
+  top: 100%;
+  left: 50%;
+  margin-top: 12px; /* Space from icon */
+  
+  /* ADDED: Start 4px up and centered */
+  transform: translateX(-50%) translateY(-4px); 
+}
+
+
+/* 5. ADDED: Final animation state for LEFT tooltips */
+.dock-item:hover .tooltip-left,
+.icon-button:hover .tooltip-left {
+    transform: translateY(-50%) translateX(0); /* Move to final spot */
+}
+
+/* 6. ADDED: Final animation state for BOTTOM tooltips */
+.dock-item:hover .tooltip-bottom,
+.icon-button:hover .tooltip-bottom,
+.quick-action-btn:hover .tooltip-bottom { 
+    transform: translateX(-50%) translateY(0); /* Move to final spot */
+}
+
+/* ======================================= */
+/* --- MODIFIED: QUICK ACTIONS BAR --- */
+/* ======================================= */
+
+#quick-actions-bar {
+  /* Removed position: fixed, bottom, right, z-index */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px; /* MODIFIED: Made smaller */
+  border-radius: 20px; /* MODIFIED: Matched folder tabs */
+  margin-right: 150px; /* === ADDED THIS LINE === */
+}
+
+.quick-action-btn {
+  position: relative; /* For tooltip */
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 0.9em; /* MODIFIED: Made smaller */
+  padding: 4px 6px; /* MODIFIED: Made smaller */
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  line-height: 1; /* Aligns emojis better */
+}
+.quick-action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.quick-action-divider {
+  width: 1px;
+  height: 16px;
+  background-color: rgba(255, 255, 255, 0.3);
+  margin: 0 4px;
+}
+
+
+/* ======================================= */
+/* --- CUSTOM CONTEXT MENU --- */
+/* ======================================= */
+
+.context-menu {
+  position: absolute; /* Positioned by JS */
+  z-index: 1000;
+  padding: 8px;
+  border-radius: 12px; /* Softer radius for a menu */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.menu-item {
+  background-color: transparent;
+  border: none;
+  color: white;            /* or black, your override handles this */
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+
+  font-family: inherit;    /* <- make buttons use the same font as body/subfolders */
+}
+
+.menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.context-menu .menu-divider {
+  height: 1px;
+  margin: 4px 0;
+  background-color: rgba(0, 0, 0, 0.12); /* nice on white background */
+}
+
+#confirm-delete-message {
+  margin: 10px 0 20px;
+}
+
+/* Make delete dialog look like the right-click menu */
+#confirm-delete-modal .dialog-content.glass-box {
+  background-color: #ffffff;              /* same as .context-menu.glass-box */
+  color: #000000;                         /* black text so it’s readable */
+  border: 1px solid rgba(0, 0, 0, 0.15);  /* same border as menu */
+
+  width: 520px;
+  max-width: 90vw;
+}
+
+/* Gray circle behind delete dialog icon (works for favicon, folder, fallback) */
+#confirm-delete-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background-color: #e5e7eb;   /* light gray circle */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+
+/* Make folder icon visible & centered on the gray circle */
+#confirm-delete-icon .bookmark-folder-icon {
+  width: 64px;        /* folder size in delete dialog */
+  height: 64px;
+  fill: #ffffff;   /* or whatever color you like */
+  opacity: 1;
+}
+
+/* Override fallback "letter" icon inside dialog so it doesn't draw its own box */
+#confirm-delete-icon .bookmark-fallback-icon {
+  background-color: transparent; /* remove its usual blue square */
+  color: #111827;                /* dark text on gray circle */
+  border-radius: 0;              /* let the circle be from the parent */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#move-bookmark-dialog {
+  background-color: #ffffff;
+  color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  width: 420px;
+  max-width: 90vw;
+}
+
+#move-bookmark-dialog .dialog-input {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111827;
+}
+
+#move-bookmark-dialog .dialog-input:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
+#move-folder-select option {
+  color: #111827;
+}
+
+
+/* ======================================= */
+/* --- ADD BOOKMARK MODAL (MODIFIED) --- */
+/* ======================================= */
+
+/* The full-screen background overlay */
+.modal-overlay {
+  display: none; /* IMPORTANT: This makes it hidden by default */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  
+  /* MODIFIED: Increased blur */
+  backdrop-filter: blur(var(--overlay-blur)); 
+  -webkit-backdrop-filter: blur(var(--overlay-blur));
+  
+  z-index: 1000;
+  
+  /* These rules center the dialog box when display is set to 'flex' */
+  justify-content: center;
+  align-items: center;
+}
+
+/* This is the pop-up box itself */
+.dialog-content {
+  /* It already uses your .glass-box style! */
+  width: 400px;
+  padding: 20px 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Adds spacing between elements */
+  z-index: 1001;
+  position: relative;
+}
+
+.dialog-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;          /* same color as dialog text */
+}
+
+.dialog-close-btn:hover {
+  opacity: 0.7;            /* or set a specific color here if you prefer */
+}
+
+/* Delete dialog icon + text layout */
+.confirm-delete-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Icon size inside delete dialog */
+#confirm-delete-icon img,
+#confirm-delete-icon .bookmark-fallback-icon,
+#confirm-delete-icon svg {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+}
+
+/* Let the text take remaining width */
+#confirm-delete-text {
+  flex: 1;
+}
+
+
+
+.dialog-content h3 {
+  margin: 0;
+  margin-bottom: 5px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-group label {
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.dialog-input {
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 1em;
+  color: white;
+  outline: none;
+}
+.dialog-input:focus {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end; /* Aligns buttons to the right */
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.dialog-btn {
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.dialog-btn:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* A primary button style for 'Save' */
+.dialog-btn.primary-btn {
+  background-color: #3b82f6;   /* normal state */
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.dialog-btn.primary-btn:hover {
+  background-color: #1d4ed8;   /* hover state */
+  border-color: #1d4ed8;
+}
+
+/* DELETE DIALOG – Cancel button */
+#confirm-delete-cancel-btn {
+  background-color: rgba(0, 0, 0, 0.04);   /* light gray chip */
+  color: #000000;                          /* black text */
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+#confirm-delete-cancel-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+
+/* ======================================= */
+/* --- BOOKMARK FALLBACK ICON (MODIFIED) --- */
+/* ======================================= */
+
+/* Add rounding and new size to the real favicons */
+.bookmark-item img {
+  width: 50px; /* Changed from 40px */
+  height: 50px; /* Changed from 40px */
+  border-radius: 10px; 
+}
+
+/* This wrapper holds both the real icon and the fallback */
+.bookmark-icon-wrapper {
+  width: 50px;
+  height: 50px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  position: relative;          /* so ::after can sit on top */
+  overflow: hidden;            /* clip the Drop Here background */
+
+  transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;
+}
+
+
+
+/* This is the fallback "F" icon */
+.bookmark-fallback-icon {
+  width: 50px; /* Changed from 40px */
+  height: 50px; /* Changed from 40px */
+  border-radius: 10px; 
+
+  background-color: #A1D5F8; 
+  color: #FFFFFF; 
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 28px; /* Changed from 24px */
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+}
+
+/* ======================================= */
+/* --- BOOKMARK FOLDER ICON (MODIFIED) --- */
+/* ======================================= */
+
+.bookmark-folder-icon {
+  width: 84px; /* Changed from 40px */
+  height: 58px; /* Changed from 40px */
+  fill: #FFFFFF;
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-blur: 0px;
+    --glass-bg: rgba(255, 255, 255, 0.25);
+    --overlay-blur: 0px;
+  }
+
+  .glass-box,
+  .modal-overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

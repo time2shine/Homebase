@@ -2287,7 +2287,9 @@ async function initializePage() {
 
       const action = button.dataset.action;
 
-      if (action === 'delete') {
+      if (action === 'open') {
+        openFolderFromContext(currentContextItemId);
+      } else if (action === 'delete') {
         // Delete a folder (and its children) in the grid
         deleteBookmarkOrFolder(currentContextItemId, true);
       } else if (action === 'move') {
@@ -2317,9 +2319,10 @@ async function initializePage() {
         deleteBookmarkOrFolder(currentContextItemId, false);
       } else if (action === 'move') {
         openMoveBookmarkModal(currentContextItemId, false);
+      } else if (action === 'open-new-tab') {
+        openBookmarkInNewTab(currentContextItemId);
       }
       // Later you can handle:
-      // if (action === 'open-new-tab') { ... }
       // if (action === 'rename') { ... }
       // if (action === 'edit') { ... }
       // if (action === 'move') { ... }
@@ -2334,3 +2337,22 @@ async function initializePage() {
 }
 
 initializePage();
+function openBookmarkInNewTab(bookmarkId) {
+  if (!bookmarkTree || !bookmarkTree[0] || !bookmarkId) return;
+  const node = findBookmarkNodeById(bookmarkTree[0], bookmarkId);
+  if (!node || !node.url) {
+    alert('This bookmark does not have a valid URL.');
+    return;
+  }
+  browser.tabs.create({ url: node.url, active: false });
+}
+function openFolderFromContext(folderId) {
+  if (!bookmarkTree || !bookmarkTree[0] || !folderId) return;
+  const folderNode = findBookmarkNodeById(bookmarkTree[0], folderId);
+  if (!folderNode || !folderNode.children) {
+    alert('Unable to open this folder.');
+    return;
+  }
+  renderBookmarkGrid(folderNode);
+}
+

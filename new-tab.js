@@ -74,7 +74,10 @@ let folderCancelBtn;
 let moveBookmarkModal;
 let moveBookmarkDialog;
 let moveDialogTitle;
-let moveFolderSelect;
+let moveFolderDropdown;
+let moveFolderDropdownBtn;
+let moveFolderDropdownMenu;
+let moveFolderSelectedLabel;
 let moveFolderSaveBtn;
 let moveFolderCancelBtn;
 let moveFolderCloseBtn;
@@ -83,6 +86,7 @@ let moveModalState = {
   isFolder: false,
   originParentId: null,
   blockedIds: new Set(),
+  selectedFolderId: null,
 };
 
 // ===============================================
@@ -345,7 +349,10 @@ function setupMoveModal() {
   moveBookmarkModal = document.getElementById('move-bookmark-modal');
   moveBookmarkDialog = document.getElementById('move-bookmark-dialog');
   moveDialogTitle = document.getElementById('move-dialog-title');
-  moveFolderSelect = document.getElementById('move-folder-select');
+  moveFolderDropdown = document.getElementById('move-folder-dropdown');
+  moveFolderDropdownBtn = document.getElementById('move-folder-dropdown-btn');
+  moveFolderDropdownMenu = document.getElementById('move-folder-dropdown-menu');
+  moveFolderSelectedLabel = document.getElementById('move-folder-selected');
   moveFolderSaveBtn = document.getElementById('move-folder-save-btn');
   moveFolderCancelBtn = document.getElementById('move-folder-cancel-btn');
   moveFolderCloseBtn = document.getElementById('move-folder-close-btn');
@@ -355,16 +362,20 @@ function setupMoveModal() {
   moveFolderSaveBtn.addEventListener('click', handleMoveBookmarkSave);
   moveFolderCancelBtn.addEventListener('click', hideMoveBookmarkModal);
   moveFolderCloseBtn.addEventListener('click', hideMoveBookmarkModal);
+  if (moveFolderDropdownBtn) {
+    moveFolderDropdownBtn.addEventListener('click', toggleMoveFolderDropdown);
+    moveFolderDropdownBtn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleMoveFolderDropdown();
+      } else if (e.key === 'Escape') {
+        closeMoveFolderDropdown();
+        hideMoveBookmarkModal();
+      }
+    });
+  }
   moveBookmarkModal.addEventListener('click', (e) => {
     if (e.target === moveBookmarkModal) {
-      hideMoveBookmarkModal();
-    }
-  });
-  moveFolderSelect.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleMoveBookmarkSave();
-    } else if (e.key === 'Escape') {
       hideMoveBookmarkModal();
     }
   });
@@ -374,21 +385,56 @@ function setupMoveModal() {
       hideMoveBookmarkModal();
     }
   });
+
+  document.addEventListener('click', (e) => {
+    if (!moveBookmarkModal || moveBookmarkModal.style.display !== 'flex') return;
+    if (!moveFolderDropdown) return;
+    if (moveFolderDropdown.contains(e.target)) return;
+    closeMoveFolderDropdown();
+  });
 }
 
 function hideMoveBookmarkModal() {
   if (moveBookmarkModal) {
     moveBookmarkModal.style.display = 'none';
   }
-  if (moveFolderSelect) {
-    moveFolderSelect.innerHTML = '';
+  closeMoveFolderDropdown();
+  if (moveFolderDropdownMenu) {
+    moveFolderDropdownMenu.innerHTML = '';
+  }
+  if (moveFolderSelectedLabel) {
+    moveFolderSelectedLabel.textContent = 'Select folder';
   }
   moveModalState = {
     targetId: null,
     isFolder: false,
     originParentId: null,
     blockedIds: new Set(),
+    selectedFolderId: null,
   };
+}
+
+function toggleMoveFolderDropdown() {
+  if (!moveFolderDropdown || !moveFolderDropdownBtn) return;
+  const isOpen = moveFolderDropdown.classList.toggle('open');
+  moveFolderDropdownBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  if (isOpen) {
+    scrollMoveFolderActiveItemIntoView();
+  }
+}
+
+function closeMoveFolderDropdown() {
+  if (!moveFolderDropdown || !moveFolderDropdownBtn) return;
+  moveFolderDropdown.classList.remove('open');
+  moveFolderDropdownBtn.setAttribute('aria-expanded', 'false');
+}
+
+function scrollMoveFolderActiveItemIntoView() {
+  if (!moveFolderDropdownMenu) return;
+  const activeItem = moveFolderDropdownMenu.querySelector('.dropdown-item.active');
+  if (activeItem) {
+    activeItem.scrollIntoView({ block: 'center' });
+  }
 }
 
 function openMoveBookmarkModal(itemId, isFolder) {
@@ -415,9 +461,10 @@ function openMoveBookmarkModal(itemId, isFolder) {
     isFolder,
     originParentId: node.parentId || null,
     blockedIds,
+    selectedFolderId: null,
   };
 
-  populateMoveFolderSelect(folderOptions, moveModalState.originParentId);
+  populateMoveFolderDropdown(folderOptions, moveModalState.originParentId);
 
   const safeTitle = node.title && node.title.trim()
     ? node.title.trim()
@@ -425,7 +472,8 @@ function openMoveBookmarkModal(itemId, isFolder) {
 
   moveDialogTitle.textContent = `Move "${safeTitle}" to:`;
   moveBookmarkModal.style.display = 'flex';
-  moveFolderSelect.focus();
+  closeMoveFolderDropdown();
+  moveFolderDropdownBtn.focus();
 }
 
 function collectFolderBranchIds(node, blocked = new Set()) {
@@ -482,23 +530,51 @@ function buildFolderOptionList(blockedIds = new Set()) {
   return options;
 }
 
-function populateMoveFolderSelect(options, preferredId) {
-  if (!moveFolderSelect) return;
-  moveFolderSelect.innerHTML = '';
+function populateMoveFolderDropdown(options, preferredId) {
+  if (!moveFolderDropdownMenu || !moveFolderSelectedLabel) return;
+  moveFolderDropdownMenu.innerHTML = '';
+  let initialOption = null;
+
   options.forEach(option => {
-    const opt = document.createElement('option');
-    opt.value = option.id;
-    opt.textContent = option.label;
-    moveFolderSelect.appendChild(opt);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'dropdown-item';
+    btn.textContent = option.label;
+    btn.dataset.value = option.id;
+    btn.addEventListener('click', () => {
+      setMoveFolderSelection(option.id, option.label);
+      closeMoveFolderDropdown();
+    });
+    moveFolderDropdownMenu.appendChild(btn);
+    if (preferredId && option.id === preferredId) {
+      initialOption = option;
+    } else if (!preferredId && moveModalState.originParentId && option.id === moveModalState.originParentId) {
+      initialOption = option;
+    }
   });
-  if (preferredId && options.some(opt => opt.id === preferredId)) {
-    moveFolderSelect.value = preferredId;
+
+  if (initialOption) {
+    setMoveFolderSelection(initialOption.id, initialOption.label);
+  } else {
+    setMoveFolderSelection(null, null);
+  }
+}
+
+function setMoveFolderSelection(folderId, label) {
+  moveModalState.selectedFolderId = folderId;
+  if (moveFolderSelectedLabel) {
+    moveFolderSelectedLabel.textContent = label || 'Select folder';
+  }
+  if (moveFolderDropdownMenu) {
+    Array.from(moveFolderDropdownMenu.children).forEach(child => {
+      child.classList.toggle('active', child.dataset.value === folderId);
+    });
   }
 }
 
 async function handleMoveBookmarkSave() {
   if (!moveModalState.targetId) return;
-  const destinationId = moveFolderSelect.value;
+  const destinationId = moveModalState.selectedFolderId;
   if (!destinationId) return;
 
   if (moveModalState.blockedIds.has(destinationId)) {

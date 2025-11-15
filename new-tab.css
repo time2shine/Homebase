@@ -1209,15 +1209,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
 }
 
-#move-folder-select {
-  color: #111827;
-}
-
-#move-folder-select option {
-  color: #111827;
-}
-
-#move-bookmark-dialog label[for="move-folder-select"] {
+#move-bookmark-dialog .move-folder-row label {
   color: #000000;
 }
 
@@ -1233,10 +1225,75 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   margin: 0;
 }
 
-.move-folder-row #move-folder-select {
-  width: 320px;       /* new base width */
-  max-width: 320px;   /* cap so it doesn’t shrink */
-  margin: 0 auto;
+.move-folder-row .custom-dropdown {
+  position: relative;
+  width: 320px;
+  max-width: 100%;
+}
+
+.dropdown-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1f2937;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dropdown-toggle:hover,
+.custom-dropdown.open .dropdown-toggle {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.dropdown-caret {
+  margin-left: 12px;
+  font-size: 0.9rem;
+}
+
+.dropdown-menu {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, 95vw);
+  max-height: 800px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+  padding: 6px 0;
+  display: none;
+  z-index: 1200;
+}
+
+.custom-dropdown.open .dropdown-menu {
+  display: block;
+}
+
+.dropdown-item {
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: #1f2937;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.dropdown-item:hover,
+.dropdown-item.active {
+  background: rgba(59, 130, 246, 0.18);
+  color: #1d4ed8;
+  font-weight: 600;
 }
 
 

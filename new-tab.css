@@ -1156,14 +1156,16 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   margin: 10px 0 20px;
 }
 
-/* Make delete dialog look like the right-click menu */
-#confirm-delete-modal .dialog-content.glass-box {
+/* Make delete/move dialogs look like the right-click menu */
+#confirm-delete-modal .dialog-content.glass-box,
+#move-bookmark-dialog {
   background-color: #ffffff;              /* same as .context-menu.glass-box */
   color: #000000;                         /* black text so it’s readable */
   border: 1px solid rgba(0, 0, 0, 0.15);  /* same border as menu */
 
   width: 520px;
   max-width: 90vw;
+  min-height: 230px;
 }
 
 /* Gray circle behind delete dialog icon (works for favicon, folder, fallback) */
@@ -1196,13 +1198,6 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   justify-content: center;
 }
 
-#move-bookmark-dialog {
-  background-color: #ffffff;
-  color: #000000;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  width: 420px;
-  max-width: 90vw;
-}
 
 #move-bookmark-dialog .dialog-input {
   background-color: rgba(0, 0, 0, 0.04);
@@ -1214,8 +1209,56 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
 }
 
+#move-folder-select {
+  color: #111827;
+}
+
 #move-folder-select option {
   color: #111827;
+}
+
+#move-bookmark-dialog label[for="move-folder-select"] {
+  color: #000000;
+}
+
+.move-folder-row {
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.move-folder-row label {
+  color: #000000;
+  font-weight: 500;
+  margin: 0;
+}
+
+.move-folder-row #move-folder-select {
+  width: 320px;       /* new base width */
+  max-width: 320px;   /* cap so it doesn’t shrink */
+  margin: 0 auto;
+}
+
+
+#move-bookmark-dialog .dialog-btn {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111827;
+}
+
+#move-bookmark-dialog .dialog-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+#move-bookmark-dialog .dialog-btn.primary-btn {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+#move-bookmark-dialog .dialog-btn.primary-btn:hover {
+  background-color: #1d4ed8;
+  border-color: #1d4ed8;
 }
 
 
@@ -1330,7 +1373,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   display: flex;
   justify-content: flex-end; /* Aligns buttons to the right */
   gap: 10px;
-  margin-top: 10px;
+  margin-top: auto;
 }
 
 .dialog-btn {

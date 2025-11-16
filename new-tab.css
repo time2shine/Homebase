@@ -395,6 +395,41 @@ button.dock-item {
   pointer-events: none;
 }
 
+.back-button {
+  position: relative;
+}
+
+.back-button .back-button-label {
+  transition: color 0.2s ease;
+}
+
+.back-button.drag-over {
+  background-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.55);
+}
+
+.back-button.drag-over .back-button-label {
+  color: #ffffff;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.back-button.drag-over::after {
+  content: "Drop Here";
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 2px 6px;
+  background: rgba(78, 78, 78, 0.85);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
 
 
 

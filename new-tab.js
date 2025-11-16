@@ -936,11 +936,10 @@ function setupGridSortable(gridElement) {
   gridSortable = Sortable.create(gridElement, {
     animation: 300,
     group: 'bookmarks', // Group name
-    draggable: '.bookmark-item', // Selector for draggable items
+    draggable: '.bookmark-item:not(.back-button)', // prevent Back from moving
     
-    // === THIS IS THE FIX ===
-    // Add .grid-item-rename-input to the filter
-    filter: '.back-button, .grid-item-rename-input', 
+    // Add .grid-item-rename-input to the filter so inline renames stay clickable
+    filter: '.grid-item-rename-input', 
     
     ghostClass: 'bookmark-placeholder', // Use our existing placeholder style
     chosenClass: 'sortable-chosen',     // Class for the item in its original spot
@@ -1036,6 +1035,11 @@ async function handleGridDrop(evt) {
     ? dropTargetElement.closest('.bookmark-folder-tab')
     : null;
 
+  // 3) NEW: Back button for moving up a level
+  const backButtonTarget = dropTargetElement
+    ? dropTargetElement.closest('.back-button')
+    : null;
+
   // --- Case 1: Dropped ONTO a folder INSIDE the grid ---
   if (folderTarget && folderTarget.dataset.bookmarkId !== draggedItemId) {
     const targetFolderId = folderTarget.dataset.bookmarkId;
@@ -1046,7 +1050,7 @@ async function handleGridDrop(evt) {
     // Move the bookmark *into* that folder
     await moveBookmark(draggedItemId, { parentId: targetFolderId });
   }
-  // --- Case 2: NEW — Dropped ONTO a folder TAB ---
+  // --- Case 2: NEW – Dropped ONTO a folder TAB ---
   else if (tabTarget) {
     const targetFolderId = tabTarget.dataset.folderId;
 
@@ -1056,8 +1060,15 @@ async function handleGridDrop(evt) {
     // Move the bookmark into the folder represented by that tab
     await moveBookmark(draggedItemId, { parentId: targetFolderId });
   }
+  // --- Case 3: NEW – Dropped ONTO the Back button ---
+  else if (backButtonTarget && backButtonTarget.dataset.backTargetId) {
+    const targetFolderId = backButtonTarget.dataset.backTargetId;
 
-  // --- Case 3: Re-ordered within the same grid ---
+    draggedItem.remove();
+    await moveBookmark(draggedItemId, { parentId: targetFolderId });
+  }
+
+  // --- Case 4: Re-ordered within the same grid ---
   else if (evt.from === evt.to && evt.oldIndex !== evt.newIndex) {
     const parentId = currentGridFolderNode.id;
 
@@ -1468,9 +1479,10 @@ function createBackButton(parentId) {
   const item = document.createElement('a');
   item.href = '#';
   item.className = 'bookmark-item';
+  item.dataset.backTargetId = parentId;
   item.innerHTML = `
     <span style="font-size: 32px; height: 32px; line-height: 1;">↩️</span>
-    <span>Back</span>
+    <span class="back-button-label">Back</span>
   `;
   
   item.addEventListener('click', (e) => {

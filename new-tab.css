@@ -345,6 +345,14 @@ button.dock-item {
   width: 100px; 
 }
 
+/* === ADD THIS NEW RULE === */
+/* When renaming, let the item grow to fit the text box */
+.bookmark-item.is-renaming {
+  height: auto; /* Override the fixed 110px height */
+  min-height: 110px; /* Ensure it doesn't shrink */
+  justify-content: flex-start; /* Align icon to the top */
+}
+
 /* Glow around the item while it's a drop target */
 .bookmark-item.drag-over {
   background-color: rgba(255, 255, 255, 0.12);          /* subtle light bg */
@@ -437,6 +445,43 @@ button.dock-item {
   width: 100%;
   text-align: center;
 }
+
+/* * === NEW CSS FOR GRID RENAME ===
+ * This is the input that replaces the <span>
+ * when renaming a grid item.
+ */
+.grid-item-rename-input {
+  font-family: inherit;
+  font-size: 0.8em;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+  color: white;
+  text-align: center;
+  
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  
+  width: 100%; 
+  box-sizing: border-box; 
+  padding: 2px;
+  
+  /* === MODIFIED === */
+  /* min-height: 2.4em;  <-- REMOVED THIS LINE */
+  height: auto;      
+  line-height: 1.3;
+  
+  resize: none; 
+  overflow: hidden; 
+}
+
+.grid-item-rename-input:focus {
+  outline: 2px solid white;
+  outline-offset: -1px;
+  border-color: white;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+/* === END NEW CSS === */
+
 
 /* Make folder wrapper match the big folder icon */
 #bookmarks-grid .bookmark-item[data-is-folder="true"] .bookmark-icon-wrapper {

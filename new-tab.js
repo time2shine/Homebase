@@ -702,7 +702,11 @@ function setupGridSortable(gridElement) {
     animation: 300,
     group: 'bookmarks', // Group name
     draggable: '.bookmark-item', // Selector for draggable items
-    filter: '.back-button', // Class to ignore
+    
+    // === THIS IS THE FIX ===
+    // Add .grid-item-rename-input to the filter
+    filter: '.back-button, .grid-item-rename-input', 
+    
     ghostClass: 'bookmark-placeholder', // Use our existing placeholder style
     chosenClass: 'sortable-chosen',     // Class for the item in its original spot
     dragClass: 'sortable-drag',         // Class for the item being dragged
@@ -948,17 +952,31 @@ function flattenBookmarks(nodes) {
 }
 
 /**
+ * === MODIFIED ===
  * Renders a single bookmark item (MODIFIED for Sortable.js)
  * All manual D&D listeners have been removed.
  */
 function renderBookmark(bookmarkNode) {
-  const item = document.createElement('a');
-  item.href = bookmarkNode.url;
+  // --- CHANGED from <a> to <div> ---
+  const item = document.createElement('div');
   item.className = 'bookmark-item';
 
   // --- D&D attributes ---
   item.dataset.bookmarkId = bookmarkNode.id;
   item.dataset.isFolder = 'false';
+
+  // --- NEW: Manual Click Handler ---
+  item.addEventListener('click', (e) => {
+    // Don't navigate if the click was on the rename input
+    if (e.target.classList.contains('grid-item-rename-input')) {
+      return;
+    }
+    // Simple check to prevent navigation after a drag
+    if (item.classList.contains('sortable-chosen')) {
+      return;
+    }
+    window.location.href = bookmarkNode.url;
+  });
 
   // NEW: right-click context menu for ICONS
   item.addEventListener('contextmenu', (e) => {
@@ -1082,12 +1100,35 @@ async function deleteBookmarkOrFolder(id, isFolder) {
 
 
 /**
+ * NEW: Auto-resizes a textarea to fit its content.
+ * (Around line 1178)
+ */
+function autoResizeTextarea(textarea) {
+  // Reset height to 'auto' to shrink if text is deleted
+  textarea.style.height = 'auto'; 
+
+  // === NEW: Force a layout reflow ===
+  // Reading a property like offsetHeight immediately after setting
+  // a style forces the browser to recalculate the layout.
+  // This ensures the scrollHeight we read next is 100% accurate.
+  const _ = textarea.offsetHeight; 
+
+  // === MODIFIED ===
+  // 2px for border (1px top + 1px bottom)
+  const verticalBorders = 2; 
+  
+  // Now scrollHeight is accurate, so we set the final height
+  textarea.style.height = (textarea.scrollHeight + verticalBorders) + 'px';
+}
+
+/**
+ * === MODIFIED ===
  * Renders a single folder item (MODIFIED for Sortable.js)
  * All manual D&D listeners have been removed.
  */
 function renderBookmarkFolder(folderNode) {
-  const item = document.createElement('a');
-  item.href = '#';
+  // --- CHANGED from <a> to <div> ---
+  const item = document.createElement('div');
   item.className = 'bookmark-item';
 
   // --- D&D attributes ---
@@ -1103,7 +1144,6 @@ function renderBookmarkFolder(folderNode) {
         viewBox="0 0 64 48"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <!-- Top tab + header -->
         <path
           d="M8 10
              C8 7.8 9.8 6 12 6
@@ -1117,7 +1157,6 @@ function renderBookmarkFolder(folderNode) {
           fill="#EDEDED"
         />
 
-        <!-- Main folder body -->
         <rect
           x="8"
           y="14"
@@ -1136,6 +1175,14 @@ function renderBookmarkFolder(folderNode) {
   // Left-click still opens the folder
   item.addEventListener('click', (e) => {
     e.preventDefault();
+    // Don't navigate if the click was on the rename input
+    if (e.target.classList.contains('grid-item-rename-input')) {
+      return;
+    }
+    // Simple check to prevent navigation after a drag
+    if (item.classList.contains('sortable-chosen')) {
+      return;
+    }
     renderBookmarkGrid(folderNode);
   });
 
@@ -1345,6 +1392,97 @@ function showEditInput(tabButton, folderNode) {
   input.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      saveAction();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cleanup();
+    }
+  });
+
+  input.addEventListener('blur', saveAction);
+}
+
+/**
+ * === MODIFIED ===
+ * Replaces a grid item's span with an input field to edit its name.
+ */
+function showGridItemRenameInput(gridItem, bookmarkNode) {
+  const titleSpan = gridItem.querySelector('span');
+  if (!titleSpan) return;
+  
+  titleSpan.style.display = 'none';
+
+  // === FIX: Add class to allow parent to grow ===
+  gridItem.classList.add('is-renaming');
+
+  // --- MODIFIED: Use a <textarea> for multi-line support ---
+  const input = document.createElement('textarea');
+  input.className = 'grid-item-rename-input';
+  input.value = bookmarkNode.title;
+
+  input.rows = 1; // Set the default rows to 1
+  
+  // Stop the click from bubbling to the parent div's click listener
+  input.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  // Stop mousedown from bubbling to Sortable.js
+  input.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+  });
+
+  // --- NEW: Add auto-resize listener ---
+  input.addEventListener('input', () => {
+    autoResizeTextarea(input);
+  });
+
+  gridItem.appendChild(input);
+
+  // --- NEW: Call resize function immediately after append ---
+  autoResizeTextarea(input); // Also fixed a typo here from your original file
+  input.focus();
+  input.select();
+
+  const cleanup = () => {
+    // === FIX: Remove class to restore parent's fixed height ===
+    gridItem.classList.remove('is-renaming');
+
+    input.remove();
+    titleSpan.style.display = '-webkit-box'; // Restore original display
+  };
+
+  const saveAction = async () => {
+    const newName = input.value.trim();
+    if (newName && newName !== bookmarkNode.title) {
+      try {
+        await browser.bookmarks.update(bookmarkNode.id, { title: newName });
+        
+        // Refresh the tree and re-render the current grid
+        const newTree = await browser.bookmarks.getTree();
+        bookmarkTree = newTree; 
+        
+        const activeGridNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+        
+        if (activeGridNode) {
+          renderBookmarkGrid(activeGridNode); // This will remove the input
+        } else {
+          loadBookmarks(activeHomebaseFolderId); // Fallback
+        }
+        
+      } catch (err) {
+        console.error("Error updating bookmark:", err);
+        cleanup(); // On error, just revert
+      }
+    } else {
+      cleanup(); // No change, revert
+    }
+  };
+
+  input.addEventListener('keydown', async (e) => {
+    // --- MODIFIED: Allow Shift+Enter for newline, just Enter to save ---
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Stop newline
       saveAction();
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -2289,6 +2427,14 @@ async function initializePage() {
 
       if (action === 'open') {
         openFolderFromContext(currentContextItemId);
+      } else if (action === 'rename') {
+        // --- UPDATED ---
+        const gridItem = document.querySelector(`.bookmark-item[data-bookmark-id="${currentContextItemId}"]`);
+        const node = findBookmarkNodeById(bookmarkTree[0], currentContextItemId);
+        if (gridItem && node) {
+          showGridItemRenameInput(gridItem, node);
+        }
+        // --- END UPDATE ---
       } else if (action === 'delete') {
         // Delete a folder (and its children) in the grid
         deleteBookmarkOrFolder(currentContextItemId, true);
@@ -2296,10 +2442,7 @@ async function initializePage() {
         openMoveBookmarkModal(currentContextItemId, true);
       }
       // Later you can handle other actions:
-      // if (action === 'open') { ... }
-      // if (action === 'rename') { ... }
       // if (action === 'edit') { ... }
-      // if (action === 'move') { ... }
 
       hideAllContextMenus();
     });
@@ -2314,7 +2457,15 @@ async function initializePage() {
 
       const action = button.dataset.action;
 
-      if (action === 'delete') {
+      if (action === 'rename') {
+        // --- UPDATED ---
+        const gridItem = document.querySelector(`.bookmark-item[data-bookmark-id="${currentContextItemId}"]`);
+        const node = findBookmarkNodeById(bookmarkTree[0], currentContextItemId);
+        if (gridItem && node) {
+          showGridItemRenameInput(gridItem, node);
+        }
+        // --- END UPDATE ---
+      } else if (action === 'delete') {
         // Delete a regular bookmark icon
         deleteBookmarkOrFolder(currentContextItemId, false);
       } else if (action === 'move') {
@@ -2323,9 +2474,7 @@ async function initializePage() {
         openBookmarkInNewTab(currentContextItemId);
       }
       // Later you can handle:
-      // if (action === 'rename') { ... }
       // if (action === 'edit') { ... }
-      // if (action === 'move') { ... }
 
       hideAllContextMenus();
     });
@@ -2355,4 +2504,3 @@ function openFolderFromContext(folderId) {
   }
   renderBookmarkGrid(folderNode);
 }
-

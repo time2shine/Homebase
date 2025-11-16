@@ -1239,7 +1239,9 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 /* Make delete/edit/move dialogs look like the right-click menu */
 #confirm-delete-modal .dialog-content.glass-box,
 #edit-folder-dialog,
-#move-bookmark-dialog {
+#move-bookmark-dialog,
+#add-bookmark-dialog,
+#add-folder-dialog {
   background-color: #ffffff;              /* same as .context-menu.glass-box */
   color: #000000;                         /* black text so it’s readable */
   border: 1px solid rgba(0, 0, 0, 0.15);  /* same border as menu */
@@ -1320,17 +1322,23 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 }
 
 
-#move-bookmark-dialog .dialog-input {
+#move-bookmark-dialog .dialog-input,
+#add-bookmark-dialog .dialog-input,
+#add-folder-dialog .dialog-input {
   background-color: rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.15);
   color: #111827;
 }
 
-#move-bookmark-dialog .dialog-input:focus {
+#move-bookmark-dialog .dialog-input:focus,
+#add-bookmark-dialog .dialog-input:focus,
+#add-folder-dialog .dialog-input:focus {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
 }
 
-#move-bookmark-dialog .move-folder-row label {
+#move-bookmark-dialog .move-folder-row label,
+#add-bookmark-dialog .form-group label,
+#add-folder-dialog .form-group label {
   color: #000000;
 }
 
@@ -1418,23 +1426,31 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 }
 
 
-#move-bookmark-dialog .dialog-btn {
+#move-bookmark-dialog .dialog-btn,
+#add-bookmark-dialog .dialog-btn,
+#add-folder-dialog .dialog-btn {
   background-color: rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.15);
   color: #111827;
 }
 
-#move-bookmark-dialog .dialog-btn:hover {
+#move-bookmark-dialog .dialog-btn:hover,
+#add-bookmark-dialog .dialog-btn:hover,
+#add-folder-dialog .dialog-btn:hover {
   background-color: rgba(0, 0, 0, 0.08);
 }
 
-#move-bookmark-dialog .dialog-btn.primary-btn {
+#move-bookmark-dialog .dialog-btn.primary-btn,
+#add-bookmark-dialog .dialog-btn.primary-btn,
+#add-folder-dialog .dialog-btn.primary-btn {
   background-color: #3b82f6;
   border-color: #3b82f6;
   color: #ffffff;
 }
 
-#move-bookmark-dialog .dialog-btn.primary-btn:hover {
+#move-bookmark-dialog .dialog-btn.primary-btn:hover,
+#add-bookmark-dialog .dialog-btn.primary-btn:hover,
+#add-folder-dialog .dialog-btn.primary-btn:hover {
   background-color: #1d4ed8;
   border-color: #1d4ed8;
 }
@@ -1589,45 +1605,6 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 #confirm-delete-cancel-btn:hover {
   background-color: rgba(0, 0, 0, 0.08);
-}
-
-#add-bookmark-dialog.bookmark-dialog-delete-style {
-  background-color: #ffffff;
-  color: #000000;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  width: 520px;
-  max-width: 90vw;
-  min-height: 230px;
-}
-
-#add-bookmark-dialog.bookmark-dialog-delete-style .form-group label {
-  color: rgba(0, 0, 0, 0.65);
-}
-
-#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-input {
-  background-color: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  color: #000000;
-}
-
-#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-input:focus {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
-}
-
-#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-btn {
-  background-color: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  color: #000000;
-}
-
-#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-btn:hover {
-  background-color: rgba(0, 0, 0, 0.07);
-}
-
-#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-btn.primary-btn {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
 }
 
 

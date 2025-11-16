@@ -151,15 +151,9 @@ function setBookmarkModalMode(mode) {
   if (mode === 'edit') {
     bookmarkModalTitle.textContent = 'Edit Bookmark';
     bookmarkSaveBtn.textContent = 'Update';
-    if (addBookmarkDialog) {
-      addBookmarkDialog.classList.add('bookmark-dialog-delete-style');
-    }
   } else {
     bookmarkModalTitle.textContent = 'Add Bookmark';
     bookmarkSaveBtn.textContent = 'Save';
-    if (addBookmarkDialog) {
-      addBookmarkDialog.classList.remove('bookmark-dialog-delete-style');
-    }
   }
 }
 

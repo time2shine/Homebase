@@ -73,6 +73,19 @@ let folderSaveBtn;
 let folderCancelBtn;
 
 // ===============================================
+// --- EDIT FOLDER MODAL ELEMENTS ---
+// ===============================================
+let editFolderModal;
+let editFolderDialog;
+let editFolderNameInput;
+let editFolderSaveBtn;
+let editFolderCancelBtn;
+let editFolderCloseBtn;
+let editFolderIconSpan;
+let editFolderTextSpan;
+let editFolderTargetId = null;
+
+// ===============================================
 // --- MOVE BOOKMARK MODAL ELEMENTS ---
 // ===============================================
 let moveBookmarkModal;
@@ -433,6 +446,135 @@ function setupFolderModal() {
       hideAddFolderModal();
     }
   });
+}
+
+// ===============================================
+// --- EDIT FOLDER MODAL FUNCTIONS ---
+// ===============================================
+function setupEditFolderModal() {
+  editFolderModal = document.getElementById('edit-folder-modal');
+  if (!editFolderModal) {
+    return;
+  }
+
+  editFolderDialog = document.getElementById('edit-folder-dialog');
+  editFolderNameInput = document.getElementById('edit-folder-name-input');
+  editFolderSaveBtn = document.getElementById('edit-folder-save-btn');
+  editFolderCancelBtn = document.getElementById('edit-folder-cancel-btn');
+  editFolderCloseBtn = document.getElementById('edit-folder-close-btn');
+  editFolderIconSpan = document.getElementById('edit-folder-icon');
+  editFolderTextSpan = document.getElementById('edit-folder-text');
+
+  editFolderSaveBtn.addEventListener('click', handleEditFolderSave);
+  editFolderCancelBtn.addEventListener('click', hideEditFolderModal);
+  editFolderCloseBtn.addEventListener('click', hideEditFolderModal);
+
+  editFolderModal.addEventListener('click', (e) => {
+    if (e.target === editFolderModal) {
+      hideEditFolderModal();
+    }
+  });
+
+  if (editFolderNameInput) {
+    editFolderNameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleEditFolderSave();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideEditFolderModal();
+      }
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && editFolderModal.style.display === 'flex') {
+      hideEditFolderModal();
+    }
+  });
+}
+
+function showEditFolderModal(folderNode) {
+  if (!editFolderModal || !folderNode) {
+    return;
+  }
+
+  editFolderTargetId = folderNode.id;
+  const folderTitle = folderNode.title || 'Folder';
+
+  if (editFolderIconSpan) {
+    editFolderIconSpan.innerHTML = `
+      <svg class="bookmark-folder-icon" viewBox="0 0 24 24">
+        <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"></path>
+      </svg>
+    `;
+  }
+
+  if (editFolderTextSpan) {
+    editFolderTextSpan.textContent = `Edit "${folderTitle}"`;
+  }
+
+  if (editFolderNameInput) {
+    editFolderNameInput.value = folderNode.title || '';
+  }
+
+  editFolderModal.style.display = 'flex';
+
+  if (editFolderNameInput) {
+    editFolderNameInput.focus();
+    editFolderNameInput.select();
+  }
+}
+
+function hideEditFolderModal() {
+  if (!editFolderModal) {
+    return;
+  }
+
+  editFolderModal.style.display = 'none';
+  editFolderTargetId = null;
+  if (editFolderNameInput) {
+    editFolderNameInput.value = '';
+  }
+}
+
+async function handleEditFolderSave() {
+  if (!editFolderTargetId || !editFolderNameInput) {
+    return;
+  }
+
+  const newName = editFolderNameInput.value.trim();
+  if (!newName) {
+    alert('Please provide a folder name.');
+    return;
+  }
+
+  try {
+    await browser.bookmarks.update(editFolderTargetId, { title: newName });
+
+    const newTree = await browser.bookmarks.getTree();
+    bookmarkTree = newTree;
+
+    let folderToRender = null;
+    if (currentGridFolderNode) {
+      folderToRender = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+    }
+
+    if (!folderToRender && activeHomebaseFolderId) {
+      folderToRender = findBookmarkNodeById(bookmarkTree[0], activeHomebaseFolderId);
+    }
+
+    if (folderToRender) {
+      renderBookmarkGrid(folderToRender);
+    } else {
+      loadBookmarks(editFolderTargetId);
+    }
+
+    hideEditFolderModal();
+  } catch (err) {
+    console.error('Error updating folder name:', err);
+    alert('Error: Could not update the folder name.');
+  }
 }
 
 // ===============================================
@@ -2486,6 +2628,7 @@ async function initializePage() {
   setupQuickActions();
   setupBookmarkModal();
   setupFolderModal();
+  setupEditFolderModal();
   setupMoveModal();
   
   loadBookmarks();
@@ -2528,6 +2671,13 @@ async function initializePage() {
           showGridItemRenameInput(gridItem, node);
         }
         // --- END UPDATE ---
+      } else if (action === 'edit') {
+        if (bookmarkTree && bookmarkTree[0] && currentContextItemId) {
+          const folderNode = findBookmarkNodeById(bookmarkTree[0], currentContextItemId);
+          if (folderNode) {
+            showEditFolderModal(folderNode);
+          }
+        }
       } else if (action === 'delete') {
         // Delete a folder (and its children) in the grid
         deleteBookmarkOrFolder(currentContextItemId, true);

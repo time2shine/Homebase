@@ -363,6 +363,32 @@
     </div>
   </div>
   
+  <div id="edit-folder-modal" class="modal-overlay">
+    <div id="edit-folder-dialog" class="dialog-content glass-box">
+      <button id="edit-folder-close-btn"
+              class="dialog-close-btn"
+              aria-label="Close">
+        &times;
+      </button>
+
+      <h3>Edit Folder</h3>
+      <p class="confirm-delete-message">
+        <span id="edit-folder-icon"></span>
+        <span id="edit-folder-text">Edit folder</span>
+      </p>
+
+      <div class="form-group">
+        <label for="edit-folder-name-input">Folder Name</label>
+        <input type="text" id="edit-folder-name-input" class="dialog-input">
+      </div>
+
+      <div class="dialog-buttons">
+        <button id="edit-folder-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="edit-folder-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+  
   <div id="confirm-delete-modal" class="modal-overlay">
     <div class="dialog-content glass-box">
       <button id="confirm-delete-close-btn"

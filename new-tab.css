@@ -1201,8 +1201,9 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   margin: 10px 0 20px;
 }
 
-/* Make delete/move dialogs look like the right-click menu */
+/* Make delete/edit/move dialogs look like the right-click menu */
 #confirm-delete-modal .dialog-content.glass-box,
+#edit-folder-dialog,
 #move-bookmark-dialog {
   background-color: #ffffff;              /* same as .context-menu.glass-box */
   color: #000000;                         /* black text so it’s readable */
@@ -1214,7 +1215,8 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 }
 
 /* Gray circle behind delete dialog icon (works for favicon, folder, fallback) */
-#confirm-delete-icon {
+#confirm-delete-icon,
+#edit-folder-icon {
   width: 72px;
   height: 72px;
   border-radius: 50%;
@@ -1226,7 +1228,8 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 }
 
 /* Make folder icon visible & centered on the gray circle */
-#confirm-delete-icon .bookmark-folder-icon {
+#confirm-delete-icon .bookmark-folder-icon,
+#edit-folder-icon .bookmark-folder-icon {
   width: 64px;        /* folder size in delete dialog */
   height: 64px;
   fill: #ffffff;   /* or whatever color you like */
@@ -1234,13 +1237,51 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 }
 
 /* Override fallback "letter" icon inside dialog so it doesn't draw its own box */
-#confirm-delete-icon .bookmark-fallback-icon {
+#confirm-delete-icon .bookmark-fallback-icon,
+#edit-folder-icon .bookmark-fallback-icon {
   background-color: transparent; /* remove its usual blue square */
   color: #111827;                /* dark text on gray circle */
   border-radius: 0;              /* let the circle be from the parent */
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+#edit-folder-dialog .dialog-input {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111827;
+  width: 100%;
+}
+
+#edit-folder-dialog .dialog-input:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
+#edit-folder-dialog label {
+  color: #000000;
+  font-weight: 500;
+}
+
+#edit-folder-dialog .dialog-btn {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111827;
+}
+
+#edit-folder-dialog .dialog-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+#edit-folder-dialog .dialog-btn.primary-btn {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+#edit-folder-dialog .dialog-btn.primary-btn:hover {
+  background-color: #1d4ed8;
+  border-color: #1d4ed8;
 }
 
 

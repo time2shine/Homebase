@@ -1407,7 +1407,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   right: 12px;
   background: transparent;
   border: none;
-  font-size: 18px;
+  font-size: 26px;
   line-height: 1;
   cursor: pointer;
   color: inherit;          /* same color as dialog text */
@@ -1513,6 +1513,45 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 #confirm-delete-cancel-btn:hover {
   background-color: rgba(0, 0, 0, 0.08);
+}
+
+#add-bookmark-dialog.bookmark-dialog-delete-style {
+  background-color: #ffffff;
+  color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  width: 520px;
+  max-width: 90vw;
+  min-height: 230px;
+}
+
+#add-bookmark-dialog.bookmark-dialog-delete-style .form-group label {
+  color: rgba(0, 0, 0, 0.65);
+}
+
+#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-input {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #000000;
+}
+
+#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-input:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
+#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-btn {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #000000;
+}
+
+#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-btn:hover {
+  background-color: rgba(0, 0, 0, 0.07);
+}
+
+#add-bookmark-dialog.bookmark-dialog-delete-style .dialog-btn.primary-btn {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
 }
 
 

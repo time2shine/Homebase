@@ -58,6 +58,10 @@ let bookmarkNameInput;
 let bookmarkUrlInput;
 let bookmarkSaveBtn;
 let bookmarkCancelBtn;
+let bookmarkCloseBtn;
+let bookmarkModalTitle;
+let bookmarkModalMode = 'add';
+let bookmarkModalEditingId = null;
 
 // ===============================================
 // --- NEW: ADD FOLDER MODAL ELEMENTS ---
@@ -102,6 +106,8 @@ async function showAddBookmarkModal() {
     alert('Please select a bookmark folder first.');
     return;
   }
+
+  resetBookmarkModalState();
   
   // 1. Clear inputs
   bookmarkNameInput.value = '';
@@ -121,13 +127,63 @@ function hideAddBookmarkModal() {
   addBookmarkModal.style.display = 'none';
   bookmarkNameInput.value = '';
   bookmarkUrlInput.value = '';
+  resetBookmarkModalState();
+}
+
+function setBookmarkModalMode(mode) {
+  bookmarkModalMode = mode;
+  if (!bookmarkModalTitle || !bookmarkSaveBtn) {
+    return;
+  }
+  if (mode === 'edit') {
+    bookmarkModalTitle.textContent = 'Edit Bookmark';
+    bookmarkSaveBtn.textContent = 'Update';
+    if (addBookmarkDialog) {
+      addBookmarkDialog.classList.add('bookmark-dialog-delete-style');
+    }
+  } else {
+    bookmarkModalTitle.textContent = 'Add Bookmark';
+    bookmarkSaveBtn.textContent = 'Save';
+    if (addBookmarkDialog) {
+      addBookmarkDialog.classList.remove('bookmark-dialog-delete-style');
+    }
+  }
+}
+
+function resetBookmarkModalState() {
+  bookmarkModalEditingId = null;
+  setBookmarkModalMode('add');
+}
+
+/**
+ * Opens the bookmark modal with the selected bookmark details for editing.
+ */
+function showEditBookmarkModal(bookmarkId) {
+  if (!bookmarkTree || !bookmarkTree[0]) {
+    return;
+  }
+  const bookmarkNode = findBookmarkNodeById(bookmarkTree[0], bookmarkId);
+  if (!bookmarkNode || !bookmarkNode.url) {
+    alert('Unable to edit this bookmark.');
+    return;
+  }
+
+  bookmarkModalEditingId = bookmarkId;
+  setBookmarkModalMode('edit');
+
+  bookmarkNameInput.value = bookmarkNode.title || '';
+  bookmarkUrlInput.value = bookmarkNode.url || '';
+
+  addBookmarkModal.style.display = 'flex';
+  bookmarkNameInput.focus();
+  bookmarkNameInput.select();
 }
 
 /**
  * Saves the new bookmark from the modal inputs.
  * (MODIFIED: This version re-fetches the tree to refresh the UI)
  */
-async function saveNewBookmark() {
+async function handleBookmarkModalSave() {
   const name = bookmarkNameInput.value.trim();
   let url = bookmarkUrlInput.value.trim();
 
@@ -142,7 +198,39 @@ async function saveNewBookmark() {
     url = 'https://' + url;
   }
 
-  // 3. Check for active folder
+  if (bookmarkModalMode === 'edit' && bookmarkModalEditingId) {
+    try {
+      await browser.bookmarks.update(bookmarkModalEditingId, {
+        title: name,
+        url: url
+      });
+
+      const newTree = await browser.bookmarks.getTree();
+      bookmarkTree = newTree;
+
+      let folderToRender = null;
+      if (currentGridFolderNode) {
+        folderToRender = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+      }
+      if (!folderToRender && activeHomebaseFolderId) {
+        folderToRender = findBookmarkNodeById(bookmarkTree[0], activeHomebaseFolderId);
+      }
+
+      if (folderToRender) {
+        renderBookmarkGrid(folderToRender);
+      } else {
+        loadBookmarks(activeHomebaseFolderId);
+      }
+
+      hideAddBookmarkModal();
+    } catch (err) {
+      console.error("Error updating bookmark:", err);
+      alert("Error: Could not update bookmark. Check the URL is valid.");
+    }
+    return;
+  }
+
+  // 3. Check for active folder when adding
   if (!activeHomebaseFolderId) {
     alert("Error: No active bookmark folder selected.");
     return;
@@ -169,7 +257,6 @@ async function saveNewBookmark() {
       renderBookmarkGrid(activeFolderNode);
     }
     
-    // 8. Hide the modal on success
     hideAddBookmarkModal();
     
   } catch (err) {
@@ -189,10 +276,16 @@ function setupBookmarkModal() {
   bookmarkUrlInput = document.getElementById('bookmark-url-input');
   bookmarkSaveBtn = document.getElementById('bookmark-save-btn');
   bookmarkCancelBtn = document.getElementById('bookmark-cancel-btn');
+  bookmarkCloseBtn = document.getElementById('bookmark-close-btn');
+  bookmarkModalTitle = addBookmarkDialog.querySelector('h3');
+  resetBookmarkModalState();
 
   // 2. Attach button listeners
-  bookmarkSaveBtn.addEventListener('click', saveNewBookmark);
+  bookmarkSaveBtn.addEventListener('click', handleBookmarkModalSave);
   bookmarkCancelBtn.addEventListener('click', hideAddBookmarkModal);
+  if (bookmarkCloseBtn) {
+    bookmarkCloseBtn.addEventListener('click', hideAddBookmarkModal);
+  }
 
   // 3. Click background overlay to close
   addBookmarkModal.addEventListener('click', (e) => {
@@ -204,7 +297,7 @@ function setupBookmarkModal() {
   // 4. Listen for "Enter" key in input fields
   bookmarkNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      saveNewBookmark();
+      handleBookmarkModalSave();
     } else if (e.key === 'Escape') {
       hideAddBookmarkModal();
     }
@@ -212,7 +305,7 @@ function setupBookmarkModal() {
 
   bookmarkUrlInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      saveNewBookmark();
+      handleBookmarkModalSave();
     } else if (e.key === 'Escape') {
       hideAddBookmarkModal();
     }
@@ -2465,6 +2558,8 @@ async function initializePage() {
           showGridItemRenameInput(gridItem, node);
         }
         // --- END UPDATE ---
+      } else if (action === 'edit') {
+        showEditBookmarkModal(currentContextItemId);
       } else if (action === 'delete') {
         // Delete a regular bookmark icon
         deleteBookmarkOrFolder(currentContextItemId, false);

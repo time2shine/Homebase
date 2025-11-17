@@ -19,7 +19,7 @@ const bookmarkTabsTrack = document.getElementById('bookmark-tabs-track');
 const tabScrollLeftBtn = document.getElementById('tab-scroll-left');
 const tabScrollRightBtn = document.getElementById('tab-scroll-right');
 const SIDEBAR_COLLAPSE_RATIO = 0.49;
-const DOCK_COLLAPSE_RATIO = 0.2;
+const DOCK_COLLAPSE_RATIO = 0.32;
 const TAB_SCROLL_STEP = 180;
 
 /**
@@ -1346,7 +1346,7 @@ function renderBookmark(bookmarkNode) {
     // Do nothing, fallback is already visible
   });
 
-  imgIcon.src = `https://s2.googleusercontent.com/s2/favicons?domain=${bookmarkNode.url}&sz=32`;
+  imgIcon.src = `https://s2.googleusercontent.com/s2/favicons?domain=${bookmarkNode.url}&sz=64`;
 
   const titleSpan = document.createElement('span');
   titleSpan.textContent = bookmarkNode.title;
@@ -1378,7 +1378,7 @@ async function deleteBookmarkOrFolder(id, isFolder) {
     try {
       const urlObj = new URL(node.url);
       const domain = urlObj.hostname || node.url;
-      faviconUrl = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=32`;
+      faviconUrl = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
     } catch (e) {
       // ignore – will fall back to letter icon
     }
@@ -2327,7 +2327,7 @@ async function handleSearchInput() {
       const domain = new URL(bookmark.url).hostname;
       bookmarkHtml += `
         <a href="${bookmark.url}" class="result-item">
-          <img src="https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=32" alt="">
+          <img src="https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64" alt="">
           <div class="result-item-info">
             <strong>${bookmark.title || 'No Title'}</strong>
           </div>

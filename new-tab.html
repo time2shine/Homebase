@@ -86,6 +86,8 @@
 
   <main class="main-content">
 
+    <div id="collapsed-clock-slot" class="collapsed-clock-slot"></div>
+
     <div class="search-area-wrapper">
       
       <div class="search-widget-container">
@@ -125,7 +127,17 @@
     </div> 
     
     <div class="bookmark-bar-wrapper">
-      <div id="bookmark-folder-tabs"></div>
+      <div class="bookmark-tabs-wrapper">
+        <button id="tab-scroll-left" class="tab-scroll-btn" aria-label="Scroll folders left">
+          &lsaquo;
+        </button>
+        <div id="bookmark-tabs-track" class="bookmark-tabs-track">
+          <div id="bookmark-folder-tabs"></div>
+        </div>
+        <button id="tab-scroll-right" class="tab-scroll-btn" aria-label="Scroll folders right">
+          &rsaquo;
+        </button>
+      </div>
 
       <div id="quick-actions-bar" class="glass-box">
         <button id="quick-add-bookmark" class="quick-action-btn">

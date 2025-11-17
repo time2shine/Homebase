@@ -14,7 +14,13 @@ const searchAreaWrapper = document.querySelector('.search-area-wrapper');
 const sidebar = document.querySelector('.sidebar');
 const collapsedClockSlot = document.getElementById('collapsed-clock-slot');
 const timeWidget = document.querySelector('.widget-time');
+const dock = document.querySelector('.dock');
+const bookmarkTabsTrack = document.getElementById('bookmark-tabs-track');
+const tabScrollLeftBtn = document.getElementById('tab-scroll-left');
+const tabScrollRightBtn = document.getElementById('tab-scroll-right');
 const SIDEBAR_COLLAPSE_RATIO = 0.49;
+const DOCK_COLLAPSE_RATIO = 0.2;
+const TAB_SCROLL_STEP = 180;
 
 /**
  * Toggles a CSS class when the window width shrinks below the configured ratio
@@ -23,10 +29,13 @@ const SIDEBAR_COLLAPSE_RATIO = 0.49;
 function updateSidebarCollapseState() {
   const referenceWidth = (window.screen && window.screen.availWidth) ? window.screen.availWidth : window.innerWidth;
   if (!referenceWidth) return;
-  const shouldCollapse = (window.innerWidth / referenceWidth) <= SIDEBAR_COLLAPSE_RATIO;
-  document.body.classList.toggle('sidebar-collapsed', shouldCollapse);
+  const widthRatio = window.innerWidth / referenceWidth;
+  const shouldCollapseSidebar = widthRatio <= SIDEBAR_COLLAPSE_RATIO;
+  const shouldCollapseDock = widthRatio <= DOCK_COLLAPSE_RATIO;
+  document.body.classList.toggle('sidebar-collapsed', shouldCollapseSidebar);
+  document.body.classList.toggle('dock-collapsed', shouldCollapseDock);
 
-  if (shouldCollapse) {
+  if (shouldCollapseSidebar) {
     if (collapsedClockSlot && timeWidget && timeWidget.parentElement !== collapsedClockSlot) {
       collapsedClockSlot.appendChild(timeWidget);
     }
@@ -42,8 +51,48 @@ function updateSidebarCollapseState() {
   }
 }
 
+/**
+ * Shows or hides the folder tab scroll arrows based on overflow and scroll position.
+ */
+function updateBookmarkTabOverflow() {
+  if (!bookmarkTabsTrack || !tabScrollLeftBtn || !tabScrollRightBtn) return;
+
+  const maxScrollLeft = Math.max(0, bookmarkTabsTrack.scrollWidth - bookmarkTabsTrack.clientWidth);
+  const currentScroll = bookmarkTabsTrack.scrollLeft;
+  const showLeft = maxScrollLeft > 0 && currentScroll > 4;
+  const showRight = maxScrollLeft > 0 && currentScroll < (maxScrollLeft - 4);
+
+  tabScrollLeftBtn.classList.toggle('visible', showLeft);
+  tabScrollRightBtn.classList.toggle('visible', showRight);
+}
+
+/**
+ * Scrolls the folder tab row by a fixed amount in the given direction.
+ */
+function scrollBookmarkTabs(direction) {
+  if (!bookmarkTabsTrack) return;
+  bookmarkTabsTrack.scrollBy({
+    left: direction * TAB_SCROLL_STEP,
+    behavior: 'smooth'
+  });
+}
+
 window.addEventListener('resize', updateSidebarCollapseState);
 updateSidebarCollapseState();
+window.addEventListener('resize', updateBookmarkTabOverflow);
+updateBookmarkTabOverflow();
+
+if (tabScrollLeftBtn) {
+  tabScrollLeftBtn.addEventListener('click', () => scrollBookmarkTabs(-1));
+}
+if (tabScrollRightBtn) {
+  tabScrollRightBtn.addEventListener('click', () => scrollBookmarkTabs(1));
+}
+if (bookmarkTabsTrack) {
+  bookmarkTabsTrack.addEventListener('scroll', () => {
+    window.requestAnimationFrame(updateBookmarkTabOverflow);
+  });
+}
 
 let allBookmarks = [];
 let suggestionAbortController = null; // To cancel old requests
@@ -1781,6 +1830,9 @@ function showGridItemRenameInput(gridItem, bookmarkNode) {
  */
 function createFolderTabs(homebaseFolder, activeFolderId = null) {
   bookmarkFolderTabsContainer.innerHTML = '';
+  if (bookmarkTabsTrack) {
+    bookmarkTabsTrack.scrollLeft = 0;
+  }
   
   const folderChildren = homebaseFolder.children.filter(node => !node.url && node.children);
   
@@ -1918,6 +1970,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
   // 'dragover' listener on add-button removed.
   
   bookmarkFolderTabsContainer.appendChild(addButton);
+  requestAnimationFrame(updateBookmarkTabOverflow);
 
   // --- NEW: Initialize Sortable.js on the tabs ---
   setupTabsSortable(bookmarkFolderTabsContainer);

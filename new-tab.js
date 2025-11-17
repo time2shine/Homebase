@@ -11,6 +11,39 @@ const bookmarkResultsContainer = document.getElementById('bookmark-results-conta
 const suggestionResultsContainer = document.getElementById('suggestion-results-container');
 
 const searchAreaWrapper = document.querySelector('.search-area-wrapper');
+const sidebar = document.querySelector('.sidebar');
+const collapsedClockSlot = document.getElementById('collapsed-clock-slot');
+const timeWidget = document.querySelector('.widget-time');
+const SIDEBAR_COLLAPSE_RATIO = 0.49;
+
+/**
+ * Toggles a CSS class when the window width shrinks below the configured ratio
+ * so the sidebar widgets can be hidden and the main pane regains the space.
+ */
+function updateSidebarCollapseState() {
+  const referenceWidth = (window.screen && window.screen.availWidth) ? window.screen.availWidth : window.innerWidth;
+  if (!referenceWidth) return;
+  const shouldCollapse = (window.innerWidth / referenceWidth) <= SIDEBAR_COLLAPSE_RATIO;
+  document.body.classList.toggle('sidebar-collapsed', shouldCollapse);
+
+  if (shouldCollapse) {
+    if (collapsedClockSlot && timeWidget && timeWidget.parentElement !== collapsedClockSlot) {
+      collapsedClockSlot.appendChild(timeWidget);
+    }
+  } else {
+    if (sidebar && timeWidget && timeWidget.parentElement !== sidebar) {
+      const firstSidebarChild = sidebar.firstElementChild;
+      if (firstSidebarChild) {
+        sidebar.insertBefore(timeWidget, firstSidebarChild);
+      } else {
+        sidebar.appendChild(timeWidget);
+      }
+    }
+  }
+}
+
+window.addEventListener('resize', updateSidebarCollapseState);
+updateSidebarCollapseState();
 
 let allBookmarks = [];
 let suggestionAbortController = null; // To cancel old requests

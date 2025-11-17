@@ -311,19 +311,23 @@ button.dock-item {
 /* ======================================= */
 
 #bookmarks-grid {
-  display: grid; /* <-- CHANGED to grid */
+  display: grid;
   
-  /* This creates columns of a fixed 100px, 
-     and as many as can fit on the line. */
+  /* Keep your column settings */
   grid-template-columns: repeat(auto-fill, 100px);
   
-  /* This adds spacing between items */
+  /* Standard gap between items */
   gap: 5px; 
   
-  /* This centers the whole grid of items */
-  justify-content: center; 
+  /* CHANGED: Align items to the start (left) instead of center */
+  justify-content: start; 
   
-  padding: 5px; /* Adds nice spacing around the edge */
+  /* NEW: Match the width and margin of the Search & Tab bars */
+  width: 88%; 
+  margin-left: 10px;
+  
+  /* MODIFIED: Remove horizontal padding so items line up flush with tabs */
+  padding: 5px 0; 
 }
 
 
@@ -400,6 +404,18 @@ button.dock-item {
 
 .back-button .back-button-label {
   transition: color 0.2s ease;
+}
+
+.back-icon-wrapper {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.bookmark-item .back-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 0;
+  object-fit: contain;
 }
 
 .back-button.drag-over {
@@ -654,7 +670,12 @@ button.dock-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 10px; /* Aligns with grid padding */
+  
+  /* NEW: Match the geometry of .search-area-wrapper */
+  width: 88%; 
+  margin-left: 10px;
+  padding: 0; /* Remove padding so it aligns perfectly with the element above */
+  margin-top: 10px; /* Optional: Adds a tiny bit of breathing room */
 }
 
 
@@ -1165,7 +1186,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   gap: 4px;
   padding: 2px 5px; /* MODIFIED: Made smaller */
   border-radius: 20px; /* MODIFIED: Matched folder tabs */
-  margin-right: 150px; /* === ADDED THIS LINE === */
+  margin-right: 0; /* === ADDED THIS LINE === */
 }
 
 .quick-action-btn {

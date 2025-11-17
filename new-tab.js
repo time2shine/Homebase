@@ -1475,7 +1475,9 @@ function createBackButton(parentId) {
   item.className = 'bookmark-item';
   item.dataset.backTargetId = parentId;
   item.innerHTML = `
-    <span style="font-size: 32px; height: 32px; line-height: 1;">↩️</span>
+    <div class="bookmark-icon-wrapper back-icon-wrapper">
+      <img src="icons/back.svg" alt="Go back" class="back-icon" />
+    </div>
     <span class="back-button-label">Back</span>
   `;
   
@@ -1488,6 +1490,7 @@ function createBackButton(parentId) {
   });
   return item;
 }
+
 
 /**
  * Clears and re-renders the bookmarks grid (MODIFIED for Sortable.js)

@@ -1293,6 +1293,13 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   opacity: 1;
 }
 
+/* Allow larger SVG wrapper so it matches grid folders */
+#confirm-delete-icon .bookmark-icon-wrapper,
+#edit-folder-icon .bookmark-icon-wrapper {
+  width: 72px;
+  height: 58px;
+}
+
 /* Override fallback "letter" icon inside dialog so it doesn't draw its own box */
 #confirm-delete-icon .bookmark-fallback-icon,
 #edit-folder-icon .bookmark-fallback-icon {

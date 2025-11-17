@@ -39,6 +39,10 @@ const menuDeleteBtn = document.getElementById('menu-delete-btn');
 // NEW: context menus for grid items
 const gridFolderMenu = document.getElementById('bookmark-grid-folder-menu');
 const iconContextMenu = document.getElementById('bookmark-icon-menu');
+const gridBlankMenu = document.getElementById('bookmark-grid-blank-menu');
+const gridMenuCreateBookmarkBtn = document.getElementById('grid-menu-create-bookmark');
+const gridMenuCreateFolderBtn = document.getElementById('grid-menu-create-folder');
+const gridMenuManageBtn = document.getElementById('grid-menu-manage');
 
 // NEW: simple state so you know what was right-clicked
 let currentContextItemId = null;
@@ -1798,7 +1802,8 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
         folderContextMenu.classList.add('hidden');
 
         const confirmed = await showDeleteConfirm(
-          `Delete "${folderNode.title}" and all its contents?`
+          `Delete "${folderNode.title}" and all its contents?`,
+          { isFolder: true }
         );
         if (confirmed) {
           deleteBookmarkFolder(folderNode.id);
@@ -2444,11 +2449,39 @@ function showDeleteConfirm(message, options = {}) {
     iconSpan.innerHTML = '';
 
     if (isFolder) {
-      // SAME FOLDER LOGO AS SUBFOLDER
       iconSpan.innerHTML = `
-        <svg class="bookmark-folder-icon" viewBox="0 0 24 24">
-          <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"></path>
-        </svg>
+        <div class="bookmark-icon-wrapper">
+          <svg
+            class="bookmark-folder-icon"
+            width="48"
+            height="40"
+            viewBox="0 0 64 48"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M8 10
+                 C8 7.8 9.8 6 12 6
+                 H26
+                 L30 10
+                 H52
+                 C54.2 10 56 11.8 56 14
+                 V18
+                 H8
+                 Z"
+              fill="#EDEDED"
+            />
+
+            <rect
+              x="8"
+              y="14"
+              width="48"
+              height="30"
+              rx="6"
+              ry="6"
+              fill="#FFFFFF"
+            />
+          </svg>
+        </div>
       `;
     } else if (faviconUrl) {
       const img = document.createElement('img');
@@ -2648,18 +2681,58 @@ async function initializePage() {
     folderContextMenu.classList.add('hidden');
     gridFolderMenu.classList.add('hidden');
     iconContextMenu.classList.add('hidden');
+    if (gridBlankMenu) {
+      gridBlankMenu.classList.add('hidden');
+    }
   };
 
   window.addEventListener('click', hideAllContextMenus);
   window.addEventListener('blur', hideAllContextMenus);
 
   // Prevent clicks inside menus from closing them immediately
-  [folderContextMenu, gridFolderMenu, iconContextMenu].forEach(menu => {
+  [folderContextMenu, gridFolderMenu, iconContextMenu, gridBlankMenu].forEach(menu => {
     if (!menu) return;
     menu.addEventListener('click', (e) => {
       e.stopPropagation();
     });
   });
+
+  const bookmarksGrid = document.getElementById('bookmarks-grid');
+  if (bookmarksGrid && gridBlankMenu) {
+    bookmarksGrid.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.bookmark-item')) {
+        return; // regular item menus handle this
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      hideAllContextMenus();
+      gridBlankMenu.style.top = `${e.clientY}px`;
+      gridBlankMenu.style.left = `${e.clientX}px`;
+      gridBlankMenu.classList.remove('hidden');
+    });
+
+    const handleGridMenuAction = (action) => {
+      hideAllContextMenus();
+      if (action === 'bookmark') {
+        showAddBookmarkModal();
+      } else if (action === 'folder') {
+        showAddFolderModal();
+      } else if (action === 'manage') {
+        // Placeholder for future functionality
+        console.log('Manage Bookmarks menu clicked');
+      }
+    };
+
+    if (gridMenuCreateBookmarkBtn) {
+      gridMenuCreateBookmarkBtn.addEventListener('click', () => handleGridMenuAction('bookmark'));
+    }
+    if (gridMenuCreateFolderBtn) {
+      gridMenuCreateFolderBtn.addEventListener('click', () => handleGridMenuAction('folder'));
+    }
+    if (gridMenuManageBtn) {
+      gridMenuManageBtn.addEventListener('click', () => handleGridMenuAction('manage'));
+    }
+  }
 
   // === Handle clicks inside the GRID FOLDER context menu ===
   if (gridFolderMenu) {

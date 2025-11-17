@@ -320,7 +320,7 @@ body.sidebar-collapsed .collapsed-clock-slot {
 @keyframes item-fade-in {
   from {
     opacity: 0;
-    transform: scale(0.95) translateY(5px);
+    transform: scale(0.98) translateY(-25px);
   }
   to {
     opacity: 1;
@@ -335,7 +335,7 @@ body.sidebar-collapsed .collapsed-clock-slot {
   /* Start items as transparent before animation */
   opacity: 0; 
   /* Apply the animation */
-  animation: item-fade-in 0.25s ease-out forwards;
+  animation: item-fade-in 0.6s cubic-bezier(0.25, 0.8, 0.4, 1) forwards;
 }
 
 /* ======================================= */
@@ -395,8 +395,8 @@ body.sidebar-collapsed #bookmarks-grid {
 
 /* Glow around the item while it's a drop target */
 .bookmark-item.drag-over {
-  background-color: rgba(255, 255, 255, 0.12);          /* subtle light bg */
-  box-shadow: 0 0 18px rgba(255, 255, 255, 0.55);       /* glow */
+  background-color: transparent;
+  box-shadow: none;
 }
 
 /* Make the folder icon larger while it's a drop target */
@@ -487,7 +487,7 @@ body.sidebar-collapsed #bookmarks-grid {
 
 .bookmark-placeholder {
   height: 110px;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: transparent;
   border-radius: 10px;
 }
 
@@ -497,12 +497,33 @@ body.sidebar-collapsed #bookmarks-grid {
 
 .bookmark-item.sortable-drag {
   pointer-events: none;
+  opacity: 1 !important;
+  filter: none !important;
+  mix-blend-mode: normal;
 }
 
-/* Make the item being dragged visually smaller */
+/* Make the item being dragged visually larger for emphasis */
 .bookmark-item.sortable-drag .bookmark-icon-wrapper {
-  transform: scale(0.8);  /* dragged icon/folder shrinks */
-  opacity: 0.95;          /* optional, a tiny fade */
+  transform: scale(1.15);
+  opacity: 1;
+}
+
+.bookmark-fallback-ghost {
+  pointer-events: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+
+  background-color: transparent !important;
+  background: none !important;
+
+  border-radius: 12px;
+  box-shadow: none !important;
+  z-index: 10000 !important;
+}
+
+.bookmark-fallback-ghost .bookmark-icon-wrapper {
+  transform: scale(0.85);
 }
 
 
@@ -609,7 +630,8 @@ body.sidebar-collapsed #bookmarks-grid {
   cursor: pointer;
   
   transition: background-color 0.2s ease, color 0.2s ease, 
-              border-color 0.2s ease, opacity 0.2s ease;
+              border-color 0.2s ease, opacity 0.2s ease,
+              transform 0.2s ease, box-shadow 0.2s ease;
 }
 .bookmark-folder-tab:hover {
   background-color: rgba(0, 0, 0, 0.5);
@@ -619,6 +641,14 @@ body.sidebar-collapsed #bookmarks-grid {
   color: #333;
   font-weight: bold;
   border-color: white;
+}
+
+.bookmark-folder-tab.drop-target {
+  background-color: rgba(255, 255, 255, 0.95);
+  color: #1e1e1e;
+  transform: scale(1.08);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.9);
 }
 
 /* === MODIFIED: Styles for Tab D&D (Using Sortable.js) === */

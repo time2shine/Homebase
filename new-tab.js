@@ -1,4 +1,4 @@
-// ===============================================
+﻿// ===============================================
 // --- GLOBAL ELEMENTS ---
 // ===============================================
 const browser = window.browser || window.chrome;
@@ -94,6 +94,8 @@ if (bookmarkTabsTrack) {
   });
 }
 
+window.addEventListener('pointermove', handleGridDragPointerMove);
+
 let allBookmarks = [];
 let suggestionAbortController = null; // To cancel old requests
 let bookmarkTree = []; // To store the entire bookmark tree
@@ -107,6 +109,8 @@ let activeHomebaseFolderId = null; // ID of the selected folder tab
 let currentGridFolderNode = null; // The folder node currently being rendered in the grid
 let gridSortable = null;          // Instance for the bookmarks grid
 let tabsSortable = null;          // Instance for the folder tabs
+let isGridDragging = false;       // Track active drag to block click navigation
+let activeTabDropTarget = null;   // Currently highlighted folder tab drop target
 
 // NEW: folder hover delay state
 let folderHoverTarget = null;
@@ -1024,11 +1028,30 @@ function setupGridSortable(gridElement) {
     ghostClass: 'bookmark-placeholder', // Use our existing placeholder style
     chosenClass: 'sortable-chosen',     // Class for the item in its original spot
     dragClass: 'sortable-drag',         // Class for the item being dragged
+    forceFallback: true,                // Use Sortable's custom ghost instead of native DnD
+    fallbackClass: 'bookmark-fallback-ghost',
+    fallbackOnBody: true,
+    fallbackTolerance: 4,
     
     // The onStart javascript hack is no longer needed 
     // because the CSS Grid layout is stable.
 
-    onEnd: handleGridDrop,            // Function to call on drop/re-order
+    onClone: (evt) => {
+      const clone = evt.clone;
+      if (clone) {
+        clone.style.backgroundColor = 'transparent';
+        clone.style.boxShadow = 'none';
+      }
+    },
+    onStart: () => {
+      isGridDragging = true;
+    },
+    onEnd: (evt) => {
+      handleGridDrop(evt);
+      setTimeout(() => {
+        isGridDragging = false;
+      }, 0);
+    },
     onMove: handleGridMove,           // Function to call when hovering
     preventOnFilter: true             // Prevent 'Back' button drag
   });
@@ -1082,6 +1105,48 @@ function handleGridMove(evt) {
   return true;
 }
 
+function handleGridDragPointerMove(evt) {
+  if (!isGridDragging) {
+    if (activeTabDropTarget) {
+      clearTabDropHighlight();
+    }
+    return;
+  }
+
+  if (!evt || typeof evt.clientX !== 'number' || typeof evt.clientY !== 'number') {
+    return;
+  }
+
+  const hoveredElement = document.elementFromPoint(evt.clientX, evt.clientY);
+  if (!hoveredElement) {
+    clearTabDropHighlight();
+    return;
+  }
+
+  const tabCandidate = hoveredElement.closest('.bookmark-folder-tab');
+  if (!tabCandidate || !tabCandidate.dataset.folderId) {
+    clearTabDropHighlight();
+    return;
+  }
+
+  if (tabCandidate === activeTabDropTarget) {
+    return;
+  }
+
+  if (activeTabDropTarget) {
+    activeTabDropTarget.classList.remove('drop-target');
+  }
+
+  activeTabDropTarget = tabCandidate;
+  activeTabDropTarget.classList.add('drop-target');
+}
+
+function clearTabDropHighlight() {
+  if (!activeTabDropTarget) return;
+  activeTabDropTarget.classList.remove('drop-target');
+  activeTabDropTarget = null;
+}
+
 
 
 /**
@@ -1089,6 +1154,7 @@ function handleGridMove(evt) {
  * This is a Sortable.js `onEnd` callback.
  */
 async function handleGridDrop(evt) {
+  clearTabDropHighlight();
   const grid = evt.from; // Get the grid container
   
   // Clear all hover effects
@@ -1298,7 +1364,7 @@ function renderBookmark(bookmarkNode) {
       return;
     }
     // Simple check to prevent navigation after a drag
-    if (item.classList.contains('sortable-chosen')) {
+    if (isGridDragging || item.classList.contains('sortable-chosen')) {
       return;
     }
     window.location.href = bookmarkNode.url;
@@ -1506,7 +1572,7 @@ function renderBookmarkFolder(folderNode) {
       return;
     }
     // Simple check to prevent navigation after a drag
-    if (item.classList.contains('sortable-chosen')) {
+    if (isGridDragging || item.classList.contains('sortable-chosen')) {
       return;
     }
     renderBookmarkGrid(folderNode);
@@ -1586,6 +1652,7 @@ function createBackButton(parentId) {
  */
 function renderBookmarkGrid(folderNode, droppedItemId = null) {
   const grid = document.getElementById('bookmarks-grid');
+  const previousPositions = droppedItemId ? captureGridItemPositions(grid) : null;
   grid.innerHTML = '';
   
   // --- Store the current folder node ---
@@ -1620,10 +1687,7 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
   const items = grid.querySelectorAll('.bookmark-item');
   
   if (droppedItemId) {
-    // A drop just happened. Make all items appear instantly.
-    items.forEach(item => {
-      item.style.opacity = 1;
-    });
+    animateGridReorder(items, previousPositions);
   } else {
     // This is a folder change or initial load.
     // Do the cool "drop-in" animation.
@@ -2916,4 +2980,83 @@ function openFolderFromContext(folderId) {
     return;
   }
   renderBookmarkGrid(folderNode);
+}
+
+function captureGridItemPositions(grid) {
+  if (!grid) return null;
+  const positions = {};
+  grid.querySelectorAll('.bookmark-item').forEach(item => {
+    const bookmarkId = item.dataset.bookmarkId;
+    if (!bookmarkId) return;
+    positions[bookmarkId] = item.getBoundingClientRect();
+  });
+  return positions;
+}
+
+function animateGridReorder(items, previousPositions) {
+  if (!previousPositions) {
+    items.forEach(item => {
+      item.style.opacity = 1;
+    });
+    return;
+  }
+
+  const animations = [];
+
+  items.forEach(item => {
+    if (item.classList.contains('back-button')) {
+      item.style.opacity = 1;
+      return;
+    }
+    const bookmarkId = item.dataset.bookmarkId;
+    if (!bookmarkId) {
+      item.style.opacity = 1;
+      return;
+    }
+    const previousRect = previousPositions[bookmarkId];
+    if (!previousRect) {
+      item.style.opacity = 1;
+      return;
+    }
+
+    const newRect = item.getBoundingClientRect();
+    const deltaX = previousRect.left - newRect.left;
+    const deltaY = previousRect.top - newRect.top;
+
+    if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
+      item.style.opacity = 1;
+      return;
+    }
+
+    animations.push({ item, deltaX, deltaY });
+  });
+
+  if (!animations.length) {
+    items.forEach(item => {
+      item.style.opacity = 1;
+    });
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    animations.forEach(({ item, deltaX, deltaY }) => {
+      item.style.transition = 'none';
+      item.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      item.style.opacity = 1;
+      item.style.willChange = 'transform';
+    });
+
+    requestAnimationFrame(() => {
+      animations.forEach(({ item }) => {
+        item.style.transition = 'transform 250ms ease';
+        item.style.transform = '';
+        const cleanup = () => {
+          item.style.transition = '';
+          item.style.willChange = '';
+          item.removeEventListener('transitionend', cleanup);
+        };
+        item.addEventListener('transitionend', cleanup);
+      });
+    });
+  });
 }

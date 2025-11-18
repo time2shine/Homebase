@@ -1,4 +1,4 @@
-﻿// ===============================================
+﻿﻿// ===============================================
 // --- GLOBAL ELEMENTS ---
 // ===============================================
 const browser = window.browser || window.chrome;
@@ -1255,10 +1255,11 @@ function setupTabsSortable(tabsContainer) {
     tabsSortable.destroy();
   }
   tabsSortable = Sortable.create(tabsContainer, {
-    animation: 300,
-    draggable: '.bookmark-folder-tab', // Only tabs are draggable
-    filter: '.bookmark-folder-add-btn', // Ignore the '+' button
-    ghostClass: 'sortable-ghost-tab', // A new class for tab ghost
+    animation: 350, // Slightly increased duration
+    easing: "cubic-bezier(0.25, 1, 0.5, 1)", //  <-- ADD THIS: Adds a smooth "snap" effect
+    draggable: '.bookmark-folder-tab', 
+    filter: '.bookmark-folder-add-btn', 
+    ghostClass: 'sortable-ghost-tab', 
     chosenClass: 'sortable-chosen-tab',
     dragClass: 'sortable-drag-tab',
     onEnd: handleTabDrop,

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿// ===============================================
+// ===============================================
 // --- GLOBAL ELEMENTS ---
 // ===============================================
 const browser = window.browser || window.chrome;
@@ -21,6 +21,39 @@ const tabScrollRightBtn = document.getElementById('tab-scroll-right');
 const SIDEBAR_COLLAPSE_RATIO = 0.49;
 const DOCK_COLLAPSE_RATIO = 0.32;
 const TAB_SCROLL_STEP = 180;
+const VIDEOS_JSON_URL = 'https://pub-d330ac9daa80435c82f1d50b5e43ca72.r2.dev/videos.json';
+const VIDEOS_JSON_CACHE_KEY = 'videosManifest';
+const VIDEOS_JSON_FETCHED_AT_KEY = 'videosManifestFetchedAt';
+const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const WALLPAPER_POOL_KEY = 'wallpaperPoolIds';
+const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
+const WALLPAPER_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
+const runWhenIdle = (cb) => {
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(cb, { timeout: 500 });
+  } else {
+    setTimeout(cb, 50);
+  }
+};
+
+(async function primeWallpaperBackground() {
+  try {
+    const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY]);
+    const selection = stored[WALLPAPER_SELECTION_KEY];
+    const now = Date.now();
+    const fallbackFresh =
+      stored[WALLPAPER_FALLBACK_USED_KEY] &&
+      now - stored[WALLPAPER_FALLBACK_USED_KEY] < WALLPAPER_TTL_MS;
+    if (selection && selection.posterUrl) {
+      applyWallpaperBackground(selection.posterUrl);
+    } else if (fallbackFresh) {
+      applyWallpaperBackground('assets/fallback.webp');
+    }
+  } catch (err) {
+    console.warn('primeWallpaperBackground failed:', err);
+  }
+})();
 
 /**
  * Toggles a CSS class when the window width shrinks below the configured ratio
@@ -77,6 +110,157 @@ function scrollBookmarkTabs(direction) {
   });
 }
 
+// ===============================================
+// --- VIDEOS MANIFEST CACHING (DAILY) ---
+// ===============================================
+async function fetchVideosManifestIfNeeded() {
+  try {
+    const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
+    const lastFetchedAt = stored[VIDEOS_JSON_FETCHED_AT_KEY] || 0;
+    const now = Date.now();
+    const isFresh = now - lastFetchedAt < VIDEOS_JSON_TTL_MS;
+
+    if (stored[VIDEOS_JSON_CACHE_KEY] && isFresh) {
+      return stored[VIDEOS_JSON_CACHE_KEY]; // Already fresh for the day
+    }
+
+    const res = await fetch(VIDEOS_JSON_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const manifest = await res.json();
+
+    await browser.storage.local.set({
+      [VIDEOS_JSON_CACHE_KEY]: manifest,
+      [VIDEOS_JSON_FETCHED_AT_KEY]: now
+    });
+    return manifest;
+  } catch (err) {
+    console.warn('Could not refresh videos manifest:', err);
+    const fallback = await browser.storage.local.get(VIDEOS_JSON_CACHE_KEY);
+    return fallback[VIDEOS_JSON_CACHE_KEY] || [];
+  }
+}
+
+async function getVideosManifest() {
+  const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
+  const manifest = stored[VIDEOS_JSON_CACHE_KEY];
+  const lastFetchedAt = stored[VIDEOS_JSON_FETCHED_AT_KEY] || 0;
+  const isFresh = manifest && Date.now() - lastFetchedAt < VIDEOS_JSON_TTL_MS;
+  if (manifest && isFresh) {
+    return manifest;
+  }
+  return fetchVideosManifestIfNeeded();
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+async function cacheAsset(url) {
+  try {
+    const cache = await caches.open('wallpaper-assets');
+    const cached = await cache.match(url);
+    if (cached) return;
+    const res = await fetch(url, { cache: 'reload' });
+    if (res.ok) {
+      await cache.put(url, res.clone());
+    }
+  } catch (err) {
+    console.warn('Failed caching asset', url, err);
+  }
+}
+
+function setBackgroundVideoSources(videoUrl, posterUrl = '') {
+  const videos = Array.from(document.querySelectorAll('.background-video'));
+  videos.forEach((v) => {
+    try { v.pause(); } catch (e) {}
+    const source = v.querySelector('source');
+    if (source) {
+      source.src = videoUrl;
+    } else {
+      v.src = videoUrl;
+    }
+    v.poster = posterUrl || '';
+    v.load();
+    v.currentTime = 0;
+    v.play().catch(() => {});
+  });
+}
+
+function applyWallpaperBackground(posterUrl) {
+  if (posterUrl) {
+    document.body.style.backgroundImage = `url("${posterUrl}")`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+  } else {
+    document.body.style.backgroundImage = '';
+  }
+}
+
+async function pickNextWallpaper(manifest) {
+  if (!manifest || !manifest.length) return null;
+  const stored = await browser.storage.local.get([WALLPAPER_POOL_KEY]);
+  let pool = Array.isArray(stored[WALLPAPER_POOL_KEY]) ? stored[WALLPAPER_POOL_KEY] : [];
+  if (!pool.length) {
+    pool = shuffleArray(manifest.map(item => item.id));
+  }
+  const nextId = pool.pop();
+  const entry = manifest.find(item => item.id === nextId);
+  await browser.storage.local.set({ [WALLPAPER_POOL_KEY]: pool });
+  if (!entry) return null;
+
+  await Promise.all([cacheAsset(entry.url), cacheAsset(entry.poster)]);
+
+  const selection = {
+    id: entry.id,
+    videoUrl: entry.url,
+    posterUrl: entry.poster,
+    title: entry.title,
+    selectedAt: Date.now()
+  };
+  await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: selection });
+  return selection;
+}
+
+async function ensureDailyWallpaper(forceNext = false) {
+  const manifest = await getVideosManifest();
+  const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY]);
+  const selection = stored[WALLPAPER_SELECTION_KEY];
+  const now = Date.now();
+  const isFresh = selection && now - (selection.selectedAt || 0) < WALLPAPER_TTL_MS;
+
+  let current = selection;
+
+  // Use fallback once on fresh installs before any selection is cached
+  if (!current && !stored[WALLPAPER_FALLBACK_USED_KEY]) {
+    applyWallpaperBackground('assets/fallback.webp');
+    setBackgroundVideoSources('assets/fallback.mp4', 'assets/fallback.webp');
+    await browser.storage.local.set({ [WALLPAPER_FALLBACK_USED_KEY]: now });
+    return;
+  }
+
+  // If fallback was already used today and no selection yet, keep fallback for the day
+  const fallbackFresh =
+    stored[WALLPAPER_FALLBACK_USED_KEY] &&
+    now - stored[WALLPAPER_FALLBACK_USED_KEY] < WALLPAPER_TTL_MS;
+  if (!current && fallbackFresh && !forceNext) {
+    applyWallpaperBackground('assets/fallback.webp');
+    return;
+  }
+
+  if (!isFresh || forceNext) {
+    current = await pickNextWallpaper(manifest);
+  }
+
+  if (current && current.videoUrl) {
+    applyWallpaperBackground(current.posterUrl || '');
+    setBackgroundVideoSources(current.videoUrl, current.posterUrl);
+  }
+}
+
 window.addEventListener('resize', updateSidebarCollapseState);
 updateSidebarCollapseState();
 window.addEventListener('resize', updateBookmarkTabOverflow);
@@ -115,7 +299,7 @@ let activeTabDropTarget = null;   // Currently highlighted folder tab drop targe
 // NEW: folder hover delay state
 let folderHoverTarget = null;
 let folderHoverStart = 0;
-const FOLDER_HOVER_DELAY_MS = 250; // tweak this (200–400ms) to taste
+const FOLDER_HOVER_DELAY_MS = 250; // tweak this (200�400ms) to taste
 
 // === CONTEXT MENU ELEMENTS ===
 const folderContextMenu = document.getElementById('bookmark-folder-menu');
@@ -1093,13 +1277,13 @@ function handleGridMove(evt) {
       targetItem.classList.add('drag-over');
       return false; // prevent Sortable from reordering while over this folder
     } else {
-      // Still in the "passing through" phase → allow normal reordering
+      // Still in the "passing through" phase ? allow normal reordering
       targetItem.classList.remove('drag-over');
       return true;
     }
   }
 
-  // Not over a folder → reset hover state and allow normal sort
+  // Not over a folder ? reset hover state and allow normal sort
   folderHoverTarget = null;
   folderHoverStart = 0;
   return true;
@@ -1196,7 +1380,7 @@ async function handleGridDrop(evt) {
     // Move the bookmark *into* that folder
     await moveBookmark(draggedItemId, { parentId: targetFolderId });
   }
-  // --- Case 2: NEW – Dropped ONTO a folder TAB ---
+  // --- Case 2: NEW � Dropped ONTO a folder TAB ---
   else if (tabTarget) {
     const targetFolderId = tabTarget.dataset.folderId;
 
@@ -1206,7 +1390,7 @@ async function handleGridDrop(evt) {
     // Move the bookmark into the folder represented by that tab
     await moveBookmark(draggedItemId, { parentId: targetFolderId });
   }
-  // --- Case 3: NEW – Dropped ONTO the Back button ---
+  // --- Case 3: NEW � Dropped ONTO the Back button ---
   else if (backButtonTarget && backButtonTarget.dataset.backTargetId) {
     const targetFolderId = backButtonTarget.dataset.backTargetId;
 
@@ -1302,12 +1486,8 @@ async function handleTabDrop(evt) {
   } else {
     // Normal case: dropped before some existing tab
     const targetNode = folderNodes[evt.newIndex];
+    if (!targetNode) return;
     targetBookmarkIndex = targetNode.index;
-
-    // Adjust if moving *down* the list
-    if (originalBookmarkIndex < targetBookmarkIndex) {
-      targetBookmarkIndex--;
-    }
   }
 
   // If nothing effectively changes, bail out
@@ -1447,7 +1627,7 @@ async function deleteBookmarkOrFolder(id, isFolder) {
       const domain = urlObj.hostname || node.url;
       faviconUrl = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
     } catch (e) {
-      // ignore – will fall back to letter icon
+      // ignore � will fall back to letter icon
     }
   }
 
@@ -1985,12 +2165,12 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     const saveButton = document.createElement('button');
     saveButton.className = 'bookmark-folder-save-btn';
-    saveButton.textContent = '✓';
+    saveButton.textContent = '?';
     saveButton.title = 'Save Folder';
 
     const cancelButton = document.createElement('button');
     cancelButton.className = 'bookmark-folder-cancel-btn';
-    cancelButton.textContent = '✖';
+    cancelButton.textContent = '?';
     cancelButton.title = 'Cancel';
 
     function cleanup() {
@@ -2461,17 +2641,18 @@ let selectedLocation = null;
 let searchTimeout = null;
 
 function getWeatherEmoji(code) {
-  if ([0, 1].includes(code)) return '☀️';
-  if ([2].includes(code)) return '⛅️';
-  if ([3].includes(code)) return '☁️';
-  if ([45, 48].includes(code)) return '🌫️';
-  if ([51, 53, 55, 56, 57].includes(code)) return '🌦️';
-  if ([61, 63, 65, 66, 67].includes(code)) return '🌧️';
-  if ([71, 73, 75, 77].includes(code)) return '🌨️';
-  if ([80, 81, 82].includes(code)) return '🌦️';
-  if ([85, 86].includes(code)) return '🌨️';
-  if ([95, 96, 99].includes(code)) return '⛈️';
-  return '❓';
+  // Use explicit Unicode escapes to avoid encoding issues
+  if ([0, 1].includes(code)) return '\u2600'; // sun
+  if ([2].includes(code)) return '\u26C5'; // sun behind cloud
+  if ([3].includes(code)) return '\u2601'; // cloud
+  if ([45, 48].includes(code)) return '\uD83C\uDF2B'; // fog
+  if ([51, 53, 55, 56, 57].includes(code)) return '\uD83C\uDF26'; // light rain
+  if ([61, 63, 65, 66, 67].includes(code)) return '\uD83C\uDF27'; // rain
+  if ([71, 73, 75, 77].includes(code)) return '\uD83C\uDF28'; // snow
+  if ([80, 81, 82].includes(code)) return '\uD83C\uDF26'; // showers
+  if ([85, 86].includes(code)) return '\uD83C\uDF28'; // snow showers
+  if ([95, 96, 99].includes(code)) return '\u26C8'; // thunderstorm
+  return '\u2753'; // unknown
 }
 function getWeatherDescription(code) {
   if ([0].includes(code)) return 'Clear sky';
@@ -2525,7 +2706,7 @@ function updateWeatherUI(data, cityName, units) {
     sunset = sunsetDate.toLocaleTimeString('en-US', timeOptions);
   }
   cityEl.textContent = cityName;
-  tempEl.textContent = `${temp}°${units === 'celsius' ? 'C' : 'F'}`;
+  tempEl.textContent = `${temp}\u00b0${units === 'celsius' ? 'C' : 'F'}`;
   descEl.textContent = getWeatherDescription(code);
   pressureEl.textContent = `Pressure: ${pressure}${pressure !== '--' ? ' mmHg' : ''}`;
   humidityEl.textContent = `Humidity: ${humidity}${humidity !== '--' ? '%' : ''}`;
@@ -2547,12 +2728,13 @@ function updateWeatherUI(data, cityName, units) {
 function showWeatherError(error) {
   if (error) console.error('Weather Error:', error);
   document.getElementById('weather-city').textContent = 'Weather Error';
-  document.getElementById('weather-temp').textContent = '--°';
+  document.getElementById('weather-temp').textContent = '--\u00b0';
   document.getElementById('weather-desc').textContent = 'Could not load data';
-  document.getElementById('weather-icon').textContent = '⚠️';
+  document.getElementById('weather-icon').textContent = '-';
   setLocationBtn.classList.remove('hidden');
   browser.storage.local.remove(['cachedWeatherData', 'cachedCityName', 'cachedUnits']);
 }
+
 
 async function fetchWeather(lat, lon, units, cityName) {
   try {
@@ -2778,6 +2960,84 @@ async function setupWeather() {
 }
 
 // ===============================================
+// --- BACKGROUND VIDEO CROSSFADE ---
+// ===============================================
+function setupBackgroundVideoCrossfade() {
+  const videos = Array.from(document.querySelectorAll('.background-video'));
+  if (videos.length < 2) return;
+
+  // Control loop manually so we can overlap and fade
+  videos.forEach(v => {
+    v.loop = false;
+    v.preload = 'auto';
+    v.muted = true;
+    v.playsInline = true;
+  });
+
+  const fadeMs = 1400;   // Duration of the crossfade (slightly longer)
+  const bufferMs = 400;  // Padding before the end to start the fade
+  const safeDurationMs = 15000; // Fallback if metadata is missing
+  const fadeSec = fadeMs / 1000;
+  const bufferSec = bufferMs / 1000;
+
+  const startCycle = (current, next) => {
+    let fading = false;
+
+    const doFade = async () => {
+      if (fading) return;
+      fading = true;
+      try {
+        next.currentTime = 0;
+        await next.play();
+        next.classList.add('is-active');
+        current.classList.remove('is-active');
+
+        setTimeout(() => {
+          current.pause();
+          current.currentTime = 0;
+          startCycle(next, current);
+        }, fadeMs + 50);
+      } catch (err) {
+        console.warn('Background video crossfade failed:', err);
+      }
+    };
+
+    const onTimeUpdate = () => {
+      const duration = current.duration || safeDurationMs / 1000;
+      const startFadeAt = Math.max(1, duration - fadeSec - bufferSec);
+      if (current.currentTime >= startFadeAt) {
+        current.removeEventListener('timeupdate', onTimeUpdate);
+        doFade();
+      }
+    };
+
+    current.addEventListener('timeupdate', onTimeUpdate);
+    current.addEventListener('ended', () => {
+      current.removeEventListener('timeupdate', onTimeUpdate);
+      doFade();
+    }, { once: true });
+  };
+
+  const [first, second] = videos;
+
+  const startPlayback = async () => {
+    try {
+      await first.play();
+      first.classList.add('is-active');
+      startCycle(first, second);
+    } catch (err) {
+      console.warn('Autoplay blocked for background video:', err);
+    }
+  };
+
+  if (first.readyState >= 1) {
+    startPlayback();
+  } else {
+    first.addEventListener('loadedmetadata', startPlayback, { once: true });
+  }
+}
+
+// ===============================================
 // --- DOCK NAVIGATION ---
 // ===============================================
 function setupDockNavigation() {
@@ -2802,20 +3062,23 @@ function setupDockNavigation() {
   document.getElementById('dock-addons-btn').addEventListener('click', (e) => {
     openTab(e, 'about:addons');
   });
+
+  const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
+  if (nextWallpaperBtn) {
+    nextWallpaperBtn.addEventListener('click', async () => {
+      await ensureDailyWallpaper(true);
+    });
+  }
 }
 
 // ===============================================
 // --- INITIALIZE THE PAGE (MODIFIED) ---
 // ===============================================
 async function initializePage() {
+  await ensureDailyWallpaper();
+  setupBackgroundVideoCrossfade();
   updateTime();
   setInterval(updateTime, 1000 * 60);
-  await loadCachedQuote();
-  await loadCachedWeather();
-  setupQuoteWidget();
-  await setupSearch();
-  await setupWeather();
-  setupAppLauncher();
   setupDockNavigation();
   
   setupQuickActions();
@@ -2825,7 +3088,16 @@ async function initializePage() {
   setupMoveModal();
   
   loadBookmarks();
-  fetchQuote();
+
+  runWhenIdle(async () => {
+    await loadCachedQuote();
+    await loadCachedWeather();
+    setupQuoteWidget();
+    await setupSearch();
+    await setupWeather();
+    setupAppLauncher();
+    fetchQuote();
+  });
 
   // --- Add global listeners to hide ALL context menus ---
   const hideAllContextMenus = () => {
@@ -3061,3 +3333,5 @@ function animateGridReorder(items, previousPositions) {
     });
   });
 }
+
+

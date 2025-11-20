@@ -5,8 +5,8 @@ body {
   font-family: sans-serif;
   color: white;
 
-  /* Use video for the live background; fallback to the still frame */
-  background: #000 url('assets/fallback.webp') center/cover no-repeat;
+  /* Base background; JS sets the poster/wallpaper per day */
+  background: #000;
   height: 100vh;
   box-sizing: border-box;
 
@@ -68,18 +68,17 @@ body {
 
 /* --- 1. Right Dock (MOVED) --- */
 .dock {
-  flex: 0 0 5px; /* Fixed width for the dock */
+  flex: 0 0 40px; /* Fixed width for the dock */
   height: 100vh;
-  padding: 50px 0 4px;
+  padding: 64px 6px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 12px;
   z-index: 100;
-
-  /* Adjust glass style for vertical bar */
+  background: transparent;
   border-radius: 0; 
-  border-left: 1px solid rgba(255, 255, 255, 0.15); /* MOVED BORDER */
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
   border-right: 0;
   border-top: 0;
   border-bottom: 0;
@@ -91,55 +90,78 @@ body.dock-collapsed .dock {
 
 .dock-item {
   position: relative; /* Added for tooltip positioning */
-  padding: 8px;
-  border-radius: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px;
+  border-radius: 9px;
   border: 1px solid rgba(255, 255, 255, 0.35);
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: transparent;
+  color: #ffffff;
+  text-decoration: none;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
+  box-sizing: border-box;
 }
 .dock-item:hover {
-  background-color: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.55);
+  background-color: #ffffff;
+  border-color: #ffffff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  color: #111;
 }
 .dock-item img {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: block;
 }
 .dock-item svg {
-  width: 24px;
-  height: 24px;
-  fill: white;
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
 }
 /* Ensure bottom dock buttons span full width while keeping box style */
-.dock-bottom .dock-item {
+.dock-bottom .dock-item,
+.dock-group-bottom .dock-item {
   width: 100%;
   box-sizing: border-box;
+  padding: 5px;
+  border-radius: 9px;
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
 }
 /* Ensure buttons keep the same box styling as anchors */
 button.dock-item {
-  background-color: inherit;
-  border: inherit;
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: inherit;
+  padding: 5px;
+  width: 100%;
   color: inherit;
   padding: inherit;
 }
 .dock-divider {
-  width: 60%;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.2);
-  margin: 5px 0;
+  width: 50%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.25);
+  margin: 4px 0;
 }
-.dock-bottom {
+.dock-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.dock-bottom,
+.dock-group-bottom {
   margin-top: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0;
+  gap: 6px;
   width: 100%;
 }
 

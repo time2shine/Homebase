@@ -226,13 +226,14 @@ async function pickNextWallpaper(manifest) {
 }
 
 async function ensureDailyWallpaper(forceNext = false) {
-  const manifest = await getVideosManifest();
   const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY]);
-  const selection = stored[WALLPAPER_SELECTION_KEY];
   const now = Date.now();
-  const isFresh = selection && now - (selection.selectedAt || 0) < WALLPAPER_TTL_MS;
 
-  let current = selection;
+  let current = stored[WALLPAPER_SELECTION_KEY];
+  const isFresh = current && now - (current.selectedAt || 0) < WALLPAPER_TTL_MS;
+  const fallbackFresh =
+    stored[WALLPAPER_FALLBACK_USED_KEY] &&
+    now - stored[WALLPAPER_FALLBACK_USED_KEY] < WALLPAPER_TTL_MS;
 
   // Use fallback once on fresh installs before any selection is cached
   if (!current && !stored[WALLPAPER_FALLBACK_USED_KEY]) {
@@ -243,13 +244,17 @@ async function ensureDailyWallpaper(forceNext = false) {
   }
 
   // If fallback was already used today and no selection yet, keep fallback for the day
-  const fallbackFresh =
-    stored[WALLPAPER_FALLBACK_USED_KEY] &&
-    now - stored[WALLPAPER_FALLBACK_USED_KEY] < WALLPAPER_TTL_MS;
   if (!current && fallbackFresh && !forceNext) {
     applyWallpaperBackground('assets/fallback.webp');
     return;
   }
+
+  // Show fallback while we fetch the manifest on cold starts so the page is never blank
+  if (!current && !fallbackFresh) {
+    applyWallpaperBackground('assets/fallback.webp');
+  }
+
+  const manifest = await getVideosManifest();
 
   if (!isFresh || forceNext) {
     current = await pickNextWallpaper(manifest);

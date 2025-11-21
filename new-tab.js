@@ -353,6 +353,9 @@ const galleryAlternateBtn = document.getElementById('gallery-alternate-btn');
 const galleryActiveFilter = document.getElementById('gallery-active-filter');
 const dockGalleryBtn = document.getElementById('dock-gallery-btn');
 const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
+const nextWallpaperTooltip = nextWallpaperBtn ? nextWallpaperBtn.querySelector('.custom-tooltip') : null;
+const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperTooltip ? nextWallpaperTooltip.textContent : 'Next Wallpaper';
+const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
 const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
 const galleryDailyToggle = document.getElementById('gallery-daily-toggle');
 const FAVORITES_KEY = 'galleryFavorites';
@@ -376,6 +379,49 @@ const settingsPreviewVideo = document.getElementById('gallery-settings-preview-v
 const settingsPreviewImg = document.getElementById('gallery-settings-preview-img');
 const settingsPreviewTitle = document.getElementById('gallery-settings-preview-title');
 const settingsPreviewAuthor = document.getElementById('gallery-settings-preview-author');
+
+function setNextWallpaperButtonLoading(isLoading) {
+  if (!nextWallpaperBtn) return;
+  nextWallpaperBtn.disabled = isLoading;
+  nextWallpaperBtn.classList.toggle('is-loading', isLoading);
+  if (nextWallpaperTooltip) {
+    nextWallpaperTooltip.textContent = isLoading ? NEXT_WALLPAPER_TOOLTIP_LOADING : NEXT_WALLPAPER_TOOLTIP_DEFAULT;
+  }
+}
+
+function waitForWallpaperReady(selection, type = 'video') {
+  return new Promise((resolve) => {
+    if (!selection) return resolve();
+    const finalType = type === 'static' ? 'static' : 'video';
+    if (finalType === 'static' || !selection.videoUrl) {
+      return resolve();
+    }
+    const videos = Array.from(document.querySelectorAll('.background-video'));
+    if (!videos.length) return resolve();
+
+    const activeVideo = videos.find(v => v.classList.contains('is-active')) || videos[0];
+    if (!activeVideo) return resolve();
+
+    let done = false;
+    const cleanup = () => {
+      if (done) return;
+      done = true;
+      activeVideo.removeEventListener('playing', onPlaying);
+      activeVideo.removeEventListener('canplay', onCanPlay);
+      activeVideo.removeEventListener('error', onError);
+      clearTimeout(timeoutId);
+      resolve();
+    };
+    const onPlaying = () => cleanup();
+    const onCanPlay = () => cleanup();
+    const onError = () => cleanup();
+    const timeoutId = setTimeout(cleanup, 8000);
+
+    activeVideo.addEventListener('playing', onPlaying);
+    activeVideo.addEventListener('canplay', onCanPlay);
+    activeVideo.addEventListener('error', onError);
+  });
+}
 
 // ===============================================
 // --- NEW: ADD BOOKMARK MODAL ELEMENTS ---
@@ -3152,7 +3198,18 @@ function setupDockNavigation() {
 
   if (nextWallpaperBtn) {
     nextWallpaperBtn.addEventListener('click', async () => {
-      await ensureDailyWallpaper(true);
+      if (nextWallpaperBtn.disabled) return;
+      setNextWallpaperButtonLoading(true);
+      try {
+        await ensureDailyWallpaper(true);
+        const selection = currentWallpaperSelection;
+        const type = await getWallpaperTypePreference();
+        await waitForWallpaperReady(selection, type);
+      } catch (err) {
+        console.warn('Failed to load next wallpaper', err);
+      } finally {
+        setNextWallpaperButtonLoading(false);
+      }
     });
   }
 

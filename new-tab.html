@@ -230,6 +230,78 @@
     </div>
   </nav>
 
+  <div id="gallery-modal" class="modal-overlay hidden">
+    <div class="gallery-dialog glass-box">
+      <div class="gallery-header">
+        <h3>Gallery</h3>
+        <button id="gallery-close-btn" class="icon-btn" aria-label="Close Gallery">×</button>
+      </div>
+      <div class="gallery-filters">
+        <button class="gallery-filter active" data-filter="all">All</button>
+      </div>
+      <div class="gallery-actions">
+        <h4 id="gallery-active-filter">All</h4>
+        <button id="gallery-alternate-btn" class="gallery-primary-btn">Pick Random Wallpaper</button>
+      </div>
+      <div id="gallery-content">
+        <div id="gallery-grid" class="gallery-grid"></div>
+
+        <div id="gallery-empty-state" class="gallery-empty hidden">
+          <p>No wallpapers here yet.</p>
+        </div>
+
+        <div id="gallery-settings-panel" class="hidden">
+          <div class="gallery-settings-layout">
+            <div class="gallery-settings-preview">
+              <div class="settings-preview-box">
+                <img src="assets/fallback.webp" alt="Preview wallpaper">
+                <div class="settings-preview-caption">
+                  <div class="settings-preview-title">Daily Wallpaper</div>
+                  <div class="settings-preview-author">Default preview</div>
+                </div>
+              </div>
+            </div>
+            <div class="gallery-settings-controls">
+              <h4>Settings</h4>
+              <div class="settings-row">
+                <label for="gallery-daily-toggle">Alternate wallpapers daily</label>
+                <label class="switch">
+                  <input type="checkbox" id="gallery-daily-toggle">
+                  <span class="slider round"></span>
+                </label>
+              </div>
+              <div class="settings-row">
+                <span>Wallpaper type</span>
+                <div class="settings-radio-group">
+                  <label><input type="radio" name="gallery-wallpaper-type" value="video" checked> Live video</label>
+                  <label><input type="radio" name="gallery-wallpaper-type" value="static"> Static picture</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="gallery-footer-nav">
+        <button class="gallery-footer-btn is-active" data-section="gallery">
+          <span class="gallery-footer-icon">🧊</span>
+          <span class="gallery-footer-label">Gallery</span>
+        </button>
+        <button class="gallery-footer-btn" data-section="my-wallpapers">
+          <span class="gallery-footer-icon">🖼️</span>
+          <span class="gallery-footer-label">My Wallpapers</span>
+        </button>
+        <button class="gallery-footer-btn" data-section="favorites">
+          <span class="gallery-footer-icon">❤️</span>
+          <span class="gallery-footer-label">Favorites</span>
+        </button>
+        <button class="gallery-footer-btn" data-section="settings">
+          <span class="gallery-footer-icon">⚙️</span>
+          <span class="gallery-footer-label">Settings</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="google-apps-panel" class="glass-box hidden">
       <h3>Google Apps</h3>
       <div id="google-apps-grid">

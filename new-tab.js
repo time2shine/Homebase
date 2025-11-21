@@ -327,6 +327,24 @@ let currentContextIsFolder = false;
 const quickAddBookmarkBtn = document.getElementById('quick-add-bookmark');
 const quickAddFolderBtn = document.getElementById('quick-add-folder');
 const quickOpenBookmarksBtn = document.getElementById('quick-open-bookmarks');
+const galleryModal = document.getElementById('gallery-modal');
+const galleryGrid = document.getElementById('gallery-grid');
+const galleryCloseBtn = document.getElementById('gallery-close-btn');
+const galleryAlternateBtn = document.getElementById('gallery-alternate-btn');
+const galleryActiveFilter = document.getElementById('gallery-active-filter');
+const dockGalleryBtn = document.getElementById('dock-gallery-btn');
+const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
+const FAVORITES_KEY = 'galleryFavorites';
+let galleryManifest = [];
+let galleryActiveFilterValue = 'all';
+let gallerySection = 'gallery'; // gallery | favorites | my-wallpapers | settings (future)
+let galleryFavorites = new Set();
+const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
+const galleryGridContainer = document.getElementById('gallery-grid');
+const galleryEmptyState = document.getElementById('gallery-empty-state');
+const gallerySettingsPanel = document.getElementById('gallery-settings-panel');
+const galleryFiltersContainer = document.querySelector('.gallery-filters');
+const galleryActionsBar = document.querySelector('.gallery-actions');
 
 // ===============================================
 // --- NEW: ADD BOOKMARK MODAL ELEMENTS ---
@@ -3101,11 +3119,14 @@ function setupDockNavigation() {
     openTab(e, 'about:addons');
   });
 
-  const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
   if (nextWallpaperBtn) {
     nextWallpaperBtn.addEventListener('click', async () => {
       await ensureDailyWallpaper(true);
     });
+  }
+
+  if (dockGalleryBtn) {
+    dockGalleryBtn.addEventListener('click', openGalleryModal);
   }
 }
 
@@ -3275,6 +3296,249 @@ async function initializePage() {
 }
 
 initializePage();
+function buildGalleryCard(item, index = 0) {
+  const card = document.createElement('div');
+  card.className = 'gallery-card';
+  const posterSrc = item.poster || item.posterUrl || item.url || '';
+  const loadingAttr = index < 40 ? 'eager' : 'lazy';
+  const isFavorite = galleryFavorites.has(item.id);
+  card.innerHTML = `
+    <img class="gallery-card-image" src="${posterSrc}" alt="${item.title || 'Wallpaper'}" loading="${loadingAttr}" referrerpolicy="no-referrer" />
+    <button class="gallery-fav-btn ${isFavorite ? 'is-active' : ''}" aria-label="Favorite this wallpaper">
+      <span class="fav-icon">${isFavorite ? '❤' : '♡'}</span>
+    </button>
+    <div class="gallery-card-meta">
+      <span class="gallery-card-title">${item.title || 'Wallpaper'}</span>
+      <button class="gallery-card-apply" aria-label="Set this wallpaper">Set</button>
+    </div>
+  `;
+
+  const applyBtn = card.querySelector('.gallery-card-apply');
+  applyBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await applyGalleryWallpaper(item);
+  });
+
+  const favBtn = card.querySelector('.gallery-fav-btn');
+  favBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    toggleFavorite(item.id);
+  });
+
+  card.addEventListener('click', async () => {
+    await applyGalleryWallpaper(item);
+  });
+
+  return card;
+}
+
+async function applyGalleryWallpaper(item) {
+  const selection = {
+    id: item.id,
+    videoUrl: item.url,
+    posterUrl: item.poster || item.posterUrl || '',
+    title: item.title || '',
+    selectedAt: Date.now()
+  };
+
+  await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: selection });
+  applyWallpaperBackground(selection.posterUrl || '');
+  if (selection.videoUrl) {
+    setBackgroundVideoSources(selection.videoUrl, selection.posterUrl);
+  }
+  // Close modal after applying
+  closeGalleryModal();
+}
+
+async function openGalleryModal() {
+  if (!galleryModal || !galleryGrid) return;
+  galleryModal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+
+  try {
+    const manifest = await getVideosManifest(); // uses cached manifest when fresh
+    galleryManifest = Array.isArray(manifest) ? manifest : [];
+    await loadGalleryFavorites();
+    buildGalleryFilters(galleryManifest);
+    setGalleryFilter(galleryActiveFilterValue || 'all');
+  } catch (err) {
+    console.warn('Could not load gallery manifest', err);
+  }
+}
+
+function closeGalleryModal() {
+  if (!galleryModal) return;
+  galleryModal.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+}
+
+function renderGallery(manifest = []) {
+  if (!galleryGrid) return;
+  galleryGrid.innerHTML = '';
+  manifest.forEach((item, idx) => {
+    const card = buildGalleryCard(item, idx);
+    galleryGrid.appendChild(card);
+  });
+}
+
+function renderCurrentGallery() {
+  const data = getGalleryDataForSection();
+  const isSettings = gallerySection === 'settings';
+
+  if (galleryEmptyState) {
+    galleryEmptyState.classList.toggle('hidden', isSettings || data.length > 0);
+  }
+  if (galleryGrid) {
+    galleryGrid.classList.toggle('hidden', isSettings);
+  }
+  if (gallerySettingsPanel) {
+    gallerySettingsPanel.classList.toggle('hidden', !isSettings);
+  }
+
+  if (isSettings) return;
+  renderGallery(data);
+}
+
+function getGalleryDataForSection() {
+  let data = galleryManifest;
+  if (gallerySection === 'favorites') {
+    data = galleryManifest.filter((item) => galleryFavorites.has(item.id));
+  }
+  if (galleryActiveFilterValue !== 'all') {
+    data = data.filter((item) => (item.category || '') === galleryActiveFilterValue);
+  }
+  return data;
+}
+
+function getFiltersFromManifest(manifest = []) {
+  const categories = new Set();
+  manifest.forEach((item) => {
+    if (item.category) {
+      categories.add(item.category);
+    }
+  });
+  return ['all', ...Array.from(categories)];
+}
+
+function buildGalleryFilters(manifest = []) {
+  const filtersContainer = document.querySelector('.gallery-filters');
+  if (!filtersContainer) return;
+  filtersContainer.innerHTML = '';
+
+  const filters = getFiltersFromManifest(manifest);
+  filters.forEach((cat) => {
+    const btn = document.createElement('button');
+    btn.className = 'gallery-filter';
+    btn.dataset.filter = cat;
+    btn.textContent = cat === 'all' ? 'All' : cat;
+    if (cat === galleryActiveFilterValue) {
+      btn.classList.add('active');
+    }
+    btn.addEventListener('click', () => setGalleryFilter(cat));
+    filtersContainer.appendChild(btn);
+  });
+}
+
+function setGalleryFilter(filter = 'all') {
+  galleryActiveFilterValue = filter;
+  const filtersContainer = document.querySelector('.gallery-filters');
+  if (filtersContainer) {
+    filtersContainer.querySelectorAll('.gallery-filter').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+  }
+  if (galleryActiveFilter) {
+    galleryActiveFilter.textContent = filter === 'all' ? 'All' : filter;
+  }
+
+  renderCurrentGallery();
+}
+
+if (galleryCloseBtn) {
+  galleryCloseBtn.addEventListener('click', closeGalleryModal);
+}
+
+if (galleryModal) {
+  galleryModal.addEventListener('click', (e) => {
+    if (e.target === galleryModal) {
+      closeGalleryModal();
+    }
+  });
+}
+
+// Placeholder: alternate button shuffles through manifest in current view
+if (galleryAlternateBtn) {
+  galleryAlternateBtn.addEventListener('click', async () => {
+    // Mirror "Next Wallpaper" behavior
+    await ensureDailyWallpaper(true);
+    closeGalleryModal();
+  });
+}
+
+if (galleryFooterButtons && galleryFooterButtons.length) {
+  galleryFooterButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      galleryFooterButtons.forEach((b) => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+
+      const section = btn.dataset.section;
+      setGallerySection(section || 'gallery');
+    });
+  });
+}
+
+async function loadGalleryFavorites() {
+  try {
+    const stored = await browser.storage.local.get(FAVORITES_KEY);
+    const ids = Array.isArray(stored[FAVORITES_KEY]) ? stored[FAVORITES_KEY] : [];
+    galleryFavorites = new Set(ids);
+  } catch (err) {
+    console.warn('Failed to load gallery favorites', err);
+    galleryFavorites = new Set();
+  }
+}
+
+async function saveGalleryFavorites() {
+  try {
+    await browser.storage.local.set({ [FAVORITES_KEY]: Array.from(galleryFavorites) });
+  } catch (err) {
+    console.warn('Failed to save gallery favorites', err);
+  }
+}
+
+async function toggleFavorite(itemId) {
+  if (!itemId) return;
+  if (galleryFavorites.has(itemId)) {
+    galleryFavorites.delete(itemId);
+  } else {
+    galleryFavorites.add(itemId);
+  }
+  await saveGalleryFavorites();
+  renderCurrentGallery();
+}
+
+function setGallerySection(section = 'gallery') {
+  gallerySection = section;
+  if (galleryFooterButtons && galleryFooterButtons.length) {
+    galleryFooterButtons.forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.section === section);
+    });
+  }
+  const hideFilters = section === 'settings';
+  if (galleryFiltersContainer) {
+    galleryFiltersContainer.style.display = hideFilters ? 'none' : 'flex';
+  }
+  if (galleryActionsBar) {
+    galleryActionsBar.style.display = hideFilters ? 'none' : 'flex';
+  }
+  if (galleryActiveFilter) {
+    galleryActiveFilter.textContent = hideFilters
+      ? 'Settings'
+      : (galleryActiveFilterValue === 'all' ? 'All' : galleryActiveFilterValue);
+  }
+
+  renderCurrentGallery();
+}
 window.addEventListener('pageshow', clearBookmarkLoadingStates);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {

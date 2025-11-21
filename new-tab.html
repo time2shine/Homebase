@@ -234,7 +234,7 @@
     <div class="gallery-dialog glass-box">
       <div class="gallery-header">
         <h3>Gallery</h3>
-        <button id="gallery-close-btn" class="icon-btn" aria-label="Close Gallery">×</button>
+        <button id="gallery-close-btn" class="icon-btn close-btn" aria-label="Close Gallery">×</button>
       </div>
       <div class="gallery-filters">
         <button class="gallery-filter active" data-filter="all">All</button>
@@ -263,12 +263,25 @@
             </div>
             <div class="gallery-settings-controls">
               <h4>Settings</h4>
-              <div class="settings-row">
-                <label for="gallery-daily-toggle">Alternate wallpapers daily</label>
-                <label class="switch">
+              <div class="settings-row settings-row-toggle">
+                <label for="gallery-daily-toggle">Pick Random Wallpaper Daily</label>
+                <div class="gallery-lamp-toggle">
                   <input type="checkbox" id="gallery-daily-toggle">
-                  <span class="slider round"></span>
-                </label>
+                  <label for="gallery-daily-toggle" class="lamp-track">
+                    <span class="lamp-bulb">
+                      <span class="lamp-bulb-center"><span class="lamp-bulb-core"></span></span>
+                      <span class="filament filament-1"></span>
+                      <span class="filament filament-2"></span>
+                      <span class="reflections"><span></span></span>
+                      <span class="sparks">
+                        <span class="spark1"></span>
+                        <span class="spark2"></span>
+                        <span class="spark3"></span>
+                        <span class="spark4"></span>
+                      </span>
+                    </span>
+                  </label>
+                </div>
               </div>
               <div class="settings-row">
                 <span>Wallpaper type</span>

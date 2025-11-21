@@ -1505,8 +1505,16 @@ async function handleTabDrop(evt) {
       parentId: rootDisplayFolderId,
       index: targetBookmarkIndex
     });
-    // Reload bookmarks, keeping the previously selected tab active
     const folderToKeepOpen = previouslyActiveFolderId || draggedFolderId;
+
+    // If the active folder isn't changing, avoid a full reload to prevent UI flash
+    if (folderToKeepOpen === activeHomebaseFolderId) {
+      const newTree = await browser.bookmarks.getTree();
+      bookmarkTree = newTree;
+      return;
+    }
+
+    // Otherwise reload, keeping the previously selected tab active
     loadBookmarks(folderToKeepOpen);
   } catch (err) {
     console.error("Error moving bookmark folder:", err);
@@ -2173,8 +2181,13 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
   const addButton = document.createElement('button');
   addButton.className = 'bookmark-folder-add-btn';
-  addButton.textContent = '+';
+  addButton.setAttribute('aria-label', 'Create New Folder');
   addButton.title = 'Create New Folder';
+  addButton.innerHTML = `
+    <svg class="bookmark-tabs__plus-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+  `;
   
   addButton.addEventListener('click', (e) => {
     e.stopPropagation();

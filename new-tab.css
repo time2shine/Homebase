@@ -1,4 +1,4 @@
-/* --- Global Styles --- */
+﻿/* --- Global Styles --- */
 body {
   margin: 0;
   padding: 0;
@@ -799,19 +799,38 @@ body.sidebar-collapsed #bookmarks-grid {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px; 
-  height: 22px; 
-  font-size: 1em; 
-  font-weight: bold;
+  align-self: center;
+  width: 28px; 
+  height: 28px; 
+  padding: 0;
+  font-size: 16px; 
+  font-weight: 700;
+  line-height: 1;
   color: white;
-  background-color: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
+  color: #ffffff;
+}
+.bookmark-folder-add-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.bookmark-folder-add-btn svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .bookmark-folder-add-btn:hover {
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(255, 255, 255, 0.18);
+  color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.26);
 }
 
 .bookmark-folder-input {
@@ -1947,3 +1966,4 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
     -webkit-backdrop-filter: none;
   }
 }
+

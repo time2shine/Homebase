@@ -1543,6 +1543,15 @@ function renderBookmark(bookmarkNode) {
   item.dataset.bookmarkId = bookmarkNode.id;
   item.dataset.isFolder = 'false';
 
+  const handleBookmarkClick = () => {
+    if (item.classList.contains('is-loading')) return;
+    item.classList.add('is-loading');
+    // Let the loading state render before navigation
+    requestAnimationFrame(() => {
+      window.location.href = bookmarkNode.url;
+    });
+  };
+
   // --- NEW: Manual Click Handler ---
   item.addEventListener('click', (e) => {
     // Don't navigate if the click was on the rename input
@@ -1553,7 +1562,7 @@ function renderBookmark(bookmarkNode) {
     if (isGridDragging || item.classList.contains('sortable-chosen')) {
       return;
     }
-    window.location.href = bookmarkNode.url;
+    handleBookmarkClick();
   });
 
   // NEW: right-click context menu for ICONS
@@ -1591,6 +1600,7 @@ function renderBookmark(bookmarkNode) {
     if (imgIcon.naturalWidth > 16) {
       iconWrapper.innerHTML = '';
       iconWrapper.appendChild(imgIcon);
+      iconWrapper.appendChild(loader);
     }
   });
 
@@ -1600,6 +1610,10 @@ function renderBookmark(bookmarkNode) {
 
   imgIcon.src = `https://s2.googleusercontent.com/s2/favicons?domain=${bookmarkNode.url}&sz=64`;
 
+  const loader = document.createElement('div');
+  loader.className = 'bookmark-loading-spinner';
+  iconWrapper.appendChild(loader);
+
   const titleSpan = document.createElement('span');
   titleSpan.textContent = bookmarkNode.title;
 
@@ -1607,6 +1621,12 @@ function renderBookmark(bookmarkNode) {
   item.appendChild(titleSpan);
 
   return item;
+}
+
+function clearBookmarkLoadingStates() {
+  document.querySelectorAll('.bookmark-item.is-loading').forEach((el) => {
+    el.classList.remove('is-loading');
+  });
 }
 
 async function deleteBookmarkOrFolder(id, isFolder) {
@@ -3080,6 +3100,7 @@ function setupDockNavigation() {
 // --- INITIALIZE THE PAGE (MODIFIED) ---
 // ===============================================
 async function initializePage() {
+  clearBookmarkLoadingStates();
   await ensureDailyWallpaper();
   setupBackgroundVideoCrossfade();
   updateTime();
@@ -3241,6 +3262,12 @@ async function initializePage() {
 }
 
 initializePage();
+window.addEventListener('pageshow', clearBookmarkLoadingStates);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    clearBookmarkLoadingStates();
+  }
+});
 function openBookmarkInNewTab(bookmarkId) {
   if (!bookmarkTree || !bookmarkTree[0] || !bookmarkId) return;
   const node = findBookmarkNodeById(bookmarkTree[0], bookmarkId);

@@ -440,6 +440,63 @@ body.sidebar-collapsed #bookmarks-grid {
   background-color: transparent;
   border-radius: 10px;
   width: 100px; 
+  cursor: pointer;
+}
+
+.bookmark-item.is-loading {
+  opacity: 0.7;
+}
+
+.bookmark-item.is-loading .bookmark-icon-wrapper {
+  filter: grayscale(0.1) brightness(0.85);
+}
+
+.bookmark-loading-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(farthest-side, #0000 42%, #000 43%);
+  background:
+    linear-gradient(0deg, rgba(255, 255, 255, 0.45) 50%, #ffffff 0) center/4px 100%,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.25) 50%, rgba(255, 255, 255, 0.8) 0) center/100% 4px;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.35));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  animation: bookmark-spin 1s infinite steps(12);
+}
+
+.bookmark-loading-spinner::before,
+.bookmark-loading-spinner::after {
+  content: "";
+  grid-area: 1/1;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.92;
+  transform: rotate(30deg);
+}
+
+.bookmark-loading-spinner::after {
+  opacity: 0.82;
+  transform: rotate(60deg);
+}
+
+.bookmark-item.is-loading .bookmark-loading-spinner {
+  opacity: 1;
+}
+
+@keyframes bookmark-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* === ADD THIS NEW RULE === */
@@ -550,6 +607,7 @@ body.sidebar-collapsed #bookmarks-grid {
 
 .bookmark-item.sortable-chosen {
   opacity: 0 !important;
+  cursor: pointer !important;
 }
 
 .bookmark-item.sortable-drag {
@@ -557,6 +615,7 @@ body.sidebar-collapsed #bookmarks-grid {
   opacity: 1 !important;
   filter: none !important;
   mix-blend-mode: normal;
+  cursor: pointer !important;
 }
 
 /* Make the item being dragged visually larger for emphasis */

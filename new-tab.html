@@ -233,7 +233,7 @@
   <div id="gallery-modal" class="modal-overlay hidden">
     <div class="gallery-dialog glass-box">
       <div class="gallery-header">
-        <h3>Gallery</h3>
+        <h3 id="gallery-header-title">Gallery</h3>
         <button id="gallery-close-btn" class="icon-btn close-btn" aria-label="Close Gallery">×</button>
       </div>
       <div class="gallery-filters">
@@ -243,21 +243,24 @@
         <h4 id="gallery-active-filter">All</h4>
         <button id="gallery-alternate-btn" class="gallery-primary-btn">Pick Random Wallpaper</button>
       </div>
-      <div id="gallery-content">
-        <div id="gallery-grid" class="gallery-grid"></div>
+        <div id="gallery-content">
+          <div id="gallery-grid" class="gallery-grid"></div>
 
-        <div id="gallery-empty-state" class="gallery-empty hidden">
-          <p>No wallpapers here yet.</p>
-        </div>
+          <div id="gallery-empty-state" class="gallery-empty hidden">
+            <p>No wallpapers here yet.</p>
+          </div>
 
-        <div id="gallery-settings-panel" class="hidden">
-          <div class="gallery-settings-layout">
-            <div class="gallery-settings-preview">
+          <div id="gallery-settings-panel" class="hidden">
+            <div class="gallery-settings-layout">
+              <div class="gallery-settings-preview">
               <div class="settings-preview-box">
-                <img src="assets/fallback.webp" alt="Preview wallpaper">
+                <video id="gallery-settings-preview-video" class="settings-preview-media hidden" muted loop playsinline>
+                  <source src="" type="video/mp4">
+                </video>
+                <img id="gallery-settings-preview-img" class="settings-preview-media" src="assets/fallback.webp" alt="Preview wallpaper">
                 <div class="settings-preview-caption">
-                  <div class="settings-preview-title">Daily Wallpaper</div>
-                  <div class="settings-preview-author">Default preview</div>
+                  <div id="gallery-settings-preview-title" class="settings-preview-title">Daily Wallpaper</div>
+                  <div id="gallery-settings-preview-author" class="settings-preview-author">Default preview</div>
                 </div>
               </div>
             </div>
@@ -265,31 +268,31 @@
               <h4>Settings</h4>
               <div class="settings-row settings-row-toggle">
                 <label for="gallery-daily-toggle">Pick Random Wallpaper Daily</label>
-                <div class="gallery-lamp-toggle">
+                <div class="checkbox-wrapper-25">
                   <input type="checkbox" id="gallery-daily-toggle">
-                  <label for="gallery-daily-toggle" class="lamp-track">
-                    <span class="lamp-bulb">
-                      <span class="lamp-bulb-center"><span class="lamp-bulb-core"></span></span>
-                      <span class="filament filament-1"></span>
-                      <span class="filament filament-2"></span>
-                      <span class="reflections"><span></span></span>
-                      <span class="sparks">
-                        <span class="spark1"></span>
-                        <span class="spark2"></span>
-                        <span class="spark3"></span>
-                        <span class="spark4"></span>
-                      </span>
-                    </span>
-                  </label>
                 </div>
               </div>
               <div class="settings-row">
                 <span>Wallpaper type</span>
-                <div class="settings-radio-group">
-                  <label><input type="radio" name="gallery-wallpaper-type" value="video" checked> Live video</label>
-                  <label><input type="radio" name="gallery-wallpaper-type" value="static"> Static picture</label>
-                </div>
+                <label class="switch wallpaper-type-switch">
+                  <input type="checkbox" id="gallery-wallpaper-type-toggle" aria-label="Wallpaper type toggle">
+                  <span>Live video</span>
+                  <span>Static picture</span>
+                </label>
               </div>
+            </div>
+          </div>
+
+          <div id="gallery-mywallpapers-panel" class="hidden gallery-mywallpapers">
+            <div class="mywallpapers-actions">
+              <button class="mw-btn primary">Upload Image <span class="mw-hint">.png .jpg .webp</span></button>
+              <button class="mw-btn">Upload Live Wallpaper <span class="mw-tag">Premium</span> <span class="mw-hint">.mp4 .gif</span></button>
+            </div>
+            <h3 class="mywallpapers-title">My Wallpapers</h3>
+            <p class="mywallpapers-empty">Own wallpaper list is empty</p>
+            <div class="mywallpapers-debug">
+              <p>Debug: section visible</p>
+              <p>Tip: upload list not implemented yet.</p>
             </div>
           </div>
         </div>

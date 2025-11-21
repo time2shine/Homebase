@@ -37,6 +37,17 @@ const runWhenIdle = (cb) => {
   }
 };
 
+function buildFallbackSelection(selectedAt = Date.now()) {
+  return {
+    id: 'fallback',
+    videoUrl: 'assets/fallback.mp4',
+    posterUrl: 'assets/fallback.webp',
+    title: 'Daily Wallpaper',
+    category: 'Default',
+    selectedAt
+  };
+}
+
 (async function primeWallpaperBackground() {
   try {
     const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY]);
@@ -226,43 +237,51 @@ async function pickNextWallpaper(manifest) {
 }
 
 async function ensureDailyWallpaper(forceNext = false) {
-  const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY]);
+  const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY, DAILY_ROTATION_KEY]);
   const now = Date.now();
+  const storedFallbackUsedAt = stored[WALLPAPER_FALLBACK_USED_KEY] || 0;
 
   let current = stored[WALLPAPER_SELECTION_KEY];
+  let fallbackUsedAt = storedFallbackUsedAt || now;
+  if (!current) {
+    const fallbackSelection = buildFallbackSelection(fallbackUsedAt);
+    current = fallbackSelection;
+    currentWallpaperSelection = fallbackSelection;
+    await browser.storage.local.set({
+      [WALLPAPER_SELECTION_KEY]: fallbackSelection,
+      [WALLPAPER_FALLBACK_USED_KEY]: fallbackUsedAt
+    });
+  } else {
+    currentWallpaperSelection = current;
+  }
+
   const isFresh = current && now - (current.selectedAt || 0) < WALLPAPER_TTL_MS;
-  const fallbackFresh =
-    stored[WALLPAPER_FALLBACK_USED_KEY] &&
-    now - stored[WALLPAPER_FALLBACK_USED_KEY] < WALLPAPER_TTL_MS;
+  const allowDailyRotation = stored[DAILY_ROTATION_KEY] !== false;
+  const fallbackFresh = fallbackUsedAt && now - fallbackUsedAt < WALLPAPER_TTL_MS;
+  const isFallbackSelection = current && current.id === 'fallback';
 
-  // Use fallback once on fresh installs before any selection is cached
-  if (!current && !stored[WALLPAPER_FALLBACK_USED_KEY]) {
-    applyWallpaperBackground('assets/fallback.webp');
-    setBackgroundVideoSources('assets/fallback.mp4', 'assets/fallback.webp');
-    await browser.storage.local.set({ [WALLPAPER_FALLBACK_USED_KEY]: now });
+  if (isFallbackSelection && fallbackFresh && !forceNext) {
+    const type = await getWallpaperTypePreference();
+    applyWallpaperByType(current, type);
     return;
-  }
-
-  // If fallback was already used today and no selection yet, keep fallback for the day
-  if (!current && fallbackFresh && !forceNext) {
-    applyWallpaperBackground('assets/fallback.webp');
-    return;
-  }
-
-  // Show fallback while we fetch the manifest on cold starts so the page is never blank
-  if (!current && !fallbackFresh) {
-    applyWallpaperBackground('assets/fallback.webp');
   }
 
   const manifest = await getVideosManifest();
 
-  if (!isFresh || forceNext) {
-    current = await pickNextWallpaper(manifest);
+  const shouldPickNext = forceNext || (!isFresh && allowDailyRotation);
+  if (shouldPickNext) {
+    const nextSelection = await pickNextWallpaper(manifest);
+    if (nextSelection) {
+      current = nextSelection;
+      currentWallpaperSelection = nextSelection;
+    }
   }
 
   if (current && current.videoUrl) {
-    applyWallpaperBackground(current.posterUrl || '');
-    setBackgroundVideoSources(current.videoUrl, current.posterUrl);
+    const type = await getWallpaperTypePreference();
+    applyWallpaperByType(current, type);
+  } else {
+    applyWallpaperBackground('assets/fallback.webp');
   }
 }
 
@@ -334,17 +353,29 @@ const galleryAlternateBtn = document.getElementById('gallery-alternate-btn');
 const galleryActiveFilter = document.getElementById('gallery-active-filter');
 const dockGalleryBtn = document.getElementById('dock-gallery-btn');
 const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
+const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
+const galleryDailyToggle = document.getElementById('gallery-daily-toggle');
 const FAVORITES_KEY = 'galleryFavorites';
+const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
+const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let gallerySection = 'gallery'; // gallery | favorites | my-wallpapers | settings (future)
 let galleryFavorites = new Set();
+let currentWallpaperSelection = null;
+let wallpaperTypePreference = null; // 'video' | 'static'
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
 const gallerySettingsPanel = document.getElementById('gallery-settings-panel');
+const galleryMyWallpapersPanel = document.getElementById('gallery-mywallpapers-panel');
 const galleryFiltersContainer = document.querySelector('.gallery-filters');
 const galleryActionsBar = document.querySelector('.gallery-actions');
+const galleryHeaderTitle = document.getElementById('gallery-header-title');
+const settingsPreviewVideo = document.getElementById('gallery-settings-preview-video');
+const settingsPreviewImg = document.getElementById('gallery-settings-preview-img');
+const settingsPreviewTitle = document.getElementById('gallery-settings-preview-title');
+const settingsPreviewAuthor = document.getElementById('gallery-settings-preview-author');
 
 // ===============================================
 // --- NEW: ADD BOOKMARK MODAL ELEMENTS ---
@@ -3342,10 +3373,9 @@ async function applyGalleryWallpaper(item) {
   };
 
   await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: selection });
-  applyWallpaperBackground(selection.posterUrl || '');
-  if (selection.videoUrl) {
-    setBackgroundVideoSources(selection.videoUrl, selection.posterUrl);
-  }
+  currentWallpaperSelection = selection;
+  const type = await getWallpaperTypePreference();
+  applyWallpaperByType(selection, type);
   // Close modal after applying
   closeGalleryModal();
 }
@@ -3359,6 +3389,10 @@ async function openGalleryModal() {
     const manifest = await getVideosManifest(); // uses cached manifest when fresh
     galleryManifest = Array.isArray(manifest) ? manifest : [];
     await loadGalleryFavorites();
+    await loadGallerySettings();
+    await loadWallpaperTypePreference();
+    await loadCurrentWallpaperSelection();
+    updateSettingsPreview(currentWallpaperSelection, wallpaperTypePreference || 'video');
     buildGalleryFilters(galleryManifest);
     setGalleryFilter(galleryActiveFilterValue || 'all');
   } catch (err) {
@@ -3384,18 +3418,22 @@ function renderGallery(manifest = []) {
 function renderCurrentGallery() {
   const data = getGalleryDataForSection();
   const isSettings = gallerySection === 'settings';
+  const isMyWallpapers = gallerySection === 'my-wallpapers';
 
   if (galleryEmptyState) {
-    galleryEmptyState.classList.toggle('hidden', isSettings || data.length > 0);
+    galleryEmptyState.classList.toggle('hidden', isSettings || isMyWallpapers || data.length > 0);
   }
   if (galleryGrid) {
-    galleryGrid.classList.toggle('hidden', isSettings);
+    galleryGrid.classList.toggle('hidden', isSettings || isMyWallpapers);
   }
   if (gallerySettingsPanel) {
     gallerySettingsPanel.classList.toggle('hidden', !isSettings);
   }
+  if (galleryMyWallpapersPanel) {
+    galleryMyWallpapersPanel.classList.toggle('hidden', !isMyWallpapers);
+  }
 
-  if (isSettings) return;
+  if (isSettings || isMyWallpapers) return;
   renderGallery(data);
 }
 
@@ -3524,7 +3562,7 @@ function setGallerySection(section = 'gallery') {
       btn.classList.toggle('is-active', btn.dataset.section === section);
     });
   }
-  const hideFilters = section === 'settings';
+  const hideFilters = section === 'settings' || section === 'my-wallpapers';
   if (galleryFiltersContainer) {
     galleryFiltersContainer.style.display = hideFilters ? 'none' : 'flex';
   }
@@ -3536,8 +3574,94 @@ function setGallerySection(section = 'gallery') {
       ? 'Settings'
       : (galleryActiveFilterValue === 'all' ? 'All' : galleryActiveFilterValue);
   }
+  if (galleryHeaderTitle) {
+    if (gallerySection === 'settings') {
+      galleryHeaderTitle.textContent = 'Gallery Settings';
+    } else if (gallerySection === 'favorites') {
+      galleryHeaderTitle.textContent = 'Favorites';
+    } else if (gallerySection === 'my-wallpapers') {
+      galleryHeaderTitle.textContent = 'My Wallpapers';
+    } else {
+      galleryHeaderTitle.textContent = 'Gallery';
+    }
+  }
 
   renderCurrentGallery();
+}
+
+async function loadGallerySettings() {
+  if (!galleryDailyToggle) return;
+  try {
+    const stored = await browser.storage.local.get(DAILY_ROTATION_KEY);
+    const enabled = stored[DAILY_ROTATION_KEY];
+    galleryDailyToggle.checked = enabled !== false; // default to on
+  } catch (err) {
+    galleryDailyToggle.checked = true;
+  }
+}
+
+if (galleryDailyToggle) {
+  galleryDailyToggle.addEventListener('change', async (e) => {
+    const enabled = !!e.target.checked;
+    await browser.storage.local.set({ [DAILY_ROTATION_KEY]: enabled });
+  });
+}
+
+async function loadWallpaperTypePreference() {
+  const stored = await browser.storage.local.get(WALLPAPER_TYPE_KEY);
+  wallpaperTypePreference = stored[WALLPAPER_TYPE_KEY] || 'video';
+  if (wallpaperTypeToggle) {
+    wallpaperTypeToggle.checked = wallpaperTypePreference === 'static';
+  }
+}
+
+async function loadCurrentWallpaperSelection() {
+  try {
+    const stored = await browser.storage.local.get(WALLPAPER_SELECTION_KEY);
+    currentWallpaperSelection = stored[WALLPAPER_SELECTION_KEY] || null;
+  } catch (err) {
+    currentWallpaperSelection = null;
+  }
+}
+
+async function getWallpaperTypePreference() {
+  if (!wallpaperTypePreference) {
+    await loadWallpaperTypePreference();
+  }
+  return wallpaperTypePreference || 'video';
+}
+
+async function setWallpaperTypePreference(type) {
+  const next = type === 'static' ? 'static' : 'video';
+  wallpaperTypePreference = next;
+  await browser.storage.local.set({ [WALLPAPER_TYPE_KEY]: next });
+
+  // Re-apply current wallpaper with the new mode if available
+  try {
+    const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY]);
+    let selection = stored[WALLPAPER_SELECTION_KEY] || currentWallpaperSelection;
+    if (!selection) {
+      const selectedAt = stored[WALLPAPER_FALLBACK_USED_KEY] || Date.now();
+      selection = buildFallbackSelection(selectedAt);
+      await browser.storage.local.set({
+        [WALLPAPER_SELECTION_KEY]: selection,
+        [WALLPAPER_FALLBACK_USED_KEY]: selectedAt
+      });
+    }
+    if (selection) {
+      currentWallpaperSelection = selection;
+      applyWallpaperByType(selection, next);
+    }
+  } catch (err) {
+    console.warn('Failed to reapply wallpaper for type change', err);
+  }
+}
+
+if (wallpaperTypeToggle) {
+  wallpaperTypeToggle.addEventListener('change', async (e) => {
+    const type = e.target.checked ? 'static' : 'video';
+    await setWallpaperTypePreference(type);
+  });
 }
 window.addEventListener('pageshow', clearBookmarkLoadingStates);
 document.addEventListener('visibilitychange', () => {
@@ -3644,3 +3768,78 @@ function animateGridReorder(items, previousPositions) {
 }
 
 
+function applyWallpaperByType(selection, type = 'video') {
+  if (!selection) return;
+  const finalType = type === 'static' ? 'static' : 'video';
+  currentWallpaperSelection = selection;
+  applyWallpaperBackground(selection.posterUrl || '');
+  if (finalType === 'video' && selection.videoUrl) {
+    setBackgroundVideoSources(selection.videoUrl, selection.posterUrl);
+    startBackgroundVideos();
+  } else {
+    clearBackgroundVideos();
+  }
+  updateSettingsPreview(selection, finalType);
+}
+
+function clearBackgroundVideos() {
+  const videos = Array.from(document.querySelectorAll('.background-video'));
+  videos.forEach((v) => {
+    try { v.pause(); } catch (e) {}
+    const source = v.querySelector('source');
+    if (source) source.src = '';
+    v.removeAttribute('src');
+    v.removeAttribute('poster');
+    v.load();
+    v.classList.remove('is-active');
+  });
+}
+
+function startBackgroundVideos() {
+  const videos = Array.from(document.querySelectorAll('.background-video'));
+  if (!videos.length) return;
+  videos.forEach((v, idx) => {
+    v.muted = true;
+    v.playsInline = true;
+    if (idx === 0) {
+      v.classList.add('is-active');
+    }
+    v.play().catch(() => {});
+  });
+}
+
+function updateSettingsPreview(selection, type = 'video') {
+  const finalType = type === 'static' ? 'static' : 'video';
+  const poster = (selection && (selection.posterUrl || selection.poster)) || 'assets/fallback.webp';
+  const title = (selection && selection.title) || 'Wallpaper';
+  const author = (selection && selection.category) || '';
+
+  if (settingsPreviewTitle) settingsPreviewTitle.textContent = title;
+  if (settingsPreviewAuthor) settingsPreviewAuthor.textContent = author ? `Category: ${author}` : '';
+
+  if (!settingsPreviewImg || !settingsPreviewVideo) return;
+
+  if (finalType === 'video' && selection && selection.videoUrl) {
+    settingsPreviewVideo.classList.remove('hidden');
+    settingsPreviewImg.classList.add('hidden');
+    settingsPreviewVideo.poster = poster;
+    const srcEl = settingsPreviewVideo.querySelector('source');
+    if (srcEl) {
+      srcEl.src = selection.videoUrl;
+    } else {
+      settingsPreviewVideo.src = selection.videoUrl;
+    }
+    settingsPreviewVideo.load();
+    settingsPreviewVideo.play().catch(() => {});
+  } else {
+    settingsPreviewVideo.pause();
+    settingsPreviewVideo.removeAttribute('src');
+    const srcEl = settingsPreviewVideo.querySelector('source');
+    if (srcEl) srcEl.src = '';
+    settingsPreviewVideo.load();
+
+    settingsPreviewImg.src = poster;
+    settingsPreviewImg.classList.remove('hidden');
+    settingsPreviewVideo.classList.add('hidden');
+  }
+}

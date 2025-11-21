@@ -1613,16 +1613,17 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 }
 
 .gallery-card {
-  background: #ffffff;
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
   height: 260px;
   position: relative;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 .gallery-card:hover {
   transform: translateY(-2px);
@@ -1691,18 +1692,24 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   white-space: nowrap;
 }
 
-.gallery-card-apply {
+.gallery-card-apply,
+.mw-card-btn {
   background: #f4f6fb;
   color: #0f172a;
   border: 1px solid #dbe4f3;
   border-radius: 10px;
   padding: 6px 10px;
+  font-size: 0.8em;
+  font-weight: 300;
   cursor: pointer;
   transition: background-color 0.12s ease, border-color 0.12s ease;
+  white-space: nowrap;
 }
-.gallery-card-apply:hover {
-  background: #e7efff;
-  border-color: #c3d5ff;
+.gallery-card-apply:hover,
+.mw-card-btn:hover {
+  background: #2ca5ff;
+  color: #ffffff;
+  border-color: #1c8cd6;
 }
 
 .gallery-footer {
@@ -2002,6 +2009,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   margin: 0;
   font-weight: 400; /* match metadata weight */
   color: #0f172a;
+  font-size: 0.9em; /* match gallery title size */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2025,24 +2033,6 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 }
 .mw-card:hover .mw-card-title.mw-marquee span { animation-play-state: running; }
 .mw-card:hover .mw-card-title.mw-marquee { text-overflow: clip; }
-
-.mw-card-btn {
-  background: #2ca5ff;
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  padding: 6px 10px;
-  font-weight: 600;
-  font-size: 0.9em;
-  cursor: pointer;
-  white-space: nowrap;
-  width: auto;
-}
-
-.mw-card-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 .mw-card-remove {
   position: absolute;

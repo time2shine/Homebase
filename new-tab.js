@@ -3405,7 +3405,7 @@ function buildGalleryCard(item, index = 0) {
     </button>
     <div class="gallery-card-meta">
       <span class="gallery-card-title">${item.title || 'Wallpaper'}</span>
-      <button class="gallery-card-apply" aria-label="Set this wallpaper">Set</button>
+      <button class="gallery-card-apply" aria-label="Apply this wallpaper">Apply</button>
     </div>
   `;
 

@@ -3576,14 +3576,18 @@ function renderMyWallpapers() {
   items.forEach((item) => {
     const card = document.createElement('div');
     card.className = 'mw-card';
+    const titleText = item.title || 'Wallpaper';
+    const needsMarquee = titleText.length > 16;
+    const clampedLen = Math.min(40, Math.max(16, titleText.length));
+    const marqueeDuration = 6; // uniform speed for all marquee titles
     card.innerHTML = `
       <button class="mw-card-remove" aria-label="Delete">×</button>
       <div class="mw-card-media">
         <img src="${item.url}" alt="${item.title || 'My wallpaper'}" loading="lazy">
       </div>
       <div class="mw-card-body">
-        <div>
-          <p class="mw-card-title">${item.title || 'Wallpaper'}</p>
+        <div class="mw-card-text">
+          <p class="mw-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
           <p class="mw-card-meta">Static upload</p>
         </div>
         <button class="mw-card-btn" data-id="${item.id}">Apply</button>

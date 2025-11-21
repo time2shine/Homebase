@@ -1792,6 +1792,18 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   justify-content: flex-start;
 }
 
+.mw-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+}
+
+.mw-upload-input {
+  display: none;
+}
+
 .mw-btn {
   background: #2ca5ff;
   color: #fff;
@@ -1820,6 +1832,12 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 .mw-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.mw-hint-block {
+  color: #475569;
+  font-size: 0.8em;
+  padding-left: 4px;
 }
 
 .mw-tag {
@@ -1908,8 +1926,9 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 .mywallpapers-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
+  justify-items: center;
 }
 
 .mw-card {
@@ -1920,6 +1939,9 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 220px;
+  position: relative;
 }
 
 .mw-card.muted {
@@ -1983,6 +2005,29 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 .mw-card-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.mw-card-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(15, 23, 42, 0.7);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.mw-card:hover .mw-card-remove {
+  opacity: 1;
+  transform: translateY(-2px);
 }
 
 .gallery-settings-layout {

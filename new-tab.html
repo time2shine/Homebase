@@ -286,12 +286,17 @@
 
         <div id="gallery-mywallpapers-panel" class="hidden gallery-mywallpapers">
           <div class="mywallpapers-hero">
-            <div class="mw-pill">Your space</div>
-            <h3 class="mywallpapers-title">My Wallpapers</h3>
-            <p class="mywallpapers-subtitle">Keep a private stash of static and live wallpapers. Uploads stay on your device.</p>
+            <p class="mywallpapers-subtitle">Keep your own stash of static or live wallpapers locally. When you apply one, Daily Random turns off so your choice stays selected.</p>
             <div class="mywallpapers-actions">
-              <button class="mw-btn primary">Upload Image <span class="mw-hint">.png .jpg .webp</span></button>
-              <button class="mw-btn">Upload Live Wallpaper <span class="mw-tag">Premium</span> <span class="mw-hint">.mp4 .gif</span></button>
+              <div class="mw-action">
+                <button id="mw-upload-btn" class="mw-btn primary">Upload Image</button>
+                <div class="mw-hint-block">.png .jpg .webp</div>
+              </div>
+              <div class="mw-action">
+                <button class="mw-btn">Upload Live Wallpaper</button>
+                <div class="mw-hint-block">.mp4 .gif</div>
+              </div>
+              <input id="mw-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp" class="mw-upload-input" hidden />
             </div>
           </div>
 
@@ -307,30 +312,7 @@
             </div>
           </div>
 
-          <div class="mywallpapers-grid">
-            <div class="mw-card">
-              <div class="mw-card-media">
-                <img src="assets/fallback.webp" alt="Fallback wallpaper preview" loading="lazy">
-              </div>
-              <div class="mw-card-body">
-                <div>
-                  <p class="mw-card-title">Fallback wallpaper</p>
-                  <p class="mw-card-meta">Static preview - bundled</p>
-                </div>
-                <button id="mw-use-fallback-btn" class="mw-card-btn">Use this</button>
-              </div>
-            </div>
-            <div class="mw-card muted">
-              <div class="mw-card-media skeleton"></div>
-              <div class="mw-card-body">
-                <div>
-                  <p class="mw-card-title">Your upload</p>
-                  <p class="mw-card-meta">Waiting for file...</p>
-                </div>
-                <button class="mw-card-btn" disabled>Pending</button>
-              </div>
-            </div>
-          </div>
+          <div id="mywallpapers-grid" class="mywallpapers-grid"></div>
         </div>
       </div>
       <div class="gallery-footer-nav">

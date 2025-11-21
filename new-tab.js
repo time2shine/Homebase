@@ -353,6 +353,8 @@ const galleryAlternateBtn = document.getElementById('gallery-alternate-btn');
 const galleryActiveFilter = document.getElementById('gallery-active-filter');
 const dockGalleryBtn = document.getElementById('dock-gallery-btn');
 const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
+const myWallpapersJumpBtn = document.getElementById('mw-jump-gallery-btn');
+const myWallpapersUseFallbackBtn = document.getElementById('mw-use-fallback-btn');
 const nextWallpaperTooltip = nextWallpaperBtn ? nextWallpaperBtn.querySelector('.custom-tooltip') : null;
 const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperTooltip ? nextWallpaperTooltip.textContent : 'Next Wallpaper';
 const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
@@ -3644,6 +3646,28 @@ function setGallerySection(section = 'gallery') {
   }
 
   renderCurrentGallery();
+}
+
+if (myWallpapersJumpBtn) {
+  myWallpapersJumpBtn.addEventListener('click', () => setGallerySection('gallery'));
+}
+
+if (myWallpapersUseFallbackBtn) {
+  myWallpapersUseFallbackBtn.addEventListener('click', async () => {
+    try {
+      const now = Date.now();
+      const selection = buildFallbackSelection(now);
+      currentWallpaperSelection = selection;
+      await browser.storage.local.set({
+        [WALLPAPER_SELECTION_KEY]: selection,
+        [WALLPAPER_FALLBACK_USED_KEY]: now
+      });
+      const type = await getWallpaperTypePreference();
+      applyWallpaperByType(selection, type);
+    } catch (err) {
+      console.warn('Failed to apply fallback wallpaper from My Wallpapers', err);
+    }
+  });
 }
 
 async function loadGallerySettings() {

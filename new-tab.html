@@ -243,16 +243,16 @@
         <h4 id="gallery-active-filter">All</h4>
         <button id="gallery-alternate-btn" class="gallery-primary-btn">Pick Random Wallpaper</button>
       </div>
-        <div id="gallery-content">
-          <div id="gallery-grid" class="gallery-grid"></div>
+      <div id="gallery-content">
+        <div id="gallery-grid" class="gallery-grid"></div>
 
-          <div id="gallery-empty-state" class="gallery-empty hidden">
-            <p>No wallpapers here yet.</p>
-          </div>
+        <div id="gallery-empty-state" class="gallery-empty hidden">
+          <p>No wallpapers here yet.</p>
+        </div>
 
-          <div id="gallery-settings-panel" class="hidden">
-            <div class="gallery-settings-layout">
-              <div class="gallery-settings-preview">
+        <div id="gallery-settings-panel" class="hidden">
+          <div class="gallery-settings-layout">
+            <div class="gallery-settings-preview">
               <div class="settings-preview-box">
                 <video id="gallery-settings-preview-video" class="settings-preview-media hidden" muted loop playsinline>
                   <source src="" type="video/mp4">
@@ -282,17 +282,53 @@
               </div>
             </div>
           </div>
+        </div>
 
-          <div id="gallery-mywallpapers-panel" class="hidden gallery-mywallpapers">
+        <div id="gallery-mywallpapers-panel" class="hidden gallery-mywallpapers">
+          <div class="mywallpapers-hero">
+            <div class="mw-pill">Your space</div>
+            <h3 class="mywallpapers-title">My Wallpapers</h3>
+            <p class="mywallpapers-subtitle">Keep a private stash of static and live wallpapers. Uploads stay on your device.</p>
             <div class="mywallpapers-actions">
               <button class="mw-btn primary">Upload Image <span class="mw-hint">.png .jpg .webp</span></button>
               <button class="mw-btn">Upload Live Wallpaper <span class="mw-tag">Premium</span> <span class="mw-hint">.mp4 .gif</span></button>
             </div>
-            <h3 class="mywallpapers-title">My Wallpapers</h3>
-            <p class="mywallpapers-empty">Own wallpaper list is empty</p>
-            <div class="mywallpapers-debug">
-              <p>Debug: section visible</p>
-              <p>Tip: upload list not implemented yet.</p>
+          </div>
+
+          <div class="mywallpapers-empty-card">
+            <div class="mw-empty-visual">
+              <div class="mw-empty-circle"></div>
+              <div class="mw-empty-rect"></div>
+            </div>
+            <div class="mw-empty-copy">
+              <p class="mw-empty-title">No wallpapers yet.</p>
+              <p class="mw-empty-desc">Uploads are coming soon. For now, pick from the Gallery or set the fallback preview below.</p>
+              <button id="mw-jump-gallery-btn" class="mw-btn ghost">Jump to Gallery</button>
+            </div>
+          </div>
+
+          <div class="mywallpapers-grid">
+            <div class="mw-card">
+              <div class="mw-card-media">
+                <img src="assets/fallback.webp" alt="Fallback wallpaper preview" loading="lazy">
+              </div>
+              <div class="mw-card-body">
+                <div>
+                  <p class="mw-card-title">Fallback wallpaper</p>
+                  <p class="mw-card-meta">Static preview - bundled</p>
+                </div>
+                <button id="mw-use-fallback-btn" class="mw-card-btn">Use this</button>
+              </div>
+            </div>
+            <div class="mw-card muted">
+              <div class="mw-card-media skeleton"></div>
+              <div class="mw-card-body">
+                <div>
+                  <p class="mw-card-title">Your upload</p>
+                  <p class="mw-card-meta">Waiting for file...</p>
+                </div>
+                <button class="mw-card-btn" disabled>Pending</button>
+              </div>
             </div>
           </div>
         </div>

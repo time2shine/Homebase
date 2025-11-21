@@ -1444,8 +1444,9 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   /* Removed position: fixed, bottom, right, z-index */
   display: flex;
   align-items: center;
+  height: 32px;
   gap: 4px;
-  padding: 2px 5px; /* MODIFIED: Made smaller */
+  padding: 0 6px; /* MODIFIED: Match tab height */
   border-radius: 20px; /* MODIFIED: Matched folder tabs */
   margin-right: 0; /* === ADDED THIS LINE === */
 }
@@ -1456,8 +1457,13 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   border: none;
   color: white;
   font-size: 0.9em; /* MODIFIED: Made smaller */
-  padding: 4px 6px; /* MODIFIED: Made smaller */
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0; /* Fixed size circle */
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: background-color 0.2s ease;
   line-height: 1; /* Aligns emojis better */

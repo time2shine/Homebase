@@ -3392,20 +3392,41 @@ async function initializePage() {
 }
 
 initializePage();
+
 function buildGalleryCard(item, index = 0) {
   const card = document.createElement('div');
   card.className = 'gallery-card';
+  
   const posterSrc = item.poster || item.posterUrl || item.url || '';
   const loadingAttr = index < 40 ? 'eager' : 'lazy';
   const isFavorite = galleryFavorites.has(item.id);
+
   card.innerHTML = `
     <img class="gallery-card-image" src="${posterSrc}" alt="${item.title || 'Wallpaper'}" loading="${loadingAttr}" referrerpolicy="no-referrer" />
-    <button class="gallery-fav-btn ${isFavorite ? 'is-active' : ''}" aria-label="Favorite this wallpaper">
-      <span class="fav-icon">${isFavorite ? '❤' : '♡'}</span>
-    </button>
+    
+    <div class="gallery-fav-btn con-like ${isFavorite ? 'is-active' : ''}" aria-label="Favorite this wallpaper">
+      <input class="like" type="checkbox" title="like" ${isFavorite ? 'checked' : ''}>
+      <div class="checkmark">
+        <svg xmlns="http://www.w3.org/2000/svg" class="outline" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M17.5,1.917a6.4,6.4,0,0,0-5.5,3.3,6.4,6.4,0,0,0-5.5-3.3A6.8,6.8,0,0,0,0,8.967c0,4.547,4.786,9.513,8.8,12.88a4.974,4.974,0,0,0,6.4,0C19.214,18.48,24,13.514,24,8.967A6.8,6.8,0,0,0,17.5,1.917Zm-3.585,18.4a2.973,2.973,0,0,1-3.83,0C4.947,16.006,2,11.87,2,8.967a4.8,4.8,0,0,1,4.5-5.05A4.8,4.8,0,0,1,11,8.967a1,1,0,0,0,2,0,4.8,4.8,0,0,1,4.5-5.05A4.8,4.8,0,0,1,22,8.967C22,11.87,19.053,16.006,13.915,20.313Z"></path>
+        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" class="filled" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M17.5,1.917a6.4,6.4,0,0,0-5.5,3.3,6.4,6.4,0,0,0-5.5-3.3A6.8,6.8,0,0,0,0,8.967c0,4.547,4.786,9.513,8.8,12.88a4.974,4.974,0,0,0,6.4,0C19.214,18.48,24,13.514,24,8.967A6.8,6.8,0,0,0,17.5,1.917Z"></path>
+        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" height="100" width="100" class="celebrate" aria-hidden="true">
+          <polygon class="poly" points="10,10 20,20"></polygon>
+          <polygon class="poly" points="10,50 20,50"></polygon>
+          <polygon class="poly" points="20,80 30,70"></polygon>
+          <polygon class="poly" points="90,10 80,20"></polygon>
+          <polygon class="poly" points="90,50 80,50"></polygon>
+          <polygon class="poly" points="80,80 70,70"></polygon>
+        </svg>
+      </div>
+    </div>
+    
     <div class="gallery-card-meta">
       <span class="gallery-card-title">${item.title || 'Wallpaper'}</span>
-    <button type="button" class="gallery-card-apply apply-button" aria-label="Apply this wallpaper">
+      <button type="button" class="gallery-card-apply apply-button" aria-label="Apply this wallpaper">
         Apply
       </button>
     </div>
@@ -3417,10 +3438,38 @@ function buildGalleryCard(item, index = 0) {
     await applyGalleryWallpaper(item);
   });
 
+  // === UPDATED CLICK HANDLER FOR FAVORITES ===
   const favBtn = card.querySelector('.gallery-fav-btn');
   favBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    toggleFavorite(item.id);
+    e.stopPropagation(); // Stop the card click (which applies wallpaper)
+    
+    const checkbox = favBtn.querySelector('.like');
+    
+    // If the user clicked the div but not the input directly (rare, but possible), toggle manually
+    if (e.target !== checkbox) {
+      checkbox.checked = !checkbox.checked;
+    }
+    
+    const isNowChecked = checkbox.checked; 
+
+    // 1. Handle visual classes locally so we see immediate feedback/animation
+    if (isNowChecked) {
+      favBtn.classList.add('is-active');
+      favBtn.classList.add('animating'); // Triggers the confetti via CSS
+      
+      // Remove animation class after 700ms so it can be re-triggered later
+      setTimeout(() => favBtn.classList.remove('animating'), 700);
+    } else {
+      favBtn.classList.remove('is-active');
+      favBtn.classList.remove('animating');
+    }
+
+    // 2. Determine if we should refresh the entire grid
+    // If we are in the 'Favorites' tab, we MUST re-render to remove the un-liked item.
+    // If we are in 'Gallery' or 'All', we SKIP re-render to keep the animation playing.
+    const shouldSkipRender = gallerySection !== 'favorites';
+    
+    await toggleFavorite(item.id, shouldSkipRender);
   });
 
   card.addEventListener('click', async () => {
@@ -4040,6 +4089,24 @@ function startBackgroundVideos() {
     }
     v.play().catch(() => {});
   });
+}
+
+/* Updated toggleFavorite to accept a skipRender flag */
+async function toggleFavorite(itemId, skipRender = false) {
+  if (!itemId) return;
+  
+  if (galleryFavorites.has(itemId)) {
+    galleryFavorites.delete(itemId);
+  } else {
+    galleryFavorites.add(itemId);
+  }
+  
+  await saveGalleryFavorites();
+  
+  // Only re-render if we didn't ask to skip it.
+  if (!skipRender) {
+    renderCurrentGallery();
+  }
 }
 
 function updateSettingsPreview(selection, type = 'video') {

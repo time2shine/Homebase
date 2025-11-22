@@ -37,6 +37,14 @@ body {
   --glass-blur: 12px;
   --glass-bg: rgba(255, 255, 255, 0.14);
   --overlay-blur: 6px;
+  --cooltipz-bg-color: rgba(91, 93, 99, 0.92);
+  --cooltipz-border-color: rgba(255, 255, 255, 0.28);
+  --cooltipz-border-radius: 8px;
+  --cooltipz-border-width: 1px;
+  --cooltipz-text-color: #ffffff;
+  --cooltipz-font-size: 0.85rem;
+  --cooltipz-slide: 8px;
+  --cooltipz-arrow-size: 0.5rem;
 }
 
 /* --- Shared "Glass" Style --- */
@@ -1388,71 +1396,8 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 /* --- CUSTOM TOOLTIPS (with Animation) --- */
 /* ======================================= */
 
-/* This rule must stay to show tooltips on toolbar */
 .search-toolbar-buttons:hover {
-  overflow: visible; /* Allows tooltips to show */
-}
-
-/* 1. Base tooltip style (hidden by default) */
-.custom-tooltip {
-  position: absolute;
-  visibility: hidden; /* Start hidden */
-  opacity: 0;           /* Start transparent */
-  
-  background-color: #555; /* CHANGED: Grey background */
-  color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 0.85em;
-  font-family: sans-serif;
-  white-space: nowrap; 
-  z-index: 1000;
-  pointer-events: none; 
-  
-  /* CHANGED: Slight animation */
-  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
-}
-
-/* 2. Show on hover (Opacity/Visibility) */
-.dock-item:hover .custom-tooltip,
-.icon-button:hover .custom-tooltip,
-.quick-action-btn:hover .custom-tooltip { 
-  visibility: visible; /* Show it */
-  opacity: 1;           /* Fade it in */
-}
-
-/* 3. Positioning: LEFT */
-.custom-tooltip.tooltip-left {
-  top: 50%;
-  right: 100%;
-  margin-right: 12px; /* Space from icon */
-  
-  /* ADDED: Start 4px to the right and centered */
-  transform: translateY(-50%) translateX(4px); 
-}
-
-/* 4. Positioning: BOTTOM */
-.custom-tooltip.tooltip-bottom {
-  top: 100%;
-  left: 50%;
-  margin-top: 12px; /* Space from icon */
-  
-  /* ADDED: Start 4px up and centered */
-  transform: translateX(-50%) translateY(-4px); 
-}
-
-
-/* 5. ADDED: Final animation state for LEFT tooltips */
-.dock-item:hover .tooltip-left,
-.icon-button:hover .tooltip-left {
-    transform: translateY(-50%) translateX(0); /* Move to final spot */
-}
-
-/* 6. ADDED: Final animation state for BOTTOM tooltips */
-.dock-item:hover .tooltip-bottom,
-.icon-button:hover .tooltip-bottom,
-.quick-action-btn:hover .tooltip-bottom { 
-    transform: translateX(-50%) translateY(0); /* Move to final spot */
+  overflow: visible; /* Allow Cooltipz tooltips to escape the toolbar */
 }
 
 /* ======================================= */

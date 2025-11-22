@@ -679,8 +679,7 @@ const myWallpapersUploadBtn = document.getElementById('mw-upload-btn');
 const myWallpapersUploadInput = document.getElementById('mw-upload-input');
 const myWallpapersUploadLiveBtn = document.getElementById('mw-upload-live-btn');
 const myWallpapersUploadLiveInput = document.getElementById('mw-upload-live-input');
-const nextWallpaperTooltip = nextWallpaperBtn ? nextWallpaperBtn.querySelector('.custom-tooltip') : null;
-const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperTooltip ? nextWallpaperTooltip.textContent : 'Next Wallpaper';
+const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-label') || 'Next Wallpaper';
 const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
 const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
 const galleryDailyToggle = document.getElementById('gallery-daily-toggle');
@@ -714,9 +713,8 @@ function setNextWallpaperButtonLoading(isLoading) {
   if (!nextWallpaperBtn) return;
   nextWallpaperBtn.disabled = isLoading;
   nextWallpaperBtn.classList.toggle('is-loading', isLoading);
-  if (nextWallpaperTooltip) {
-    nextWallpaperTooltip.textContent = isLoading ? NEXT_WALLPAPER_TOOLTIP_LOADING : NEXT_WALLPAPER_TOOLTIP_DEFAULT;
-  }
+  const tooltipText = isLoading ? NEXT_WALLPAPER_TOOLTIP_LOADING : NEXT_WALLPAPER_TOOLTIP_DEFAULT;
+  nextWallpaperBtn.setAttribute('aria-label', tooltipText);
 }
 
 function waitForWallpaperReady(selection, type = 'video') {

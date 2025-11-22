@@ -3405,7 +3405,9 @@ function buildGalleryCard(item, index = 0) {
     </button>
     <div class="gallery-card-meta">
       <span class="gallery-card-title">${item.title || 'Wallpaper'}</span>
-      <button class="gallery-card-apply" aria-label="Apply this wallpaper">Apply</button>
+    <button type="button" class="gallery-card-apply apply-button" aria-label="Apply this wallpaper">
+        Apply
+      </button>
     </div>
   `;
 
@@ -3590,7 +3592,9 @@ function renderMyWallpapers() {
           <p class="mw-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
           <p class="mw-card-meta">Static upload</p>
         </div>
-        <button class="mw-card-btn" data-id="${item.id}">Apply</button>
+        <button type="button" class="mw-card-btn apply-button" data-id="${item.id}">
+          Apply
+        </button>
       </div>
     `;
     const applyBtn = card.querySelector('.mw-card-btn');

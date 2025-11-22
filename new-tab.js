@@ -3721,6 +3721,9 @@ function buildGalleryCard(item, index = 0) {
   const card = document.createElement('div');
   card.className = 'gallery-card';
   
+  const titleText = item.title || 'Wallpaper';
+  const needsMarquee = titleText.length > 23;
+  const marqueeDuration = Math.max(6, Math.min(14, Math.ceil(titleText.length / 1.8)));
   const posterSrc = item.posterUrl || item.poster || item.url || '';
   const loadingAttr = index < 40 ? 'eager' : 'lazy';
   const isFavorite = galleryFavorites.has(item.id);
@@ -3749,7 +3752,7 @@ function buildGalleryCard(item, index = 0) {
     </div>
     
     <div class="gallery-card-meta">
-      <span class="gallery-card-title">${item.title || 'Wallpaper'}</span>
+      <span class="gallery-card-title ${needsMarquee ? 'gallery-marquee' : ''}" ${needsMarquee ? `style="--gallery-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></span>
       <button type="button" class="gallery-card-apply apply-button" aria-label="Apply this wallpaper">
         Apply
       </button>

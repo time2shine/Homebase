@@ -1764,7 +1764,8 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   justify-content: space-between;
   padding: 10px;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .gallery-card-title {
@@ -1773,6 +1774,24 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  display: inline-block;
+}
+
+.gallery-card-title.gallery-marquee span {
+  display: inline-block;
+  padding-right: 32px;
+  animation: mw-title-marquee var(--gallery-marquee-duration, 10s) linear infinite;
+}
+
+.gallery-card:not(:hover) .gallery-card-title.gallery-marquee span {
+  animation: none;
+  transform: translateX(0);
+}
+
+.gallery-card:hover .gallery-card-title.gallery-marquee span {
+  animation-play-state: running;
 }
 
 .gallery-footer {

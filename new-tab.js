@@ -3720,8 +3720,10 @@ function buildGalleryCard(item, index = 0) {
   card.className = 'gallery-card';
   
   const titleText = item.title || 'Wallpaper';
-  const needsMarquee = titleText.length > 23;
-  const marqueeDuration = Math.max(6, Math.min(14, Math.ceil(titleText.length / 1.8)));
+  const wordCount = titleText.trim().split(/\s+/).filter(Boolean).length;
+  const charCount = titleText.length;
+  const needsMarquee = charCount > 15 || wordCount >= 5;
+  const marqueeDuration = Math.max(8, Math.min(20, Math.ceil(charCount / 2)));
   const posterSrc = item.posterUrl || item.poster || item.url || '';
   const loadingAttr = index < 40 ? 'eager' : 'lazy';
   const isFavorite = galleryFavorites.has(item.id);
@@ -4007,10 +4009,9 @@ function renderMyWallpapers() {
   const items = Array.isArray(myWallpapers) ? myWallpapers : [];
   items.forEach((item) => {
     const card = document.createElement('div');
-    card.className = 'mw-card';
+    card.className = 'gallery-card mw-card';
     const titleText = item.title || 'Wallpaper';
-    const needsMarquee = titleText.length > 16;
-    const clampedLen = Math.min(40, Math.max(16, titleText.length));
+    const needsMarquee = titleText.length > 20;
     const marqueeDuration = 6; // uniform speed for all marquee titles
     const isVideo = item.type === 'video';
     const isGif = isVideo && (item.mimeType === 'image/gif' || (item.title || '').toLowerCase().endsWith('.gif'));
@@ -4032,13 +4033,13 @@ function renderMyWallpapers() {
           <path fill="white" d="M20.5 10.5L37.5 15.5L42.5 11.5L51.5 12.5L68.75 0L72 11.5L79.5 12.5H88.5L87 22L68.75 31.5L75.5066 25L86 26L87 35.5L77.5 48L70.5 49.5L80 50L77.5 71.5L63.5 58.5L53.5 68.5L65.5 70.5L45.5 73L35.5 79.5L28 67L16 63L12 51.5L0 48L16 25L22.5 17L20.5 10.5Z"></path>
         </svg>
       </button>
-      <div class="mw-card-media"></div>
-      <div class="mw-card-body">
+      <div class="mw-card-media gallery-card-image"></div>
+      <div class="mw-card-body gallery-card-meta">
         <div class="mw-card-text">
-          <p class="mw-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
+          <p class="mw-card-title gallery-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
           <p class="mw-card-meta">${isVideo ? 'Live upload' : 'Static upload'}</p>
         </div>
-        <button type="button" class="mw-card-btn apply-button" data-id="${item.id}">
+        <button type="button" class="mw-card-btn apply-button gallery-card-apply" data-id="${item.id}">
           Apply
         </button>
       </div>
@@ -4076,12 +4077,16 @@ function renderMyWallpapers() {
       }
     }
     const applyBtn = card.querySelector('.mw-card-btn');
-    applyBtn.addEventListener('click', () => applyMyWallpaper(item));
+    applyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      applyMyWallpaper(item);
+    });
     const deleteBtn = card.querySelector('.mw-card-remove');
     deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       removeMyWallpaper(item.id);
     });
+    card.addEventListener('click', () => applyMyWallpaper(item));
     myWallpapersGrid.appendChild(card);
   });
 

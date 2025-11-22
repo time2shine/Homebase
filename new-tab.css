@@ -1556,8 +1556,8 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  grid-auto-rows: minmax(260px, auto);
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  grid-auto-rows: minmax(235px, auto);
   gap: 10px;
   overflow-y: auto;
   padding-right: 6px;
@@ -1573,7 +1573,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   flex-direction: column;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
-  min-height: 260px;
+  min-height: 235px;
   height: auto;
   position: relative;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
@@ -1586,9 +1586,9 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 .gallery-card-image {
   width: 100%;
-  height: 200px;
-  min-height: 200px;
-  max-height: 200px;
+  height: 165px;
+  min-height: 165px;
+  max-height: 165px;
   object-fit: cover;
   display: block;
   background: #f4f6fb;
@@ -2035,12 +2035,14 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 .mywallpapers-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-  justify-items: center;
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  grid-auto-rows: minmax(235px, auto);
+  gap: 10px;
+  justify-items: stretch;
+  align-items: start;
   max-height: 50vh;
   overflow-y: auto;
-  padding: 4px 4px 12px 0;
+  padding: 4px 6px 12px 0;
 }
 
 .mw-card {
@@ -2048,14 +2050,22 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-  overflow: visible; /* allow delete pill hover to expand outside */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 240px;
+  max-width: 100%;
   position: relative;
-  min-height: 260px;
+  min-height: 235px;
   height: auto;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.mw-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  border-color: #cfd8e3;
 }
 
 .mw-card.muted {
@@ -2063,14 +2073,14 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 }
 
 .mw-card-media {
-  aspect-ratio: 16 / 9;
-  height: 200px;
-  min-height: 200px;
-  max-height: 200px;
-  background: #e2e8f0;
+  width: 100%;
+  height: 165px;
+  min-height: 165px;
+  max-height: 165px;
+  background: #f4f6fb;
   overflow: hidden;
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
 .mw-card-media img {
@@ -2100,13 +2110,14 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 }
 
 .mw-card-body {
-  padding: 12px;
+  padding: 10px;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .mw-card-text {
@@ -2147,8 +2158,8 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 .mw-card-remove {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 8px;
+  right: 8px;
   opacity: 0;
   transition: opacity 0.2s ease, transform 0.2s ease;
   cursor: pointer;
@@ -2162,8 +2173,8 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 /* Fix for My Wallpapers Delete Button Position */
 .mw-card-remove.bin-button {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   z-index: 10;
 }
 

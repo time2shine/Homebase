@@ -671,6 +671,7 @@ const galleryGrid = document.getElementById('gallery-grid');
 const galleryCloseBtn = document.getElementById('gallery-close-btn');
 const galleryAlternateBtn = document.getElementById('gallery-alternate-btn');
 const galleryActiveFilter = document.getElementById('gallery-active-filter');
+const galleryClearTagBtn = document.getElementById('gallery-clear-tag-btn');
 const dockGalleryBtn = document.getElementById('dock-gallery-btn');
 const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
 const myWallpapersJumpBtn = document.getElementById('mw-jump-gallery-btn');
@@ -689,6 +690,7 @@ const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
 const MY_WALLPAPERS_KEY = 'myWallpapers';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
+let galleryActiveTag = null;
 let gallerySection = 'gallery'; // gallery | favorites | my-wallpapers | settings (future)
 let galleryFavorites = new Set();
 let currentWallpaperSelection = null;
@@ -3719,6 +3721,14 @@ function buildGalleryCard(item, index = 0) {
   const card = document.createElement('div');
   card.className = 'gallery-card';
   
+  const escapeHtml = (str = '') => String(str).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[char] || char));
+
   const titleText = item.title || 'Wallpaper';
   const wordCount = titleText.trim().split(/\s+/).filter(Boolean).length;
   const charCount = titleText.length;
@@ -3727,6 +3737,13 @@ function buildGalleryCard(item, index = 0) {
   const posterSrc = item.posterUrl || item.poster || item.url || '';
   const loadingAttr = index < 40 ? 'eager' : 'lazy';
   const isFavorite = galleryFavorites.has(item.id);
+  const tags = Array.isArray(item.tags) ? item.tags.map((tag) => String(tag).trim()).filter(Boolean) : [];
+  const tagsHtml = tags
+    .map((tag) => {
+      const safeTag = escapeHtml(tag);
+      return `<span class="gallery-card-tag" data-tag="${safeTag}">${safeTag}</span>`;
+    })
+    .join('');
 
   card.innerHTML = `
     <img class="gallery-card-image" src="${posterSrc}" alt="${item.title || 'Wallpaper'}" loading="${loadingAttr}" referrerpolicy="no-referrer" />
@@ -3757,7 +3774,19 @@ function buildGalleryCard(item, index = 0) {
         Apply
       </button>
     </div>
+    ${tagsHtml ? `<div class="gallery-card-tags">${tagsHtml}</div>` : ''}
   `;
+
+  const tagButtons = card.querySelectorAll('.gallery-card-tag');
+  tagButtons.forEach((tagEl) => {
+    tagEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tagValue = (tagEl.dataset.tag || tagEl.textContent || '').trim();
+      if (tagValue) {
+        setGalleryTagFilter(tagValue);
+      }
+    });
+  });
 
   const applyBtn = card.querySelector('.gallery-card-apply');
   applyBtn.addEventListener('click', async (e) => {
@@ -3913,6 +3942,13 @@ function getGalleryDataForSection() {
   if (galleryActiveFilterValue !== 'all') {
     data = data.filter((item) => (item.category || '') === galleryActiveFilterValue);
   }
+  if (galleryActiveTag) {
+    const tagLower = galleryActiveTag.toLowerCase();
+    data = data.filter((item) => {
+      if (!Array.isArray(item.tags)) return false;
+      return item.tags.some((tag) => String(tag).trim().toLowerCase() === tagLower);
+    });
+  }
   return data;
 }
 
@@ -3945,7 +3981,7 @@ function buildGalleryFilters(manifest = []) {
   });
 }
 
-function setGalleryFilter(filter = 'all') {
+function setGalleryFilter(filter = 'all', shouldRender = true) {
   galleryActiveFilterValue = filter;
   const filtersContainer = document.querySelector('.gallery-filters');
   if (filtersContainer) {
@@ -3953,11 +3989,35 @@ function setGalleryFilter(filter = 'all') {
       btn.classList.toggle('active', btn.dataset.filter === filter);
     });
   }
-  if (galleryActiveFilter) {
-    galleryActiveFilter.textContent = filter === 'all' ? 'All' : filter;
-  }
+  updateGalleryActiveFilterLabel();
 
+  if (shouldRender) {
+    renderCurrentGallery();
+  }
+}
+
+function setGalleryTagFilter(tag = null) {
+  const normalizedTag = (tag || '').trim();
+  galleryActiveTag = normalizedTag || null;
+  if (galleryActiveTag && galleryActiveFilterValue !== 'all') {
+    setGalleryFilter('all', false);
+  }
+  if (galleryClearTagBtn) {
+    const hasTag = Boolean(galleryActiveTag);
+    galleryClearTagBtn.classList.toggle('hidden', !hasTag);
+    galleryClearTagBtn.disabled = !hasTag;
+  }
+  updateGalleryActiveFilterLabel();
   renderCurrentGallery();
+}
+
+function updateGalleryActiveFilterLabel() {
+  if (!galleryActiveFilter) return;
+  if (galleryActiveTag) {
+    galleryActiveFilter.textContent = `Tag: ${galleryActiveTag}`;
+    return;
+  }
+  galleryActiveFilter.textContent = galleryActiveFilterValue === 'all' ? 'All' : galleryActiveFilterValue;
 }
 
 function normalizeMyWallpaperItems(items = []) {
@@ -4107,6 +4167,10 @@ if (galleryModal) {
       closeGalleryModal();
     }
   });
+}
+
+if (galleryClearTagBtn) {
+  galleryClearTagBtn.addEventListener('click', () => setGalleryTagFilter(null));
 }
 
 // Placeholder: alternate button shuffles through manifest in current view
@@ -4344,10 +4408,17 @@ function setGallerySection(section = 'gallery') {
   if (galleryActionsBar) {
     galleryActionsBar.style.display = hideFilters ? 'none' : 'flex';
   }
+  if (galleryClearTagBtn) {
+    const shouldHideClear = hideFilters || !galleryActiveTag;
+    galleryClearTagBtn.classList.toggle('hidden', shouldHideClear);
+    galleryClearTagBtn.disabled = shouldHideClear;
+  }
   if (galleryActiveFilter) {
-    galleryActiveFilter.textContent = hideFilters
-      ? 'Settings'
-      : (galleryActiveFilterValue === 'all' ? 'All' : galleryActiveFilterValue);
+    if (hideFilters) {
+      galleryActiveFilter.textContent = 'Settings';
+    } else {
+      updateGalleryActiveFilterLabel();
+    }
   }
   if (galleryHeaderTitle) {
     if (gallerySection === 'settings') {

@@ -1931,7 +1931,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-  overflow: hidden;
+  overflow: visible; /* allow delete pill hover to expand outside */
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -2020,17 +2020,8 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 .mw-card-remove {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(15, 23, 42, 0.7);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  top: 4px;
+  right: 4px;
   opacity: 0;
   transition: opacity 0.2s ease, transform 0.2s ease;
   cursor: pointer;
@@ -2041,6 +2032,73 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   transform: translateY(-2px);
 }
 
+/* Fix for My Wallpapers Delete Button Position */
+.mw-card-remove.bin-button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10;
+}
+
+/* My Wallpapers delete button (bin) */
+.bin-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: rgb(255, 95, 95);
+  cursor: pointer;
+  border: 1px solid rgb(255, 201, 201);
+  transition-duration: 0.3s;
+  position: relative;
+  overflow: hidden;
+  transform-origin: right center;
+  z-index: 10;
+}
+.bin-bottom {
+  width: 10px;
+  z-index: 2;
+}
+.bin-top {
+  width: 12px;
+  transform-origin: right;
+  transition-duration: 0.3s;
+  z-index: 2;
+}
+.bin-button:hover .bin-top {
+  transform: rotate(45deg);
+}
+.bin-button:hover {
+  background-color: rgb(255, 0, 0);
+}
+.bin-button:active {
+  transform: scale(0.9);
+}
+.garbage {
+  position: absolute;
+  width: 9px;
+  height: auto;
+  z-index: 1;
+  opacity: 0;
+  transition: all 0.3s;
+}
+.bin-button:hover .garbage {
+  animation: throw 0.4s linear;
+}
+@keyframes throw {
+  from {
+    transform: translate(-400%, -700%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(0%, 0%);
+    opacity: 1;
+  }
+}
+
 /* Shared apply button (gallery + my wallpapers) */
 .apply-button {
   display: flex;
@@ -2048,7 +2106,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   justify-content: center;
   outline: none;
   cursor: pointer;
-  width: 75px;
+  width: 55px;
   height: 25px;
   background-image: linear-gradient(to top, #d8d9db 0%, #ffffff 80%, #fdfdfd 100%);
   border-radius: 15px;

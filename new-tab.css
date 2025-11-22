@@ -144,6 +144,13 @@ body.dock-collapsed .dock {
   background-color: transparent;
   border: 1px solid rgba(255, 255, 255, 0.35);
 }
+.dock-bottom .dock-item:hover,
+.dock-group-bottom .dock-item:hover {
+  background-color: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  color: #111;
+}
 /* Ensure buttons keep the same box styling as anchors */
 button.dock-item {
   background-color: transparent;

@@ -25,12 +25,17 @@ const VIDEOS_JSON_URL = 'https://pub-d330ac9daa80435c82f1d50b5e43ca72.r2.dev/vid
 const VIDEOS_JSON_CACHE_KEY = 'videosManifest';
 const VIDEOS_JSON_FETCHED_AT_KEY = 'videosManifestFetchedAt';
 const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const GALLERY_POSTERS_CACHE_KEY = 'cachedGalleryPosters';
 const WALLPAPER_POOL_KEY = 'wallpaperPoolIds';
 const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
+const CACHED_APPLIED_VIDEO_URL_KEY = 'cachedAppliedVideoUrl';
 const WALLPAPER_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
 const WALLPAPER_CACHE_NAME = 'wallpaper-assets';
 const USER_WALLPAPER_CACHE_PREFIX = 'https://user-wallpapers.local/';
+const REMOTE_VIDEO_REGEX = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+const isRemoteHttpUrl = (url = '') => typeof url === 'string' && /^https?:\/\//i.test(url);
+const isRemoteVideoUrl = (url = '') => isRemoteHttpUrl(url) && REMOTE_VIDEO_REGEX.test(url);
 const runWhenIdle = (cb) => {
   if ('requestIdleCallback' in window) {
     requestIdleCallback(cb, { timeout: 500 });
@@ -159,9 +164,12 @@ async function getVideosManifest() {
   const lastFetchedAt = stored[VIDEOS_JSON_FETCHED_AT_KEY] || 0;
   const isFresh = manifest && Date.now() - lastFetchedAt < VIDEOS_JSON_TTL_MS;
   if (manifest && isFresh) {
+    runWhenIdle(() => cacheGalleryPosters(manifest));
     return manifest;
   }
-  return fetchVideosManifestIfNeeded();
+  const fetched = await fetchVideosManifestIfNeeded();
+  runWhenIdle(() => cacheGalleryPosters(fetched));
+  return fetched;
 }
 
 function shuffleArray(arr) {
@@ -186,7 +194,42 @@ async function cacheAsset(url) {
   }
 }
 
+async function cacheGalleryPosters(manifest = []) {
+  const posters = Array.from(new Set(
+    manifest
+      .map((item) => item && (item.poster || item.posterUrl))
+      .filter(Boolean)
+  ));
+  if (!posters.length) return [];
+
+  let cachedList = [];
+  try {
+    const stored = await browser.storage.local.get(GALLERY_POSTERS_CACHE_KEY);
+    cachedList = Array.isArray(stored[GALLERY_POSTERS_CACHE_KEY]) ? stored[GALLERY_POSTERS_CACHE_KEY] : [];
+  } catch (err) {
+    console.warn('Unable to read cached poster index', err);
+  }
+
+  const cachedSet = new Set(cachedList);
+  const newPosters = posters.filter((url) => !cachedSet.has(url));
+  const postersToCache = (newPosters.length ? newPosters : posters).filter(Boolean);
+
+  if (postersToCache.length) {
+    await Promise.all(postersToCache.map((url) => cacheAsset(url)));
+  }
+
+  const nextCached = Array.from(new Set([...cachedSet, ...posters]));
+  try {
+    await browser.storage.local.set({ [GALLERY_POSTERS_CACHE_KEY]: nextCached });
+  } catch (err) {
+    console.warn('Unable to update cached poster index', err);
+  }
+  return nextCached;
+}
+
 const wallpaperObjectUrlCache = new Map();
+let galleryPosterPrefetchPromise = null;
+let galleryHydrationWarmPromise = null;
 
 function normalizeWallpaperCacheKey(cacheKey) {
   if (!cacheKey) return '';
@@ -249,6 +292,56 @@ async function getCachedObjectUrl(cacheKey) {
   }
 }
 
+async function hydrateManifestPosters(manifest = []) {
+  const hydrated = await Promise.all((manifest || []).map(async (item) => {
+    const posterCacheKey = (item && (item.poster || item.posterUrl)) || '';
+    let posterUrl = (item && (item.posterUrl || item.poster)) || '';
+
+    if (posterCacheKey) {
+      const cachedPoster = await getCachedObjectUrl(posterCacheKey);
+      if (cachedPoster) {
+        posterUrl = cachedPoster;
+      }
+    }
+
+    return {
+      ...item,
+      posterUrl,
+      posterCacheKey
+    };
+  }));
+
+  return hydrated;
+}
+
+async function prefetchGalleryPosters() {
+  if (galleryPosterPrefetchPromise) return galleryPosterPrefetchPromise;
+  galleryPosterPrefetchPromise = (async () => {
+    try {
+      const manifest = await fetchVideosManifestIfNeeded();
+      const manifestList = Array.isArray(manifest) ? manifest : [];
+      await cacheGalleryPosters(manifestList);
+    } catch (err) {
+      console.warn('Failed to prefetch gallery posters', err);
+    }
+  })();
+  return galleryPosterPrefetchPromise;
+}
+
+async function warmGalleryPosterHydration() {
+  if (galleryHydrationWarmPromise) return galleryHydrationWarmPromise;
+  galleryHydrationWarmPromise = (async () => {
+    try {
+      const manifest = await getVideosManifest();
+      const manifestList = Array.isArray(manifest) ? manifest : [];
+      await hydrateManifestPosters(manifestList);
+    } catch (err) {
+      console.warn('Failed to warm gallery poster hydration', err);
+    }
+  })();
+  return galleryHydrationWarmPromise;
+}
+
 async function deleteCachedObject(cacheKey) {
   const keys = getCacheKeyVariants(cacheKey);
   if (!keys.length) return;
@@ -269,6 +362,49 @@ async function deleteCachedObject(cacheKey) {
       wallpaperObjectUrlCache.delete(key);
     }
   });
+}
+
+async function pruneCachedVideos(keepUrl = '') {
+  try {
+    const cache = await caches.open(WALLPAPER_CACHE_NAME);
+    const requests = await cache.keys();
+    const deletions = requests
+      .map((req) => {
+        const url = req.url;
+        if (!isRemoteVideoUrl(url)) return null;
+        if (keepUrl && url === keepUrl) return null;
+        return cache.delete(req).catch(() => {});
+      })
+      .filter(Boolean);
+    if (deletions.length) {
+      await Promise.all(deletions);
+    }
+  } catch (err) {
+    console.warn('Failed to prune cached videos', err);
+  }
+}
+
+async function cacheAppliedWallpaperVideo(selection) {
+  if (!selection) return;
+
+  const videoCacheKey = selection.videoCacheKey || '';
+  const videoUrl = selection.videoUrl || '';
+  const targetUrl = isRemoteVideoUrl(videoCacheKey)
+    ? videoCacheKey
+    : (isRemoteVideoUrl(videoUrl) ? videoUrl : '');
+
+  try {
+    await pruneCachedVideos(targetUrl);
+
+    if (targetUrl) {
+      await cacheAsset(targetUrl);
+      await browser.storage.local.set({ [CACHED_APPLIED_VIDEO_URL_KEY]: targetUrl });
+    } else {
+      await browser.storage.local.remove(CACHED_APPLIED_VIDEO_URL_KEY);
+    }
+  } catch (err) {
+    console.warn('Failed to cache applied video', err);
+  }
 }
 
 function readFileAsDataUrl(file) {
@@ -335,15 +471,22 @@ async function hydrateWallpaperSelection(selection) {
   if (!selection) return selection;
   const hydrated = { ...selection };
 
-  if (selection.videoCacheKey) {
-    const cachedVideo = await getCachedObjectUrl(selection.videoCacheKey);
+  if (!hydrated.videoCacheKey && isRemoteHttpUrl(hydrated.videoUrl || '')) {
+    hydrated.videoCacheKey = hydrated.videoUrl;
+  }
+  if (!hydrated.posterCacheKey && isRemoteHttpUrl(hydrated.posterUrl || '')) {
+    hydrated.posterCacheKey = hydrated.posterUrl;
+  }
+
+  if (hydrated.videoCacheKey) {
+    const cachedVideo = await getCachedObjectUrl(hydrated.videoCacheKey);
     if (cachedVideo) {
       hydrated.videoUrl = cachedVideo;
     }
   }
 
-  if (selection.posterCacheKey && !selection.posterUrl) {
-    const cachedPoster = await getCachedObjectUrl(selection.posterCacheKey);
+  if (hydrated.posterCacheKey) {
+    const cachedPoster = await getCachedObjectUrl(hydrated.posterCacheKey);
     if (cachedPoster) {
       hydrated.posterUrl = cachedPoster;
     }
@@ -395,12 +538,14 @@ async function pickNextWallpaper(manifest) {
   await browser.storage.local.set({ [WALLPAPER_POOL_KEY]: pool });
   if (!entry) return null;
 
-  await Promise.all([cacheAsset(entry.url), cacheAsset(entry.poster)]);
+  await cacheAsset(entry.poster);
 
   const selection = {
     id: entry.id,
     videoUrl: entry.url,
+    videoCacheKey: entry.url || '',
     posterUrl: entry.poster,
+    posterCacheKey: entry.poster || '',
     title: entry.title,
     selectedAt: Date.now()
   };
@@ -454,6 +599,7 @@ async function ensureDailyWallpaper(forceNext = false) {
     currentWallpaperSelection = hydratedSelection;
     const type = hydratedSelection.videoUrl ? await getWallpaperTypePreference() : 'static';
     applyWallpaperByType(hydratedSelection, type);
+    runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
   } else {
     applyWallpaperBackground('assets/fallback.webp');
   }
@@ -3412,6 +3558,8 @@ async function initializePage() {
   updateTime();
   setInterval(updateTime, 1000 * 60);
   setupDockNavigation();
+  prefetchGalleryPosters().catch(() => {});
+  runWhenIdle(() => warmGalleryPosterHydration());
   
   setupQuickActions();
   setupBookmarkModal();
@@ -3573,7 +3721,7 @@ function buildGalleryCard(item, index = 0) {
   const card = document.createElement('div');
   card.className = 'gallery-card';
   
-  const posterSrc = item.poster || item.posterUrl || item.url || '';
+  const posterSrc = item.posterUrl || item.poster || item.url || '';
   const loadingAttr = index < 40 ? 'eager' : 'lazy';
   const isFavorite = galleryFavorites.has(item.id);
 
@@ -3659,7 +3807,9 @@ async function applyGalleryWallpaper(item) {
   const selection = {
     id: item.id,
     videoUrl: item.url,
-    posterUrl: item.poster || item.posterUrl || '',
+    posterUrl: item.posterUrl || item.poster || '',
+    posterCacheKey: item.poster || item.posterUrl || '',
+    videoCacheKey: item.url || '',
     title: item.title || '',
     selectedAt: Date.now()
   };
@@ -3670,6 +3820,7 @@ async function applyGalleryWallpaper(item) {
   currentWallpaperSelection = hydrated;
   const type = await getWallpaperTypePreference();
   applyWallpaperByType(hydrated, type);
+  runWhenIdle(() => cacheAppliedWallpaperVideo(hydrated));
   // Close modal after applying
   closeGalleryModal();
 }
@@ -3681,7 +3832,10 @@ async function openGalleryModal() {
 
   try {
     const manifest = await getVideosManifest(); // uses cached manifest when fresh
-    galleryManifest = Array.isArray(manifest) ? manifest : [];
+    const manifestList = Array.isArray(manifest) ? manifest : [];
+    runWhenIdle(() => cacheGalleryPosters(manifestList));
+    const hydrationPromise = hydrateManifestPosters(manifestList).catch(() => manifestList);
+    galleryManifest = manifestList;
     await loadGalleryFavorites();
     await loadGallerySettings();
     await loadWallpaperTypePreference();
@@ -3690,6 +3844,11 @@ async function openGalleryModal() {
     updateSettingsPreview(currentWallpaperSelection, wallpaperTypePreference || 'video');
     buildGalleryFilters(galleryManifest);
     setGalleryFilter(galleryActiveFilterValue || 'all');
+    hydrationPromise.then((hydrated) => {
+      if (!hydrated || !galleryModal || galleryModal.classList.contains('hidden')) return;
+      galleryManifest = Array.isArray(hydrated) ? hydrated : manifestList;
+      renderCurrentGallery();
+    });
   } catch (err) {
     console.warn('Could not load gallery manifest', err);
   }
@@ -4016,6 +4175,8 @@ async function applyMyWallpaper(item) {
     if (wallpaperTypeToggle) wallpaperTypeToggle.checked = true; 
     applyWallpaperByType(hydratedSelection, 'static');
   }
+
+  runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
   
   closeGalleryModal();
 }
@@ -4213,6 +4374,7 @@ if (myWallpapersUseFallbackBtn) {
       });
       const type = await getWallpaperTypePreference();
       applyWallpaperByType(selection, type);
+      runWhenIdle(() => cacheAppliedWallpaperVideo(selection));
     } catch (err) {
       console.warn('Failed to apply fallback wallpaper from My Wallpapers', err);
     }

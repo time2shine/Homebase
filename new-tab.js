@@ -61,19 +61,26 @@ function buildFallbackSelection(selectedAt = Date.now()) {
   try {
     const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY]);
     const selection = stored[WALLPAPER_SELECTION_KEY];
+    const fallbackUsedAt = stored[WALLPAPER_FALLBACK_USED_KEY] || 0;
     const now = Date.now();
-    const fallbackFresh =
-      stored[WALLPAPER_FALLBACK_USED_KEY] &&
-      now - stored[WALLPAPER_FALLBACK_USED_KEY] < WALLPAPER_TTL_MS;
-    if (selection && selection.posterUrl) {
-      applyWallpaperBackground(selection.posterUrl);
+
+    // Prefer the last applied wallpaper (hydrate to resolve cached poster URLs)
+    if (selection) {
+      const hydrated = await hydrateWallpaperSelection(selection);
+      const poster = hydrated.posterUrl || 'assets/fallback.webp';
+      applyWallpaperBackground(poster);
       lastAppliedWallpaper = {
-        id: selection.id || 'stored',
-        poster: selection.posterUrl,
+        id: hydrated.id || 'stored',
+        poster,
         video: '',
         type: 'static'
       };
-    } else if (fallbackFresh) {
+      return;
+    }
+
+    // Fallback path (keeps previous behavior)
+    const fallbackFresh = fallbackUsedAt && now - fallbackUsedAt < WALLPAPER_TTL_MS;
+    if (fallbackFresh) {
       applyWallpaperBackground('assets/fallback.webp');
       lastAppliedWallpaper = {
         id: 'fallback',
@@ -81,6 +88,24 @@ function buildFallbackSelection(selectedAt = Date.now()) {
         video: '',
         type: 'static'
       };
+      return;
+    }
+
+    const fallbackSelection = buildFallbackSelection(now - WALLPAPER_TTL_MS - 1);
+    applyWallpaperBackground(fallbackSelection.posterUrl);
+    lastAppliedWallpaper = {
+      id: fallbackSelection.id,
+      poster: fallbackSelection.posterUrl,
+      video: '',
+      type: 'static'
+    };
+    try {
+      await browser.storage.local.set({
+        [WALLPAPER_SELECTION_KEY]: fallbackSelection,
+        [WALLPAPER_FALLBACK_USED_KEY]: now
+      });
+    } catch (err) {
+      console.warn('Unable to persist fallback selection during prime', err);
     }
   } catch (err) {
     console.warn('primeWallpaperBackground failed:', err);
@@ -3622,7 +3647,14 @@ async function initializePage() {
   setupEditFolderModal();
   setupMoveModal();
   
-  loadBookmarks();
+  try {
+    await loadBookmarks();
+  } finally {
+    if (document && document.body) {
+      document.body.classList.remove('preload');
+      document.body.classList.add('ready');
+    }
+  }
 
   runWhenIdle(async () => {
     await loadCachedQuote();

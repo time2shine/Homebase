@@ -16,6 +16,26 @@ body {
   overflow: hidden; /* Prevent full-page scroll */
 }
 
+/* Show a neutral poster + hide UI until JS hydrates to avoid flashing the old layout */
+body.preload {
+  background: #000 url('assets/fallback.webp') center/cover no-repeat fixed;
+}
+
+body.preload .sidebar,
+body.preload .main-content,
+body.preload .dock {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.ready .sidebar,
+body.ready .main-content,
+body.ready .dock {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.25s ease;
+}
+
 /* Full-bleed video background */
 .background-video {
   position: fixed;

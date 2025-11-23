@@ -3762,11 +3762,8 @@ async function initializePage() {
   
   try {
     await loadBookmarks();
-  } finally {
-    if (document && document.body) {
-      document.body.classList.remove('preload');
-      document.body.classList.add('ready');
-    }
+  } catch (e) {
+    console.warn(e);
   }
 
   runWhenIdle(async () => {
@@ -3777,6 +3774,13 @@ async function initializePage() {
     await setupWeather();
     setupAppLauncher();
     fetchQuote();
+
+    requestAnimationFrame(() => {
+      if (document && document.body) {
+        document.body.classList.remove('preload');
+        document.body.classList.add('ready');
+      }
+    });
   });
 
   // --- Add global listeners to hide ALL context menus ---

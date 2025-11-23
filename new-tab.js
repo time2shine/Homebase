@@ -3122,6 +3122,8 @@ async function setupSearch() {
     searchWidget.classList.remove('results-open');
     searchAreaWrapper.classList.remove('search-focused'); // Unfocus
   });
+
+  revealWidget('.widget-search');
 }
 
 async function handleSearchChange() {

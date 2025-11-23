@@ -48,6 +48,15 @@ const runWhenIdle = (cb) => {
 };
 let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
 
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    const context = this;
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(context, args), wait);
+  };
+}
+
 function revealWidget(selector) {
   const el = document.querySelector(selector);
   if (!el) return;
@@ -3085,6 +3094,20 @@ const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
 const searchSelect = document.getElementById('search-select');
 let currentSearchEngine = searchEngines[0];
+let selectedResultIndex = -1;
+let latestSearchToken = 0;
+let lastBookmarkHtml = '';
+let lastSuggestionHtml = '';
+
+function escapeHtml(unsafe) {
+  if (!unsafe) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 function populateSearchOptions() {
   searchEngines.forEach((engine, index) => {
@@ -3106,18 +3129,24 @@ async function setupSearch() {
   if (savedIndex >= searchEngines.length) savedIndex = 0;
   updateSearchUI(savedIndex);
 
+  const debouncedSearch = debounce(handleSearchInput, 300);
   searchForm.addEventListener('submit', handleSearch);
   searchSelect.addEventListener('change', handleSearchChange);
 
-  searchInput.addEventListener('input', handleSearchInput);
-  
+  searchInput.addEventListener('input', debouncedSearch);
+  searchInput.addEventListener('keydown', handleSearchKeydown);
+
   searchInput.addEventListener('click', e => {
     e.stopPropagation();
   });
   
   searchResultsPanel.addEventListener('click', e => e.stopPropagation());
-  
-  window.addEventListener('click', () => {
+
+  window.addEventListener('mousedown', (e) => {
+    const target = e.target;
+    if (searchWidget.contains(target) || searchResultsPanel.contains(target) || searchInput.contains(target)) {
+      return;
+    }
     searchResultsPanel.classList.add('hidden');
     searchWidget.classList.remove('results-open');
     searchAreaWrapper.classList.remove('search-focused'); // Unfocus
@@ -3143,6 +3172,54 @@ async function handleSearch(event) {
   window.location.href = searchUrl;
 }
 
+function handleSearchKeydown(e) {
+  const results = document.querySelectorAll('.result-item');
+  if (results.length === 0) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    selectedResultIndex++;
+    if (selectedResultIndex >= results.length) selectedResultIndex = 0;
+    updateSelection(results);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    selectedResultIndex--;
+    if (selectedResultIndex < 0) selectedResultIndex = results.length - 1;
+    updateSelection(results);
+  } else if (e.key === 'Enter') {
+    if (selectedResultIndex > -1) {
+      e.preventDefault();
+      results[selectedResultIndex].click();
+    }
+  }
+}
+
+function updateSelection(results) {
+  const clampedIndex = Math.min(Math.max(selectedResultIndex, -1), results.length - 1);
+  selectedResultIndex = clampedIndex;
+  results.forEach((item, index) => {
+    if (index === clampedIndex && clampedIndex !== -1) {
+      item.classList.add('selected');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+}
+
+function applySelectionToCurrentResults() {
+  const results = document.querySelectorAll('.result-item');
+  if (!results.length) {
+    selectedResultIndex = -1;
+    return;
+  }
+  updateSelection(results);
+}
+
+function isStaleSearch(token, queryLower) {
+  return token !== latestSearchToken || queryLower !== searchInput.value.toLowerCase().trim();
+}
+
 // Function to fetch suggestions
 async function fetchSearchSuggestions(query, engine) {
   if (suggestionAbortController) {
@@ -3154,16 +3231,44 @@ async function fetchSearchSuggestions(query, engine) {
   try {
     const res = await fetch(engine.suggestionUrl + encodeURIComponent(query), { signal });
     if (!res.ok) return [];
-    const data = await res.json();
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (parseErr) {
+      data = raw;
+    }
     
-    if (engine.name === 'Google' || engine.name === 'Bing' || engine.name === 'Yandex') {
-      return data[1] || [];
+    if (engine.name === 'Google' || engine.name === 'Bing') {
+      return Array.isArray(data) && Array.isArray(data[1]) ? data[1].filter(val => typeof val === 'string') : [];
     }
     if (engine.name === 'DuckDuckGo') {
-      return data.map(item => item.phrase) || [];
+      return Array.isArray(data) ? data.map(item => item && item.phrase).filter(val => typeof val === 'string') : [];
     }
     if (engine.name === 'Yahoo') {
-      return data?.gossip?.results?.[0]?.nodes?.map(item => item.key) || [];
+      const results = data?.gossip?.results;
+      if (Array.isArray(results)) {
+        return results
+          .flatMap(entry => (entry?.nodes || []).map(node => node && node.key))
+          .filter(val => typeof val === 'string');
+      }
+      return [];
+    }
+    if (engine.name === 'Yandex') {
+      let parsedArray = data;
+      if (typeof parsedArray === 'string') {
+        try {
+          parsedArray = JSON.parse(parsedArray);
+        } catch {
+          parsedArray = [];
+        }
+      }
+      const suggestionBucket = Array.isArray(parsedArray) && parsedArray.length > 1 ? parsedArray[1] : [];
+      return Array.isArray(suggestionBucket)
+        ? suggestionBucket
+            .map(item => (Array.isArray(item) ? item[1] : item))
+            .filter(val => typeof val === 'string')
+        : [];
     }
     return [];
   } catch (err) {
@@ -3191,14 +3296,20 @@ function updatePanelVisibility() {
 
 // Merged logic into one async function
 async function handleSearchInput() {
+  selectedResultIndex = -1;
   const query = searchInput.value;
   const queryLower = query.toLowerCase().trim();
+  const queryTerms = queryLower.split(/\s+/).filter(Boolean);
+  const currentToken = ++latestSearchToken;
 
   // 1. Handle empty query
   if (queryLower.length === 0) {
     searchAreaWrapper.classList.remove('search-focused');
     bookmarkResultsContainer.innerHTML = '';
     suggestionResultsContainer.innerHTML = '';
+    lastBookmarkHtml = '';
+    lastSuggestionHtml = '';
+    applySelectionToCurrentResults();
     updatePanelVisibility();
     return;
   }
@@ -3208,25 +3319,45 @@ async function handleSearchInput() {
 
   // 3. Filter Bookmarks (Synchronous) - Build HTML string
   let bookmarkHtml = '';
-  const bookmarkResults = allBookmarks.filter(b =>
-    b.title.toLowerCase().includes(queryLower) ||
-    b.url.toLowerCase().includes(queryLower)
-  ).slice(0, 5);
+  const bookmarkResults = allBookmarks
+    .filter(b => {
+      const title = (b.title || '').toLowerCase();
+      const url = (b.url || '').toLowerCase();
+      return queryTerms.every(term => title.includes(term) || url.includes(term));
+    })
+    .slice(0, 5);
 
   if (bookmarkResults.length > 0) {
     bookmarkHtml += '<div class="result-header">Bookmarks</div>';
     bookmarkResults.forEach(bookmark => {
-      const domain = new URL(bookmark.url).hostname;
+      let domain = '';
+      try {
+        domain = new URL(bookmark.url).hostname;
+      } catch (err) {
+        domain = '';
+      }
+      const safeTitle = escapeHtml(bookmark.title || 'No Title');
       bookmarkHtml += `
         <a href="${bookmark.url}" class="result-item">
           <img src="https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64" alt="">
           <div class="result-item-info">
-            <strong>${bookmark.title || 'No Title'}</strong>
+            <strong>${safeTitle}</strong>
           </div>
         </a>
       `;
     });
   }
+
+  if (isStaleSearch(currentToken, queryLower)) return;
+
+  if (bookmarkHtml !== lastBookmarkHtml) {
+    const prevScroll = bookmarkResultsContainer.scrollTop;
+    bookmarkResultsContainer.innerHTML = bookmarkHtml;
+    bookmarkResultsContainer.scrollTop = prevScroll;
+    lastBookmarkHtml = bookmarkHtml;
+  }
+  applySelectionToCurrentResults();
+  updatePanelVisibility();
 
   // 4. Fetch Suggestions (Asynchronous) - Build HTML string
   let suggestionHtml = '';
@@ -3236,7 +3367,10 @@ async function handleSearchInput() {
     return; // Aborted, do nothing
   }
   
+  if (isStaleSearch(currentToken, queryLower)) return;
+
   if (suggestionResults && suggestionResults.length > 0) {
+    const safeQuery = escapeHtml(query);
     suggestionHtml += `<div class="result-header">${currentSearchEngine.name} Search</div>`;
     
     // Add "Search for..."
@@ -3244,7 +3378,7 @@ async function handleSearchInput() {
       <a href="${currentSearchEngine.url}${encodeURIComponent(query)}" class="result-item result-item-suggestion">
         <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
         <div class="result-item-info">
-          <strong>${query}</strong>
+          <strong>${safeQuery}</strong>
         </div>
       </a>
     `;
@@ -3252,20 +3386,26 @@ async function handleSearchInput() {
     // Add fetched suggestions (UP TO 10)
     suggestionResults.slice(0, 10).forEach(suggestion => {
       if (suggestion.toLowerCase() === query.toLowerCase()) return;
+      const safeSuggestion = escapeHtml(suggestion);
       suggestionHtml += `
         <a href="${currentSearchEngine.url}${encodeURIComponent(suggestion)}" class="result-item result-item-suggestion">
           <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
           <div class="result-item-info">
-            <strong>${suggestion}</strong>
+            <strong>${safeSuggestion}</strong>
           </div>
         </a>
       `;
     });
   }
 
-  // 5. RENDER BOTH AT THE SAME TIME
-  bookmarkResultsContainer.innerHTML = bookmarkHtml;
-  suggestionResultsContainer.innerHTML = suggestionHtml;
+  if (suggestionHtml !== lastSuggestionHtml) {
+    const prevScroll = suggestionResultsContainer.scrollTop;
+    suggestionResultsContainer.innerHTML = suggestionHtml;
+    suggestionResultsContainer.scrollTop = prevScroll;
+    lastSuggestionHtml = suggestionHtml;
+  }
+
+  applySelectionToCurrentResults();
 
   // 6. Update visibility
   updatePanelVisibility();

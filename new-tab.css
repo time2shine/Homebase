@@ -1062,6 +1062,10 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
 .result-item:hover {
   background-color: #f0f0f0;
 }
+.result-item.selected {
+  background-color: #f0f0f0;
+  border-left: 3px solid #2ca5ff;
+}
 .result-item img {
   width: 24px;
   height: 24px;

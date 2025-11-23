@@ -5,8 +5,13 @@ body {
   font-family: sans-serif;
   color: white;
 
-  /* Base background; JS sets the poster/wallpaper per day */
-  background: #000;
+  /* IMPORTANT: fallback poster to prevent black flash */
+  background-color: #000;
+  background-image: url("assets/fallback.webp");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
   height: 100vh;
   box-sizing: border-box;
 
@@ -14,6 +19,19 @@ body {
   display: flex;
   flex-direction: row;
   overflow: hidden; /* Prevent full-page scroll */
+}
+
+.widget-hidden {
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+}
+
+.widget-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 /* Show a neutral poster + hide UI until JS hydrates to avoid flashing the old layout */

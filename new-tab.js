@@ -46,6 +46,13 @@ const runWhenIdle = (cb) => {
 };
 let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
 
+function revealWidget(selector) {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  el.classList.remove('widget-hidden');
+  el.classList.add('widget-visible');
+}
+
 function buildFallbackSelection(selectedAt = Date.now()) {
   return {
     id: 'fallback',
@@ -59,39 +66,32 @@ function buildFallbackSelection(selectedAt = Date.now()) {
 
 (async function primeWallpaperBackground() {
   try {
-    const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY]);
+    const stored = await browser.storage.local.get([
+      WALLPAPER_SELECTION_KEY,
+      WALLPAPER_FALLBACK_USED_KEY
+    ]);
+
     const selection = stored[WALLPAPER_SELECTION_KEY];
-    const fallbackUsedAt = stored[WALLPAPER_FALLBACK_USED_KEY] || 0;
     const now = Date.now();
 
-    // Prefer the last applied wallpaper (hydrate to resolve cached poster URLs)
+    // Always use the current wallpaper poster first
     if (selection) {
       const hydrated = await hydrateWallpaperSelection(selection);
       const poster = hydrated.posterUrl || 'assets/fallback.webp';
+      setWallpaperFallbackPoster(poster);
       applyWallpaperBackground(poster);
       lastAppliedWallpaper = {
         id: hydrated.id || 'stored',
         poster,
-        video: '',
-        type: 'static'
+        video: hydrated.videoUrl || '',
+        type: hydrated.videoUrl ? 'video' : 'static'
       };
       return;
     }
 
-    // Fallback path (keeps previous behavior)
-    const fallbackFresh = fallbackUsedAt && now - fallbackUsedAt < WALLPAPER_TTL_MS;
-    if (fallbackFresh) {
-      applyWallpaperBackground('assets/fallback.webp');
-      lastAppliedWallpaper = {
-        id: 'fallback',
-        poster: 'assets/fallback.webp',
-        video: '',
-        type: 'static'
-      };
-      return;
-    }
-
-    const fallbackSelection = buildFallbackSelection(now - WALLPAPER_TTL_MS - 1);
+    // Only reach here if there is truly no wallpaper set
+    const fallbackSelection = buildFallbackSelection(now);
+    setWallpaperFallbackPoster(fallbackSelection.posterUrl);
     applyWallpaperBackground(fallbackSelection.posterUrl);
     lastAppliedWallpaper = {
       id: fallbackSelection.id,
@@ -99,14 +99,11 @@ function buildFallbackSelection(selectedAt = Date.now()) {
       video: '',
       type: 'static'
     };
-    try {
-      await browser.storage.local.set({
-        [WALLPAPER_SELECTION_KEY]: fallbackSelection,
-        [WALLPAPER_FALLBACK_USED_KEY]: now
-      });
-    } catch (err) {
-      console.warn('Unable to persist fallback selection during prime', err);
-    }
+
+    await browser.storage.local.set({
+      [WALLPAPER_SELECTION_KEY]: fallbackSelection,
+      [WALLPAPER_FALLBACK_USED_KEY]: now
+    });
   } catch (err) {
     console.warn('primeWallpaperBackground failed:', err);
   }
@@ -2855,6 +2852,7 @@ async function loadCachedQuote() {
     if (data.cachedQuote) {
       quoteText.textContent = `\"${data.cachedQuote}\"`;
       quoteAuthor.textContent = data.cachedAuthor ? `- ${data.cachedAuthor}` : '';
+      revealWidget('.widget-quote');
     }
   } catch (err) {
     console.warn('Could not load cached quote:', err);
@@ -2890,12 +2888,16 @@ async function fetchQuote() {
       cachedQuote: q.content,
       cachedAuthor: q.author || ''
     });
+
+    revealWidget('.widget-quote');
   } catch (err) {
     console.error('Quote Error:', err);
     if (!quoteText.textContent.includes('"')) {
       quoteText.textContent = '"The best way to predict the future is to create it."';
       quoteAuthor.textContent = '- Peter Drucker';
     }
+
+    revealWidget('.widget-quote');
   }
 }
 
@@ -2958,6 +2960,8 @@ function updateTime() {
   timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' };
   dateEl.textContent = now.toLocaleDateString('en-US', dateOptions);
+
+  revealWidget('.widget-time');
 }
 
 
@@ -3258,6 +3262,8 @@ function updateWeatherUI(data, cityName, units) {
     cachedCityName: cityName,
     cachedUnits: units
   });
+
+  revealWidget('.widget-weather');
 }
 
 function showWeatherError(error) {
@@ -3267,6 +3273,7 @@ function showWeatherError(error) {
   document.getElementById('weather-desc').textContent = 'Could not load data';
   document.getElementById('weather-icon').textContent = '-';
   setLocationBtn.classList.remove('hidden');
+  revealWidget('.widget-weather');
   browser.storage.local.remove(['cachedWeatherData', 'cachedCityName', 'cachedUnits']);
 }
 

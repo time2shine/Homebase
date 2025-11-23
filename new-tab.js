@@ -4361,6 +4361,42 @@ async function removeMyWallpaper(id) {
   if (target && target.cacheKey) {
     await deleteCachedObject(target.cacheKey);
   }
+
+  // If the deleted wallpaper is currently applied, fall back to the default live wallpaper
+  try {
+    const stored = await browser.storage.local.get(WALLPAPER_SELECTION_KEY);
+    const activeSelection = currentWallpaperSelection || stored[WALLPAPER_SELECTION_KEY] || null;
+    const activeId = activeSelection && activeSelection.id;
+    const selectionKeys = new Set(
+      [activeSelection && activeSelection.cacheKey, activeSelection && activeSelection.posterCacheKey, activeSelection && activeSelection.videoCacheKey]
+        .filter(Boolean)
+        .map(normalizeWallpaperCacheKey)
+    );
+    const targetKeys = new Set(
+      [target && target.cacheKey, target && target.posterCacheKey, target && target.videoCacheKey]
+        .filter(Boolean)
+        .map(normalizeWallpaperCacheKey)
+    );
+    const matchesActive = (activeId && activeId === id) || Array.from(targetKeys).some((key) => selectionKeys.has(key));
+
+    if (matchesActive) {
+      const now = Date.now();
+      const fallbackSelection = buildFallbackSelection(now);
+      currentWallpaperSelection = fallbackSelection;
+      wallpaperTypePreference = 'video';
+      if (wallpaperTypeToggle) wallpaperTypeToggle.checked = false;
+      await browser.storage.local.set({
+        [WALLPAPER_SELECTION_KEY]: fallbackSelection,
+        [WALLPAPER_FALLBACK_USED_KEY]: now,
+        [WALLPAPER_TYPE_KEY]: 'video'
+      });
+      applyWallpaperByType(fallbackSelection, 'video');
+      runWhenIdle(() => cacheAppliedWallpaperVideo(fallbackSelection));
+    }
+  } catch (err) {
+    console.warn('Failed to reset wallpaper after deletion', err);
+  }
+
   renderMyWallpapers();
 }
 

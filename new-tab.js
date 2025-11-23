@@ -26,6 +26,7 @@ const VIDEOS_JSON_CACHE_KEY = 'videosManifest';
 const VIDEOS_JSON_FETCHED_AT_KEY = 'videosManifestFetchedAt';
 const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const GALLERY_POSTERS_CACHE_KEY = 'cachedGalleryPosters';
+let videosManifestPromise = null;
 const WALLPAPER_POOL_KEY = 'wallpaperPoolIds';
 const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
 const CACHED_APPLIED_VIDEO_URL_KEY = 'cachedAppliedVideoUrl';
@@ -43,6 +44,7 @@ const runWhenIdle = (cb) => {
     setTimeout(cb, 50);
   }
 };
+let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
 
 function buildFallbackSelection(selectedAt = Date.now()) {
   return {
@@ -65,8 +67,20 @@ function buildFallbackSelection(selectedAt = Date.now()) {
       now - stored[WALLPAPER_FALLBACK_USED_KEY] < WALLPAPER_TTL_MS;
     if (selection && selection.posterUrl) {
       applyWallpaperBackground(selection.posterUrl);
+      lastAppliedWallpaper = {
+        id: selection.id || 'stored',
+        poster: selection.posterUrl,
+        video: '',
+        type: 'static'
+      };
     } else if (fallbackFresh) {
       applyWallpaperBackground('assets/fallback.webp');
+      lastAppliedWallpaper = {
+        id: 'fallback',
+        poster: 'assets/fallback.webp',
+        video: '',
+        type: 'static'
+      };
     }
   } catch (err) {
     console.warn('primeWallpaperBackground failed:', err);
@@ -132,30 +146,36 @@ function scrollBookmarkTabs(direction) {
 // --- VIDEOS MANIFEST CACHING (DAILY) ---
 // ===============================================
 async function fetchVideosManifestIfNeeded() {
-  try {
-    const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
-    const lastFetchedAt = stored[VIDEOS_JSON_FETCHED_AT_KEY] || 0;
-    const now = Date.now();
-    const isFresh = now - lastFetchedAt < VIDEOS_JSON_TTL_MS;
+  if (videosManifestPromise) return videosManifestPromise;
+  videosManifestPromise = (async () => {
+    try {
+      const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
+      const lastFetchedAt = stored[VIDEOS_JSON_FETCHED_AT_KEY] || 0;
+      const now = Date.now();
+      const isFresh = now - lastFetchedAt < VIDEOS_JSON_TTL_MS;
 
-    if (stored[VIDEOS_JSON_CACHE_KEY] && isFresh) {
-      return stored[VIDEOS_JSON_CACHE_KEY]; // Already fresh for the day
+      if (stored[VIDEOS_JSON_CACHE_KEY] && isFresh) {
+        return stored[VIDEOS_JSON_CACHE_KEY]; // Already fresh for the day
+      }
+
+      const res = await fetch(VIDEOS_JSON_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const manifest = await res.json();
+
+      await browser.storage.local.set({
+        [VIDEOS_JSON_CACHE_KEY]: manifest,
+        [VIDEOS_JSON_FETCHED_AT_KEY]: now
+      });
+      return manifest;
+    } catch (err) {
+      console.warn('Could not refresh videos manifest:', err);
+      const fallback = await browser.storage.local.get(VIDEOS_JSON_CACHE_KEY);
+      return fallback[VIDEOS_JSON_CACHE_KEY] || [];
+    } finally {
+      videosManifestPromise = null;
     }
-
-    const res = await fetch(VIDEOS_JSON_URL, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const manifest = await res.json();
-
-    await browser.storage.local.set({
-      [VIDEOS_JSON_CACHE_KEY]: manifest,
-      [VIDEOS_JSON_FETCHED_AT_KEY]: now
-    });
-    return manifest;
-  } catch (err) {
-    console.warn('Could not refresh videos manifest:', err);
-    const fallback = await browser.storage.local.get(VIDEOS_JSON_CACHE_KEY);
-    return fallback[VIDEOS_JSON_CACHE_KEY] || [];
-  }
+  })();
+  return videosManifestPromise;
 }
 
 async function getVideosManifest() {
@@ -502,16 +522,22 @@ async function hydrateWallpaperSelection(selection) {
 function setBackgroundVideoSources(videoUrl, posterUrl = '') {
   const videos = Array.from(document.querySelectorAll('.background-video'));
   videos.forEach((v) => {
-    try { v.pause(); } catch (e) {}
     const source = v.querySelector('source');
-    if (source) {
-      source.src = videoUrl;
-    } else {
-      v.src = videoUrl;
+    const currentSrc = source ? (source.getAttribute('src') || '') : (v.getAttribute('src') || '');
+    const desiredPoster = posterUrl || '';
+    const needsUpdate = currentSrc !== videoUrl || v.poster !== desiredPoster;
+
+    if (needsUpdate) {
+      try { v.pause(); } catch (e) {}
+      if (source) {
+        source.src = videoUrl;
+      } else {
+        v.src = videoUrl;
+      }
+      v.poster = desiredPoster;
+      v.load();
+      v.currentTime = 0;
     }
-    v.poster = posterUrl || '';
-    v.load();
-    v.currentTime = 0;
     v.play().catch(() => {});
   });
 }
@@ -916,8 +942,7 @@ async function handleBookmarkModalSave() {
         url: url
       });
 
-      const newTree = await browser.bookmarks.getTree();
-      bookmarkTree = newTree;
+      const newTree = await getBookmarkTree(true);
 
       let folderToRender = null;
       if (currentGridFolderNode) {
@@ -957,8 +982,7 @@ async function handleBookmarkModalSave() {
 
     // 5. === THIS IS THE FIX ===
     // Re-fetch the entire bookmark tree to get the update
-    const newTree = await browser.bookmarks.getTree();
-    bookmarkTree = newTree; // Update the global tree variable
+    const newTree = await getBookmarkTree(true); // Update the global tree variable
 
     // 6. Re-find the active folder node from the NEW tree
     const activeFolderNode = findBookmarkNodeById(bookmarkTree[0], activeHomebaseFolderId);
@@ -1087,8 +1111,7 @@ async function saveNewFolder() {
     });
 
     // 4. Re-fetch the entire bookmark tree to get the update
-    const newTree = await browser.bookmarks.getTree();
-    bookmarkTree = newTree; // Update the global tree variable
+    const newTree = await getBookmarkTree(true); // Update the global tree variable
 
     // 5. Re-find the active folder node from the NEW tree
     const activeFolderNode = findBookmarkNodeById(bookmarkTree[0], activeHomebaseFolderId);
@@ -1250,8 +1273,7 @@ async function handleEditFolderSave() {
   try {
     await browser.bookmarks.update(editFolderTargetId, { title: newName });
 
-    const newTree = await browser.bookmarks.getTree();
-    bookmarkTree = newTree;
+    const newTree = await getBookmarkTree(true);
 
     let folderToRender = null;
     if (currentGridFolderNode) {
@@ -1586,6 +1608,29 @@ function setupAppLauncher() {
 // --- BOOKMARKS ---
 // ===============================================
 
+let bookmarkTreeFetchPromise = null;
+async function getBookmarkTree(forceRefresh = false) {
+  if (bookmarkTree && !forceRefresh && !bookmarkTreeFetchPromise) {
+    return bookmarkTree;
+  }
+  if (bookmarkTreeFetchPromise) {
+    return bookmarkTreeFetchPromise;
+  }
+  bookmarkTreeFetchPromise = browser.bookmarks.getTree()
+    .then((tree) => {
+      bookmarkTree = tree;
+      return tree;
+    })
+    .catch((err) => {
+      console.warn('Failed to refresh bookmark tree', err);
+      return bookmarkTree || [];
+    })
+    .finally(() => {
+      bookmarkTreeFetchPromise = null;
+    });
+  return bookmarkTreeFetchPromise;
+}
+
 // --- NEW: Grid Drag-and-Drop Handlers (Using Sortable.js) ---
 
 /**
@@ -1596,9 +1641,8 @@ async function moveBookmark(id, destination) {
   try {
     await browser.bookmarks.move(id, destination);
     
-    // Re-fetch the entire bookmark tree
-    const newTree = await browser.bookmarks.getTree();
-    bookmarkTree = newTree; // Update the global tree variable
+    // Re-fetch the entire bookmark tree (deduped)
+    const newTree = await getBookmarkTree(true);
 
     // Find the node for the currently displayed grid
     const activeGridNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
@@ -1934,7 +1978,7 @@ async function handleTabDrop(evt) {
 
     // If the active folder isn't changing, avoid a full reload to prevent UI flash
     if (folderToKeepOpen === activeHomebaseFolderId) {
-      const newTree = await browser.bookmarks.getTree();
+      const newTree = await getBookmarkTree(true);
       bookmarkTree = newTree;
       return;
     }
@@ -2106,8 +2150,7 @@ async function deleteBookmarkOrFolder(id, isFolder) {
     }
 
     // refresh tree + grid
-    const newTree = await browser.bookmarks.getTree();
-    bookmarkTree = newTree;
+    const newTree = await getBookmarkTree(true);
 
     if (currentGridFolderNode) {
       const activeGridNode = findBookmarkNodeById(
@@ -2364,8 +2407,7 @@ async function createNewBookmarkFolder(name) {
       title: name
     });
     
-    const tree = await browser.bookmarks.getTree();
-    bookmarkTree = tree;
+    const tree = await getBookmarkTree(true);
     
     processBookmarks(tree, newFolderNode.id);
     
@@ -2492,8 +2534,7 @@ function showGridItemRenameInput(gridItem, bookmarkNode) {
         await browser.bookmarks.update(bookmarkNode.id, { title: newName });
         
         // Refresh the tree and re-render the current grid
-        const newTree = await browser.bookmarks.getTree();
-        bookmarkTree = newTree; 
+        const newTree = await getBookmarkTree(true);
         
         const activeGridNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
         
@@ -2736,15 +2777,21 @@ function processBookmarks(nodes, activeFolderId = null) {
 /**
  * Now accepts an optional ID to keep a folder active after reload.
  */
-function loadBookmarks(activeFolderId = null) {
-  if (browser.bookmarks) {
-    browser.bookmarks.getTree(tree => {
-      bookmarkTree = tree;
-      processBookmarks(tree, activeFolderId);
-    });
-  } else {
+async function loadBookmarks(activeFolderId = null) {
+  if (!browser.bookmarks) {
     console.warn('Bookmarks API not available.');
-    document.getElementById('bookmarks-grid').innerHTML = 'Bookmarks are not available.';
+    const grid = document.getElementById('bookmarks-grid');
+    if (grid) {
+      grid.innerHTML = 'Bookmarks are not available.';
+    }
+    return;
+  }
+
+  try {
+    const tree = await getBookmarkTree(true);
+    processBookmarks(tree, activeFolderId);
+  } catch (err) {
+    console.warn('Failed to load bookmarks', err);
   }
 }
 
@@ -3430,9 +3477,9 @@ function setupBackgroundVideoCrossfade() {
   if (videos.length < 2) return;
 
   // Control loop manually so we can overlap and fade
-  videos.forEach(v => {
+  videos.forEach((v, idx) => {
     v.loop = false;
-    v.preload = 'auto';
+    v.preload = idx === 0 ? 'auto' : 'metadata'; // avoid eager downloads
     v.muted = true;
     v.playsInline = true;
   });
@@ -3446,10 +3493,18 @@ function setupBackgroundVideoCrossfade() {
   const startCycle = (current, next) => {
     let fading = false;
 
+    const primeNext = () => {
+      if (next.preload !== 'auto') {
+        next.preload = 'auto';
+        next.load();
+      }
+    };
+
     const doFade = async () => {
       if (fading) return;
       fading = true;
       try {
+        primeNext();
         next.currentTime = 0;
         await next.play();
         next.classList.add('is-active');
@@ -4706,14 +4761,39 @@ function animateGridReorder(items, previousPositions) {
 function applyWallpaperByType(selection, type = 'video') {
   if (!selection) return;
   const finalType = type === 'static' ? 'static' : 'video';
+  const poster = selection.posterUrl || '';
+  const video = finalType === 'video' ? (selection.videoUrl || '') : '';
+
+  const unchanged =
+    lastAppliedWallpaper &&
+    lastAppliedWallpaper.id === (selection.id || null) &&
+    lastAppliedWallpaper.poster === poster &&
+    lastAppliedWallpaper.video === video &&
+    lastAppliedWallpaper.type === finalType;
+
   currentWallpaperSelection = selection;
-  applyWallpaperBackground(selection.posterUrl || '');
-  if (finalType === 'video' && selection.videoUrl) {
-    setBackgroundVideoSources(selection.videoUrl, selection.posterUrl);
-    startBackgroundVideos();
+
+  if (!unchanged) {
+    applyWallpaperBackground(poster);
+    if (finalType === 'video' && video) {
+      setBackgroundVideoSources(video, poster);
+      startBackgroundVideos();
+    } else {
+      clearBackgroundVideos();
+    }
+    lastAppliedWallpaper = {
+      id: selection.id || null,
+      poster,
+      video,
+      type: finalType
+    };
   } else {
-    clearBackgroundVideos();
+    // If unchanged, ensure videos keep playing for video type
+    if (finalType === 'video' && video) {
+      startBackgroundVideos();
+    }
   }
+
   updateSettingsPreview(selection, finalType);
 }
 

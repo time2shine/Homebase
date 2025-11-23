@@ -3,6 +3,18 @@
 <head>
   <meta charset="utf-8">
   <title>New Tab</title>
+  <script>
+    (function() {
+      const browserApi = window.browser || window.chrome;
+      if (!browserApi || !browserApi.storage || !browserApi.storage.local) return;
+
+      browserApi.storage.local.get('cachedAppliedPosterUrl').then((res) => {
+        const url = res && res.cachedAppliedPosterUrl;
+        if (!url) return;
+        document.write(`<style>:root { --initial-wallpaper: url("${url}"); }</style>`);
+      }).catch(() => {});
+    })();
+  </script>
   <link rel="stylesheet" href="cooltipz-classes.min.css">
   <link rel="stylesheet" href="new-tab.css">
 </head>

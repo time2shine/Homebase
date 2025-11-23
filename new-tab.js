@@ -30,6 +30,8 @@ let videosManifestPromise = null;
 const WALLPAPER_POOL_KEY = 'wallpaperPoolIds';
 const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
 const CACHED_APPLIED_VIDEO_URL_KEY = 'cachedAppliedVideoUrl';
+const CACHED_APPLIED_POSTER_URL_KEY = 'cachedAppliedPosterUrl';
+const CACHED_APPLIED_POSTER_CACHE_KEY = 'cachedAppliedPoster';
 const WALLPAPER_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
 const WALLPAPER_CACHE_NAME = 'wallpaper-assets';
@@ -58,10 +60,19 @@ function buildFallbackSelection(selectedAt = Date.now()) {
     id: 'fallback',
     videoUrl: 'assets/fallback.mp4',
     posterUrl: 'assets/fallback.webp',
+    posterCacheKey: 'assets/fallback.webp',
     title: 'Daily Wallpaper',
     category: 'Default',
     selectedAt
   };
+}
+
+function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
+  const poster = posterUrl || 'assets/fallback.webp';
+  document.documentElement.style.setProperty('--initial-wallpaper', `url("${poster}")`);
+  runWhenIdle(() => {
+    cacheAppliedWallpaperPoster(poster, posterCacheKey).catch(() => {});
+  });
 }
 
 (async function primeWallpaperBackground() {
@@ -78,7 +89,7 @@ function buildFallbackSelection(selectedAt = Date.now()) {
     if (selection) {
       const hydrated = await hydrateWallpaperSelection(selection);
       const poster = hydrated.posterUrl || 'assets/fallback.webp';
-      setWallpaperFallbackPoster(poster);
+      setWallpaperFallbackPoster(poster, hydrated.posterCacheKey || hydrated.posterUrl || '');
       applyWallpaperBackground(poster);
       lastAppliedWallpaper = {
         id: hydrated.id || 'stored',
@@ -91,7 +102,7 @@ function buildFallbackSelection(selectedAt = Date.now()) {
 
     // Only reach here if there is truly no wallpaper set
     const fallbackSelection = buildFallbackSelection(now);
-    setWallpaperFallbackPoster(fallbackSelection.posterUrl);
+    setWallpaperFallbackPoster(fallbackSelection.posterUrl, fallbackSelection.posterCacheKey || fallbackSelection.posterUrl || '');
     applyWallpaperBackground(fallbackSelection.posterUrl);
     lastAppliedWallpaper = {
       id: fallbackSelection.id,
@@ -447,6 +458,101 @@ async function cacheAppliedWallpaperVideo(selection) {
   } catch (err) {
     console.warn('Failed to cache applied video', err);
   }
+}
+
+async function resolvePosterBlob(posterUrl, posterCacheKey = '') {
+  const cacheKeys = new Set();
+  if (posterCacheKey) {
+    getCacheKeyVariants(posterCacheKey).forEach((key) => cacheKeys.add(key));
+  }
+  if (posterUrl) {
+    cacheKeys.add(posterUrl);
+  }
+  getCacheKeyVariants(CACHED_APPLIED_POSTER_CACHE_KEY).forEach((key) => cacheKeys.add(key));
+
+  let cache = null;
+  try {
+    cache = await caches.open(WALLPAPER_CACHE_NAME);
+  } catch (err) {
+    cache = null;
+  }
+
+  if (cache) {
+    for (const key of cacheKeys) {
+      try {
+        const match = await cache.match(key);
+        if (match) {
+          return await match.blob();
+        }
+      } catch (err) {
+        // Ignore cache read errors
+      }
+    }
+  }
+
+  if (posterUrl) {
+    try {
+      const res = await fetch(posterUrl);
+      if (res && res.ok) {
+        return await res.blob();
+      }
+    } catch (err) {
+      // Ignore fetch errors so caller can fall back
+    }
+  }
+
+  return null;
+}
+
+async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
+  try {
+    if (!posterUrl) {
+      await browser.storage.local.remove(CACHED_APPLIED_POSTER_URL_KEY);
+      await deleteCachedObject(CACHED_APPLIED_POSTER_CACHE_KEY);
+      return;
+    }
+
+    const blob = await resolvePosterBlob(posterUrl, posterCacheKey);
+    let storedUrl = posterUrl;
+
+    if (blob) {
+      const dataUrl = await blobToDataUrl(blob);
+      if (dataUrl) {
+        storedUrl = dataUrl;
+      }
+
+      try {
+        const cache = await caches.open(WALLPAPER_CACHE_NAME);
+        await cache.put(
+          normalizeWallpaperCacheKey(CACHED_APPLIED_POSTER_CACHE_KEY),
+          new Response(blob, {
+            headers: {
+              'content-type': blob.type || 'image/webp'
+            }
+          })
+        );
+      } catch (err) {
+        console.warn('Failed to cache applied poster blob', err);
+      }
+    }
+
+    await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: storedUrl });
+  } catch (err) {
+    console.warn('Failed to cache applied wallpaper poster', err);
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e && e.target && e.target.result ? e.target.result : '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(blob);
+    } catch (err) {
+      resolve('');
+    }
+  });
 }
 
 function readFileAsDataUrl(file) {
@@ -4801,7 +4907,10 @@ function applyWallpaperByType(selection, type = 'video') {
   if (!selection) return;
   const finalType = type === 'static' ? 'static' : 'video';
   const poster = selection.posterUrl || '';
+  const posterCacheKey = selection.posterCacheKey || selection.poster || selection.posterUrl || '';
   const video = finalType === 'video' ? (selection.videoUrl || '') : '';
+
+  setWallpaperFallbackPoster(poster, posterCacheKey);
 
   const unchanged =
     lastAppliedWallpaper &&

@@ -7,7 +7,7 @@ body {
 
   /* IMPORTANT: fallback poster to prevent black flash */
   background-color: #000;
-  background-image: url("assets/fallback.webp");
+  background-image: var(--initial-wallpaper, url("assets/fallback.webp"));
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -36,7 +36,7 @@ body {
 
 /* Show a neutral poster + hide UI until JS hydrates to avoid flashing the old layout */
 body.preload {
-  background: #000 url('assets/fallback.webp') center/cover no-repeat fixed;
+  background: #000 var(--initial-wallpaper) center/cover no-repeat fixed;
 }
 
 body.preload .sidebar,

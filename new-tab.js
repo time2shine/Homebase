@@ -858,6 +858,7 @@ const appTimeFormatSelect = document.getElementById('app-time-format');
 const appSidebarToggle = document.getElementById('app-show-sidebar-toggle');
 const appMaxTabsSelect = document.getElementById('app-max-tabs-select');
 const appAutoCloseSelect = document.getElementById('app-autoclose-select');
+const appSearchOpenNewTabToggle = document.getElementById('app-search-open-new-tab-toggle');
 const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-label') || 'Next Wallpaper';
 const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
 const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
@@ -871,6 +872,7 @@ const APP_SHOW_SIDEBAR_KEY = 'appShowSidebar';
 const APP_MAX_TABS_KEY = 'appMaxTabsCount';
 const APP_AUTOCLOSE_KEY = 'appAutoCloseMinutes';
 const APP_SINGLETON_MODE_KEY = 'appSingletonMode';
+const APP_SEARCH_OPEN_NEW_TAB_KEY = 'appSearchOpenNewTab';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -885,6 +887,7 @@ let appShowSidebarPreference = true;
 let appMaxTabsPreference = 0; // 0 means unlimited
 let appAutoClosePreference = 0; // 0 means never
 let appSingletonModePreference = false;
+let appSearchOpenNewTabPreference = false;
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
@@ -3051,13 +3054,15 @@ async function loadAppSettingsFromStorage() {
       APP_SHOW_SIDEBAR_KEY,
       APP_MAX_TABS_KEY,
       APP_AUTOCLOSE_KEY,
-      APP_SINGLETON_MODE_KEY
+      APP_SINGLETON_MODE_KEY,
+      APP_SEARCH_OPEN_NEW_TAB_KEY
     ]);
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
     appMaxTabsPreference = parseInt(stored[APP_MAX_TABS_KEY] || 0, 10);
     appAutoClosePreference = parseInt(stored[APP_AUTOCLOSE_KEY] || 0, 10);
     appSingletonModePreference = stored[APP_SINGLETON_MODE_KEY] === true;
+    appSearchOpenNewTabPreference = stored[APP_SEARCH_OPEN_NEW_TAB_KEY] === true;
 
     if (appSingletonModePreference) {
       await handleSingletonMode();
@@ -3162,6 +3167,9 @@ function syncAppSettingsForm() {
   if (appAutoCloseSelect) {
     appAutoCloseSelect.value = appAutoClosePreference;
   }
+  if (appSearchOpenNewTabToggle) {
+    appSearchOpenNewTabToggle.checked = appSearchOpenNewTabPreference;
+  }
   const singletonToggle = document.getElementById('app-singleton-mode-toggle');
   if (singletonToggle) {
     singletonToggle.checked = appSingletonModePreference;
@@ -3228,6 +3236,7 @@ function setupAppSettingsModal() {
       const nextSidebarVisible = appSidebarToggle ? appSidebarToggle.checked : true;
       const nextMaxTabs = appMaxTabsSelect ? parseInt(appMaxTabsSelect.value, 10) || 0 : 0;
       const nextAutoClose = appAutoCloseSelect ? parseInt(appAutoCloseSelect.value, 10) || 0 : 0;
+      const nextSearchOpenNewTab = appSearchOpenNewTabToggle ? appSearchOpenNewTabToggle.checked : false;
       const nextSingletonMode = (() => {
         const toggle = document.getElementById('app-singleton-mode-toggle');
         return toggle ? toggle.checked : false;
@@ -3237,6 +3246,7 @@ function setupAppSettingsModal() {
       applySidebarVisibility(nextSidebarVisible);
       appMaxTabsPreference = nextMaxTabs;
       appAutoClosePreference = nextAutoClose;
+      appSearchOpenNewTabPreference = nextSearchOpenNewTab;
       appSingletonModePreference = nextSingletonMode;
       updateTime();
 
@@ -3246,6 +3256,7 @@ function setupAppSettingsModal() {
           [APP_SHOW_SIDEBAR_KEY]: nextSidebarVisible,
           [APP_MAX_TABS_KEY]: nextMaxTabs,
           [APP_AUTOCLOSE_KEY]: nextAutoClose,
+          [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
           [APP_SINGLETON_MODE_KEY]: nextSingletonMode
         });
       } catch (err) {
@@ -3331,6 +3342,7 @@ async function setupSearch() {
   });
   
   searchResultsPanel.addEventListener('click', e => e.stopPropagation());
+  searchResultsPanel.addEventListener('click', handleSearchResultClick);
 
   window.addEventListener('mousedown', (e) => {
     const target = e.target;
@@ -3354,12 +3366,33 @@ async function handleSearchChange() {
   }
 }
 
+function openSearchUrl(url) {
+  if (!url) return;
+  if (appSearchOpenNewTabPreference) {
+    const win = window.open(url, '_blank', 'noopener');
+    if (!win) {
+      window.location.href = url;
+    }
+  } else {
+    window.location.href = url;
+  }
+}
+
 async function handleSearch(event) {
   event.preventDefault();
   const query = searchInput.value;
   if (!query) return;
   const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
-  window.location.href = searchUrl;
+  openSearchUrl(searchUrl);
+}
+
+function handleSearchResultClick(e) {
+  const anchor = e.target.closest('a.result-item');
+  if (!anchor) return;
+  if (!appSearchOpenNewTabPreference) return;
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+  e.preventDefault();
+  openSearchUrl(anchor.href);
 }
 
 function handleSearchKeydown(e) {

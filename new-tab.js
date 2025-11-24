@@ -768,9 +768,13 @@ async function ensureDailyWallpaper(forceNext = false) {
   }
 }
 
-window.addEventListener('resize', updateSidebarCollapseState);
+const debouncedResize = debounce(() => {
+  updateSidebarCollapseState();
+  updateBookmarkTabOverflow();
+}, 100);
+
+window.addEventListener('resize', debouncedResize);
 updateSidebarCollapseState();
-window.addEventListener('resize', updateBookmarkTabOverflow);
 updateBookmarkTabOverflow();
 
 if (tabScrollLeftBtn) {
@@ -859,6 +863,7 @@ let galleryFavorites = new Set();
 let currentWallpaperSelection = null;
 let wallpaperTypePreference = null; // 'video' | 'static'
 let myWallpapers = [];
+let myWallpaperMediaObserver = null;
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
@@ -2157,46 +2162,6 @@ function renderBookmark(bookmarkNode) {
   item.dataset.bookmarkId = bookmarkNode.id;
   item.dataset.isFolder = 'false';
 
-  const handleBookmarkClick = () => {
-    if (item.classList.contains('is-loading')) return;
-    item.classList.add('is-loading');
-    // Let the loading state render before navigation
-    requestAnimationFrame(() => {
-      window.location.href = bookmarkNode.url;
-    });
-  };
-
-  // --- NEW: Manual Click Handler ---
-  item.addEventListener('click', (e) => {
-    // Don't navigate if the click was on the rename input
-    if (e.target.classList.contains('grid-item-rename-input')) {
-      return;
-    }
-    // Simple check to prevent navigation after a drag
-    if (isGridDragging || item.classList.contains('sortable-chosen')) {
-      return;
-    }
-    handleBookmarkClick();
-  });
-
-  // NEW: right-click context menu for ICONS
-  item.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    currentContextItemId = bookmarkNode.id;
-    currentContextIsFolder = false;
-
-    // Position menu at cursor
-    iconContextMenu.style.top = `${e.clientY}px`;
-    iconContextMenu.style.left = `${e.clientX}px`;
-
-    // Hide other menus, show this one
-    folderContextMenu.classList.add('hidden');
-    gridFolderMenu.classList.add('hidden');
-    iconContextMenu.classList.remove('hidden');
-  });
-
   const title = bookmarkNode.title || ' ';
   const firstLetter = title.charAt(0).toUpperCase();
 
@@ -2381,38 +2346,6 @@ function renderBookmarkFolder(folderNode) {
     </div>
     <span>${folderNode.title}</span>
   `;
-
-
-  // Left-click still opens the folder
-  item.addEventListener('click', (e) => {
-    e.preventDefault();
-    // Don't navigate if the click was on the rename input
-    if (e.target.classList.contains('grid-item-rename-input')) {
-      return;
-    }
-    // Simple check to prevent navigation after a drag
-    if (isGridDragging || item.classList.contains('sortable-chosen')) {
-      return;
-    }
-    renderBookmarkGrid(folderNode);
-  });
-
-  // NEW: right-click context menu for FOLDERS in the grid
-  item.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    currentContextItemId = folderNode.id;
-    currentContextIsFolder = true;
-
-    gridFolderMenu.style.top = `${e.clientY}px`;
-    gridFolderMenu.style.left = `${e.clientX}px`;
-
-    // Hide other menus, show this one
-    folderContextMenu.classList.add('hidden');
-    iconContextMenu.classList.add('hidden');
-    gridFolderMenu.classList.remove('hidden');
-  });
 
   return item;
 }
@@ -3947,6 +3880,59 @@ async function initializePage() {
   });
 
   const bookmarksGrid = document.getElementById('bookmarks-grid');
+  if (bookmarksGrid) {
+    bookmarksGrid.addEventListener('click', (e) => {
+      if (e.target.classList.contains('grid-item-rename-input')) return;
+      const item = e.target.closest('.bookmark-item');
+      if (!item) return;
+      if (isGridDragging || item.classList.contains('sortable-chosen')) return;
+      if (item.classList.contains('back-button')) return;
+      e.preventDefault();
+
+      const nodeId = item.dataset.bookmarkId;
+      if (!nodeId || !bookmarkTree || !bookmarkTree[0]) return;
+      const node = findBookmarkNodeById(bookmarkTree[0], nodeId);
+      if (!node) return;
+
+      if (item.dataset.isFolder === 'true') {
+        renderBookmarkGrid(node);
+        return;
+      }
+
+      if (item.classList.contains('is-loading')) return;
+      item.classList.add('is-loading');
+      requestAnimationFrame(() => {
+        if (node.url) {
+          window.location.href = node.url;
+        }
+      });
+    });
+
+    bookmarksGrid.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.grid-item-rename-input')) return;
+      const item = e.target.closest('.bookmark-item');
+      if (!item || item.classList.contains('back-button')) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      hideAllContextMenus();
+      const isFolder = item.dataset.isFolder === 'true';
+      const nodeId = item.dataset.bookmarkId;
+      currentContextItemId = nodeId || null;
+      currentContextIsFolder = isFolder;
+
+      folderContextMenu.classList.add('hidden');
+      gridFolderMenu.classList.add('hidden');
+      iconContextMenu.classList.add('hidden');
+
+      const targetMenu = isFolder ? gridFolderMenu : iconContextMenu;
+      if (!targetMenu) return;
+
+      targetMenu.style.top = `${e.clientY}px`;
+      targetMenu.style.left = `${e.clientX}px`;
+      targetMenu.classList.remove('hidden');
+    });
+  }
   if (bookmarksGrid && gridBlankMenu) {
     bookmarksGrid.addEventListener('contextmenu', (e) => {
       if (e.target.closest('.bookmark-item')) {
@@ -4409,8 +4395,67 @@ async function resolveMyWallpaperSource(item) {
   return item.url || item.posterUrl || '';
 }
 
+function getMyWallpaperMediaObserver() {
+  if (myWallpaperMediaObserver) return myWallpaperMediaObserver;
+  myWallpaperMediaObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      const media = entry.target;
+      const itemId = media.dataset.wallpaperId;
+      const item = (myWallpapers || []).find((mw) => mw.id === itemId);
+      if (item) {
+        renderMyWallpaperMedia(media, item);
+      }
+      observer.unobserve(media);
+    });
+  }, { rootMargin: '0px 0px 200px 0px' });
+  return myWallpaperMediaObserver;
+}
+
+function renderMyWallpaperMedia(media, item) {
+  if (!media || !item || media.dataset.mediaLoaded === 'true') return;
+  media.dataset.mediaLoaded = 'true';
+  media.innerHTML = '';
+  media.style.backgroundImage = '';
+
+  const isVideo = item.type === 'video';
+  const isGif = isVideo && (item.mimeType === 'image/gif' || (item.title || '').toLowerCase().endsWith('.gif'));
+
+  if (isVideo && !isGif) {
+    const video = document.createElement('video');
+    video.className = 'mw-card-video';
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.poster = item.posterUrl || 'assets/fallback.webp';
+    media.appendChild(video);
+    resolveMyWallpaperSource(item).then((src) => {
+      if (src && media.contains(video)) {
+        video.src = src;
+        video.load();
+        video.play().catch(() => {});
+      }
+    });
+  } else {
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.alt = item.title || 'My wallpaper';
+    img.src = (!isVideo || isGif) ? (item.posterUrl || item.url || 'assets/fallback.webp') : (item.posterUrl || 'assets/fallback.webp');
+    media.appendChild(img);
+    if (isVideo) {
+      resolveMyWallpaperSource(item).then((src) => {
+        if (src && media.contains(img)) {
+          img.src = src;
+        }
+      });
+    }
+  }
+}
+
 function renderMyWallpapers() {
   if (!myWallpapersGrid) return;
+  const observer = getMyWallpaperMediaObserver();
+  observer.disconnect();
   myWallpapersGrid.innerHTML = '';
   const items = Array.isArray(myWallpapers) ? myWallpapers : [];
   items.forEach((item) => {
@@ -4452,34 +4497,14 @@ function renderMyWallpapers() {
     `;
     const media = card.querySelector('.mw-card-media');
     if (media) {
+      media.dataset.mediaLoaded = 'false';
       if (isVideo && !isGif) {
-        const video = document.createElement('video');
-        video.className = 'mw-card-video';
-        video.muted = true;
-        video.loop = true;
-        video.playsInline = true;
-        video.poster = item.posterUrl || 'assets/fallback.webp';
-        media.appendChild(video);
-        resolveMyWallpaperSource(item).then((src) => {
-          if (src && media.contains(video)) {
-            video.src = src;
-            video.load();
-            video.play().catch(() => {});
-          }
-        });
+        media.dataset.wallpaperId = item.id;
+        media.style.backgroundImage = `url("${item.posterUrl || 'assets/fallback.webp'}")`;
+        observer.observe(media);
       } else {
-        const img = document.createElement('img');
-        img.loading = 'lazy';
-        img.alt = item.title || 'My wallpaper';
-        img.src = (!isVideo || isGif) ? (item.posterUrl || item.url || 'assets/fallback.webp') : (item.posterUrl || 'assets/fallback.webp');
-        media.appendChild(img);
-        if (isVideo) {
-          resolveMyWallpaperSource(item).then((src) => {
-            if (src && media.contains(img)) {
-              img.src = src;
-            }
-          });
-        }
+        delete media.dataset.wallpaperId;
+        renderMyWallpaperMedia(media, item);
       }
     }
     const applyBtn = card.querySelector('.mw-card-btn');
@@ -5063,6 +5088,21 @@ function animateGridReorder(items, previousPositions) {
 }
 
 
+function cleanupUnusedObjectUrls(currentSelection) {
+  const activeUrls = new Set();
+  if (currentSelection) {
+    if (currentSelection.videoUrl) activeUrls.add(currentSelection.videoUrl);
+    if (currentSelection.posterUrl) activeUrls.add(currentSelection.posterUrl);
+  }
+
+  for (const [cacheKey, objectUrl] of wallpaperObjectUrlCache.entries()) {
+    if (!activeUrls.has(objectUrl)) {
+      URL.revokeObjectURL(objectUrl);
+      wallpaperObjectUrlCache.delete(cacheKey);
+    }
+  }
+}
+
 function applyWallpaperByType(selection, type = 'video') {
   if (!selection) return;
   const finalType = type === 'static' ? 'static' : 'video';
@@ -5080,6 +5120,7 @@ function applyWallpaperByType(selection, type = 'video') {
     lastAppliedWallpaper.type === finalType;
 
   currentWallpaperSelection = selection;
+  cleanupUnusedObjectUrls(selection);
 
   if (!unchanged) {
     applyWallpaperBackground(poster);

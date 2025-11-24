@@ -138,12 +138,12 @@ function updateSidebarCollapseState() {
   const referenceWidth = (window.screen && window.screen.availWidth) ? window.screen.availWidth : window.innerWidth;
   if (!referenceWidth) return;
   const widthRatio = window.innerWidth / referenceWidth;
-  const shouldCollapseSidebar = sidebarHiddenPref || widthRatio <= SIDEBAR_COLLAPSE_RATIO;
+  const shouldCollapseSidebar = !sidebarHiddenPref && widthRatio <= SIDEBAR_COLLAPSE_RATIO;
   const shouldCollapseDock = widthRatio <= DOCK_COLLAPSE_RATIO;
   document.body.classList.toggle('sidebar-collapsed', shouldCollapseSidebar);
   document.body.classList.toggle('dock-collapsed', shouldCollapseDock);
 
-  if (shouldCollapseSidebar) {
+  if (shouldCollapseSidebar && !sidebarHiddenPref) {
     if (collapsedClockSlot && timeWidget && timeWidget.parentElement !== collapsedClockSlot) {
       collapsedClockSlot.appendChild(timeWidget);
     }

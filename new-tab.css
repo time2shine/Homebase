@@ -257,28 +257,52 @@ body.sidebar-collapsed .search-area-wrapper {
   margin-right: 0;
 }
 
+body.sidebar-hidden {
+  justify-content: center;
+}
+
 body.sidebar-hidden .sidebar {
   display: none;
 }
 
 body.sidebar-hidden .main-content {
   width: 100%;
-  padding: 20px;
+  max-width: 1240px;
+  padding: 20px 32px;
+  margin: 0 auto;
 }
 
 body.sidebar-hidden .search-area-wrapper {
   width: 100%;
-  margin-left: 0;
-  margin-right: 0;
+  max-width: 1160px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 body.sidebar-hidden #bookmarks-grid {
   width: 100%;
-  margin-left: 0;
+  max-width: 1160px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+body.sidebar-hidden .bookmark-bar-wrapper {
+  width: 100%;
+  max-width: 1160px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 body.sidebar-hidden .collapsed-clock-slot {
-  display: block;
+  display: none !important;
+}
+
+body.sidebar-hidden .widget-time {
+  display: none !important;
 }
 
 .collapsed-clock-slot {

@@ -877,7 +877,7 @@ let currentWallpaperSelection = null;
 let wallpaperTypePreference = null; // 'video' | 'static'
 let myWallpapers = [];
 let myWallpaperMediaObserver = null;
-let timeFormatPreference = '24-hour';
+let timeFormatPreference = '12-hour';
 let appShowSidebarPreference = true;
 let appCloseExtraTabsPreference = false;
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
@@ -3029,7 +3029,7 @@ function updateTime() {
   revealWidget('.widget-time');
 }
 
-function applyTimeFormatPreference(format = '24-hour') {
+function applyTimeFormatPreference(format = '12-hour') {
   timeFormatPreference = format === '12-hour' ? '12-hour' : '24-hour';
 }
 
@@ -3042,7 +3042,7 @@ function applySidebarVisibility(showSidebar = true) {
 async function loadAppSettingsFromStorage() {
   try {
     const stored = await browser.storage.local.get([APP_TIME_FORMAT_KEY, APP_SHOW_SIDEBAR_KEY, APP_CLOSE_EXTRA_TABS_KEY]);
-    applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '24-hour');
+    applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
     appCloseExtraTabsPreference = stored[APP_CLOSE_EXTRA_TABS_KEY] === true;
     if (appCloseExtraTabsPreference) {

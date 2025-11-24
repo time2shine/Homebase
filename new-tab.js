@@ -4946,8 +4946,22 @@ if (wallpaperTypeToggle) {
 }
 window.addEventListener('pageshow', clearBookmarkLoadingStates);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
+  const videos = document.querySelectorAll('.background-video');
+
+  if (document.hidden) {
+    videos.forEach((v) => {
+      if (!v.paused) {
+        v.dataset.wasPlaying = 'true';
+        v.pause();
+      }
+    });
+  } else {
     clearBookmarkLoadingStates();
+
+    const activeVideo = document.querySelector('.background-video.is-active') || videos[0];
+    if (activeVideo) {
+      activeVideo.play().catch(() => {});
+    }
   }
 });
 function openBookmarkInNewTab(bookmarkId) {

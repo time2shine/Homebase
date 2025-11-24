@@ -856,7 +856,8 @@ const appSettingsCancelBtn = document.getElementById('app-settings-cancel');
 const appSettingsSaveBtn = document.getElementById('app-settings-save');
 const appTimeFormatSelect = document.getElementById('app-time-format');
 const appSidebarToggle = document.getElementById('app-show-sidebar-toggle');
-const appCloseTabsToggle = document.getElementById('app-close-tabs-toggle');
+const appMaxTabsSelect = document.getElementById('app-max-tabs-select');
+const appAutoCloseSelect = document.getElementById('app-autoclose-select');
 const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-label') || 'Next Wallpaper';
 const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
 const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
@@ -867,7 +868,9 @@ const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
 const MY_WALLPAPERS_KEY = 'myWallpapers';
 const APP_TIME_FORMAT_KEY = 'appTimeFormatPreference';
 const APP_SHOW_SIDEBAR_KEY = 'appShowSidebar';
-const APP_CLOSE_EXTRA_TABS_KEY = 'appCloseExtraTabs';
+const APP_MAX_TABS_KEY = 'appMaxTabsCount';
+const APP_AUTOCLOSE_KEY = 'appAutoCloseMinutes';
+const APP_SINGLETON_MODE_KEY = 'appSingletonMode';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -879,7 +882,9 @@ let myWallpapers = [];
 let myWallpaperMediaObserver = null;
 let timeFormatPreference = '12-hour';
 let appShowSidebarPreference = true;
-let appCloseExtraTabsPreference = false;
+let appMaxTabsPreference = 0; // 0 means unlimited
+let appAutoClosePreference = 0; // 0 means never
+let appSingletonModePreference = false;
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
@@ -3041,33 +3046,106 @@ function applySidebarVisibility(showSidebar = true) {
 
 async function loadAppSettingsFromStorage() {
   try {
-    const stored = await browser.storage.local.get([APP_TIME_FORMAT_KEY, APP_SHOW_SIDEBAR_KEY, APP_CLOSE_EXTRA_TABS_KEY]);
+    const stored = await browser.storage.local.get([
+      APP_TIME_FORMAT_KEY,
+      APP_SHOW_SIDEBAR_KEY,
+      APP_MAX_TABS_KEY,
+      APP_AUTOCLOSE_KEY,
+      APP_SINGLETON_MODE_KEY
+    ]);
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
-    appCloseExtraTabsPreference = stored[APP_CLOSE_EXTRA_TABS_KEY] === true;
-    if (appCloseExtraTabsPreference) {
-      runWhenIdle(() => closeDuplicateHomebaseTabs());
+    appMaxTabsPreference = parseInt(stored[APP_MAX_TABS_KEY] || 0, 10);
+    appAutoClosePreference = parseInt(stored[APP_AUTOCLOSE_KEY] || 0, 10);
+    appSingletonModePreference = stored[APP_SINGLETON_MODE_KEY] === true;
+
+    if (appSingletonModePreference) {
+      await handleSingletonMode();
     }
+
+    runWhenIdle(() => manageHomebaseTabs());
   } catch (err) {
     console.warn('Failed to load app settings', err);
   }
 }
 
-async function closeDuplicateHomebaseTabs() {
-  if (!appCloseExtraTabsPreference) return;
-  if (!browser.tabs || !browser.tabs.query || !browser.tabs.remove) return;
+async function handleSingletonMode() {
+  // Safety check: ensure APIs exist
+  if (!browser.tabs || !browser.tabs.getCurrent || !browser.tabs.update) return;
+
   try {
-    const allTabs = await browser.tabs.query({});
-    const currentUrl = window.location.href;
-    const duplicateIds = allTabs
-      .filter((t) => t && t.url === currentUrl && !t.active)
-      .map((t) => t.id)
-      .filter((id) => typeof id === 'number');
-    if (duplicateIds.length) {
-      await browser.tabs.remove(duplicateIds);
+    const currentTab = await browser.tabs.getCurrent();
+    if (!currentTab) return;
+
+    // Filter by URL AND Container (cookieStoreId)
+    const tabs = await browser.tabs.query({
+      url: window.location.href,
+      cookieStoreId: currentTab.cookieStoreId
+    });
+
+    // Find a tab that isn't THIS one
+    const existingTab = tabs.find((t) => t.id !== currentTab.id);
+
+    if (existingTab) {
+      // Switch to the old tab
+      await browser.tabs.update(existingTab.id, { active: true });
+      // Close this new duplicate
+      window.close();
     }
   } catch (err) {
-    console.warn('Failed to close extra Homebase tabs', err);
+    console.warn('Singleton mode check failed', err);
+  }
+}
+
+async function manageHomebaseTabs() {
+  if (appMaxTabsPreference === 0 && appAutoClosePreference === 0) return;
+  if (!browser.tabs || !browser.tabs.query || !browser.tabs.remove || !browser.tabs.getCurrent) return;
+
+  try {
+    const currentTab = await browser.tabs.getCurrent();
+    if (!currentTab) return;
+    const allTabs = await browser.tabs.query({ url: window.location.href });
+
+    const myTabs = allTabs.filter((t) => t.cookieStoreId === currentTab.cookieStoreId);
+
+    myTabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
+
+    const tabsToClose = new Set();
+    const now = Date.now();
+
+    if (appAutoClosePreference > 0) {
+      const thresholdMs = appAutoClosePreference * 60 * 1000;
+
+      myTabs.forEach((tab) => {
+        if (tab.active || tab.pinned || tab.audible) return;
+
+        const timeSinceAccess = now - tab.lastAccessed;
+        if (timeSinceAccess > thresholdMs) {
+          tabsToClose.add(tab.id);
+        }
+      });
+    }
+
+    if (appMaxTabsPreference > 0) {
+      const survivors = myTabs.filter((t) => !tabsToClose.has(t.id));
+
+      if (survivors.length > appMaxTabsPreference) {
+        const extras = survivors.slice(appMaxTabsPreference);
+
+        extras.forEach((tab) => {
+          if (!tab.active && !tab.pinned && !tab.audible) {
+            tabsToClose.add(tab.id);
+          }
+        });
+      }
+    }
+
+    if (tabsToClose.size > 0) {
+      await browser.tabs.remove(Array.from(tabsToClose));
+      console.log(`Cleaned up ${tabsToClose.size} extra Homebase tabs.`);
+    }
+  } catch (err) {
+    console.warn('Failed to manage Homebase tabs', err);
   }
 }
 
@@ -3078,8 +3156,15 @@ function syncAppSettingsForm() {
   if (appSidebarToggle) {
     appSidebarToggle.checked = appShowSidebarPreference;
   }
-  if (appCloseTabsToggle) {
-    appCloseTabsToggle.checked = appCloseExtraTabsPreference;
+  if (appMaxTabsSelect) {
+    appMaxTabsSelect.value = appMaxTabsPreference;
+  }
+  if (appAutoCloseSelect) {
+    appAutoCloseSelect.value = appAutoClosePreference;
+  }
+  const singletonToggle = document.getElementById('app-singleton-mode-toggle');
+  if (singletonToggle) {
+    singletonToggle.checked = appSingletonModePreference;
   }
 }
 
@@ -3141,25 +3226,37 @@ function setupAppSettingsModal() {
     appSettingsSaveBtn.addEventListener('click', async () => {
       const nextFormat = appTimeFormatSelect && appTimeFormatSelect.value === '12-hour' ? '12-hour' : '24-hour';
       const nextSidebarVisible = appSidebarToggle ? appSidebarToggle.checked : true;
-      const nextCloseExtra = appCloseTabsToggle ? appCloseTabsToggle.checked : false;
+      const nextMaxTabs = appMaxTabsSelect ? parseInt(appMaxTabsSelect.value, 10) || 0 : 0;
+      const nextAutoClose = appAutoCloseSelect ? parseInt(appAutoCloseSelect.value, 10) || 0 : 0;
+      const nextSingletonMode = (() => {
+        const toggle = document.getElementById('app-singleton-mode-toggle');
+        return toggle ? toggle.checked : false;
+      })();
 
       applyTimeFormatPreference(nextFormat);
       applySidebarVisibility(nextSidebarVisible);
-      appCloseExtraTabsPreference = nextCloseExtra;
+      appMaxTabsPreference = nextMaxTabs;
+      appAutoClosePreference = nextAutoClose;
+      appSingletonModePreference = nextSingletonMode;
       updateTime();
-      if (nextCloseExtra) {
-        runWhenIdle(() => closeDuplicateHomebaseTabs());
-      }
 
       try {
         await browser.storage.local.set({
           [APP_TIME_FORMAT_KEY]: nextFormat,
           [APP_SHOW_SIDEBAR_KEY]: nextSidebarVisible,
-          [APP_CLOSE_EXTRA_TABS_KEY]: nextCloseExtra
+          [APP_MAX_TABS_KEY]: nextMaxTabs,
+          [APP_AUTOCLOSE_KEY]: nextAutoClose,
+          [APP_SINGLETON_MODE_KEY]: nextSingletonMode
         });
       } catch (err) {
         console.warn('Failed to save app settings', err);
       }
+
+      if (nextSingletonMode) {
+        await handleSingletonMode();
+      }
+
+      runWhenIdle(() => manageHomebaseTabs());
 
       closeAppSettingsModal();
     });

@@ -286,22 +286,52 @@
                 <span class="app-switch-track"></span>
               </label>
             </div>
-            <div class="app-setting-row">
-              <div class="app-setting-label">
-                <div class="title">Automatically close extra new tabs</div>
-                <div class="hint">Keep things tidy by limiting duplicate Homebase tabs.</div>
-              </div>
-              <label class="app-switch">
-                <input type="checkbox" id="app-close-tabs-toggle">
-                <span class="app-switch-track"></span>
-              </label>
-            </div>
           </section>
           <section class="app-settings-section" data-section="search">
             <div class="app-settings-placeholder">Search panel preferences are coming soon.</div>
           </section>
           <section class="app-settings-section" data-section="tabs">
-            <div class="app-settings-placeholder">Tab options are coming soon.</div>
+            
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Jump to existing tab</div>
+                <div class="hint">If a Homebase tab is already open, switch to it instead of opening a new one.</div>
+              </div>
+              <label class="app-switch">
+                <input type="checkbox" id="app-singleton-mode-toggle">
+                <span class="app-switch-track"></span>
+              </label>
+            </div>
+
+            <div class="app-divider" style="margin: 20px 0;"></div>
+
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Max open Homebase tabs</div>
+                <div class="hint">Older tabs will be closed if you exceed this limit.</div>
+              </div>
+              <select id="app-max-tabs-select" class="app-setting-select">
+                <option value="0">Unlimited (Default)</option>
+                <option value="1">1 Tab</option>
+                <option value="2">2 Tabs</option>
+                <option value="3">3 Tabs</option>
+                <option value="5">5 Tabs</option>
+              </select>
+            </div>
+
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Close inactive tabs after</div>
+                <div class="hint">Close background Homebase tabs if unused for this long.</div>
+              </div>
+              <select id="app-autoclose-select" class="app-setting-select">
+                <option value="0">Never (Default)</option>
+                <option value="5">5 Minutes</option>
+                <option value="15">15 Minutes</option>
+                <option value="30">30 Minutes</option>
+                <option value="60">1 Hour</option>
+              </select>
+            </div>
           </section>
           <section class="app-settings-section" data-section="bookmarks">
             <div class="app-settings-placeholder">Bookmark controls are coming soon.</div>

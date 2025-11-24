@@ -1,4 +1,4 @@
-﻿/* --- Global Styles --- */
+/* --- Global Styles --- */
 body {
   margin: 0;
   padding: 0;
@@ -1098,6 +1098,12 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
   display: flex;
   align-items: center;
   padding: 10px 16px;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
   border-radius: 0;
   text-decoration: none;
   color: #333;
@@ -2918,7 +2924,7 @@ input:checked + .slider:before {
 #add-bookmark-dialog,
 #add-folder-dialog {
   background-color: #ffffff;              /* same as .context-menu.glass-box */
-  color: #000000;                         /* black text so it’s readable */
+  color: #000000;                         /* black text so it's readable */
   border: 1px solid rgba(0, 0, 0, 0.15);  /* same border as menu */
 
   width: 520px;
@@ -3278,7 +3284,7 @@ input:checked + .slider:before {
   border-color: #1d4ed8;
 }
 
-/* DELETE DIALOG – Cancel button */
+/* DELETE DIALOG - Cancel button */
 #confirm-delete-cancel-btn {
   background-color: rgba(0, 0, 0, 0.04);   /* light gray chip */
   color: #000000;                          /* black text */

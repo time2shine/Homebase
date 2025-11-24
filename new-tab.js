@@ -811,7 +811,7 @@ let activeTabDropTarget = null;   // Currently highlighted folder tab drop targe
 // NEW: folder hover delay state
 let folderHoverTarget = null;
 let folderHoverStart = 0;
-const FOLDER_HOVER_DELAY_MS = 250; // tweak this (200�400ms) to taste
+const FOLDER_HOVER_DELAY_MS = 250; // tweak this (200-400ms) to taste
 
 // === CONTEXT MENU ELEMENTS ===
 const folderContextMenu = document.getElementById('bookmark-folder-menu');
@@ -2020,7 +2020,7 @@ async function handleGridDrop(evt) {
     // Move the bookmark *into* that folder
     await moveBookmark(draggedItemId, { parentId: targetFolderId });
   }
-  // --- Case 2: NEW � Dropped ONTO a folder TAB ---
+  // --- Case 2: NEW - Dropped ONTO a folder TAB ---
   else if (tabTarget) {
     const targetFolderId = tabTarget.dataset.folderId;
 
@@ -2030,7 +2030,7 @@ async function handleGridDrop(evt) {
     // Move the bookmark into the folder represented by that tab
     await moveBookmark(draggedItemId, { parentId: targetFolderId });
   }
-  // --- Case 3: NEW � Dropped ONTO the Back button ---
+  // --- Case 3: NEW - Dropped ONTO the Back button ---
   else if (backButtonTarget && backButtonTarget.dataset.backTargetId) {
     const targetFolderId = backButtonTarget.dataset.backTargetId;
 
@@ -2255,7 +2255,7 @@ async function deleteBookmarkOrFolder(id, isFolder) {
       const domain = urlObj.hostname || node.url;
       faviconUrl = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
     } catch (e) {
-      // ignore � will fall back to letter icon
+      // ignore - will fall back to letter icon
     }
   }
 
@@ -3299,6 +3299,7 @@ let selectedResultIndex = -1;
 let latestSearchToken = 0;
 let lastBookmarkHtml = '';
 let lastSuggestionHtml = '';
+let searchNavigationLocked = false;
 
 function escapeHtml(unsafe) {
   if (!unsafe) return '';
@@ -3368,25 +3369,59 @@ async function handleSearchChange() {
 
 function openSearchUrl(url) {
   if (!url) return;
-  if (appSearchOpenNewTabPreference) {
+  if (!appSearchOpenNewTabPreference) {
+    window.location.href = url;
+    return;
+  }
+  try {
     const win = window.open(url, '_blank', 'noopener');
     if (!win) {
-      window.location.href = url;
+      console.warn('Search result blocked by popup settings');
     }
-  } else {
-    window.location.href = url;
+  } catch (err) {
+    console.warn('Failed to open search result', err);
   }
 }
 
-async function handleSearch(event) {
-  // BLOCK the native form submission; all logic lives in handleSearchKeydown.
+function handleSearch(event) {
+  // Stop the native form submission; navigation is handled inline to retain user gesture.
   event.preventDefault();
+
+  if (searchNavigationLocked) return;
+  searchNavigationLocked = true;
+
+  const results = document.querySelectorAll('.result-item');
+  const target =
+    (selectedResultIndex > -1 && results[selectedResultIndex]) ? results[selectedResultIndex] :
+    (results.length > 0 ? results[0] : null);
+
+  if (target && target.dataset && target.dataset.url) {
+    openSearchUrl(target.dataset.url);
+  } else {
+    const query = searchInput.value.trim();
+    if (query) {
+      const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
+      openSearchUrl(searchUrl);
+    }
+  }
+
+  setTimeout(() => { searchNavigationLocked = false; }, 0);
 }
 
 function handleSearchResultClick(e) {
-  // Let the browser handle navigation natively based on the anchor's target.
-  // We intentionally avoid preventDefault/stopPropagation here to prevent double opens.
-  return;
+  const target = e.target.closest('.result-item');
+  if (!target) return;
+  e.preventDefault();
+
+  if (searchNavigationLocked) return;
+  searchNavigationLocked = true;
+
+  const url = (target.dataset && target.dataset.url) || '';
+  if (url) {
+    openSearchUrl(url);
+  }
+
+  setTimeout(() => { searchNavigationLocked = false; }, 0);
 }
 
 function handleSearchKeydown(e) {
@@ -3408,17 +3443,29 @@ function handleSearchKeydown(e) {
     // Stop the native form submission entirely
     e.preventDefault();
 
+    if (searchNavigationLocked) return;
+    searchNavigationLocked = true;
+
+    let url = '';
+
     if (selectedResultIndex > -1 && results.length > 0) {
       const target = results[selectedResultIndex];
-      if (target) {
-        target.click();
-      }
+      url = (target && target.dataset && target.dataset.url) || '';
+    } else if (results.length > 0) {
+      const first = results[0];
+      url = (first && first.dataset && first.dataset.url) || '';
     } else {
-      const query = searchInput.value;
-      if (!query) return;
-      const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
-      openSearchUrl(searchUrl);
+      const query = searchInput.value.trim();
+      if (query) {
+        url = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
+      }
     }
+
+    if (url) {
+      openSearchUrl(url);
+    }
+
+    setTimeout(() => { searchNavigationLocked = false; }, 0);
   }
 }
 
@@ -3545,9 +3592,6 @@ async function handleSearchInput() {
   // 2. Expand bar
   searchAreaWrapper.classList.add('search-focused');
 
-  // Determine target attribute based on user preference
-  const targetAttr = appSearchOpenNewTabPreference ? 'target="_blank" rel="noopener"' : '';
-
   // 3. Filter Bookmarks (Synchronous) - Build HTML string
   let bookmarkHtml = '';
   const bookmarkResults = allBookmarks
@@ -3561,20 +3605,23 @@ async function handleSearchInput() {
   if (bookmarkResults.length > 0) {
     bookmarkHtml += '<div class="result-header">Bookmarks</div>';
     bookmarkResults.forEach(bookmark => {
+      const bookmarkUrl = bookmark.url || '';
+      if (!bookmarkUrl) return;
       let domain = '';
       try {
-        domain = new URL(bookmark.url).hostname;
+        domain = new URL(bookmarkUrl).hostname;
       } catch (err) {
         domain = '';
       }
       const safeTitle = escapeHtml(bookmark.title || 'No Title');
+      const safeUrl = escapeHtml(bookmarkUrl);
       bookmarkHtml += `
-        <a href="${bookmark.url}" class="result-item" ${targetAttr}>
+        <button type="button" class="result-item" data-url="${safeUrl}">
           <img src="https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64" alt="">
           <div class="result-item-info">
             <strong>${safeTitle}</strong>
           </div>
-        </a>
+        </button>
       `;
     });
   }
@@ -3602,29 +3649,33 @@ async function handleSearchInput() {
 
   if (suggestionResults && suggestionResults.length > 0) {
     const safeQuery = escapeHtml(query);
+    const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
+    const safeSearchUrl = escapeHtml(searchUrl);
     suggestionHtml += `<div class="result-header">${currentSearchEngine.name} Search</div>`;
     
     // Add "Search for..."
     suggestionHtml += `
-      <a href="${currentSearchEngine.url}${encodeURIComponent(query)}" class="result-item result-item-suggestion" ${targetAttr}>
+      <button type="button" class="result-item result-item-suggestion" data-url="${safeSearchUrl}">
         <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
         <div class="result-item-info">
           <strong>${safeQuery}</strong>
         </div>
-      </a>
+      </button>
     `;
     
     // Add fetched suggestions (UP TO 10)
     suggestionResults.slice(0, 10).forEach(suggestion => {
       if (suggestion.toLowerCase() === query.toLowerCase()) return;
       const safeSuggestion = escapeHtml(suggestion);
+      const suggestionUrl = `${currentSearchEngine.url}${encodeURIComponent(suggestion)}`;
+      const safeSuggestionUrl = escapeHtml(suggestionUrl);
       suggestionHtml += `
-        <a href="${currentSearchEngine.url}${encodeURIComponent(suggestion)}" class="result-item result-item-suggestion" ${targetAttr}>
+        <button type="button" class="result-item result-item-suggestion" data-url="${safeSuggestionUrl}">
           <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
           <div class="result-item-info">
             <strong>${safeSuggestion}</strong>
           </div>
-        </a>
+        </button>
       `;
     });
   }

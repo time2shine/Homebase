@@ -134,10 +134,11 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
  * so the sidebar widgets can be hidden and the main pane regains the space.
  */
 function updateSidebarCollapseState() {
+  const sidebarHiddenPref = document.body.classList.contains('sidebar-hidden');
   const referenceWidth = (window.screen && window.screen.availWidth) ? window.screen.availWidth : window.innerWidth;
   if (!referenceWidth) return;
   const widthRatio = window.innerWidth / referenceWidth;
-  const shouldCollapseSidebar = widthRatio <= SIDEBAR_COLLAPSE_RATIO;
+  const shouldCollapseSidebar = sidebarHiddenPref || widthRatio <= SIDEBAR_COLLAPSE_RATIO;
   const shouldCollapseDock = widthRatio <= DOCK_COLLAPSE_RATIO;
   document.body.classList.toggle('sidebar-collapsed', shouldCollapseSidebar);
   document.body.classList.toggle('dock-collapsed', shouldCollapseDock);
@@ -847,6 +848,15 @@ const myWallpapersUploadBtn = document.getElementById('mw-upload-btn');
 const myWallpapersUploadInput = document.getElementById('mw-upload-input');
 const myWallpapersUploadLiveBtn = document.getElementById('mw-upload-live-btn');
 const myWallpapersUploadLiveInput = document.getElementById('mw-upload-live-input');
+const mainSettingsBtn = document.getElementById('main-settings-btn');
+const appSettingsModal = document.getElementById('app-settings-modal');
+const appSettingsNav = document.getElementById('app-settings-nav');
+const appSettingsCloseBtn = document.getElementById('app-settings-close');
+const appSettingsCancelBtn = document.getElementById('app-settings-cancel');
+const appSettingsSaveBtn = document.getElementById('app-settings-save');
+const appTimeFormatSelect = document.getElementById('app-time-format');
+const appSidebarToggle = document.getElementById('app-show-sidebar-toggle');
+const appCloseTabsToggle = document.getElementById('app-close-tabs-toggle');
 const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-label') || 'Next Wallpaper';
 const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
 const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
@@ -855,6 +865,9 @@ const FAVORITES_KEY = 'galleryFavorites';
 const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
 const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
 const MY_WALLPAPERS_KEY = 'myWallpapers';
+const APP_TIME_FORMAT_KEY = 'appTimeFormatPreference';
+const APP_SHOW_SIDEBAR_KEY = 'appShowSidebar';
+const APP_CLOSE_EXTRA_TABS_KEY = 'appCloseExtraTabs';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -864,6 +877,9 @@ let currentWallpaperSelection = null;
 let wallpaperTypePreference = null; // 'video' | 'static'
 let myWallpapers = [];
 let myWallpaperMediaObserver = null;
+let timeFormatPreference = '24-hour';
+let appShowSidebarPreference = true;
+let appCloseExtraTabsPreference = false;
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
@@ -3005,11 +3021,155 @@ function updateTime() {
   const now = new Date();
   const timeEl = document.getElementById('current-time');
   const dateEl = document.getElementById('current-date');
-  timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const useHour12 = timeFormatPreference === '12-hour';
+  timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: useHour12 });
   const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' };
   dateEl.textContent = now.toLocaleDateString('en-US', dateOptions);
 
   revealWidget('.widget-time');
+}
+
+function applyTimeFormatPreference(format = '24-hour') {
+  timeFormatPreference = format === '12-hour' ? '12-hour' : '24-hour';
+}
+
+function applySidebarVisibility(showSidebar = true) {
+  appShowSidebarPreference = showSidebar !== false;
+  document.body.classList.toggle('sidebar-hidden', !appShowSidebarPreference);
+  updateSidebarCollapseState();
+}
+
+async function loadAppSettingsFromStorage() {
+  try {
+    const stored = await browser.storage.local.get([APP_TIME_FORMAT_KEY, APP_SHOW_SIDEBAR_KEY, APP_CLOSE_EXTRA_TABS_KEY]);
+    applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '24-hour');
+    applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
+    appCloseExtraTabsPreference = stored[APP_CLOSE_EXTRA_TABS_KEY] === true;
+    if (appCloseExtraTabsPreference) {
+      runWhenIdle(() => closeDuplicateHomebaseTabs());
+    }
+  } catch (err) {
+    console.warn('Failed to load app settings', err);
+  }
+}
+
+async function closeDuplicateHomebaseTabs() {
+  if (!appCloseExtraTabsPreference) return;
+  if (!browser.tabs || !browser.tabs.query || !browser.tabs.remove) return;
+  try {
+    const allTabs = await browser.tabs.query({});
+    const currentUrl = window.location.href;
+    const duplicateIds = allTabs
+      .filter((t) => t && t.url === currentUrl && !t.active)
+      .map((t) => t.id)
+      .filter((id) => typeof id === 'number');
+    if (duplicateIds.length) {
+      await browser.tabs.remove(duplicateIds);
+    }
+  } catch (err) {
+    console.warn('Failed to close extra Homebase tabs', err);
+  }
+}
+
+function syncAppSettingsForm() {
+  if (appTimeFormatSelect) {
+    appTimeFormatSelect.value = timeFormatPreference;
+  }
+  if (appSidebarToggle) {
+    appSidebarToggle.checked = appShowSidebarPreference;
+  }
+  if (appCloseTabsToggle) {
+    appCloseTabsToggle.checked = appCloseExtraTabsPreference;
+  }
+}
+
+function setActiveAppSettingsSection(section = 'general') {
+  const navItems = document.querySelectorAll('.app-settings-nav-item');
+  const sections = document.querySelectorAll('.app-settings-section');
+  navItems.forEach((item) => {
+    item.classList.toggle('is-active', item.dataset.section === section);
+  });
+  sections.forEach((panel) => {
+    panel.classList.toggle('active', panel.dataset.section === section);
+  });
+}
+
+function openAppSettingsModal() {
+  if (!appSettingsModal) return;
+  syncAppSettingsForm();
+  setActiveAppSettingsSection('general');
+  appSettingsModal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+
+function closeAppSettingsModal() {
+  if (!appSettingsModal) return;
+  appSettingsModal.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+  syncAppSettingsForm();
+}
+
+function setupAppSettingsModal() {
+  if (!appSettingsModal || !mainSettingsBtn) return;
+
+  mainSettingsBtn.addEventListener('click', () => {
+    openAppSettingsModal();
+  });
+
+  if (appSettingsCloseBtn) {
+    appSettingsCloseBtn.addEventListener('click', closeAppSettingsModal);
+  }
+  if (appSettingsCancelBtn) {
+    appSettingsCancelBtn.addEventListener('click', closeAppSettingsModal);
+  }
+  if (appSettingsModal) {
+    appSettingsModal.addEventListener('click', (e) => {
+      if (e.target === appSettingsModal) {
+        closeAppSettingsModal();
+      }
+    });
+  }
+  if (appSettingsNav) {
+    appSettingsNav.addEventListener('click', (e) => {
+      const btn = e.target.closest('.app-settings-nav-item');
+      if (!btn) return;
+      const section = btn.dataset.section || 'general';
+      setActiveAppSettingsSection(section);
+    });
+  }
+  if (appSettingsSaveBtn) {
+    appSettingsSaveBtn.addEventListener('click', async () => {
+      const nextFormat = appTimeFormatSelect && appTimeFormatSelect.value === '12-hour' ? '12-hour' : '24-hour';
+      const nextSidebarVisible = appSidebarToggle ? appSidebarToggle.checked : true;
+      const nextCloseExtra = appCloseTabsToggle ? appCloseTabsToggle.checked : false;
+
+      applyTimeFormatPreference(nextFormat);
+      applySidebarVisibility(nextSidebarVisible);
+      appCloseExtraTabsPreference = nextCloseExtra;
+      updateTime();
+      if (nextCloseExtra) {
+        runWhenIdle(() => closeDuplicateHomebaseTabs());
+      }
+
+      try {
+        await browser.storage.local.set({
+          [APP_TIME_FORMAT_KEY]: nextFormat,
+          [APP_SHOW_SIDEBAR_KEY]: nextSidebarVisible,
+          [APP_CLOSE_EXTRA_TABS_KEY]: nextCloseExtra
+        });
+      } catch (err) {
+        console.warn('Failed to save app settings', err);
+      }
+
+      closeAppSettingsModal();
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !appSettingsModal.classList.contains('hidden')) {
+      closeAppSettingsModal();
+    }
+  });
 }
 
 
@@ -3823,9 +3983,12 @@ async function initializePage() {
   clearBookmarkLoadingStates();
   await ensureDailyWallpaper();
   setupBackgroundVideoCrossfade();
+  await loadAppSettingsFromStorage();
+  syncAppSettingsForm();
   updateTime();
   setInterval(updateTime, 1000 * 60);
   setupDockNavigation();
+  setupAppSettingsModal();
   prefetchGalleryPosters().catch(() => {});
   runWhenIdle(() => warmGalleryPosterHydration());
   

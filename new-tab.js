@@ -3341,8 +3341,8 @@ async function setupSearch() {
     e.stopPropagation();
   });
   
+  searchResultsPanel.addEventListener('click', handleSearchResultClick, true);
   searchResultsPanel.addEventListener('click', e => e.stopPropagation());
-  searchResultsPanel.addEventListener('click', handleSearchResultClick);
 
   window.addEventListener('mousedown', (e) => {
     const target = e.target;
@@ -3379,40 +3379,45 @@ function openSearchUrl(url) {
 }
 
 async function handleSearch(event) {
+  // BLOCK the native form submission; all logic lives in handleSearchKeydown.
   event.preventDefault();
-  const query = searchInput.value;
-  if (!query) return;
-  const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
-  openSearchUrl(searchUrl);
 }
 
 function handleSearchResultClick(e) {
-  const anchor = e.target.closest('a.result-item');
-  if (!anchor) return;
-  if (!appSearchOpenNewTabPreference) return;
-  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
-  e.preventDefault();
-  openSearchUrl(anchor.href);
+  // Let the browser handle navigation natively based on the anchor's target.
+  // We intentionally avoid preventDefault/stopPropagation here to prevent double opens.
+  return;
 }
 
 function handleSearchKeydown(e) {
   const results = document.querySelectorAll('.result-item');
-  if (results.length === 0) return;
 
   if (e.key === 'ArrowDown') {
+    if (results.length === 0) return;
     e.preventDefault();
     selectedResultIndex++;
     if (selectedResultIndex >= results.length) selectedResultIndex = 0;
     updateSelection(results);
   } else if (e.key === 'ArrowUp') {
+    if (results.length === 0) return;
     e.preventDefault();
     selectedResultIndex--;
     if (selectedResultIndex < 0) selectedResultIndex = results.length - 1;
     updateSelection(results);
   } else if (e.key === 'Enter') {
-    if (selectedResultIndex > -1) {
-      e.preventDefault();
-      results[selectedResultIndex].click();
+    // Stop the native form submission entirely
+    e.preventDefault();
+
+    if (selectedResultIndex > -1 && results.length > 0) {
+      const target = results[selectedResultIndex];
+      if (target) {
+        target.click();
+      }
+    } else {
+      const query = searchInput.value;
+      if (!query) return;
+      const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
+      openSearchUrl(searchUrl);
     }
   }
 }
@@ -3540,6 +3545,9 @@ async function handleSearchInput() {
   // 2. Expand bar
   searchAreaWrapper.classList.add('search-focused');
 
+  // Determine target attribute based on user preference
+  const targetAttr = appSearchOpenNewTabPreference ? 'target="_blank" rel="noopener"' : '';
+
   // 3. Filter Bookmarks (Synchronous) - Build HTML string
   let bookmarkHtml = '';
   const bookmarkResults = allBookmarks
@@ -3561,7 +3569,7 @@ async function handleSearchInput() {
       }
       const safeTitle = escapeHtml(bookmark.title || 'No Title');
       bookmarkHtml += `
-        <a href="${bookmark.url}" class="result-item">
+        <a href="${bookmark.url}" class="result-item" ${targetAttr}>
           <img src="https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64" alt="">
           <div class="result-item-info">
             <strong>${safeTitle}</strong>
@@ -3598,7 +3606,7 @@ async function handleSearchInput() {
     
     // Add "Search for..."
     suggestionHtml += `
-      <a href="${currentSearchEngine.url}${encodeURIComponent(query)}" class="result-item result-item-suggestion">
+      <a href="${currentSearchEngine.url}${encodeURIComponent(query)}" class="result-item result-item-suggestion" ${targetAttr}>
         <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
         <div class="result-item-info">
           <strong>${safeQuery}</strong>
@@ -3611,7 +3619,7 @@ async function handleSearchInput() {
       if (suggestion.toLowerCase() === query.toLowerCase()) return;
       const safeSuggestion = escapeHtml(suggestion);
       suggestionHtml += `
-        <a href="${currentSearchEngine.url}${encodeURIComponent(suggestion)}" class="result-item result-item-suggestion">
+        <a href="${currentSearchEngine.url}${encodeURIComponent(suggestion)}" class="result-item result-item-suggestion" ${targetAttr}>
           <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
           <div class="result-item-info">
             <strong>${safeSuggestion}</strong>

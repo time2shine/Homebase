@@ -3303,6 +3303,7 @@ let currentSelectionIndex = -1;
 let currentSectionIndex = 0; // 0 = bookmarks, 1 = suggestions
 let selectionWasAuto = false;
 let lastSelectedText = '';
+let userIsTyping = false;
 let latestSearchToken = 0;
 let lastBookmarkHtml = '';
 let lastSuggestionHtml = '';
@@ -3379,7 +3380,10 @@ async function setupSearch() {
   searchForm.addEventListener('submit', handleSearch);
   searchSelect.addEventListener('change', handleSearchChange);
 
-  searchInput.addEventListener('input', debouncedSearch);
+  searchInput.addEventListener('input', e => {
+    userIsTyping = true;
+    debouncedSearch(e);
+  });
   document.addEventListener('keydown', handleSearchKeydown);
 
   searchInput.addEventListener('click', e => {
@@ -3469,7 +3473,7 @@ function clearAllSelections() {
 }
 
 function syncSearchInputWithItem(item) {
-  if (!item) return;
+  if (!item || userIsTyping) return;
   const label = item.querySelector('.result-label');
   if (label && label.textContent) {
     searchInput.value = label.textContent;
@@ -3508,6 +3512,7 @@ function attachHoverSync() {
       if (item.dataset.hoverBound === '1') return;
       item.dataset.hoverBound = '1';
       item.addEventListener('mouseenter', () => {
+        userIsTyping = false;
         removeSelectionClasses();
         selectionWasAuto = false;
         item.classList.add('selected');
@@ -3626,6 +3631,7 @@ function handleSearchKeydown(e) {
     case 'ArrowDown': {
       const items = getCurrentSectionItems();
 
+      userIsTyping = false;
       // If current section has items, but we are at the last one -> jump to next section
       if (items.length > 0 && currentSelectionIndex === items.length - 1) {
         e.preventDefault();
@@ -3658,6 +3664,7 @@ function handleSearchKeydown(e) {
     case 'ArrowUp': {
       const items = getCurrentSectionItems();
 
+      userIsTyping = false;
       // If at first item -> jump to previous section
       if (items.length > 0 && currentSelectionIndex === 0) {
         e.preventDefault();

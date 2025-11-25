@@ -3294,8 +3294,14 @@ const searchEngines = [
 const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
 const searchSelect = document.getElementById('search-select');
+const resultSections = [
+  bookmarkResultsContainer,
+  suggestionResultsContainer
+];
 let currentSearchEngine = searchEngines[0];
-let selectedResultIndex = -1;
+let currentSelectionIndex = -1;
+let currentSectionIndex = 0; // 0 = bookmarks, 1 = suggestions
+let selectionWasAuto = false;
 let latestSearchToken = 0;
 let lastBookmarkHtml = '';
 let lastSuggestionHtml = '';
@@ -3339,7 +3345,9 @@ function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken 
     searchInput.value = '';
   }
 
-  selectedResultIndex = -1;
+  clearAllSelections();
+  currentSectionIndex = 0;
+  selectionWasAuto = false;
   searchAreaWrapper.classList.remove('search-focused');
   bookmarkResultsContainer.innerHTML = '';
   suggestionResultsContainer.innerHTML = '';
@@ -3352,6 +3360,8 @@ function hideSearchResultsPanel() {
   searchResultsPanel.classList.add('hidden');
   searchWidget.classList.remove('results-open');
   searchAreaWrapper.classList.remove('search-focused');
+  clearAllSelections();
+  currentSectionIndex = 0;
 }
 
 async function setupSearch() {
@@ -3366,7 +3376,7 @@ async function setupSearch() {
   searchSelect.addEventListener('change', handleSearchChange);
 
   searchInput.addEventListener('input', debouncedSearch);
-  searchInput.addEventListener('keydown', handleSearchKeydown);
+  document.addEventListener('keydown', handleSearchKeydown);
 
   searchInput.addEventListener('click', e => {
     e.stopPropagation();
@@ -3380,9 +3390,7 @@ async function setupSearch() {
     if (searchWidget.contains(target) || searchResultsPanel.contains(target) || searchInput.contains(target)) {
       return;
     }
-    searchResultsPanel.classList.add('hidden');
-    searchWidget.classList.remove('results-open');
-    searchAreaWrapper.classList.remove('search-focused'); // Unfocus
+    hideSearchResultsPanel();
   });
 
   revealWidget('.widget-search');
@@ -3428,6 +3436,81 @@ function openSearchUrl(url) {
   }
 }
 
+// ===============================================
+// KEYBOARD NAVIGATION FOR SEARCH RESULTS
+// ===============================================
+function getCurrentSectionItems(sectionIndex = currentSectionIndex) {
+  const section = resultSections[sectionIndex];
+  if (!section) return [];
+  return Array.from(section.querySelectorAll('.result-item'));
+}
+
+function removeSelectionClasses() {
+  resultSections.forEach(section => {
+    if (!section) return;
+    section.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+  });
+}
+
+function clearAllSelections() {
+  removeSelectionClasses();
+  currentSelectionIndex = -1;
+  selectionWasAuto = false;
+}
+
+function selectItem(items, index) {
+  if (!items.length) return;
+
+  let nextIndex = index;
+  if (nextIndex < 0) nextIndex = items.length - 1;
+  if (nextIndex >= items.length) nextIndex = 0;
+
+  removeSelectionClasses();
+  items[nextIndex].classList.add('selected');
+  items[nextIndex].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+
+  currentSelectionIndex = nextIndex;
+  selectionWasAuto = false;
+}
+
+function moveSection(direction) {
+  const totalSections = resultSections.length;
+  if (!totalSections) return;
+
+  for (let i = 0; i < totalSections; i++) {
+    currentSectionIndex = (currentSectionIndex + direction + totalSections) % totalSections;
+    const newItems = getCurrentSectionItems();
+    if (newItems.length) {
+      currentSelectionIndex = 0;
+      selectItem(newItems, 0);
+      return;
+    }
+  }
+
+  clearAllSelections();
+  currentSectionIndex = 0;
+}
+
+function getSelectedResult() {
+  const selected = searchResultsPanel.querySelector('.result-item.selected');
+  if (!selected) return null;
+  if (selectionWasAuto) return null;
+  return selected;
+}
+
+function getSelectionSnapshot() {
+  const selected = searchResultsPanel.querySelector('.result-item.selected');
+  if (!selected) return null;
+  const url = selected.dataset?.url || selected.getAttribute('href') || '';
+  const text = (selected.textContent || '').trim();
+  const sectionIndex = resultSections.findIndex(section => section && section.contains(selected));
+  const itemIndex = sectionIndex > -1
+    ? Array.from(resultSections[sectionIndex].querySelectorAll('.result-item')).indexOf(selected)
+    : -1;
+
+  return { sectionIndex, url, text, itemIndex };
+}
+
 function handleSearch(event) {
   // Stop the native form submission; navigation is handled inline to retain user gesture.
   event.preventDefault();
@@ -3435,23 +3518,23 @@ function handleSearch(event) {
   if (searchNavigationLocked) return;
   searchNavigationLocked = true;
 
-  const results = document.querySelectorAll('.result-item');
-  const target =
-    (selectedResultIndex > -1 && results[selectedResultIndex]) ? results[selectedResultIndex] :
-    (results.length > 0 ? results[0] : null);
+  const target = getSelectedResult();
+  const query = searchInput.value.trim();
 
-  let url = '';
-
-  if (target && target.dataset && target.dataset.url) {
-    url = target.dataset.url;
-  } else {
-    const query = searchInput.value.trim();
-    if (query) {
-      url = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
+  if (target) {
+    const url = target.dataset?.url || target.getAttribute('href') || '';
+    if (url) {
+      openSearchUrl(url);
+      setTimeout(() => { searchNavigationLocked = false; }, 0);
+      return;
     }
   }
 
-  if (url) {
+  if (query) {
+    const encoded = encodeURIComponent(query);
+    const url = currentSearchEngine.url.includes('%s')
+      ? currentSearchEngine.url.replace('%s', encoded)
+      : `${currentSearchEngine.url}${encoded}`;
     openSearchUrl(url);
   }
 
@@ -3475,70 +3558,205 @@ function handleSearchResultClick(e) {
 }
 
 function handleSearchKeydown(e) {
-  const results = document.querySelectorAll('.result-item');
-
-  if (e.key === 'ArrowDown') {
-    if (results.length === 0) return;
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && searchWidget.contains(e.target)) {
     e.preventDefault();
-    selectedResultIndex++;
-    if (selectedResultIndex >= results.length) selectedResultIndex = 0;
-    updateSelection(results);
-  } else if (e.key === 'ArrowUp') {
-    if (results.length === 0) return;
-    e.preventDefault();
-    selectedResultIndex--;
-    if (selectedResultIndex < 0) selectedResultIndex = results.length - 1;
-    updateSelection(results);
-  } else if (e.key === 'Enter') {
-    // Stop the native form submission entirely
-    e.preventDefault();
-
-    if (searchNavigationLocked) return;
-    searchNavigationLocked = true;
-
-    let url = '';
-
-    if (selectedResultIndex > -1 && results.length > 0) {
-      const target = results[selectedResultIndex];
-      url = (target && target.dataset && target.dataset.url) || '';
-    } else if (results.length > 0) {
-      const first = results[0];
-      url = (first && first.dataset && first.dataset.url) || '';
-    } else {
-      const query = searchInput.value.trim();
-      if (query) {
-        url = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
-      }
-    }
-
-    if (url) {
-      openSearchUrl(url);
-    }
-
-    setTimeout(() => { searchNavigationLocked = false; }, 0);
   }
-}
 
-function updateSelection(results) {
-  const clampedIndex = Math.min(Math.max(selectedResultIndex, -1), results.length - 1);
-  selectedResultIndex = clampedIndex;
-  results.forEach((item, index) => {
-    if (index === clampedIndex && clampedIndex !== -1) {
-      item.classList.add('selected');
-      item.scrollIntoView({ block: 'nearest' });
-    } else {
-      item.classList.remove('selected');
+  // Only operate when results panel is open and the event originated from the search UI.
+  const panelOpen = !searchResultsPanel.classList.contains('hidden');
+  if (!panelOpen) {
+    if (e.key === 'Escape' && searchWidget.contains(e.target)) {
+      searchInput.value = '';
     }
-  });
-}
-
-function applySelectionToCurrentResults() {
-  const results = document.querySelectorAll('.result-item');
-  if (!results.length) {
-    selectedResultIndex = -1;
     return;
   }
-  updateSelection(results);
+
+  const isSearchContext =
+    searchWidget.contains(e.target) || searchResultsPanel.contains(e.target);
+
+  if (!isSearchContext) return;
+
+  switch (e.key) {
+    case 'ArrowDown': {
+      const items = getCurrentSectionItems();
+
+      // If current section has items, but we are at the last one -> jump to next section
+      if (items.length > 0 && currentSelectionIndex === items.length - 1) {
+        e.preventDefault();
+
+        let nextSection = currentSectionIndex + 1;
+
+        // wrap around to start
+        if (nextSection >= resultSections.length) nextSection = 0;
+
+        const nextItems = getCurrentSectionItems(nextSection);
+
+        if (nextItems.length > 0) {
+          currentSectionIndex = nextSection;
+          if (resultSections[currentSectionIndex]) {
+            resultSections[currentSectionIndex].scrollTop = 0;
+          }
+          selectItem(nextItems, 0);
+          return;
+        }
+      }
+
+      // Normal down movement
+      if (items.length > 0) {
+        e.preventDefault();
+        selectItem(items, currentSelectionIndex + 1);
+      }
+      break;
+    }
+
+    case 'ArrowUp': {
+      const items = getCurrentSectionItems();
+
+      // If at first item -> jump to previous section
+      if (items.length > 0 && currentSelectionIndex === 0) {
+        e.preventDefault();
+
+        let prevSection = currentSectionIndex - 1;
+
+        // wrap around to last
+        if (prevSection < 0) prevSection = resultSections.length - 1;
+
+        const prevItems = getCurrentSectionItems(prevSection);
+
+        if (prevItems.length > 0) {
+          currentSectionIndex = prevSection;
+          if (resultSections[currentSectionIndex]) {
+            resultSections[currentSectionIndex].scrollTop = 0;
+          }
+          selectItem(prevItems, prevItems.length - 1);
+          return;
+        }
+      }
+
+      // Normal up movement
+      if (items.length > 0) {
+        e.preventDefault();
+        selectItem(items, currentSelectionIndex - 1);
+      }
+      break;
+    }
+
+    case 'Tab':
+      e.preventDefault();
+      moveSection(e.shiftKey ? -1 : 1);
+      break;
+
+    case 'Enter': {
+      e.preventDefault();
+      const selected = getSelectedResult();
+      const query = searchInput.value.trim();
+
+      if (selected) {
+        if (searchNavigationLocked) return;
+        searchNavigationLocked = true;
+
+        const url = selected.dataset?.url || selected.getAttribute('href') || '';
+        if (url) {
+          openSearchUrl(url);
+        }
+
+        setTimeout(() => { searchNavigationLocked = false; }, 0);
+        break;
+      }
+
+      if (query !== '') {
+        const encoded = encodeURIComponent(query);
+        const searchUrl = currentSearchEngine.url.includes('%s')
+          ? currentSearchEngine.url.replace('%s', encoded)
+          : `${currentSearchEngine.url}${encoded}`;
+        openSearchUrl(searchUrl);
+      }
+
+      break;
+    }
+
+    case 'Escape':
+      e.preventDefault();
+      hideSearchResultsPanel();
+      break;
+  }
+}
+
+function applySelectionToCurrentResults(snapshot = null) {
+  const sections = resultSections.map(section =>
+    section ? Array.from(section.querySelectorAll('.result-item')) : []
+  );
+  const bookmarkItems = sections[0] || [];
+  const suggestionItems = sections[1] || [];
+  const hadSelection = Boolean(snapshot) || currentSelectionIndex !== -1;
+
+  const hasAnyItems = sections.some(list => list.length > 0);
+  if (!hasAnyItems) {
+    clearAllSelections();
+    currentSectionIndex = 0;
+    return;
+  }
+
+  if (!sections[currentSectionIndex].length) {
+    const nextIndex = sections.findIndex(list => list.length > 0);
+    if (nextIndex !== -1) {
+      currentSectionIndex = nextIndex;
+    }
+  }
+
+  let currentItems = sections[currentSectionIndex];
+  if (!currentItems.length) {
+    clearAllSelections();
+    return;
+  }
+
+  if (snapshot) {
+    for (let sIndex = 0; sIndex < sections.length; sIndex++) {
+      const list = sections[sIndex];
+      if (!list.length) continue;
+      let matchIndex = -1;
+
+      if (snapshot.url) {
+        matchIndex = list.findIndex(item => (item.dataset?.url || item.getAttribute('href') || '') === snapshot.url);
+      }
+      if (matchIndex === -1 && snapshot.text) {
+        matchIndex = list.findIndex(item => (item.textContent || '').trim() === snapshot.text);
+      }
+
+      if (matchIndex !== -1) {
+        currentSectionIndex = sIndex;
+        currentSelectionIndex = matchIndex;
+        currentItems = sections[currentSectionIndex];
+        selectionWasAuto = false;
+        break;
+      }
+    }
+  }
+
+  if (hadSelection && !sections[currentSectionIndex][currentSelectionIndex]) {
+    currentSelectionIndex = 0;
+  }
+
+  if (currentSelectionIndex >= currentItems.length) {
+    currentSelectionIndex = hadSelection ? currentItems.length - 1 : -1;
+  }
+
+  // Auto-select first suggestion only when no bookmarks exist and user hasn't selected anything
+  if (!hadSelection && currentSelectionIndex === -1 && bookmarkItems.length === 0 && suggestionItems.length > 0) {
+    currentSectionIndex = 1;
+    currentSelectionIndex = 0;
+    selectionWasAuto = true;
+  }
+
+  removeSelectionClasses();
+
+  if (currentSelectionIndex >= 0) {
+    const targetItem = sections[currentSectionIndex][currentSelectionIndex];
+    if (targetItem) {
+      targetItem.classList.add('selected');
+      targetItem.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    }
+  }
 }
 
 function isStaleSearch(token, queryLower) {
@@ -3621,7 +3839,11 @@ function updatePanelVisibility() {
 
 // Merged logic into one async function
 async function handleSearchInput() {
-  selectedResultIndex = -1;
+  const previousSelection = getSelectionSnapshot();
+  clearAllSelections();
+  if (previousSelection && previousSelection.sectionIndex >= 0) {
+    currentSectionIndex = previousSelection.sectionIndex;
+  }
   const query = searchInput.value;
   const queryLower = query.toLowerCase().trim();
   const queryTerms = queryLower.split(/\s+/).filter(Boolean);
@@ -3678,7 +3900,7 @@ async function handleSearchInput() {
     bookmarkResultsContainer.scrollTop = prevScroll;
     lastBookmarkHtml = bookmarkHtml;
   }
-  applySelectionToCurrentResults();
+  applySelectionToCurrentResults(previousSelection);
   updatePanelVisibility();
 
   // 4. Fetch Suggestions (Asynchronous) - Build HTML string
@@ -3731,7 +3953,7 @@ async function handleSearchInput() {
     lastSuggestionHtml = suggestionHtml;
   }
 
-  applySelectionToCurrentResults();
+  applySelectionToCurrentResults(previousSelection);
 
   // 6. Update visibility
   updatePanelVisibility();

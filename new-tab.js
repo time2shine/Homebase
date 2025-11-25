@@ -3324,6 +3324,36 @@ function updateSearchUI(index) {
   searchInput.placeholder = `Search with ${currentSearchEngine.name}`;
   searchSelect.selectedIndex = index;
 }
+
+function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken = false } = {}) {
+  if (abortSuggestions && suggestionAbortController) {
+    suggestionAbortController.abort();
+    suggestionAbortController = null;
+  }
+
+  if (bumpToken) {
+    latestSearchToken++;
+  }
+
+  if (clearInput) {
+    searchInput.value = '';
+  }
+
+  selectedResultIndex = -1;
+  searchAreaWrapper.classList.remove('search-focused');
+  bookmarkResultsContainer.innerHTML = '';
+  suggestionResultsContainer.innerHTML = '';
+  lastBookmarkHtml = '';
+  lastSuggestionHtml = '';
+  updatePanelVisibility();
+}
+
+function hideSearchResultsPanel() {
+  searchResultsPanel.classList.add('hidden');
+  searchWidget.classList.remove('results-open');
+  searchAreaWrapper.classList.remove('search-focused');
+}
+
 async function setupSearch() {
   populateSearchOptions();
   const data = await browser.storage.local.get(['searchIndex']);
@@ -3370,9 +3400,24 @@ async function handleSearchChange() {
 function openSearchUrl(url) {
   if (!url) return;
   if (!appSearchOpenNewTabPreference) {
+    const clearOnLeave = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          searchInput.value = '';
+          hideSearchResultsPanel();
+        });
+      });
+    };
+
+    window.addEventListener('pagehide', clearOnLeave, { once: true });
+
     window.location.href = url;
     return;
   }
+
+  clearSearchUI({ abortSuggestions: true, bumpToken: true });
+  hideSearchResultsPanel();
+
   try {
     const win = window.open(url, '_blank', 'noopener');
     if (!win) {
@@ -3395,14 +3440,19 @@ function handleSearch(event) {
     (selectedResultIndex > -1 && results[selectedResultIndex]) ? results[selectedResultIndex] :
     (results.length > 0 ? results[0] : null);
 
+  let url = '';
+
   if (target && target.dataset && target.dataset.url) {
-    openSearchUrl(target.dataset.url);
+    url = target.dataset.url;
   } else {
     const query = searchInput.value.trim();
     if (query) {
-      const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
-      openSearchUrl(searchUrl);
+      url = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
     }
+  }
+
+  if (url) {
+    openSearchUrl(url);
   }
 
   setTimeout(() => { searchNavigationLocked = false; }, 0);
@@ -3579,13 +3629,7 @@ async function handleSearchInput() {
 
   // 1. Handle empty query
   if (queryLower.length === 0) {
-    searchAreaWrapper.classList.remove('search-focused');
-    bookmarkResultsContainer.innerHTML = '';
-    suggestionResultsContainer.innerHTML = '';
-    lastBookmarkHtml = '';
-    lastSuggestionHtml = '';
-    applySelectionToCurrentResults();
-    updatePanelVisibility();
+    clearSearchUI({ clearInput: false, abortSuggestions: true });
     return;
   }
   

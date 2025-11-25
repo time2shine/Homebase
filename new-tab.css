@@ -1109,16 +1109,28 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
   color: #333;
   gap: 15px;
   border-bottom: 1px solid #eee;
+  transition: background 180ms ease, color 180ms ease;
+  position: relative;
+  background-size: 200% 100%;
+  background-position: left center;
 }
 .result-item:last-of-type {
   border-bottom: none;
 }
 .result-item:hover {
-  background-color: #f0f0f0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.06)
+  );
 }
 .result-item.selected {
-  background-color: #f0f0f0;
-  border-left: 3px solid #2ca5ff;
+  background: linear-gradient(
+    90deg,
+    rgba(220, 220, 220, 0.55),
+    rgba(240, 240, 240, 0.25)
+  );
+  background-position: right center;
 }
 .result-item img {
   width: 24px;

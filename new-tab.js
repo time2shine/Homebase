@@ -3302,6 +3302,7 @@ let currentSearchEngine = searchEngines[0];
 let currentSelectionIndex = -1;
 let currentSectionIndex = 0; // 0 = bookmarks, 1 = suggestions
 let selectionWasAuto = false;
+let lastSelectedText = '';
 let latestSearchToken = 0;
 let lastBookmarkHtml = '';
 let lastSuggestionHtml = '';
@@ -3347,6 +3348,7 @@ function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken 
 
   clearAllSelections();
   currentSectionIndex = 0;
+  lastSelectedText = '';
   selectionWasAuto = false;
   searchAreaWrapper.classList.remove('search-focused');
   bookmarkResultsContainer.innerHTML = '';
@@ -3362,6 +3364,8 @@ function hideSearchResultsPanel() {
   searchAreaWrapper.classList.remove('search-focused');
   clearAllSelections();
   currentSectionIndex = 0;
+  lastSelectedText = '';
+  selectionWasAuto = false;
 }
 
 async function setupSearch() {
@@ -3439,6 +3443,12 @@ function openSearchUrl(url) {
 // ===============================================
 // KEYBOARD NAVIGATION FOR SEARCH RESULTS
 // ===============================================
+document.addEventListener('keydown', (e) => {
+  if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
 function getCurrentSectionItems(sectionIndex = currentSectionIndex) {
   const section = resultSections[sectionIndex];
   if (!section) return [];
@@ -3458,6 +3468,21 @@ function clearAllSelections() {
   selectionWasAuto = false;
 }
 
+function syncSearchInputWithItem(item) {
+  if (!item) return;
+  const label = item.querySelector('.result-label');
+  if (label && label.textContent) {
+    searchInput.value = label.textContent;
+  }
+}
+
+function getResultLabelText(item) {
+  if (!item) return '';
+  const label = item.querySelector('.result-label');
+  if (label && label.textContent) return label.textContent.trim();
+  return (item.textContent || '').trim();
+}
+
 function selectItem(items, index) {
   if (!items.length) return;
 
@@ -3471,6 +3496,27 @@ function selectItem(items, index) {
 
   currentSelectionIndex = nextIndex;
   selectionWasAuto = false;
+  lastSelectedText = getResultLabelText(items[nextIndex]);
+  syncSearchInputWithItem(items[nextIndex]);
+}
+
+function attachHoverSync() {
+  resultSections.forEach((section, sectionIndex) => {
+    if (!section) return;
+    const items = Array.from(section.querySelectorAll('.result-item'));
+    items.forEach((item, index) => {
+      if (item.dataset.hoverBound === '1') return;
+      item.dataset.hoverBound = '1';
+      item.addEventListener('mouseenter', () => {
+        removeSelectionClasses();
+        selectionWasAuto = false;
+        item.classList.add('selected');
+        currentSectionIndex = sectionIndex;
+        currentSelectionIndex = index;
+        lastSelectedText = getResultLabelText(item);
+      });
+    });
+  });
 }
 
 function moveSection(direction) {
@@ -3642,6 +3688,9 @@ function handleSearchKeydown(e) {
     }
 
     case 'Tab':
+      if (searchResultsPanel.querySelectorAll('.result-item').length === 0) {
+        return;
+      }
       e.preventDefault();
       moveSection(e.shiftKey ? -1 : 1);
       break;
@@ -3682,13 +3731,58 @@ function handleSearchKeydown(e) {
   }
 }
 
-function applySelectionToCurrentResults(snapshot = null) {
+function restoreSelectionAfterFilter() {
+  if (!lastSelectedText) return false;
+  const items = Array.from(searchResultsPanel.querySelectorAll('.result-item'));
+  for (let i = 0; i < items.length; i++) {
+    const text = getResultLabelText(items[i]);
+    if (text.toLowerCase() === lastSelectedText.toLowerCase()) {
+      removeSelectionClasses();
+      items[i].classList.add('selected');
+      const sectionIndex = resultSections.findIndex(section => section && section.contains(items[i]));
+      if (sectionIndex !== -1) {
+        currentSectionIndex = sectionIndex;
+        currentSelectionIndex = Array.from(resultSections[sectionIndex].querySelectorAll('.result-item')).indexOf(items[i]);
+        selectionWasAuto = false;
+        lastSelectedText = text;
+        items[i].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+        syncSearchInputWithItem(items[i]);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function maybeAutoSelectSuggestion(query) {
+  const trimmed = (query || '').trim();
+  if (!trimmed || trimmed.length < 2) return;
+
+  const bookmarks = bookmarkResultsContainer.querySelectorAll('.result-item');
+  const suggestions = suggestionResultsContainer.querySelectorAll('.result-item');
+
+  if (bookmarks.length > 0) return;
+  if (suggestions.length === 0) return;
+
+  const first = suggestions[0];
+  const text = getResultLabelText(first);
+  if (text.toLowerCase() === trimmed.toLowerCase()) return;
+
+  removeSelectionClasses();
+  currentSectionIndex = 1;
+  currentSelectionIndex = 0;
+  selectionWasAuto = true;
+
+  first.classList.add('selected');
+  first.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+}
+
+function applySelectionToCurrentResults(snapshot = null, query = '') {
   const sections = resultSections.map(section =>
     section ? Array.from(section.querySelectorAll('.result-item')) : []
   );
   const bookmarkItems = sections[0] || [];
   const suggestionItems = sections[1] || [];
-  const hadSelection = Boolean(snapshot) || currentSelectionIndex !== -1;
 
   const hasAnyItems = sections.some(list => list.length > 0);
   if (!hasAnyItems) {
@@ -3704,12 +3798,7 @@ function applySelectionToCurrentResults(snapshot = null) {
     }
   }
 
-  let currentItems = sections[currentSectionIndex];
-  if (!currentItems.length) {
-    clearAllSelections();
-    return;
-  }
-
+  let restored = false;
   if (snapshot) {
     for (let sIndex = 0; sIndex < sections.length; sIndex++) {
       const list = sections[sIndex];
@@ -3726,36 +3815,41 @@ function applySelectionToCurrentResults(snapshot = null) {
       if (matchIndex !== -1) {
         currentSectionIndex = sIndex;
         currentSelectionIndex = matchIndex;
-        currentItems = sections[currentSectionIndex];
         selectionWasAuto = false;
+        lastSelectedText = getResultLabelText(list[matchIndex]);
+        restored = true;
         break;
       }
     }
   }
 
-  if (hadSelection && !sections[currentSectionIndex][currentSelectionIndex]) {
-    currentSelectionIndex = 0;
+  if (!restored) {
+    restored = restoreSelectionAfterFilter();
   }
 
+  let currentItems = sections[currentSectionIndex] || [];
   if (currentSelectionIndex >= currentItems.length) {
-    currentSelectionIndex = hadSelection ? currentItems.length - 1 : -1;
+    currentSelectionIndex = -1;
   }
 
-  // Auto-select first suggestion only when no bookmarks exist and user hasn't selected anything
-  if (!hadSelection && currentSelectionIndex === -1 && bookmarkItems.length === 0 && suggestionItems.length > 0) {
-    currentSectionIndex = 1;
-    currentSelectionIndex = 0;
-    selectionWasAuto = true;
+  if (!restored) {
+    selectionWasAuto = false;
   }
 
   removeSelectionClasses();
 
-  if (currentSelectionIndex >= 0) {
-    const targetItem = sections[currentSectionIndex][currentSelectionIndex];
-    if (targetItem) {
-      targetItem.classList.add('selected');
-      targetItem.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
-    }
+  if (currentSelectionIndex >= 0 && currentItems[currentSelectionIndex]) {
+    const targetItem = currentItems[currentSelectionIndex];
+    targetItem.classList.add('selected');
+    targetItem.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    lastSelectedText = getResultLabelText(targetItem);
+    syncSearchInputWithItem(targetItem);
+  } else {
+    currentSelectionIndex = -1;
+  }
+
+  if (currentSelectionIndex === -1 && bookmarkItems.length === 0 && suggestionItems.length > 0) {
+    maybeAutoSelectSuggestion(query);
   }
 }
 
@@ -3885,7 +3979,7 @@ async function handleSearchInput() {
         <button type="button" class="result-item" data-url="${safeUrl}">
           <img src="https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64" alt="">
           <div class="result-item-info">
-            <strong>${safeTitle}</strong>
+            <strong class="result-label">${safeTitle}</strong>
           </div>
         </button>
       `;
@@ -3900,7 +3994,7 @@ async function handleSearchInput() {
     bookmarkResultsContainer.scrollTop = prevScroll;
     lastBookmarkHtml = bookmarkHtml;
   }
-  applySelectionToCurrentResults(previousSelection);
+  applySelectionToCurrentResults(previousSelection, query.trim());
   updatePanelVisibility();
 
   // 4. Fetch Suggestions (Asynchronous) - Build HTML string
@@ -3908,6 +4002,7 @@ async function handleSearchInput() {
   const suggestionResults = await fetchSearchSuggestions(query.trim(), currentSearchEngine);
   
   if (suggestionResults === null) {
+    attachHoverSync();
     return; // Aborted, do nothing
   }
   
@@ -3924,7 +4019,7 @@ async function handleSearchInput() {
       <button type="button" class="result-item result-item-suggestion" data-url="${safeSearchUrl}">
         <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
         <div class="result-item-info">
-          <strong>${safeQuery}</strong>
+          <strong class="result-label">${safeQuery}</strong>
         </div>
       </button>
     `;
@@ -3939,7 +4034,7 @@ async function handleSearchInput() {
         <button type="button" class="result-item result-item-suggestion" data-url="${safeSuggestionUrl}">
           <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
           <div class="result-item-info">
-            <strong>${safeSuggestion}</strong>
+            <strong class="result-label">${safeSuggestion}</strong>
           </div>
         </button>
       `;
@@ -3953,7 +4048,8 @@ async function handleSearchInput() {
     lastSuggestionHtml = suggestionHtml;
   }
 
-  applySelectionToCurrentResults(previousSelection);
+  applySelectionToCurrentResults(previousSelection, query.trim());
+  attachHoverSync();
 
   // 6. Update visibility
   updatePanelVisibility();

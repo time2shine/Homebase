@@ -3309,6 +3309,48 @@ let lastBookmarkHtml = '';
 let lastSuggestionHtml = '';
 let searchNavigationLocked = false;
 
+/**
+ * Checks if a query string is likely a direct URL, domain, or IP address.
+ */
+function isLikelyUrl(query) {
+  const trimmedQuery = query.trim().toLowerCase();
+
+  // 1. Exclude search phrases (anything with spaces)
+  if (trimmedQuery.includes(' ')) {
+    return false;
+  }
+
+  // 2. Check for explicit schemes (mailto:, magnet:, about:, view-source:)
+  // Regex: Starts with alphanumeric, followed by chars, ending in colon (e.g., "mailto:")
+  // We exclude 'localhost:' here to handle it specifically later
+  if (/^[a-z][a-z0-9+.-]+:/i.test(trimmedQuery) && !trimmedQuery.startsWith('localhost:')) {
+    return true;
+  }
+
+  // 3. Intranet Shortnames: Ends with a slash (e.g., "router/", "nas/")
+  // This allows users to force navigation to a local host without a .com
+  if (trimmedQuery.endsWith('/') && trimmedQuery.length > 1) {
+    return true;
+  }
+
+  // 4. Localhost (explicit or with port)
+  if (trimmedQuery.startsWith('localhost')) {
+    return true;
+  }
+
+  // 5. IPv4 addresses
+  if (/^(\d{1,3}\.){3}\d{1,3}(:\d+)?(\/.*)?$/.test(trimmedQuery)) {
+    return true;
+  }
+
+  // 6. Standard Domain structure (example.com)
+  if (/^([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/.*)?$/.test(trimmedQuery)) {
+    return true;
+  }
+
+  return false;
+}
+
 function escapeHtml(unsafe) {
   if (!unsafe) return '';
   return String(unsafe)
@@ -3413,35 +3455,79 @@ async function handleSearchChange() {
   }
 }
 
-function openSearchUrl(url) {
+async function openSearchUrl(url) {
   if (!url) return;
-  if (!appSearchOpenNewTabPreference) {
-    const clearOnLeave = () => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          searchInput.value = '';
-          hideSearchResultsPanel();
-        });
-      });
-    };
-
-    window.addEventListener('pagehide', clearOnLeave, { once: true });
-
+  // Firefox blocks privileged URLs via browser.tabs, but allows standard navigation in current tab.
+  const isPrivileged = url.startsWith('about:') || url.startsWith('view-source:');
+  if (isPrivileged) {
     window.location.href = url;
     return;
   }
+  // Use the Extension API for navigation. This supports special schemes better than window.open.
+  if (appSearchOpenNewTabPreference) {
+    clearSearchUI({ abortSuggestions: true, bumpToken: true });
+    hideSearchResultsPanel();
 
-  clearSearchUI({ abortSuggestions: true, bumpToken: true });
-  hideSearchResultsPanel();
+    try {
+      await browser.tabs.create({ url, active: true });
+    } catch (err) {
+      console.warn('Failed to open search result', err);
+    }
+    return;
+  }
+
+  const clearOnLeave = () => {
+    requestAnimationFrame(() => {
+      searchInput.value = '';
+      hideSearchResultsPanel();
+    });
+  };
+
+  window.addEventListener('pagehide', clearOnLeave, { once: true });
 
   try {
-    const win = window.open(url, '_blank', 'noopener');
-    if (!win) {
-      console.warn('Search result blocked by popup settings');
-    }
+    await browser.tabs.update({ url });
   } catch (err) {
-    console.warn('Failed to open search result', err);
+    console.warn('Navigation failed (likely privileged URL), falling back to new tab:', err);
+
+    try {
+      await browser.tabs.create({ url, active: true });
+      clearSearchUI({ abortSuggestions: true, bumpToken: true });
+      hideSearchResultsPanel();
+    } catch (createErr) {
+      console.error('Failed to open fallback tab', createErr);
+    }
   }
+}
+
+function executeSearch(query) {
+  const trimmedQuery = (query || '').trim();
+  if (!trimmedQuery) return;
+
+  if (isLikelyUrl(trimmedQuery)) {
+    let url = trimmedQuery;
+    // Check if it already has a protocol (e.g., "http://", "mailto:", "about:")
+    // We look for a colon early in the string, but exclude "localhost:" (which is host:port)
+    const hasProtocol = /^[a-z][a-z0-9+.-]+:/i.test(trimmedQuery) && !trimmedQuery.startsWith('localhost:');
+
+    if (!hasProtocol) {
+      // Logic to determine HTTP vs HTTPS
+      // 1. Localhost, IPs, or Intranet Shortnames (e.g. "nas/") use HTTP
+      const isLocal = trimmedQuery.startsWith('localhost')
+        || /^(\d{1,3}\.){3}\d{1,3}/.test(trimmedQuery)
+        || trimmedQuery.indexOf('.') === -1;
+
+      url = isLocal ? `http://${url}` : `https://${url}`;
+    }
+    openSearchUrl(url);
+    return;
+  }
+
+  const encoded = encodeURIComponent(trimmedQuery);
+  const url = currentSearchEngine.url.includes('%s')
+    ? currentSearchEngine.url.replace('%s', encoded)
+    : `${currentSearchEngine.url}${encoded}`;
+  openSearchUrl(url);
 }
 
 // ===============================================
@@ -3582,11 +3668,7 @@ function handleSearch(event) {
   }
 
   if (query) {
-    const encoded = encodeURIComponent(query);
-    const url = currentSearchEngine.url.includes('%s')
-      ? currentSearchEngine.url.replace('%s', encoded)
-      : `${currentSearchEngine.url}${encoded}`;
-    openSearchUrl(url);
+    executeSearch(query);
   }
 
   setTimeout(() => { searchNavigationLocked = false; }, 0);
@@ -3721,11 +3803,7 @@ function handleSearchKeydown(e) {
       }
 
       if (query !== '') {
-        const encoded = encodeURIComponent(query);
-        const searchUrl = currentSearchEngine.url.includes('%s')
-          ? currentSearchEngine.url.replace('%s', encoded)
-          : `${currentSearchEngine.url}${encoded}`;
-        openSearchUrl(searchUrl);
+        executeSearch(query);
       }
 
       break;

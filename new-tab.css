@@ -2014,6 +2014,17 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   color: #333;
 }
 
+.engine-toggle-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.engine-toggle-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
 /* --- Fix for Search Engines Modal --- */
 
 /* 1. Ensure it sits ON TOP of the main Settings modal (which is z-index 2000) */
@@ -3650,5 +3661,65 @@ input:checked + .slider:before {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
+}
+
+/* ======================================= */
+/* --- NEW: Visual Search Engine Selector --- */
+/* ======================================= */
+
+.search-engine-selector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 4px; /* Padding inside the search bar */
+  max-width: 260px;     /* Prevent it from eating all space */
+  overflow-x: auto;     /* Scroll if you enable too many engines */
+  scrollbar-width: none; 
+  -ms-overflow-style: none;
+  border-right: 1px solid #eee; /* Divider between icons and input */
+  margin-right: 8px;
+}
+
+.search-engine-selector::-webkit-scrollbar {
+  display: none;
+}
+
+.engine-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  transition: all 0.2s ease;
+  opacity: 0.4;         /* Dim inactive icons */
+  flex-shrink: 0;
+  filter: grayscale(100%); /* Optional: Make inactive icons grey */
+}
+
+/* Icons inside the button */
+.engine-icon-btn svg, 
+.engine-icon-btn img {
+  width: 18px;
+  height: 18px;
+  display: block;
+  pointer-events: none;
+}
+
+/* Hover state */
+.engine-icon-btn:hover {
+  opacity: 0.7;
+  background-color: rgba(0, 0, 0, 0.05);
+  filter: grayscale(0%);
+}
+
+/* Selected state */
+.engine-icon-btn.active {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.08); /* Highlight background */
+  transform: scale(1.05);
+  filter: grayscale(0%); /* Show full color */
 }
 

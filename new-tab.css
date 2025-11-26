@@ -415,6 +415,9 @@ body.sidebar-collapsed .collapsed-clock-slot {
 .calculator-result {
   background-color: rgba(44, 165, 255, 0.08);
   border-bottom: 1px solid rgba(44, 165, 255, 0.2);
+  padding-right: 16px;
+  position: relative;
+  overflow: hidden;
 }
 
 .calculator-result .result-icon-wrapper {
@@ -426,6 +429,10 @@ body.sidebar-collapsed .collapsed-clock-slot {
   font-size: 20px;
 }
 
+.calculator-result .result-item-info {
+  margin-right: 80px;
+}
+
 .calculator-result .copy-btn {
   background: #fff;
   border: 1px solid #ddd;
@@ -434,6 +441,11 @@ body.sidebar-collapsed .collapsed-clock-slot {
   font-size: 0.8em;
   cursor: pointer;
   color: #333;
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-shrink: 0;
 }
 
 .calculator-result .copy-btn:hover {
@@ -1161,6 +1173,7 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
   background: none;
   border: none;
   width: 100%;
+  max-width: 100%;
   text-align: left;
   font: inherit;
   cursor: pointer;
@@ -1173,6 +1186,7 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
   position: relative;
   background-size: 200% 100%;
   background-position: left center;
+  overflow: hidden;
 }
 .result-item:last-of-type {
   border-bottom: none;
@@ -1207,7 +1221,9 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
 .result-item-info {
   display: flex;
   align-items: center;
-  overflow: hidden; 
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
 }
 .result-item-info strong {
   font-size: 1em;
@@ -1216,6 +1232,128 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
   text-overflow: ellipsis;
   color: #333;
   font-weight: normal;
+}
+
+.calculator-result .result-item-info span {
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* ============================= */
+/*   CALCULATOR BLOCK (Animated) */
+/* ============================= */
+
+.calc-item {
+  --calc-accent: var(--dynamic-accent, #2ca5ff);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.65),
+    rgba(255, 255, 255, 0.35)
+  );
+  backdrop-filter: blur(6px);
+
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+
+  animation: calcFadeIn 0.3s ease-out;
+}
+
+@keyframes calcFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.calc-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.calc-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+  animation: popIn 0.25s ease-out;
+  transition: transform 0.18s ease;
+}
+
+.calc-item:hover .calc-icon {
+  transform: scale(1.14) rotate(-3deg);
+}
+
+@keyframes popIn {
+  0%   { transform: scale(0.2); opacity: 0; }
+  80%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.calc-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.calc-answer {
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--calc-accent);
+  margin-bottom: 3px;
+  animation: answerFlash 0.35s ease-out;
+}
+
+@keyframes answerFlash {
+  from { color: white; text-shadow: 0 0 18px var(--calc-accent); }
+  to   { color: var(--calc-accent); }
+}
+
+.calc-expression {
+  font-size: 14px;
+  color: #444;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.calc-copy {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.22s ease;
+}
+
+.calc-copy:hover {
+  background: var(--calc-accent);
+  border-color: var(--calc-accent);
+  color: white;
+  transform: scale(1.06);
+}
+
+.calc-copy:active {
+  animation: pulseCopy 0.35s ease-out;
+}
+
+@keyframes pulseCopy {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
 }
 
 .result-item-suggestion .result-item-info strong {

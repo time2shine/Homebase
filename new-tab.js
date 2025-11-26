@@ -4058,11 +4058,11 @@ function handleSearch(event) {
 }
 
 function handleSearchResultClick(e) {
-  if (e.target.classList.contains('copy-btn')) {
+  if (e.target.classList.contains('copy-btn') || e.target.classList.contains('calc-copy')) {
     e.preventDefault();
     e.stopPropagation();
-    const parent = e.target.closest('.calculator-result');
-    const text = parent ? parent.dataset.copy : '';
+    const parent = e.target.closest('[data-copy]');
+    const text = parent ? parent.dataset.copy || e.target.dataset.copy : '';
     if (text) {
       navigator.clipboard.writeText(text).then(() => {
         const original = e.target.textContent;
@@ -4213,6 +4213,13 @@ function handleSearchKeydown(e) {
     case 'Enter': {
       e.preventDefault();
       const selected = getSelectedResult();
+      
+      if (selected && (selected.classList.contains('calculator-result') || selected.classList.contains('calc-item'))) {
+        const copyBtn = selected.querySelector('.copy-btn, .calc-copy');
+        if (copyBtn) copyBtn.click();
+        return;
+      }
+
       const query = searchInput.value.trim();
 
       if (selected) {
@@ -4548,15 +4555,15 @@ async function handleSearchInput() {
       const safeQuery = escapeHtml(query);
       calcHtml = `
         <div class="result-header">Calculator</div>
-        <div class="result-item calculator-result" data-copy="${displayResult}">
-          <div class="result-icon-wrapper">
-             <span style="font-size: 20px;">🧮</span>
+        <div class="result-item calc-item" data-copy="${displayResult}">
+          <div class="calc-left">
+            <div class="calc-icon">🧮</div>
+            <div class="calc-text">
+              <div class="calc-answer">${displayResult}</div>
+              <div class="calc-expression">${safeQuery}</div>
+            </div>
           </div>
-          <div class="result-item-info">
-            <strong class="result-label" style="font-size: 1.2em;">${displayResult}</strong>
-            <span style="font-size: 0.85em; color: #666; margin-left: 8px;">= ${safeQuery}</span>
-          </div>
-          <button class="copy-btn" style="margin-left:auto; padding: 4px 8px; font-size: 0.8em; cursor: pointer;">Copy</button>
+          <button class="calc-copy" data-copy="${displayResult}">Copy</button>
         </div>
       `;
     }
@@ -5429,6 +5436,50 @@ if (browser?.storage?.onChanged) {
 }
 
 initializePage();
+
+// ================================
+//    Dynamic Calculator Color
+// ================================
+function extractAverageColor(imgUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = imgUrl;
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+      let r = 0; let g = 0; let b = 0;
+      let count = 0;
+
+      for (let i = 0; i < data.length; i += 200) {
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+        count++;
+      }
+
+      resolve(`rgb(${Math.round(r / count)}, ${Math.round(g / count)}, ${Math.round(b / count)})`);
+    };
+
+    img.onerror = () => resolve('#2ca5ff');
+  });
+}
+
+async function updateDynamicAccent() {
+  const poster = document.body.style.backgroundImage.replace(/^url\("|"\)$/g, '');
+  if (!poster) return;
+  const avg = await extractAverageColor(poster);
+  document.documentElement.style.setProperty('--dynamic-accent', avg);
+}
+
+setTimeout(updateDynamicAccent, 600);
 
 function buildGalleryCard(item, index = 0) {
   const card = document.createElement('div');

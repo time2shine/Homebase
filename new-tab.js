@@ -3498,17 +3498,56 @@ const suggestionCache = new Map();
 
 function evaluateMath(query) {
   let expression = query.replace(/^=/, '').replace(/x/gi, '*').trim();
-  if (!/^[\d\.\s\+\-\*\/\%\^\(\)]+$/.test(expression)) {
-    return null;
-  }
-  if (!/[\+\-\*\/\%\^]/.test(expression)) {
-    return null;
-  }
+  if (!/^[\d\.\s\+\-\*\/\%\^\(\)]+$/.test(expression)) return null;
+  if (!/[\+\-\*\/\%\^]/.test(expression)) return null;
 
   try {
-    const result = new Function(`return (${expression})`)();
-    if (!isFinite(result) || isNaN(result)) return null;
-    return Math.round(result * 10000) / 10000;
+    const clean = expression.replace(/\s+/g, '');
+    const parts = clean.split(/([\+\-\*\/\%\^])/).filter(p => p !== '');
+    if (parts.length < 3) return null;
+
+    const operators = [];
+    const numbers = [];
+    for (let i = 0; i < parts.length; i++) {
+      if (['+','-','*','/','%','^'].includes(parts[i])) {
+        operators.push(parts[i]);
+      } else {
+        const num = parseFloat(parts[i]);
+        if (isNaN(num)) return null;
+        numbers.push(num);
+      }
+    }
+    if (numbers.length !== operators.length + 1) return null;
+
+    const applyOp = (a, b, operator) => {
+      switch (operator) {
+        case '+': return a + b;
+        case '-': return a - b;
+        case '*': return a * b;
+        case '/': return b === 0 ? 0 : a / b;
+        case '%': return a % b;
+        case '^': return Math.pow(a, b);
+        default: return 0;
+      }
+    };
+
+    for (let i = 0; i < operators.length; i++) {
+      const operator = operators[i];
+      if (['*', '/', '%', '^'].includes(operator)) {
+        const result = applyOp(numbers[i], numbers[i + 1], operator);
+        numbers.splice(i, 2, result);
+        operators.splice(i, 1);
+        i--;
+      }
+    }
+
+    let finalResult = numbers[0];
+    for (let i = 0; i < operators.length; i++) {
+      finalResult = applyOp(finalResult, numbers[i + 1], operators[i]);
+    }
+
+    if (!isFinite(finalResult) || isNaN(finalResult)) return null;
+    return Math.round(finalResult * 10000) / 10000;
   } catch (e) {
     return null;
   }
@@ -4489,6 +4528,15 @@ async function handleSearchInput() {
   const queryTerms = queryLower.split(/\s+/).filter(Boolean);
   const currentToken = ++latestSearchToken;
 
+  // 1. Handle empty query
+  if (queryLower.length === 0) {
+    clearSearchUI({ clearInput: false, abortSuggestions: true });
+    return;
+  }
+  
+  searchAreaWrapper.classList.add('search-focused');
+
+  // --- A. Generate Calculator HTML (Synchronous) ---
   let calcHtml = '';
   if (appSearchMathPreference) {
     const mathResult = evaluateMath(queryLower);
@@ -4514,39 +4562,7 @@ async function handleSearchInput() {
     }
   }
 
-  const bangMatch = query.match(/^!(\S+)/);
-  let tempEngine = null;
-
-  if (bangMatch) {
-    const rawBang = bangMatch[1].toLowerCase();
-    const engineId = bangMap[rawBang] || rawBang;
-    tempEngine = searchEngines.find((e) => e.id === engineId && e.enabled);
-  }
-
-  if (tempEngine) {
-    if (currentSearchEngine.id !== tempEngine.id) {
-      updateSearchUI(tempEngine.id);
-    }
-  } else {
-    const savedId = appSearchRememberEnginePreference
-      ? (await browser.storage.local.get('currentSearchEngineId')).currentSearchEngineId
-      : appSearchDefaultEnginePreference;
-    const targetId = savedId || 'google';
-    if (currentSearchEngine.id !== targetId) {
-      updateSearchUI(targetId);
-    }
-  }
-
-  // 1. Handle empty query
-  if (queryLower.length === 0) {
-    clearSearchUI({ clearInput: false, abortSuggestions: true });
-    return;
-  }
-  
-  // 2. Expand bar
-  searchAreaWrapper.classList.add('search-focused');
-
-  // 3. Filter Bookmarks (Synchronous) - Build HTML string
+  // --- B. Generate Bookmark HTML (Synchronous) ---
   let bookmarkHtml = '';
   const bookmarkResults = allBookmarks
     .filter(b => {
@@ -4580,18 +4596,42 @@ async function handleSearchInput() {
     });
   }
 
+  // --- C. Handle Bangs (Synchronous) ---
+  const bangMatch = query.match(/^!(\S+)/);
+  let tempEngine = null;
+  if (bangMatch) {
+    const rawBang = bangMatch[1].toLowerCase();
+    const engineId = bangMap[rawBang] || rawBang;
+    tempEngine = searchEngines.find((e) => e.id === engineId && e.enabled);
+  }
+
+  if (tempEngine) {
+    if (currentSearchEngine.id !== tempEngine.id) {
+      updateSearchUI(tempEngine.id);
+    }
+  } else {
+    const savedId = appSearchRememberEnginePreference
+      ? (await browser.storage.local.get('currentSearchEngineId')).currentSearchEngineId
+      : appSearchDefaultEnginePreference;
+    const targetId = savedId || 'google';
+    if (currentSearchEngine.id !== targetId) {
+      updateSearchUI(targetId);
+    }
+  }
+
   if (isStaleSearch(currentToken, queryLower)) return;
 
-  if (bookmarkHtml !== lastBookmarkHtml) {
-    const prevScroll = bookmarkResultsContainer.scrollTop;
-    bookmarkResultsContainer.innerHTML = bookmarkHtml;
-    bookmarkResultsContainer.scrollTop = prevScroll;
-    lastBookmarkHtml = bookmarkHtml;
+  // --- D. Render Calculator + Bookmarks immediately ---
+  const topSectionHtml = calcHtml + bookmarkHtml;
+  if (topSectionHtml !== lastBookmarkHtml) {
+    bookmarkResultsContainer.innerHTML = topSectionHtml;
+    lastBookmarkHtml = topSectionHtml;
   }
+
   applySelectionToCurrentResults(previousSelection, query.trim());
   updatePanelVisibility();
 
-  // 4. Fetch Suggestions (Asynchronous) - Build HTML string
+  // --- E. Fetch Suggestions (Asynchronous) ---
   let suggestionHtml = '';
   const suggestionResults = await fetchSearchSuggestions(query.trim(), currentSearchEngine);
   
@@ -4635,18 +4675,16 @@ async function handleSearchInput() {
     });
   }
 
-  const finalHtml = `${calcHtml}${suggestionHtml}`;
-  if (finalHtml !== lastSuggestionHtml) {
+  // --- F. Final Render of Suggestions ---
+  if (suggestionHtml !== lastSuggestionHtml) {
     const prevScroll = suggestionResultsContainer.scrollTop;
-    suggestionResultsContainer.innerHTML = finalHtml;
+    suggestionResultsContainer.innerHTML = suggestionHtml;
     suggestionResultsContainer.scrollTop = prevScroll;
-    lastSuggestionHtml = finalHtml;
+    lastSuggestionHtml = suggestionHtml;
   }
 
   applySelectionToCurrentResults(previousSelection, query.trim());
   attachHoverSync();
-
-  // 6. Update visibility
   updatePanelVisibility();
 }
 

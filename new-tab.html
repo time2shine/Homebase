@@ -300,6 +300,24 @@
             </div>
             <div class="app-setting-row">
               <div class="app-setting-label">
+                <div class="title">Remember search engine</div>
+                <div class="hint">Restore the last used search engine when opening a new tab.</div>
+              </div>
+              <label class="app-switch">
+                <input type="checkbox" id="app-search-remember-engine-toggle" checked>
+                <span class="app-switch-track"></span>
+              </label>
+            </div>
+            <div class="app-setting-row" id="app-search-default-engine-container" style="display: none;">
+              <div class="app-setting-label">
+                <div class="title">Default Search Engine</div>
+                <div class="hint">The engine to use when opening a new tab.</div>
+              </div>
+              <select id="app-search-default-engine-select" class="app-setting-select">
+              </select>
+            </div>
+            <div class="app-setting-row">
+              <div class="app-setting-label">
                 <div class="title">Search Engines</div>
                 <div class="hint">Choose which engines appear in the dropdown.</div>
               </div>

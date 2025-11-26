@@ -859,6 +859,9 @@ const appSidebarToggle = document.getElementById('app-show-sidebar-toggle');
 const appMaxTabsSelect = document.getElementById('app-max-tabs-select');
 const appAutoCloseSelect = document.getElementById('app-autoclose-select');
 const appSearchOpenNewTabToggle = document.getElementById('app-search-open-new-tab-toggle');
+const appSearchRememberEngineToggle = document.getElementById('app-search-remember-engine-toggle');
+const appSearchDefaultEngineContainer = document.getElementById('app-search-default-engine-container');
+const appSearchDefaultEngineSelect = document.getElementById('app-search-default-engine-select');
 const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-label') || 'Next Wallpaper';
 const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
 const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
@@ -873,6 +876,8 @@ const APP_MAX_TABS_KEY = 'appMaxTabsCount';
 const APP_AUTOCLOSE_KEY = 'appAutoCloseMinutes';
 const APP_SINGLETON_MODE_KEY = 'appSingletonMode';
 const APP_SEARCH_OPEN_NEW_TAB_KEY = 'appSearchOpenNewTab';
+const APP_SEARCH_REMEMBER_ENGINE_KEY = 'appSearchRememberEngine';
+const APP_SEARCH_DEFAULT_ENGINE_KEY = 'appSearchDefaultEngine';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -888,6 +893,8 @@ let appMaxTabsPreference = 0; // 0 means unlimited
 let appAutoClosePreference = 0; // 0 means never
 let appSingletonModePreference = false;
 let appSearchOpenNewTabPreference = false;
+let appSearchRememberEnginePreference = true;
+let appSearchDefaultEnginePreference = 'google';
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
@@ -3055,7 +3062,9 @@ async function loadAppSettingsFromStorage() {
       APP_MAX_TABS_KEY,
       APP_AUTOCLOSE_KEY,
       APP_SINGLETON_MODE_KEY,
-      APP_SEARCH_OPEN_NEW_TAB_KEY
+      APP_SEARCH_OPEN_NEW_TAB_KEY,
+      APP_SEARCH_REMEMBER_ENGINE_KEY,
+      APP_SEARCH_DEFAULT_ENGINE_KEY
     ]);
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
@@ -3063,6 +3072,10 @@ async function loadAppSettingsFromStorage() {
     appAutoClosePreference = parseInt(stored[APP_AUTOCLOSE_KEY] || 0, 10);
     appSingletonModePreference = stored[APP_SINGLETON_MODE_KEY] === true;
     appSearchOpenNewTabPreference = stored[APP_SEARCH_OPEN_NEW_TAB_KEY] === true;
+    appSearchRememberEnginePreference = stored[APP_SEARCH_REMEMBER_ENGINE_KEY] !== false;
+    if (stored[APP_SEARCH_DEFAULT_ENGINE_KEY]) {
+      appSearchDefaultEnginePreference = stored[APP_SEARCH_DEFAULT_ENGINE_KEY];
+    }
 
     if (appSingletonModePreference) {
       await handleSingletonMode();
@@ -3154,6 +3167,44 @@ async function manageHomebaseTabs() {
   }
 }
 
+function populateDefaultEngineSelectControl() {
+  if (!appSearchDefaultEngineSelect) return;
+  appSearchDefaultEngineSelect.innerHTML = '';
+  const activeEngines = searchEngines.filter((engine) => engine.enabled);
+
+  if (activeEngines.length === 0) {
+    const option = document.createElement('option');
+    option.value = 'google';
+    option.textContent = 'Google';
+    appSearchDefaultEngineSelect.appendChild(option);
+  } else {
+    activeEngines.forEach((engine) => {
+      const option = document.createElement('option');
+      option.value = engine.id;
+      option.textContent = engine.name;
+      appSearchDefaultEngineSelect.appendChild(option);
+    });
+  }
+
+  const desired = appSearchDefaultEnginePreference;
+  if (desired) {
+    appSearchDefaultEngineSelect.value = desired;
+  }
+  if (!appSearchDefaultEngineSelect.value && activeEngines.length > 0) {
+    appSearchDefaultEngineSelect.value = activeEngines[0].id;
+  }
+}
+
+function updateDefaultEngineVisibilityControl() {
+  if (!appSearchDefaultEngineContainer) return;
+  if (appSearchRememberEngineToggle && appSearchRememberEngineToggle.checked) {
+    appSearchDefaultEngineContainer.style.display = 'none';
+  } else {
+    appSearchDefaultEngineContainer.style.display = 'flex';
+    populateDefaultEngineSelectControl();
+  }
+}
+
 function syncAppSettingsForm() {
   if (appTimeFormatSelect) {
     appTimeFormatSelect.value = timeFormatPreference;
@@ -3170,6 +3221,10 @@ function syncAppSettingsForm() {
   if (appSearchOpenNewTabToggle) {
     appSearchOpenNewTabToggle.checked = appSearchOpenNewTabPreference;
   }
+  if (appSearchRememberEngineToggle) {
+    appSearchRememberEngineToggle.checked = appSearchRememberEnginePreference;
+  }
+  updateDefaultEngineVisibilityControl();
   const singletonToggle = document.getElementById('app-singleton-mode-toggle');
   if (singletonToggle) {
     singletonToggle.checked = appSingletonModePreference;
@@ -3207,7 +3262,12 @@ function setupAppSettingsModal() {
 
   mainSettingsBtn.addEventListener('click', () => {
     openAppSettingsModal();
+    updateDefaultEngineVisibilityControl();
   });
+
+  if (appSearchRememberEngineToggle) {
+    appSearchRememberEngineToggle.addEventListener('change', updateDefaultEngineVisibilityControl);
+  }
 
   if (appSettingsCloseBtn) {
     appSettingsCloseBtn.addEventListener('click', closeAppSettingsModal);
@@ -3241,12 +3301,16 @@ function setupAppSettingsModal() {
         const toggle = document.getElementById('app-singleton-mode-toggle');
         return toggle ? toggle.checked : false;
       })();
+      const nextRememberEngine = appSearchRememberEngineToggle ? appSearchRememberEngineToggle.checked : true;
+      const nextDefaultEngine = appSearchDefaultEngineSelect && appSearchDefaultEngineSelect.value ? appSearchDefaultEngineSelect.value : appSearchDefaultEnginePreference;
 
       applyTimeFormatPreference(nextFormat);
       applySidebarVisibility(nextSidebarVisible);
       appMaxTabsPreference = nextMaxTabs;
       appAutoClosePreference = nextAutoClose;
       appSearchOpenNewTabPreference = nextSearchOpenNewTab;
+      appSearchRememberEnginePreference = nextRememberEngine;
+      appSearchDefaultEnginePreference = nextDefaultEngine;
       appSingletonModePreference = nextSingletonMode;
       updateTime();
 
@@ -3257,8 +3321,14 @@ function setupAppSettingsModal() {
           [APP_MAX_TABS_KEY]: nextMaxTabs,
           [APP_AUTOCLOSE_KEY]: nextAutoClose,
           [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
+          [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
+          [APP_SEARCH_DEFAULT_ENGINE_KEY]: nextDefaultEngine,
           [APP_SINGLETON_MODE_KEY]: nextSingletonMode
         });
+        if (!nextRememberEngine) {
+          await browser.storage.local.remove('currentSearchEngineId');
+          updateSearchUI(nextDefaultEngine);
+        }
       } catch (err) {
         console.warn('Failed to save app settings', err);
       }
@@ -3343,9 +3413,11 @@ function setupSearchEnginesModal() {
     if (!currentStillEnabled) {
       const firstEnabled = searchEngines.find((e) => e.enabled) || searchEngines[0];
       updateSearchUI(firstEnabled.id);
-      browser.storage.local.set({ currentSearchEngineId: firstEnabled.id }).catch((err) => {
-        console.warn('Failed to persist search engine selection', err);
-      });
+      if (appSearchRememberEnginePreference) {
+        browser.storage.local.set({ currentSearchEngineId: firstEnabled.id }).catch((err) => {
+          console.warn('Failed to persist search engine selection', err);
+        });
+      }
     }
 
     closeModal();
@@ -3552,8 +3624,10 @@ async function setupSearch() {
 
 async function handleSearchChange() {
   const newId = searchSelect ? searchSelect.value : currentSearchEngine.id;
-  await browser.storage.local.set({ currentSearchEngineId: newId });
   updateSearchUI(newId);
+  if (appSearchRememberEnginePreference) {
+    await browser.storage.local.set({ currentSearchEngineId: newId });
+  }
   if (searchInput.value.trim().length > 0) {
     handleSearchInput();
   }
@@ -4060,9 +4134,13 @@ async function loadSearchEnginePreferences() {
 
   populateSearchOptions();
 
-  const lastEngine = await browser.storage.local.get('currentSearchEngineId');
-  updateSearchUI(lastEngine.currentSearchEngineId);
-  if (!lastEngine.currentSearchEngineId) {
+  let targetEngineId = null;
+  if (appSearchRememberEnginePreference) {
+    const lastEngine = await browser.storage.local.get('currentSearchEngineId');
+    targetEngineId = lastEngine.currentSearchEngineId;
+  }
+  updateSearchUI(targetEngineId);
+  if (appSearchRememberEnginePreference && !targetEngineId) {
     try {
       await browser.storage.local.set({ currentSearchEngineId: currentSearchEngine.id });
     } catch (err) {

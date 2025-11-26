@@ -3451,6 +3451,20 @@ let searchEngines = [
   { id: 'yahoo', name: 'Yahoo', enabled: false, url: 'https://search.yahoo.com/search?p=', suggestionUrl: 'https://ff.search.yahoo.com/gossip?output=json&command=' },
   { id: 'yandex', name: 'Yandex', enabled: false, url: 'https://yandex.com/search/?text=', suggestionUrl: 'https://suggest.yandex.com/suggest-ff.cgi?part=' }
 ];
+const bangMap = {
+  g: 'google',
+  yt: 'youtube',
+  ddg: 'duckduckgo',
+  b: 'bing',
+  w: 'wikipedia',
+  r: 'reddit',
+  gh: 'github',
+  so: 'stackoverflow',
+  amz: 'amazon',
+  maps: 'maps',
+  y: 'yahoo',
+  ya: 'yandex'
+};
 const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
 const searchSelect = document.getElementById('search-select');
@@ -3469,6 +3483,7 @@ let lastBookmarkHtml = '';
 let lastSuggestionHtml = '';
 let searchNavigationLocked = false;
 let searchEngineSaveTimeout = null;
+const suggestionCache = new Map();
 
 /**
  * Checks if a query string is likely a direct URL, domain, or IP address.
@@ -3552,14 +3567,40 @@ function updateSearchUI(engineId) {
   currentSearchEngine = engine;
   searchInput.placeholder = `Search with ${currentSearchEngine.name}`;
   if (searchSelect) {
+    const previousValue = searchSelect.value;
     searchSelect.value = currentSearchEngine.id;
+    if (previousValue !== currentSearchEngine.id) {
+      searchSelect.classList.remove('engine-switch-anim');
+      void searchSelect.offsetWidth;
+      searchSelect.classList.add('engine-switch-anim');
+    }
   }
+
+  preconnectToSearchEngine(currentSearchEngine.url);
 
   const isDefault = currentSearchEngine.id === (appSearchDefaultEnginePreference || 'google');
   const searchContainer = document.querySelector('.search-container');
   if (searchContainer) {
     searchContainer.classList.toggle('non-default-engine', !isDefault);
   }
+}
+
+function preconnectToSearchEngine(url) {
+  let origin;
+  try {
+    origin = new URL(url).origin;
+  } catch (e) {
+    return;
+  }
+
+  let link = document.head.querySelector(`link[rel="preconnect"][href="${origin}"]`);
+  if (link) return;
+
+  link = document.createElement('link');
+  link.rel = 'preconnect';
+  link.href = origin;
+  link.crossOrigin = 'anonymous';
+  document.head.appendChild(link);
 }
 
 function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken = false } = {}) {
@@ -3604,6 +3645,22 @@ async function setupSearch() {
   const debouncedSearch = debounce(handleSearchInput, 120);
   searchForm.addEventListener('submit', handleSearch);
   searchSelect.addEventListener('change', handleSearchChange);
+  searchSelect.addEventListener('wheel', (e) => {
+    e.preventDefault();
+
+    const activeEngines = searchEngines.filter((eng) => eng.enabled);
+    if (activeEngines.length < 2) return;
+
+    let currentIndex = activeEngines.findIndex((eng) => eng.id === currentSearchEngine.id);
+    if (currentIndex === -1) currentIndex = 0;
+
+    const direction = e.deltaY > 0 ? 1 : -1;
+    const nextIndex = (currentIndex + direction + activeEngines.length) % activeEngines.length;
+    const nextEngine = activeEngines[nextIndex];
+
+    updateSearchUI(nextEngine.id);
+    handleSearchChange();
+  });
 
   searchInput.addEventListener('input', e => {
     userIsTyping = true;
@@ -3617,6 +3674,13 @@ async function setupSearch() {
   
   searchResultsPanel.addEventListener('click', handleSearchResultClick, true);
   searchResultsPanel.addEventListener('click', e => e.stopPropagation());
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length > 1) return;
+    searchInput.focus();
+  });
 
   window.addEventListener('mousedown', (e) => {
     const target = e.target;
@@ -3638,7 +3702,7 @@ async function handleSearchChange() {
       browser.storage.local.set({ currentSearchEngineId: newId }).catch((err) => {
         console.warn('Failed to persist search engine selection', err);
       });
-    }, 500);
+    }, 200);
   }
   if (searchInput.value.trim().length > 0) {
     handleSearchInput();
@@ -3698,9 +3762,10 @@ function executeSearch(query) {
 
   const bangMatch = originalQuery.match(/^!(\S+)\s+(.*)/);
   if (bangMatch) {
-    const bangId = bangMatch[1].toLowerCase();
+    const rawBang = bangMatch[1].toLowerCase();
     const bangQuery = bangMatch[2].trim();
-    const matchingEngine = searchEngines.find((e) => e.id.toLowerCase() === bangId && e.enabled);
+    const engineId = bangMap[rawBang] || rawBang;
+    const matchingEngine = searchEngines.find((e) => e.id.toLowerCase() === engineId && e.enabled);
     if (matchingEngine && bangQuery) {
       updateSearchUI(matchingEngine.id);
       effectiveQuery = bangQuery;
@@ -3910,6 +3975,14 @@ function handleSearchKeydown(e) {
     const nextIndex = (currentIndex + delta + activeEngines.length) % activeEngines.length;
     const nextEngine = activeEngines[nextIndex];
     updateSearchUI(nextEngine.id);
+    handleSearchChange();
+    return;
+  }
+
+  if (e.altKey && e.key === 'Home' && searchWidget.contains(e.target)) {
+    e.preventDefault();
+    const defaultId = appSearchDefaultEnginePreference || 'google';
+    updateSearchUI(defaultId);
     handleSearchChange();
     return;
   }
@@ -4210,6 +4283,11 @@ async function fetchSearchSuggestions(query, engine) {
   // 1. If the engine has no suggestion URL (e.g. Reddit), return empty immediately
   if (!engine.suggestionUrl) return [];
 
+  const cacheKey = `${engine.id}:${query}`;
+  if (suggestionCache.has(cacheKey)) {
+    return suggestionCache.get(cacheKey);
+  }
+
   if (suggestionAbortController) {
     suggestionAbortController.abort();
   }
@@ -4227,27 +4305,36 @@ async function fetchSearchSuggestions(query, engine) {
       data = raw;
     }
 
+    let results = [];
+
     // Group 1: Standard OpenSearch Format (Google, Bing, YouTube, Wikipedia, Amazon, Maps)
     // Format: ["query", ["suggestion1", "suggestion2"], ...]
     const openSearchEngines = ['Google', 'Bing', 'YouTube', 'Wikipedia', 'Amazon', 'Maps'];
     if (openSearchEngines.includes(engine.name)) {
-      return Array.isArray(data) && Array.isArray(data[1]) ? data[1].filter(val => typeof val === 'string') : [];
+      results = Array.isArray(data) && Array.isArray(data[1]) ? data[1].filter(val => typeof val === 'string') : [];
+      suggestionCache.set(cacheKey, results);
+      return results;
     }
 
     // Group 2: DuckDuckGo (Array of objects)
     if (engine.name === 'DuckDuckGo') {
-      return Array.isArray(data) ? data.map(item => item && item.phrase).filter(val => typeof val === 'string') : [];
+      results = Array.isArray(data) ? data.map(item => item && item.phrase).filter(val => typeof val === 'string') : [];
+      suggestionCache.set(cacheKey, results);
+      return results;
     }
 
     // Group 3: Yahoo (Nested Object)
     if (engine.name === 'Yahoo') {
-      const results = data?.gossip?.results;
-      if (Array.isArray(results)) {
-        return results
+      const yahooResults = data?.gossip?.results;
+      if (Array.isArray(yahooResults)) {
+        results = yahooResults
           .flatMap(entry => (entry?.nodes || []).map(node => node && node.key))
           .filter(val => typeof val === 'string');
+      } else {
+        results = [];
       }
-      return [];
+      suggestionCache.set(cacheKey, results);
+      return results;
     }
 
     // Group 4: Yandex (Nested Array)
@@ -4261,14 +4348,17 @@ async function fetchSearchSuggestions(query, engine) {
         }
       }
       const suggestionBucket = Array.isArray(parsedArray) && parsedArray.length > 1 ? parsedArray[1] : [];
-      return Array.isArray(suggestionBucket)
+      results = Array.isArray(suggestionBucket)
         ? suggestionBucket
             .map(item => (Array.isArray(item) ? item[1] : item))
             .filter(val => typeof val === 'string')
         : [];
+      suggestionCache.set(cacheKey, results);
+      return results;
     }
 
-    return [];
+    suggestionCache.set(cacheKey, results);
+    return results;
   } catch (err) {
     if (err.name === 'AbortError') {
       return null;
@@ -4303,6 +4393,29 @@ async function handleSearchInput() {
   const queryLower = query.toLowerCase().trim();
   const queryTerms = queryLower.split(/\s+/).filter(Boolean);
   const currentToken = ++latestSearchToken;
+
+  const bangMatch = query.match(/^!(\S+)/);
+  let tempEngine = null;
+
+  if (bangMatch) {
+    const rawBang = bangMatch[1].toLowerCase();
+    const engineId = bangMap[rawBang] || rawBang;
+    tempEngine = searchEngines.find((e) => e.id === engineId && e.enabled);
+  }
+
+  if (tempEngine) {
+    if (currentSearchEngine.id !== tempEngine.id) {
+      updateSearchUI(tempEngine.id);
+    }
+  } else {
+    const savedId = appSearchRememberEnginePreference
+      ? (await browser.storage.local.get('currentSearchEngineId')).currentSearchEngineId
+      : appSearchDefaultEnginePreference;
+    const targetId = savedId || 'google';
+    if (currentSearchEngine.id !== targetId) {
+      updateSearchUI(targetId);
+    }
+  }
 
   // 1. Handle empty query
   if (queryLower.length === 0) {
@@ -5125,17 +5238,32 @@ async function initializePage() {
 
 if (browser?.storage?.onChanged) {
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.currentSearchEngineId) {
-      const newId = changes.currentSearchEngineId.newValue;
-      if (appSearchRememberEnginePreference && newId && newId !== currentSearchEngine.id) {
-        updateSearchUI(newId);
-      }
-    }
+    if (area !== 'local') return;
 
-    if (area === 'local' && changes[APP_SEARCH_REMEMBER_ENGINE_KEY]) {
+    if (changes[APP_SEARCH_REMEMBER_ENGINE_KEY]) {
       appSearchRememberEnginePreference = changes[APP_SEARCH_REMEMBER_ENGINE_KEY].newValue !== false;
       if (!appSearchRememberEnginePreference) {
         updateSearchUI(appSearchDefaultEnginePreference);
+      }
+    }
+
+    if (changes[SEARCH_ENGINES_PREF_KEY]) {
+      const newConfig = changes[SEARCH_ENGINES_PREF_KEY].newValue;
+      if (newConfig) {
+        searchEngines.forEach((engine) => {
+          if (Object.prototype.hasOwnProperty.call(newConfig, engine.id)) {
+            engine.enabled = newConfig[engine.id];
+          }
+        });
+        populateSearchOptions();
+        updateSearchUI(currentSearchEngine.id);
+      }
+    }
+
+    if (changes.currentSearchEngineId) {
+      const newId = changes.currentSearchEngineId.newValue;
+      if (appSearchRememberEnginePreference && newId && newId !== currentSearchEngine.id) {
+        updateSearchUI(newId);
       }
     }
   });
@@ -6080,6 +6208,9 @@ document.addEventListener('visibilitychange', () => {
     const activeVideo = document.querySelector('.background-video.is-active') || videos[0];
     if (activeVideo) {
       activeVideo.play().catch(() => {});
+    }
+    if (!document.body.classList.contains('modal-open')) {
+      setTimeout(() => searchInput.focus(), 50);
     }
   }
 });

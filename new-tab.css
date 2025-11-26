@@ -402,6 +402,16 @@ body.sidebar-collapsed .collapsed-clock-slot {
   background-color: rgba(44, 165, 255, 0.03);
 }
 
+.engine-switch-anim {
+  animation: engine-bump 0.2s ease-in-out;
+}
+
+@keyframes engine-bump {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
 #search-select {
   background: #f0f0f0;
   border-radius: 5px;

@@ -3468,6 +3468,7 @@ let latestSearchToken = 0;
 let lastBookmarkHtml = '';
 let lastSuggestionHtml = '';
 let searchNavigationLocked = false;
+let searchEngineSaveTimeout = null;
 
 /**
  * Checks if a query string is likely a direct URL, domain, or IP address.
@@ -3553,6 +3554,12 @@ function updateSearchUI(engineId) {
   if (searchSelect) {
     searchSelect.value = currentSearchEngine.id;
   }
+
+  const isDefault = currentSearchEngine.id === (appSearchDefaultEnginePreference || 'google');
+  const searchContainer = document.querySelector('.search-container');
+  if (searchContainer) {
+    searchContainer.classList.toggle('non-default-engine', !isDefault);
+  }
 }
 
 function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken = false } = {}) {
@@ -3626,7 +3633,12 @@ async function handleSearchChange() {
   const newId = searchSelect ? searchSelect.value : currentSearchEngine.id;
   updateSearchUI(newId);
   if (appSearchRememberEnginePreference) {
-    await browser.storage.local.set({ currentSearchEngineId: newId });
+    if (searchEngineSaveTimeout) clearTimeout(searchEngineSaveTimeout);
+    searchEngineSaveTimeout = setTimeout(() => {
+      browser.storage.local.set({ currentSearchEngineId: newId }).catch((err) => {
+        console.warn('Failed to persist search engine selection', err);
+      });
+    }, 500);
   }
   if (searchInput.value.trim().length > 0) {
     handleSearchInput();
@@ -3679,21 +3691,34 @@ async function openSearchUrl(url) {
 }
 
 function executeSearch(query) {
-  const trimmedQuery = (query || '').trim();
-  if (!trimmedQuery) return;
+  const originalQuery = (query || '').trim();
+  if (!originalQuery) return;
 
-  if (isLikelyUrl(trimmedQuery)) {
-    let url = trimmedQuery;
+  let effectiveQuery = originalQuery;
+
+  const bangMatch = originalQuery.match(/^!(\S+)\s+(.*)/);
+  if (bangMatch) {
+    const bangId = bangMatch[1].toLowerCase();
+    const bangQuery = bangMatch[2].trim();
+    const matchingEngine = searchEngines.find((e) => e.id.toLowerCase() === bangId && e.enabled);
+    if (matchingEngine && bangQuery) {
+      updateSearchUI(matchingEngine.id);
+      effectiveQuery = bangQuery;
+    }
+  }
+
+  if (isLikelyUrl(effectiveQuery)) {
+    let url = effectiveQuery;
     // Check if it already has a protocol (e.g., "http://", "mailto:", "about:")
     // We look for a colon early in the string, but exclude "localhost:" (which is host:port)
-    const hasProtocol = /^[a-z][a-z0-9+.-]+:/i.test(trimmedQuery) && !trimmedQuery.startsWith('localhost:');
+    const hasProtocol = /^[a-z][a-z0-9+.-]+:/i.test(effectiveQuery) && !effectiveQuery.startsWith('localhost:');
 
     if (!hasProtocol) {
       // Logic to determine HTTP vs HTTPS
       // 1. Localhost, IPs, or Intranet Shortnames (e.g. "nas/") use HTTP
-      const isLocal = trimmedQuery.startsWith('localhost')
-        || /^(\d{1,3}\.){3}\d{1,3}/.test(trimmedQuery)
-        || trimmedQuery.indexOf('.') === -1;
+      const isLocal = effectiveQuery.startsWith('localhost')
+        || /^(\d{1,3}\.){3}\d{1,3}/.test(effectiveQuery)
+        || effectiveQuery.indexOf('.') === -1;
 
       url = isLocal ? `http://${url}` : `https://${url}`;
     }
@@ -3701,7 +3726,7 @@ function executeSearch(query) {
     return;
   }
 
-  const encoded = encodeURIComponent(trimmedQuery);
+  const encoded = encodeURIComponent(effectiveQuery);
   const url = currentSearchEngine.url.includes('%s')
     ? currentSearchEngine.url.replace('%s', encoded)
     : `${currentSearchEngine.url}${encoded}`;
@@ -3871,6 +3896,22 @@ function handleSearchResultClick(e) {
 function handleSearchKeydown(e) {
   if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && searchWidget.contains(e.target)) {
     e.preventDefault();
+  }
+
+  if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && searchWidget.contains(e.target)) {
+    e.preventDefault();
+    const activeEngines = searchEngines.filter((eng) => eng.enabled);
+    if (activeEngines.length < 2) return;
+
+    let currentIndex = activeEngines.findIndex((eng) => eng.id === currentSearchEngine.id);
+    if (currentIndex === -1) currentIndex = 0;
+
+    const delta = e.key === 'ArrowDown' ? 1 : -1;
+    const nextIndex = (currentIndex + delta + activeEngines.length) % activeEngines.length;
+    const nextEngine = activeEngines[nextIndex];
+    updateSearchUI(nextEngine.id);
+    handleSearchChange();
+    return;
   }
 
   // Only operate when results panel is open and the event originated from the search UI.
@@ -4121,7 +4162,12 @@ function isStaleSearch(token, queryLower) {
 }
 
 async function loadSearchEnginePreferences() {
-  const stored = await browser.storage.local.get(SEARCH_ENGINES_PREF_KEY);
+  const stored = await browser.storage.local.get([
+    SEARCH_ENGINES_PREF_KEY,
+    'currentSearchEngineId',
+    APP_SEARCH_REMEMBER_ENGINE_KEY,
+    APP_SEARCH_DEFAULT_ENGINE_KEY
+  ]);
   const savedConfig = stored[SEARCH_ENGINES_PREF_KEY];
 
   if (savedConfig) {
@@ -4132,21 +4178,31 @@ async function loadSearchEnginePreferences() {
     });
   }
 
+  if (Object.prototype.hasOwnProperty.call(stored, APP_SEARCH_REMEMBER_ENGINE_KEY)) {
+    appSearchRememberEnginePreference = stored[APP_SEARCH_REMEMBER_ENGINE_KEY] !== false;
+  }
+  if (stored[APP_SEARCH_DEFAULT_ENGINE_KEY]) {
+    appSearchDefaultEnginePreference = stored[APP_SEARCH_DEFAULT_ENGINE_KEY];
+  }
+
   populateSearchOptions();
 
+  const remember = stored[APP_SEARCH_REMEMBER_ENGINE_KEY] !== false;
   let targetEngineId = null;
-  if (appSearchRememberEnginePreference) {
-    const lastEngine = await browser.storage.local.get('currentSearchEngineId');
-    targetEngineId = lastEngine.currentSearchEngineId;
+
+  if (remember) {
+    targetEngineId = stored.currentSearchEngineId;
+  } else {
+    targetEngineId = stored[APP_SEARCH_DEFAULT_ENGINE_KEY] || appSearchDefaultEnginePreference || 'google';
   }
+
+  const engineObj = searchEngines.find((e) => e.id === targetEngineId && e.enabled);
+  if (!engineObj) {
+    const fallback = searchEngines.find((e) => e.enabled && e.id === (appSearchDefaultEnginePreference || 'google'));
+    targetEngineId = fallback ? fallback.id : (searchEngines.find((e) => e.enabled)?.id || 'google');
+  }
+
   updateSearchUI(targetEngineId);
-  if (appSearchRememberEnginePreference && !targetEngineId) {
-    try {
-      await browser.storage.local.set({ currentSearchEngineId: currentSearchEngine.id });
-    } catch (err) {
-      console.warn('Failed to persist default search engine', err);
-    }
-  }
 }
 
 // Function to fetch suggestions
@@ -5065,6 +5121,24 @@ async function initializePage() {
   // === All manual D&D listeners for bookmarkFolderTabsContainer removed ===
   // They are now handled by setupTabsSortable() which is
   // called at the end of createFolderTabs()
+}
+
+if (browser?.storage?.onChanged) {
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.currentSearchEngineId) {
+      const newId = changes.currentSearchEngineId.newValue;
+      if (appSearchRememberEnginePreference && newId && newId !== currentSearchEngine.id) {
+        updateSearchUI(newId);
+      }
+    }
+
+    if (area === 'local' && changes[APP_SEARCH_REMEMBER_ENGINE_KEY]) {
+      appSearchRememberEnginePreference = changes[APP_SEARCH_REMEMBER_ENGINE_KEY].newValue !== false;
+      if (!appSearchRememberEnginePreference) {
+        updateSearchUI(appSearchDefaultEnginePreference);
+      }
+    }
+  });
 }
 
 initializePage();

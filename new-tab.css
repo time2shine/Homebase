@@ -397,6 +397,11 @@ body.sidebar-collapsed .collapsed-clock-slot {
   flex: 1;
 }
 
+.search-container.non-default-engine {
+  border-color: #2ca5ff;
+  background-color: rgba(44, 165, 255, 0.03);
+}
+
 #search-select {
   background: #f0f0f0;
   border-radius: 5px;

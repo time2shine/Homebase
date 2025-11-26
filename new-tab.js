@@ -3376,7 +3376,7 @@ async function setupSearch() {
   if (savedIndex >= searchEngines.length) savedIndex = 0;
   updateSearchUI(savedIndex);
 
-  const debouncedSearch = debounce(handleSearchInput, 300);
+  const debouncedSearch = debounce(handleSearchInput, 120);
   searchForm.addEventListener('submit', handleSearch);
   searchSelect.addEventListener('change', handleSearchChange);
 

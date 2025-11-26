@@ -4557,7 +4557,7 @@ async function handleSearchInput() {
         <div class="result-header">Calculator</div>
         <div class="result-item calc-item" data-copy="${displayResult}">
           <div class="calc-left">
-            <div class="calc-icon">🧮</div>
+            <div class="calc-icon" data-lottie></div>
             <div class="calc-text">
               <div class="calc-answer">${displayResult}</div>
               <div class="calc-expression">${safeQuery}</div>
@@ -4633,6 +4633,18 @@ async function handleSearchInput() {
   if (topSectionHtml !== lastBookmarkHtml) {
     bookmarkResultsContainer.innerHTML = topSectionHtml;
     lastBookmarkHtml = topSectionHtml;
+
+    const calcItem = bookmarkResultsContainer.querySelector('.calc-item');
+    if (calcItem) {
+      const answerEl = calcItem.querySelector('.calc-answer');
+      if (answerEl) {
+        setTimeout(() => createSparkles(answerEl), 50);
+      }
+      const icon = calcItem.querySelector('[data-lottie]');
+      if (icon) {
+        setTimeout(() => loadCalcIconAnimation(icon), 50);
+      }
+    }
   }
 
   applySelectionToCurrentResults(previousSelection, query.trim());
@@ -5480,6 +5492,51 @@ async function updateDynamicAccent() {
 }
 
 setTimeout(updateDynamicAccent, 600);
+
+// ============================
+//      Sparkle Burst Effect
+// ============================
+
+function createSparkles(targetEl) {
+  if (!targetEl) return;
+  const container = document.createElement('div');
+  container.className = 'sparkle-container';
+  targetEl.appendChild(container);
+
+  for (let i = 0; i < 10; i++) {
+    const s = document.createElement('div');
+    s.className = 'sparkle';
+
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 12 + Math.random() * 18;
+
+    const x = Math.cos(angle) * distance;
+    const y = Math.sin(angle) * distance;
+
+    s.style.left = `calc(50% + ${x}px)`;
+    s.style.top = `calc(50% + ${y}px)`;
+    s.style.animationDelay = `${Math.random() * 0.25}s`;
+
+    container.appendChild(s);
+  }
+
+  setTimeout(() => container.remove(), 850);
+}
+
+// =====================================
+//      Lottie Animation Loader
+// =====================================
+
+function loadCalcIconAnimation(container) {
+  if (!window.lottie || !container) return;
+  lottie.loadAnimation({
+    container,
+    renderer: 'svg',
+    loop: false,
+    autoplay: true,
+    path: 'https://assets7.lottiefiles.com/packages/lf20_8gkbnj5j.json'
+  });
+}
 
 function buildGalleryCard(item, index = 0) {
   const card = document.createElement('div');

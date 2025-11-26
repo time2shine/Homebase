@@ -860,6 +860,7 @@ const appMaxTabsSelect = document.getElementById('app-max-tabs-select');
 const appAutoCloseSelect = document.getElementById('app-autoclose-select');
 const appSearchOpenNewTabToggle = document.getElementById('app-search-open-new-tab-toggle');
 const appSearchRememberEngineToggle = document.getElementById('app-search-remember-engine-toggle');
+const appSearchMathToggle = document.getElementById('app-search-math-toggle');
 const appSearchDefaultEngineContainer = document.getElementById('app-search-default-engine-container');
 const appSearchDefaultEngineSelect = document.getElementById('app-search-default-engine-select');
 const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-label') || 'Next Wallpaper';
@@ -878,6 +879,7 @@ const APP_SINGLETON_MODE_KEY = 'appSingletonMode';
 const APP_SEARCH_OPEN_NEW_TAB_KEY = 'appSearchOpenNewTab';
 const APP_SEARCH_REMEMBER_ENGINE_KEY = 'appSearchRememberEngine';
 const APP_SEARCH_DEFAULT_ENGINE_KEY = 'appSearchDefaultEngine';
+const APP_SEARCH_MATH_KEY = 'appSearchMath';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -895,6 +897,7 @@ let appSingletonModePreference = false;
 let appSearchOpenNewTabPreference = false;
 let appSearchRememberEnginePreference = true;
 let appSearchDefaultEnginePreference = 'google';
+let appSearchMathPreference = true;
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
@@ -3064,7 +3067,8 @@ async function loadAppSettingsFromStorage() {
       APP_SINGLETON_MODE_KEY,
       APP_SEARCH_OPEN_NEW_TAB_KEY,
       APP_SEARCH_REMEMBER_ENGINE_KEY,
-      APP_SEARCH_DEFAULT_ENGINE_KEY
+      APP_SEARCH_DEFAULT_ENGINE_KEY,
+      APP_SEARCH_MATH_KEY
     ]);
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
@@ -3076,6 +3080,7 @@ async function loadAppSettingsFromStorage() {
     if (stored[APP_SEARCH_DEFAULT_ENGINE_KEY]) {
       appSearchDefaultEnginePreference = stored[APP_SEARCH_DEFAULT_ENGINE_KEY];
     }
+    appSearchMathPreference = stored[APP_SEARCH_MATH_KEY] !== false;
 
     if (appSingletonModePreference) {
       await handleSingletonMode();
@@ -3224,6 +3229,9 @@ function syncAppSettingsForm() {
   if (appSearchRememberEngineToggle) {
     appSearchRememberEngineToggle.checked = appSearchRememberEnginePreference;
   }
+  if (appSearchMathToggle) {
+    appSearchMathToggle.checked = appSearchMathPreference;
+  }
   updateDefaultEngineVisibilityControl();
   const singletonToggle = document.getElementById('app-singleton-mode-toggle');
   if (singletonToggle) {
@@ -3303,6 +3311,7 @@ function setupAppSettingsModal() {
       })();
       const nextRememberEngine = appSearchRememberEngineToggle ? appSearchRememberEngineToggle.checked : true;
       const nextDefaultEngine = appSearchDefaultEngineSelect && appSearchDefaultEngineSelect.value ? appSearchDefaultEngineSelect.value : appSearchDefaultEnginePreference;
+      const nextMath = appSearchMathToggle ? appSearchMathToggle.checked : true;
 
       applyTimeFormatPreference(nextFormat);
       applySidebarVisibility(nextSidebarVisible);
@@ -3311,6 +3320,7 @@ function setupAppSettingsModal() {
       appSearchOpenNewTabPreference = nextSearchOpenNewTab;
       appSearchRememberEnginePreference = nextRememberEngine;
       appSearchDefaultEnginePreference = nextDefaultEngine;
+      appSearchMathPreference = nextMath;
       appSingletonModePreference = nextSingletonMode;
       updateTime();
 
@@ -3322,6 +3332,7 @@ function setupAppSettingsModal() {
           [APP_AUTOCLOSE_KEY]: nextAutoClose,
           [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
           [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
+          [APP_SEARCH_MATH_KEY]: nextMath,
           [APP_SEARCH_DEFAULT_ENGINE_KEY]: nextDefaultEngine,
           [APP_SINGLETON_MODE_KEY]: nextSingletonMode
         });
@@ -3484,6 +3495,71 @@ let lastSuggestionHtml = '';
 let searchNavigationLocked = false;
 let searchEngineSaveTimeout = null;
 const suggestionCache = new Map();
+
+function evaluateMath(query) {
+  let expression = query.replace(/^=/, '').replace(/x/gi, '*').trim();
+  if (!/^[\d\.\s\+\-\*\/\%\^\(\)]+$/.test(expression)) {
+    return null;
+  }
+  if (!/[\+\-\*\/\%\^]/.test(expression)) {
+    return null;
+  }
+
+  try {
+    const result = new Function(`return (${expression})`)();
+    if (!isFinite(result) || isNaN(result)) return null;
+    return Math.round(result * 10000) / 10000;
+  } catch (e) {
+    return null;
+  }
+}
+
+function evaluateUnits(query) {
+  const regex = /^([\d\.]+)\s*([a-z]+)\s*(?:to|in)?\s*([a-z]+)$/i;
+  const match = query.match(regex);
+  if (!match) return null;
+
+  const val = parseFloat(match[1]);
+  const from = match[2].toLowerCase();
+  const to = match[3].toLowerCase();
+
+  const units = {
+    kg: { type: 'weight', base: 1 },
+    lbs: { type: 'weight', base: 0.453592 },
+    lb: { type: 'weight', base: 0.453592 },
+    m: { type: 'length', base: 1 },
+    meter: { type: 'length', base: 1 },
+    meters: { type: 'length', base: 1 },
+    km: { type: 'length', base: 1000 },
+    ft: { type: 'length', base: 0.3048 },
+    feet: { type: 'length', base: 0.3048 },
+    mi: { type: 'length', base: 1609.34 },
+    mile: { type: 'length', base: 1609.34 },
+    miles: { type: 'length', base: 1609.34 },
+    c: { type: 'temp' },
+    celsius: { type: 'temp' },
+    f: { type: 'temp' },
+    fahrenheit: { type: 'temp' }
+  };
+
+  if (!units[from] || !units[to]) return null;
+  if (units[from].type !== units[to].type) return null;
+
+  let result = null;
+  if (units[from].type === 'temp') {
+    if ((from === 'c' || from === 'celsius') && (to === 'f' || to === 'fahrenheit')) {
+      result = (val * 9 / 5) + 32;
+    } else if ((from === 'f' || from === 'fahrenheit') && (to === 'c' || to === 'celsius')) {
+      result = (val - 32) * 5 / 9;
+    }
+  } else {
+    const inBase = val * units[from].base;
+    result = inBase / units[to].base;
+  }
+
+  if (result === null) return null;
+  return parseFloat(result.toFixed(2));
+}
 
 /**
  * Checks if a query string is likely a direct URL, domain, or IP address.
@@ -3943,6 +4019,25 @@ function handleSearch(event) {
 }
 
 function handleSearchResultClick(e) {
+  if (e.target.classList.contains('copy-btn')) {
+    e.preventDefault();
+    e.stopPropagation();
+    const parent = e.target.closest('.calculator-result');
+    const text = parent ? parent.dataset.copy : '';
+    if (text) {
+      navigator.clipboard.writeText(text).then(() => {
+        const original = e.target.textContent;
+        e.target.textContent = 'Copied!';
+        setTimeout(() => {
+          e.target.textContent = original;
+        }, 1500);
+      }).catch((err) => {
+        console.warn('Copy failed', err);
+      });
+    }
+    return;
+  }
+
   const target = e.target.closest('.result-item');
   if (!target) return;
   e.preventDefault();
@@ -4394,6 +4489,31 @@ async function handleSearchInput() {
   const queryTerms = queryLower.split(/\s+/).filter(Boolean);
   const currentToken = ++latestSearchToken;
 
+  let calcHtml = '';
+  if (appSearchMathPreference) {
+    const mathResult = evaluateMath(queryLower);
+    const unitResult = mathResult === null ? evaluateUnits(queryLower) : null;
+    const finalResult = mathResult !== null ? mathResult : unitResult;
+
+    if (finalResult !== null) {
+      const displayResult = escapeHtml(String(finalResult));
+      const safeQuery = escapeHtml(query);
+      calcHtml = `
+        <div class="result-header">Calculator</div>
+        <div class="result-item calculator-result" data-copy="${displayResult}">
+          <div class="result-icon-wrapper">
+             <span style="font-size: 20px;">🧮</span>
+          </div>
+          <div class="result-item-info">
+            <strong class="result-label" style="font-size: 1.2em;">${displayResult}</strong>
+            <span style="font-size: 0.85em; color: #666; margin-left: 8px;">= ${safeQuery}</span>
+          </div>
+          <button class="copy-btn" style="margin-left:auto; padding: 4px 8px; font-size: 0.8em; cursor: pointer;">Copy</button>
+        </div>
+      `;
+    }
+  }
+
   const bangMatch = query.match(/^!(\S+)/);
   let tempEngine = null;
 
@@ -4517,9 +4637,10 @@ async function handleSearchInput() {
 
   if (suggestionHtml !== lastSuggestionHtml) {
     const prevScroll = suggestionResultsContainer.scrollTop;
-    suggestionResultsContainer.innerHTML = suggestionHtml;
+    const combined = `${calcHtml}${suggestionHtml}`;
+    suggestionResultsContainer.innerHTML = combined;
     suggestionResultsContainer.scrollTop = prevScroll;
-    lastSuggestionHtml = suggestionHtml;
+    lastSuggestionHtml = combined;
   }
 
   applySelectionToCurrentResults(previousSelection, query.trim());

@@ -3280,16 +3280,104 @@ function setupAppSettingsModal() {
   });
 }
 
+function setupSearchEnginesModal() {
+  const modal = document.getElementById('search-engines-modal');
+  const openBtn = document.getElementById('manage-search-engines-btn');
+  const saveBtn = document.getElementById('search-engines-save-btn');
+  const cancelBtn = document.getElementById('search-engines-cancel-btn');
+  const listContainer = document.getElementById('search-engines-modal-list');
+
+  if (!modal || !openBtn || !saveBtn || !cancelBtn || !listContainer) return;
+
+  const closeModal = () => {
+    modal.style.display = 'none';
+  };
+
+  const renderList = () => {
+    listContainer.innerHTML = '';
+    searchEngines.forEach((engine) => {
+      const div = document.createElement('div');
+      div.className = 'engine-toggle-item';
+      div.innerHTML = `
+        <span>${engine.name}</span>
+        <label class="app-switch">
+          <input type="checkbox" class="engine-toggle-checkbox" data-id="${engine.id}" ${engine.enabled ? 'checked' : ''}>
+          <span class="app-switch-track"></span>
+        </label>
+      `;
+      listContainer.appendChild(div);
+    });
+  };
+
+  openBtn.addEventListener('click', async () => {
+    try {
+      await loadSearchEnginePreferences();
+    } catch (err) {
+      console.warn('Failed to refresh search engines before opening modal', err);
+    }
+    renderList();
+    modal.style.display = 'flex';
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    const toggles = listContainer.querySelectorAll('.engine-toggle-checkbox');
+    const newConfig = {};
+
+    toggles.forEach((toggle) => {
+      const id = toggle.dataset.id;
+      const isEnabled = toggle.checked;
+      newConfig[id] = isEnabled;
+      const engine = searchEngines.find((e) => e.id === id);
+      if (engine) engine.enabled = isEnabled;
+    });
+
+    try {
+      await browser.storage.local.set({ [SEARCH_ENGINES_PREF_KEY]: newConfig });
+    } catch (err) {
+      console.warn('Failed to save search engines', err);
+    }
+
+    populateSearchOptions();
+
+    const currentStillEnabled = searchEngines.find((e) => e.id === currentSearchEngine.id && e.enabled);
+    if (!currentStillEnabled) {
+      const firstEnabled = searchEngines.find((e) => e.enabled) || searchEngines[0];
+      updateSearchUI(firstEnabled.id);
+      browser.storage.local.set({ currentSearchEngineId: firstEnabled.id }).catch((err) => {
+        console.warn('Failed to persist search engine selection', err);
+      });
+    }
+
+    closeModal();
+  });
+
+  cancelBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+}
+
 
 // ===============================================
 // --- SEARCH BAR ---
 // ===============================================
-const searchEngines = [
-  { name: 'Google', url: 'https://www.google.com/search?q=', suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=' },
-  { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=', suggestionUrl: 'https://duckduckgo.com/ac/?type=json&q=' },
-  { name: 'Bing', url: 'https://www.bing.com/search?q=', suggestionUrl: 'https://api.bing.com/osjson.aspx?query=' },
-  { name: 'Yahoo', url: 'https://search.yahoo.com/search?p=', suggestionUrl: 'https://ff.search.yahoo.com/gossip?output=json&command=' },
-  { name: 'Yandex', url: 'https://yandex.com/search/?text=', suggestionUrl: 'https://suggest.yandex.com/suggest-ff.cgi?part=' }
+const SEARCH_ENGINES_PREF_KEY = 'searchEnginesConfig';
+
+let searchEngines = [
+  { id: 'google', name: 'Google', enabled: true, url: 'https://www.google.com/search?q=', suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=' },
+  { id: 'youtube', name: 'YouTube', enabled: true, url: 'https://www.youtube.com/results?search_query=', suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=' },
+  { id: 'duckduckgo', name: 'DuckDuckGo', enabled: true, url: 'https://duckduckgo.com/?q=', suggestionUrl: 'https://duckduckgo.com/ac/?type=json&q=' },
+  { id: 'bing', name: 'Bing', enabled: true, url: 'https://www.bing.com/search?q=', suggestionUrl: 'https://api.bing.com/osjson.aspx?query=' },
+  { id: 'wikipedia', name: 'Wikipedia', enabled: true, url: 'https://en.wikipedia.org/wiki/Special:Search?search=', suggestionUrl: 'https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=' },
+  
+  // OFF by default
+  { id: 'reddit', name: 'Reddit', enabled: false, url: 'https://www.reddit.com/search/?q=', suggestionUrl: '' }, // No public suggestion API
+  { id: 'github', name: 'GitHub', enabled: false, url: 'https://github.com/search?q=', suggestionUrl: '' }, // No public suggestion API
+  { id: 'stackoverflow', name: 'StackOverflow', enabled: false, url: 'https://stackoverflow.com/search?q=', suggestionUrl: '' }, // No public suggestion API
+  { id: 'amazon', name: 'Amazon', enabled: false, url: 'https://www.amazon.com/s?k=', suggestionUrl: 'https://completion.amazon.com/search/complete?search-alias=aps&client=amazon-search-ui&mkt=1&q=' },
+  { id: 'maps', name: 'Maps', enabled: false, url: 'https://www.google.com/maps/search/', suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=' },
+  { id: 'yahoo', name: 'Yahoo', enabled: false, url: 'https://search.yahoo.com/search?p=', suggestionUrl: 'https://ff.search.yahoo.com/gossip?output=json&command=' },
+  { id: 'yandex', name: 'Yandex', enabled: false, url: 'https://yandex.com/search/?text=', suggestionUrl: 'https://suggest.yandex.com/suggest-ff.cgi?part=' }
 ];
 const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
@@ -3298,7 +3386,7 @@ const resultSections = [
   bookmarkResultsContainer,
   suggestionResultsContainer
 ];
-let currentSearchEngine = searchEngines[0];
+let currentSearchEngine = searchEngines.find((engine) => engine.enabled) || searchEngines[0];
 let currentSelectionIndex = -1;
 let currentSectionIndex = 0; // 0 = bookmarks, 1 = suggestions
 let selectionWasAuto = false;
@@ -3362,17 +3450,37 @@ function escapeHtml(unsafe) {
 }
 
 function populateSearchOptions() {
-  searchEngines.forEach((engine, index) => {
+  if (!searchSelect) return;
+  searchSelect.innerHTML = '';
+
+  const activeEngines = searchEngines.filter((engine) => engine.enabled);
+
+  if (activeEngines.length === 0) {
     const option = document.createElement('option');
-    option.value = index;
+    option.textContent = 'Google';
+    option.value = 'google';
+    searchSelect.appendChild(option);
+    return;
+  }
+
+  activeEngines.forEach((engine) => {
+    const option = document.createElement('option');
+    option.value = engine.id;
     option.textContent = engine.name;
     searchSelect.appendChild(option);
   });
 }
-function updateSearchUI(index) {
-  currentSearchEngine = searchEngines[index];
+function updateSearchUI(engineId) {
+  let engine = searchEngines.find((e) => e.id === engineId);
+  if (!engine || !engine.enabled) {
+    engine = searchEngines.find((e) => e.enabled) || searchEngines[0];
+  }
+
+  currentSearchEngine = engine;
   searchInput.placeholder = `Search with ${currentSearchEngine.name}`;
-  searchSelect.selectedIndex = index;
+  if (searchSelect) {
+    searchSelect.value = currentSearchEngine.id;
+  }
 }
 
 function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken = false } = {}) {
@@ -3412,11 +3520,7 @@ function hideSearchResultsPanel() {
 }
 
 async function setupSearch() {
-  populateSearchOptions();
-  const data = await browser.storage.local.get(['searchIndex']);
-  let savedIndex = data.searchIndex || 0;
-  if (savedIndex >= searchEngines.length) savedIndex = 0;
-  updateSearchUI(savedIndex);
+  await loadSearchEnginePreferences();
 
   const debouncedSearch = debounce(handleSearchInput, 120);
   searchForm.addEventListener('submit', handleSearch);
@@ -3447,9 +3551,9 @@ async function setupSearch() {
 }
 
 async function handleSearchChange() {
-  const newIndex = searchSelect.selectedIndex;
-  await browser.storage.local.set({ searchIndex: newIndex });
-  updateSearchUI(newIndex);
+  const newId = searchSelect ? searchSelect.value : currentSearchEngine.id;
+  await browser.storage.local.set({ currentSearchEngineId: newId });
+  updateSearchUI(newId);
   if (searchInput.value.trim().length > 0) {
     handleSearchInput();
   }
@@ -3942,8 +4046,36 @@ function isStaleSearch(token, queryLower) {
   return token !== latestSearchToken || queryLower !== searchInput.value.toLowerCase().trim();
 }
 
+async function loadSearchEnginePreferences() {
+  const stored = await browser.storage.local.get(SEARCH_ENGINES_PREF_KEY);
+  const savedConfig = stored[SEARCH_ENGINES_PREF_KEY];
+
+  if (savedConfig) {
+    searchEngines.forEach((engine) => {
+      if (Object.prototype.hasOwnProperty.call(savedConfig, engine.id)) {
+        engine.enabled = savedConfig[engine.id];
+      }
+    });
+  }
+
+  populateSearchOptions();
+
+  const lastEngine = await browser.storage.local.get('currentSearchEngineId');
+  updateSearchUI(lastEngine.currentSearchEngineId);
+  if (!lastEngine.currentSearchEngineId) {
+    try {
+      await browser.storage.local.set({ currentSearchEngineId: currentSearchEngine.id });
+    } catch (err) {
+      console.warn('Failed to persist default search engine', err);
+    }
+  }
+}
+
 // Function to fetch suggestions
 async function fetchSearchSuggestions(query, engine) {
+  // 1. If the engine has no suggestion URL (e.g. Reddit), return empty immediately
+  if (!engine.suggestionUrl) return [];
+
   if (suggestionAbortController) {
     suggestionAbortController.abort();
   }
@@ -3960,13 +4092,20 @@ async function fetchSearchSuggestions(query, engine) {
     } catch (parseErr) {
       data = raw;
     }
-    
-    if (engine.name === 'Google' || engine.name === 'Bing') {
+
+    // Group 1: Standard OpenSearch Format (Google, Bing, YouTube, Wikipedia, Amazon, Maps)
+    // Format: ["query", ["suggestion1", "suggestion2"], ...]
+    const openSearchEngines = ['Google', 'Bing', 'YouTube', 'Wikipedia', 'Amazon', 'Maps'];
+    if (openSearchEngines.includes(engine.name)) {
       return Array.isArray(data) && Array.isArray(data[1]) ? data[1].filter(val => typeof val === 'string') : [];
     }
+
+    // Group 2: DuckDuckGo (Array of objects)
     if (engine.name === 'DuckDuckGo') {
       return Array.isArray(data) ? data.map(item => item && item.phrase).filter(val => typeof val === 'string') : [];
     }
+
+    // Group 3: Yahoo (Nested Object)
     if (engine.name === 'Yahoo') {
       const results = data?.gossip?.results;
       if (Array.isArray(results)) {
@@ -3976,6 +4115,8 @@ async function fetchSearchSuggestions(query, engine) {
       }
       return [];
     }
+
+    // Group 4: Yandex (Nested Array)
     if (engine.name === 'Yandex') {
       let parsedArray = data;
       if (typeof parsedArray === 'string') {
@@ -3992,6 +4133,7 @@ async function fetchSearchSuggestions(query, engine) {
             .filter(val => typeof val === 'string')
         : [];
     }
+
     return [];
   } catch (err) {
     if (err.name === 'AbortError') {
@@ -4625,6 +4767,7 @@ async function initializePage() {
   setInterval(updateTime, 1000 * 60);
   setupDockNavigation();
   setupAppSettingsModal();
+  setupSearchEnginesModal();
   prefetchGalleryPosters().catch(() => {});
   runWhenIdle(() => warmGalleryPosterHydration());
   

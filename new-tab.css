@@ -1806,6 +1806,81 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   padding: 8px 0;
 }
 
+.settings-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.engine-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.engine-toggle-item:hover {
+  background: #f9fafb;
+}
+
+.engine-toggle-item span {
+  font-weight: 500;
+  color: #333;
+}
+
+/* --- Fix for Search Engines Modal --- */
+
+/* 1. Ensure it sits ON TOP of the main Settings modal (which is z-index 2000) */
+#search-engines-modal {
+  z-index: 2100;
+}
+
+/* 2. Make the dialog white (like the other settings dialogs) */
+#search-engines-dialog {
+  background-color: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+/* 3. Style the buttons for a white background (Dark Text) */
+#search-engines-dialog .dialog-btn {
+  background-color: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #0f172a;
+}
+
+#search-engines-dialog .dialog-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* 4. Style the Primary (Save) button */
+#search-engines-dialog .dialog-btn.primary-btn {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+#search-engines-dialog .dialog-btn.primary-btn:hover {
+  background-color: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* 5. Tweak the list container inside the modal */
+#search-engines-modal-list {
+  background-color: #f8fafc !important; /* Light gray background */
+  border-color: #e2e8f0 !important;
+}
+
+#search-engines-modal-list .engine-toggle-item {
+  background-color: #ffffff;
+  border-color: #e2e8f0;
+}
+
 .gallery-header {
   display: flex;
   align-items: center;

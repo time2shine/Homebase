@@ -25,7 +25,10 @@
     "https://duckduckgo.com/ac/*",
     "https://api.bing.com/osjson.aspx*",
     "https://ff.search.yahoo.com/*",
-    "https://suggest.yandex.com/*"
+    "https://suggest.yandex.com/*",
+    
+    "https://en.wikipedia.org/*",
+    "https://completion.amazon.com/*"
   ],
 
   "web_accessible_resources": [

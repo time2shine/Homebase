@@ -298,6 +298,13 @@
                 <span class="app-switch-track"></span>
               </label>
             </div>
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Search Engines</div>
+                <div class="hint">Choose which engines appear in the dropdown.</div>
+              </div>
+              <button id="manage-search-engines-btn" class="gallery-secondary-btn">Configure</button>
+            </div>
           </section>
           <section class="app-settings-section" data-section="tabs">
             
@@ -311,8 +318,6 @@
                 <span class="app-switch-track"></span>
               </label>
             </div>
-
-            <div class="app-divider" style="margin: 20px 0;"></div>
 
             <div class="app-setting-row">
               <div class="app-setting-label">
@@ -769,6 +774,19 @@
     </div>
   </div>
 
+  <div id="search-engines-modal" class="modal-overlay">
+    <div id="search-engines-dialog" class="dialog-content glass-box" style="width: 420px; height: 500px; max-height: 85vh;">
+      <h3>Search Engines</h3>
+      
+      <div id="search-engines-modal-list" class="settings-list-grid" style="overflow-y: auto; flex: 1; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+      </div>
+
+      <div class="dialog-buttons">
+        <button id="search-engines-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="search-engines-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
 
   <script src="Sortable.min.js"></script>
   <script src="new-tab.js"></script>

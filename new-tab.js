@@ -861,6 +861,7 @@ const appAutoCloseSelect = document.getElementById('app-autoclose-select');
 const appSearchOpenNewTabToggle = document.getElementById('app-search-open-new-tab-toggle');
 const appSearchRememberEngineToggle = document.getElementById('app-search-remember-engine-toggle');
 const appSearchMathToggle = document.getElementById('app-search-math-toggle');
+const appSearchHistoryToggle = document.getElementById('app-search-history-toggle');
 const appSearchDefaultEngineContainer = document.getElementById('app-search-default-engine-container');
 const appSearchDefaultEngineSelect = document.getElementById('app-search-default-engine-select');
 const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-label') || 'Next Wallpaper';
@@ -880,6 +881,7 @@ const APP_SEARCH_OPEN_NEW_TAB_KEY = 'appSearchOpenNewTab';
 const APP_SEARCH_REMEMBER_ENGINE_KEY = 'appSearchRememberEngine';
 const APP_SEARCH_DEFAULT_ENGINE_KEY = 'appSearchDefaultEngine';
 const APP_SEARCH_MATH_KEY = 'appSearchMath';
+const APP_SEARCH_SHOW_HISTORY_KEY = 'appSearchShowHistory';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -898,6 +900,7 @@ let appSearchOpenNewTabPreference = false;
 let appSearchRememberEnginePreference = true;
 let appSearchDefaultEnginePreference = 'google';
 let appSearchMathPreference = true;
+let appSearchShowHistoryPreference = false;
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
@@ -3068,7 +3071,8 @@ async function loadAppSettingsFromStorage() {
       APP_SEARCH_OPEN_NEW_TAB_KEY,
       APP_SEARCH_REMEMBER_ENGINE_KEY,
       APP_SEARCH_DEFAULT_ENGINE_KEY,
-      APP_SEARCH_MATH_KEY
+      APP_SEARCH_MATH_KEY,
+      APP_SEARCH_SHOW_HISTORY_KEY
     ]);
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
@@ -3081,6 +3085,7 @@ async function loadAppSettingsFromStorage() {
       appSearchDefaultEnginePreference = stored[APP_SEARCH_DEFAULT_ENGINE_KEY];
     }
     appSearchMathPreference = stored[APP_SEARCH_MATH_KEY] !== false;
+    appSearchShowHistoryPreference = stored[APP_SEARCH_SHOW_HISTORY_KEY] === true;
 
     if (appSingletonModePreference) {
       await handleSingletonMode();
@@ -3232,6 +3237,9 @@ function syncAppSettingsForm() {
   if (appSearchMathToggle) {
     appSearchMathToggle.checked = appSearchMathPreference;
   }
+  if (appSearchHistoryToggle) {
+    appSearchHistoryToggle.checked = appSearchShowHistoryPreference;
+  }
   updateDefaultEngineVisibilityControl();
   const singletonToggle = document.getElementById('app-singleton-mode-toggle');
   if (singletonToggle) {
@@ -3312,6 +3320,7 @@ function setupAppSettingsModal() {
       const nextRememberEngine = appSearchRememberEngineToggle ? appSearchRememberEngineToggle.checked : true;
       const nextDefaultEngine = appSearchDefaultEngineSelect && appSearchDefaultEngineSelect.value ? appSearchDefaultEngineSelect.value : appSearchDefaultEnginePreference;
       const nextMath = appSearchMathToggle ? appSearchMathToggle.checked : true;
+      const nextSearchHistory = appSearchHistoryToggle ? appSearchHistoryToggle.checked : false;
 
       applyTimeFormatPreference(nextFormat);
       applySidebarVisibility(nextSidebarVisible);
@@ -3321,6 +3330,7 @@ function setupAppSettingsModal() {
       appSearchRememberEnginePreference = nextRememberEngine;
       appSearchDefaultEnginePreference = nextDefaultEngine;
       appSearchMathPreference = nextMath;
+      appSearchShowHistoryPreference = nextSearchHistory;
       appSingletonModePreference = nextSingletonMode;
       updateTime();
 
@@ -3333,6 +3343,7 @@ function setupAppSettingsModal() {
           [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
           [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
           [APP_SEARCH_MATH_KEY]: nextMath,
+          [APP_SEARCH_SHOW_HISTORY_KEY]: nextSearchHistory,
           [APP_SEARCH_DEFAULT_ENGINE_KEY]: nextDefaultEngine,
           [APP_SINGLETON_MODE_KEY]: nextSingletonMode
         });
@@ -4557,7 +4568,7 @@ async function handleSearchInput() {
         <div class="result-header">Calculator</div>
         <div class="result-item calc-item" data-copy="${displayResult}">
           <div class="calc-left">
-            <div class="calc-icon">🧮</div>
+            <div class="calc-icon">&#129518;</div>
             <div class="calc-text">
               <div class="calc-answer">${displayResult}</div>
               <div class="calc-expression">${safeQuery}</div>
@@ -4571,6 +4582,7 @@ async function handleSearchInput() {
 
   // --- B. Generate Bookmark HTML (Synchronous) ---
   let bookmarkHtml = '';
+  const shownUrls = new Set();
   const bookmarkResults = allBookmarks
     .filter(b => {
       const title = (b.title || '').toLowerCase();
@@ -4584,6 +4596,7 @@ async function handleSearchInput() {
     bookmarkResults.forEach(bookmark => {
       const bookmarkUrl = bookmark.url || '';
       if (!bookmarkUrl) return;
+      shownUrls.add(bookmarkUrl);
       let domain = '';
       try {
         domain = new URL(bookmarkUrl).hostname;
@@ -4638,25 +4651,70 @@ async function handleSearchInput() {
   applySelectionToCurrentResults(previousSelection, query.trim());
   updatePanelVisibility();
 
-  // --- E. Fetch Suggestions (Asynchronous) ---
-  let suggestionHtml = '';
-  const suggestionResults = await fetchSearchSuggestions(query.trim(), currentSearchEngine);
-  
-  if (suggestionResults === null) {
-    attachHoverSync();
-    return; // Aborted, do nothing
+  // --- E. Start Async Fetches (Parallel Optimization) ---
+  let historyPromise = Promise.resolve([]);
+  if (appSearchShowHistoryPreference && browser.history) {
+    const startTime = Date.now() - (90 * 24 * 60 * 60 * 1000);
+    historyPromise = browser.history.search({
+      text: query,
+      maxResults: 5,
+      startTime
+    }).catch(err => {
+      console.warn("History search failed", err);
+      return [];
+    });
   }
-  
+
+  const suggestionsPromise = fetchSearchSuggestions(query.trim(), currentSearchEngine);
+
+  const [historyResults, suggestionResults] = await Promise.all([historyPromise, suggestionsPromise]);
+
   if (isStaleSearch(currentToken, queryLower)) return;
 
+  // --- F. Build Bottom Section HTML (History + Suggestions) ---
+  let bottomHtml = '';
+
+  // 1. Render History (Deduped)
+  if (historyResults.length > 0) {
+    const uniqueHistory = historyResults.filter(item => !shownUrls.has(item.url));
+
+    if (uniqueHistory.length > 0) {
+      bottomHtml += `<div class="result-header">Recent History</div>`;
+      uniqueHistory.forEach(item => {
+        const url = item.url;
+        const title = item.title || url;
+        const safeUrl = escapeHtml(url);
+        const safeTitle = escapeHtml(title);
+
+        const clockIcon = `<svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"></path></svg>`;
+
+        bottomHtml += `
+          <button type="button" class="result-item result-item-history" data-url="${safeUrl}">
+            ${clockIcon}
+            <div class="result-item-info">
+              <strong class="result-label">${safeTitle}</strong>
+            </div>
+          </button>
+        `;
+      });
+    }
+  }
+
+  // Abort if aborted (fetchSearchSuggestions returns null on abort)
+  if (suggestionResults === null) {
+    attachHoverSync();
+    return;
+  }
+
+  // 2. Render Suggestions
   if (suggestionResults && suggestionResults.length > 0) {
     const safeQuery = escapeHtml(query);
     const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
     const safeSearchUrl = escapeHtml(searchUrl);
-    suggestionHtml += `<div class="result-header">${currentSearchEngine.name} Search</div>`;
-    
-    // Add "Search for..."
-    suggestionHtml += `
+
+    bottomHtml += `<div class="result-header">${currentSearchEngine.name} Search</div>`;
+
+    bottomHtml += `
       <button type="button" class="result-item result-item-suggestion" data-url="${safeSearchUrl}">
         <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
         <div class="result-item-info">
@@ -4664,14 +4722,13 @@ async function handleSearchInput() {
         </div>
       </button>
     `;
-    
-    // Add fetched suggestions (UP TO 10)
+
     suggestionResults.slice(0, 10).forEach(suggestion => {
       if (suggestion.toLowerCase() === query.toLowerCase()) return;
       const safeSuggestion = escapeHtml(suggestion);
       const suggestionUrl = `${currentSearchEngine.url}${encodeURIComponent(suggestion)}`;
       const safeSuggestionUrl = escapeHtml(suggestionUrl);
-      suggestionHtml += `
+      bottomHtml += `
         <button type="button" class="result-item result-item-suggestion" data-url="${safeSuggestionUrl}">
           <svg class="suggestion-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
           <div class="result-item-info">
@@ -4682,12 +4739,12 @@ async function handleSearchInput() {
     });
   }
 
-  // --- F. Final Render of Suggestions ---
-  if (suggestionHtml !== lastSuggestionHtml) {
+  // --- G. Final Render ---
+  if (bottomHtml !== lastSuggestionHtml) {
     const prevScroll = suggestionResultsContainer.scrollTop;
-    suggestionResultsContainer.innerHTML = suggestionHtml;
+    suggestionResultsContainer.innerHTML = bottomHtml;
     suggestionResultsContainer.scrollTop = prevScroll;
-    lastSuggestionHtml = suggestionHtml;
+    lastSuggestionHtml = bottomHtml;
   }
 
   applySelectionToCurrentResults(previousSelection, query.trim());

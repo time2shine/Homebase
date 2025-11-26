@@ -20,6 +20,7 @@
     "tabs",
     "storage",
     "bookmarks",
+    "history",
     
     "https://suggestqueries.google.com/*",
     "https://duckduckgo.com/ac/*",

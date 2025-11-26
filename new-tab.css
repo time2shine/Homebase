@@ -412,6 +412,35 @@ body.sidebar-collapsed .collapsed-clock-slot {
   100% { transform: scale(1); }
 }
 
+.calculator-result {
+  background-color: rgba(44, 165, 255, 0.08);
+  border-bottom: 1px solid rgba(44, 165, 255, 0.2);
+}
+
+.calculator-result .result-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 20px;
+}
+
+.calculator-result .copy-btn {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.8em;
+  cursor: pointer;
+  color: #333;
+}
+
+.calculator-result .copy-btn:hover {
+  background: #f0f0f0;
+  border-color: #ccc;
+}
+
 #search-select {
   background: #f0f0f0;
   border-radius: 5px;

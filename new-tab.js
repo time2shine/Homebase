@@ -4635,12 +4635,12 @@ async function handleSearchInput() {
     });
   }
 
-  if (suggestionHtml !== lastSuggestionHtml) {
+  const finalHtml = `${calcHtml}${suggestionHtml}`;
+  if (finalHtml !== lastSuggestionHtml) {
     const prevScroll = suggestionResultsContainer.scrollTop;
-    const combined = `${calcHtml}${suggestionHtml}`;
-    suggestionResultsContainer.innerHTML = combined;
+    suggestionResultsContainer.innerHTML = finalHtml;
     suggestionResultsContainer.scrollTop = prevScroll;
-    lastSuggestionHtml = combined;
+    lastSuggestionHtml = finalHtml;
   }
 
   applySelectionToCurrentResults(previousSelection, query.trim());

@@ -3355,6 +3355,9 @@ function setupSearchEnginesModal() {
 
   const renderList = () => {
     listContainer.innerHTML = '';
+    
+    // Sort engines: enabled first, then disabled (optional, but good UX) 
+    // or just keep original order. Here we use the current 'searchEngines' order.
     searchEngines.forEach((engine) => {
       const div = document.createElement('div');
       div.className = 'engine-toggle-item';
@@ -3369,6 +3372,23 @@ function setupSearchEnginesModal() {
           <span class="app-switch-track"></span>
         </label>
       `;
+
+      // --- NEW FEATURE: Prevent Disabling Last Engine ---
+      const checkbox = div.querySelector('.engine-toggle-checkbox');
+      checkbox.addEventListener('change', (e) => {
+        // Count how many are CURRENTLY checked in the DOM
+        const allCheckboxes = listContainer.querySelectorAll('.engine-toggle-checkbox');
+        const checkedCount = Array.from(allCheckboxes).filter(cb => cb.checked).length;
+
+        if (checkedCount === 0) {
+          // If the user just unchecked the last one, revert it immediately
+          e.preventDefault();
+          checkbox.checked = true;
+          showCustomAlert("You must have at least one search engine enabled.");
+        }
+      });
+      // --------------------------------------------------
+
       listContainer.appendChild(div);
     });
 
@@ -3376,7 +3396,7 @@ function setupSearchEnginesModal() {
     if (engineSortable) engineSortable.destroy();
     engineSortable = Sortable.create(listContainer, {
       animation: 150,
-      handle: '.engine-toggle-main', // Drag using the text/icon area
+      handle: '.engine-toggle-main',
       ghostClass: 'sortable-ghost-engine'
     });
   };
@@ -3959,6 +3979,41 @@ function hideSearchResultsPanel() {
   selectionWasAuto = false;
 }
 
+function cycleSearchEngine(direction) {
+  const activeEngines = searchEngines.filter((eng) => eng.enabled);
+  if (activeEngines.length < 2) return;
+
+  let currentIndex = activeEngines.findIndex((eng) => eng.id === currentSearchEngine.id);
+  if (currentIndex === -1) currentIndex = 0;
+
+  const delta = direction === 'down' ? 1 : -1;
+  const nextIndex = (currentIndex + delta + activeEngines.length) % activeEngines.length;
+  const nextEngine = activeEngines[nextIndex];
+
+  updateSearchUI(nextEngine.id);
+  handleSearchChange();
+
+  const input = document.getElementById('search-input');
+  if (input) input.focus();
+
+  const selector = document.getElementById('search-engine-selector');
+  if (selector) {
+    selector.classList.remove('suppress-hover');
+    selector.classList.add('expanded');
+
+    if (selector.dataset.collapseTimeout) {
+      clearTimeout(parseInt(selector.dataset.collapseTimeout));
+    }
+
+    const timeoutId = setTimeout(() => {
+      selector.classList.remove('expanded');
+      selector.classList.add('suppress-hover');
+    }, 1500);
+
+    selector.dataset.collapseTimeout = timeoutId;
+  }
+}
+
 async function setupSearch() {
   await loadSearchEnginePreferences();
 
@@ -4008,37 +4063,7 @@ async function setupSearch() {
     // --- 1. Global Alt + Arrow Up/Down for Search Engine Switching ---
     if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       e.preventDefault();
-      
-      const activeEngines = searchEngines.filter((eng) => eng.enabled);
-      if (activeEngines.length < 2) return;
-
-      let currentIndex = activeEngines.findIndex((eng) => eng.id === currentSearchEngine.id);
-      if (currentIndex === -1) currentIndex = 0;
-
-      const delta = e.key === 'ArrowDown' ? 1 : -1;
-      const nextIndex = (currentIndex + delta + activeEngines.length) % activeEngines.length;
-      const nextEngine = activeEngines[nextIndex];
-
-      updateSearchUI(nextEngine.id);
-      handleSearchChange();
-
-      // Focus the input immediately
-      searchInput.focus();
-
-      // Trigger Visual Expansion
-      const selector = document.getElementById('search-engine-selector');
-      if (selector) {
-        selector.classList.remove('suppress-hover'); // Ensure it opens first
-        selector.classList.add('expanded');
-        if (selector.dataset.collapseTimeout) {
-          clearTimeout(parseInt(selector.dataset.collapseTimeout));
-        }
-        const timeoutId = setTimeout(() => {
-          selector.classList.remove('expanded');
-          selector.classList.add('suppress-hover'); // Force collapse even if mouse is over
-        }, 1500);
-        selector.dataset.collapseTimeout = timeoutId;
-      }
+      cycleSearchEngine(e.key === 'ArrowDown' ? 'down' : 'up');
       return;
     }
 
@@ -4351,38 +4376,7 @@ function handleSearchKeydown(e) {
 
   if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && searchWidget.contains(e.target)) {
     e.preventDefault();
-    const activeEngines = searchEngines.filter((eng) => eng.enabled);
-    if (activeEngines.length < 2) return;
-
-    let currentIndex = activeEngines.findIndex((eng) => eng.id === currentSearchEngine.id);
-    if (currentIndex === -1) currentIndex = 0;
-
-    const delta = e.key === 'ArrowDown' ? 1 : -1;
-    const nextIndex = (currentIndex + delta + activeEngines.length) % activeEngines.length;
-    const nextEngine = activeEngines[nextIndex];
-    updateSearchUI(nextEngine.id);
-    handleSearchChange();
-
-    // --- NEW: Visual Expansion Logic ---
-    const selector = document.getElementById('search-engine-selector');
-    if (selector) {
-      selector.classList.remove('suppress-hover'); // Ensure it opens first
-      selector.classList.add('expanded');
-
-      // Clear existing timeout to keep it open while cycling
-      if (selector.dataset.collapseTimeout) {
-        clearTimeout(parseInt(selector.dataset.collapseTimeout));
-      }
-
-      // Auto-collapse after 1.5 seconds of inactivity
-      const timeoutId = setTimeout(() => {
-        selector.classList.remove('expanded');
-        selector.classList.add('suppress-hover'); // Force collapse
-      }, 1500);
-
-      selector.dataset.collapseTimeout = timeoutId;
-    }
-    // -----------------------------------
+    cycleSearchEngine(e.key === 'ArrowDown' ? 'down' : 'up');
     return;
   }
 
@@ -5169,6 +5163,30 @@ async function fetchWeather(lat, lon, units, cityName) {
   }
 }
 
+
+function showCustomAlert(message) {
+  const modal = document.getElementById('custom-alert-modal');
+  const msgElement = document.getElementById('custom-alert-message');
+  const okBtn = document.getElementById('custom-alert-ok-btn');
+
+  if (!modal || !msgElement || !okBtn) return;
+
+  msgElement.textContent = message;
+  modal.style.display = 'flex';
+
+  const closeAlert = () => {
+    modal.style.display = 'none';
+    okBtn.removeEventListener('click', closeAlert);
+  };
+
+  okBtn.addEventListener('click', closeAlert);
+
+  modal.onclick = (e) => {
+    if (e.target === modal) closeAlert();
+  };
+
+  okBtn.focus();
+}
 
 // message is optional; options can contain { title, faviconUrl, isFolder }
 function showDeleteConfirm(message, options = {}) {

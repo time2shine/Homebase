@@ -3839,6 +3839,44 @@ input:checked + .slider:before {
   opacity: 0.9;
 }
 
+/* ======================================= */
+/* --- CUSTOM ALERT MODAL (Solid White) --- */
+/* ======================================= */
+
+/* 1. Ensure it sits on top of everything (Search Engines modal is 2100) */
+#custom-alert-modal {
+  z-index: 2300;
+  background-color: rgba(0, 0, 0, 0.4); /* Dim the background slightly */
+}
+
+/* 2. Override Glass Box to be Solid White, matching Settings Page */
+#custom-alert-dialog {
+  background-color: #ffffff;     /* Solid White */
+  color: #0f172a;                /* Dark Slate Text */
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); /* Strong shadow for depth */
+  border-radius: 20px;           /* Round edges */
+  
+  /* Disable glass effects */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* 3. Style the OK button to match Settings 'Save' button */
+#custom-alert-dialog .dialog-btn.primary-btn {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+  min-width: 80px;
+  font-weight: 600;
+}
+
+#custom-alert-dialog .dialog-btn.primary-btn:hover {
+  background-color: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* 4. Restore the accessibility media query (Optional, keeps existing logic for other elements) */
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --glass-blur: 0px;

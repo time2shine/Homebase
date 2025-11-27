@@ -3757,16 +3757,46 @@ function escapeHtml(unsafe) {
     .replace(/'/g, '&#039;');
 }
 
+function ensureEngineIconExists(engine) {
+  const container = document.getElementById('search-engine-selector');
+  if (!container) return;
+  const list = container.querySelector('.search-engine-list');
+  if (!list) return;
+
+  let btn = list.querySelector(`.engine-icon-btn[data-engine-id="${engine.id}"]`);
+  if (btn) return;
+
+  btn = document.createElement('div');
+  btn.className = 'engine-icon-btn';
+  btn.dataset.engineId = engine.id;
+  btn.style.setProperty('--engine-color', engine.color || '#333');
+
+  const iconHtml = engine.icon || `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
+  btn.innerHTML = `<span class="tooltip">${engine.name}</span>${iconHtml}`;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    updateSearchUI(engine.id);
+    const selector = document.getElementById('search-engine-selector');
+    if (selector) {
+      selector.classList.remove('expanded');
+      selector.classList.add('suppress-hover');
+    }
+    if (searchInput) searchInput.focus();
+  });
+
+  list.appendChild(btn);
+}
+
 function updateSearchSelectorPosition() {
   const container = document.getElementById('search-engine-selector');
   const list = container ? container.querySelector('.search-engine-list') : null;
   if (!container || !list) return;
 
-  const activeEngines = searchEngines.filter(e => e.enabled);
-  if (activeEngines.length === 0) return;
+  const allButtons = Array.from(list.querySelectorAll('.engine-icon-btn'));
+  if (allButtons.length === 0) return;
 
-  // Find index of currently selected engine
-  const currentIndex = activeEngines.findIndex(e => e.id === currentSearchEngine.id);
+  const currentIndex = allButtons.findIndex(btn => btn.dataset.engineId === currentSearchEngine.id);
   if (currentIndex === -1) return;
 
   // Constants matching CSS
@@ -3779,7 +3809,7 @@ function updateSearchSelectorPosition() {
   // Offset = currentIndex * itemFullWidth
   // We clamp this so we don't scroll past the start (0) or end.
   
-  const maxOffset = Math.max(0, (activeEngines.length - visibleCount) * itemFullWidth);
+  const maxOffset = Math.max(0, (allButtons.length - visibleCount) * itemFullWidth);
   let offset = currentIndex * itemFullWidth;
 
   // Clamp
@@ -3884,11 +3914,12 @@ function populateSearchOptions() {
 }
 function updateSearchUI(engineId) {
   let engine = searchEngines.find((e) => e.id === engineId);
-  if (!engine || !engine.enabled) {
+  if (!engine) {
     engine = searchEngines.find((e) => e.enabled) || searchEngines[0];
   }
 
   currentSearchEngine = engine;
+  ensureEngineIconExists(currentSearchEngine);
   searchInput.placeholder = `Search with ${currentSearchEngine.name}`;
   if (searchSelect) {
     const previousValue = searchSelect.value;
@@ -4153,7 +4184,7 @@ function executeSearch(query) {
     const rawBang = bangMatch[1].toLowerCase();
     const bangQuery = bangMatch[2].trim();
     const engineId = bangMap[rawBang] || rawBang;
-    const matchingEngine = searchEngines.find((e) => e.id.toLowerCase() === engineId && e.enabled);
+    const matchingEngine = searchEngines.find((e) => e.id.toLowerCase() === engineId);
     if (matchingEngine && bangQuery) {
       updateSearchUI(matchingEngine.id);
       effectiveQuery = bangQuery;
@@ -4354,6 +4385,14 @@ function handleSearchResultClick(e) {
   if (!target) return;
   e.preventDefault();
 
+  const bangInsert = target.dataset.bangInsert;
+  if (bangInsert) {
+    searchInput.value = bangInsert;
+    searchInput.focus();
+    handleSearchInput();
+    return;
+  }
+
   if (searchNavigationLocked) return;
   searchNavigationLocked = true;
 
@@ -4480,6 +4519,13 @@ function handleSearchKeydown(e) {
       if (selected && (selected.classList.contains('calculator-result') || selected.classList.contains('calc-item'))) {
         const copyBtn = selected.querySelector('.copy-btn, .calc-copy');
         if (copyBtn) copyBtn.click();
+        return;
+      }
+
+      if (selected && selected.dataset.bangInsert) {
+        searchInput.value = selected.dataset.bangInsert;
+        searchInput.focus();
+        handleSearchInput();
         return;
       }
 
@@ -4635,7 +4681,7 @@ function applySelectionToCurrentResults(snapshot = null, query = '') {
 }
 
 function isStaleSearch(token, queryLower) {
-  return token !== latestSearchToken || queryLower !== searchInput.value.toLowerCase().trim();
+  return token !== latestSearchToken || queryLower !== searchInput.value.toLowerCase();
 }
 
 async function loadSearchEnginePreferences() {
@@ -4798,6 +4844,36 @@ async function fetchSearchSuggestions(query, engine) {
   }
 }
 
+function getBangSuggestions(query) {
+  const term = query.substring(1).toLowerCase().trim();
+  const matches = [];
+  const seenIds = new Set();
+
+  Object.entries(bangMap).forEach(([bang, engineId]) => {
+    if (bang.startsWith(term)) {
+      const engine = searchEngines.find(e => e.id === engineId);
+      if (engine) {
+        matches.push({ bang, engine });
+        seenIds.add(engineId);
+      }
+    }
+  });
+
+  searchEngines.forEach(engine => {
+    const isMatch = engine.id.startsWith(term);
+
+    if (isMatch && !matches.find(m => m.engine.id === engine.id && m.bang === engine.id) && !seenIds.has(engine.id)) {
+      matches.push({ bang: engine.id, engine });
+    }
+  });
+
+  return matches.sort((a, b) => {
+    if (a.bang === term) return -1;
+    if (b.bang === term) return 1;
+    return a.bang.localeCompare(b.bang);
+  });
+}
+
 // Helper function to show/hide the main panel
 function updatePanelVisibility() {
   const hasBookmarks = bookmarkResultsContainer.innerHTML.trim().length > 0;
@@ -4820,28 +4896,65 @@ async function handleSearchInput() {
     currentSectionIndex = previousSelection.sectionIndex;
   }
   const query = searchInput.value;
-  const queryLower = query.toLowerCase().trim();
-  const queryTerms = queryLower.split(/\s+/).filter(Boolean);
+  const queryLower = query.toLowerCase(); 
+  
+  // =========================================================
+  // 1. ICON UPDATE LOGIC (Moved to Top & Fixed)
+  // =========================================================
+  const bangMatch = query.match(/^!(\S+)/); // Match "!something"
+  let targetEngineId = null;
+
+  if (bangMatch) {
+    const rawBang = bangMatch[1].toLowerCase();
+    const mappedId = bangMap[rawBang] || rawBang;
+    
+    const engine = searchEngines.find(e => e.id === mappedId);
+    
+    if (engine) {
+      targetEngineId = engine.id;
+    }
+  }
+
+  if (targetEngineId) {
+    if (currentSearchEngine.id !== targetEngineId) {
+      updateSearchUI(targetEngineId);
+    }
+  } 
+  else {
+    if (!queryLower.startsWith('!') || queryLower.trim().length === 0) {
+       const savedId = appSearchRememberEnginePreference
+        ? (await browser.storage.local.get('currentSearchEngineId')).currentSearchEngineId
+        : appSearchDefaultEnginePreference;
+      
+      const targetId = savedId || 'google';
+      
+      if (currentSearchEngine.id !== targetId) {
+        updateSearchUI(targetId);
+      }
+    }
+  }
+  // =========================================================
+
+  const isBangSearch = queryLower.startsWith('!') && !queryLower.includes(' ');
   const currentToken = ++latestSearchToken;
 
-  // 1. Handle empty query
-  if (queryLower.length === 0) {
+  // 2. Handle empty query
+  if (queryLower.trim().length === 0) {
     clearSearchUI({ clearInput: false, abortSuggestions: true });
     return;
   }
   
   searchAreaWrapper.classList.add('search-focused');
 
-  // --- A. Generate Calculator HTML (Synchronous) ---
+  // --- A. Generate Calculator HTML ---
   let calcHtml = '';
-  if (appSearchMathPreference) {
-    const mathResult = evaluateMath(queryLower);
-    const unitResult = mathResult === null ? evaluateUnits(queryLower) : null;
+  if (appSearchMathPreference && !isBangSearch) {
+    const mathResult = evaluateMath(queryLower.trim());
+    const unitResult = mathResult === null ? evaluateUnits(queryLower.trim()) : null;
     const finalResult = mathResult !== null ? mathResult : unitResult;
 
     if (finalResult !== null) {
       const displayResult = escapeHtml(String(finalResult));
-      const safeQuery = escapeHtml(query);
       calcHtml = `
         <div class="result-header">Calculator</div>
         <div class="result-item calc-item" data-copy="${displayResult}">
@@ -4849,7 +4962,7 @@ async function handleSearchInput() {
             <div class="calc-icon">&#129518;</div>
             <div class="calc-text">
               <div class="calc-answer">${displayResult}</div>
-              <div class="calc-expression">${safeQuery}</div>
+              <div class="calc-expression">${escapeHtml(query)}</div>
             </div>
           </div>
           <button class="calc-copy" data-copy="${displayResult}">Copy</button>
@@ -4858,117 +4971,33 @@ async function handleSearchInput() {
     }
   }
 
-  // --- B. Generate Bookmark HTML (Synchronous) ---
+  // --- B. Generate Bookmark HTML ---
   let bookmarkHtml = '';
   const shownUrls = new Set();
-  const bookmarkResults = allBookmarks
-    .filter(b => {
-      const title = (b.title || '').toLowerCase();
-      const url = (b.url || '').toLowerCase();
-      return queryTerms.every(term => title.includes(term) || url.includes(term));
-    })
-    .slice(0, 5);
+  
+  if (!isBangSearch) {
+    const queryTerms = queryLower.trim().split(/\s+/).filter(Boolean);
+    const bookmarkResults = allBookmarks
+      .filter(b => {
+        const title = (b.title || '').toLowerCase();
+        const url = (b.url || '').toLowerCase();
+        return queryTerms.every(term => title.includes(term) || url.includes(term));
+      })
+      .slice(0, 5);
 
-  if (bookmarkResults.length > 0) {
-    bookmarkHtml += '<div class="result-header">Bookmarks</div>';
-    bookmarkResults.forEach(bookmark => {
-      const bookmarkUrl = bookmark.url || '';
-      if (!bookmarkUrl) return;
-      shownUrls.add(bookmarkUrl);
-      let domain = '';
-      try {
-        domain = new URL(bookmarkUrl).hostname;
-      } catch (err) {
-        domain = '';
-      }
-      const safeTitle = escapeHtml(bookmark.title || 'No Title');
-      const safeUrl = escapeHtml(bookmarkUrl);
-      bookmarkHtml += `
-        <button type="button" class="result-item" data-url="${safeUrl}">
-          <img src="https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64" alt="">
-          <div class="result-item-info">
-            <strong class="result-label">${safeTitle}</strong>
-          </div>
-        </button>
-      `;
-    });
-  }
-
-  // --- C. Handle Bangs (Synchronous) ---
-  const bangMatch = query.match(/^!(\S+)/);
-  let tempEngine = null;
-  if (bangMatch) {
-    const rawBang = bangMatch[1].toLowerCase();
-    const engineId = bangMap[rawBang] || rawBang;
-    tempEngine = searchEngines.find((e) => e.id === engineId && e.enabled);
-  }
-
-  if (tempEngine) {
-    if (currentSearchEngine.id !== tempEngine.id) {
-      updateSearchUI(tempEngine.id);
-    }
-  } else {
-    const savedId = appSearchRememberEnginePreference
-      ? (await browser.storage.local.get('currentSearchEngineId')).currentSearchEngineId
-      : appSearchDefaultEnginePreference;
-    const targetId = savedId || 'google';
-    if (currentSearchEngine.id !== targetId) {
-      updateSearchUI(targetId);
-    }
-  }
-
-  if (isStaleSearch(currentToken, queryLower)) return;
-
-  // --- D. Render Calculator + Bookmarks immediately ---
-  const topSectionHtml = calcHtml + bookmarkHtml;
-  if (topSectionHtml !== lastBookmarkHtml) {
-    bookmarkResultsContainer.innerHTML = topSectionHtml;
-    lastBookmarkHtml = topSectionHtml;
-  }
-
-  applySelectionToCurrentResults(previousSelection, query.trim());
-  updatePanelVisibility();
-
-  // --- E. Start Async Fetches (Parallel Optimization) ---
-  let historyPromise = Promise.resolve([]);
-  if (appSearchShowHistoryPreference && browser.history) {
-    const startTime = Date.now() - (90 * 24 * 60 * 60 * 1000);
-    historyPromise = browser.history.search({
-      text: query,
-      maxResults: 5,
-      startTime
-    }).catch(err => {
-      console.warn("History search failed", err);
-      return [];
-    });
-  }
-
-  const suggestionsPromise = fetchSearchSuggestions(query.trim(), currentSearchEngine);
-
-  const [historyResults, suggestionResults] = await Promise.all([historyPromise, suggestionsPromise]);
-
-  if (isStaleSearch(currentToken, queryLower)) return;
-
-  // --- F. Build Bottom Section HTML (History + Suggestions) ---
-  let bottomHtml = '';
-  const searchIcon = ICONS.search || '';
-  const clockIcon = ICONS.historyClock || '';
-
-  // 1. Render History (Deduped)
-  if (historyResults.length > 0) {
-    const uniqueHistory = historyResults.filter(item => !shownUrls.has(item.url));
-
-    if (uniqueHistory.length > 0) {
-      bottomHtml += `<div class="result-header">Recent History</div>`;
-      uniqueHistory.forEach(item => {
-        const url = item.url;
-        const title = item.title || url;
-        const safeUrl = escapeHtml(url);
-        const safeTitle = escapeHtml(title);
-
-        bottomHtml += `
-          <button type="button" class="result-item result-item-history" data-url="${safeUrl}">
-            ${clockIcon}
+    if (bookmarkResults.length > 0) {
+      bookmarkHtml += '<div class="result-header">Bookmarks</div>';
+      bookmarkResults.forEach(bookmark => {
+        const bookmarkUrl = bookmark.url || '';
+        if (!bookmarkUrl) return;
+        shownUrls.add(bookmarkUrl);
+        let domain = '';
+        try { domain = new URL(bookmarkUrl).hostname; } catch (err) {}
+        const safeTitle = escapeHtml(bookmark.title || 'No Title');
+        const safeUrl = escapeHtml(bookmarkUrl);
+        bookmarkHtml += `
+          <button type="button" class="result-item" data-url="${safeUrl}">
+            <img src="https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64" alt="">
             <div class="result-item-info">
               <strong class="result-label">${safeTitle}</strong>
             </div>
@@ -4978,22 +5007,107 @@ async function handleSearchInput() {
     }
   }
 
-  // Abort if aborted (fetchSearchSuggestions returns null on abort)
+  // --- C. Handle Bang Autocomplete Dropdown ---
+  if (isBangSearch) {
+    const bangSuggestions = getBangSuggestions(queryLower);
+    
+    suggestionResultsContainer.innerHTML = '';
+    
+    let bangHtml = `<div class="result-header">Bang Shortcuts</div>`;
+    
+    if (bangSuggestions.length === 0) {
+      bangHtml += `<div class="result-item"><div class="result-item-info" style="justify-content:center; color:#888;">No matching bangs</div></div>`;
+    } else {
+      bangSuggestions.forEach(item => {
+        const safeName = escapeHtml(item.engine.name);
+        const bangCode = `!${item.bang}`;
+        bangHtml += `
+          <button type="button" class="result-item" data-bang-insert="${bangCode} ">
+            <span class="bang-badge">${bangCode}</span>
+            ${item.engine.icon || ''}
+            <div class="result-item-info">
+              <strong class="result-label">${safeName}</strong>
+            </div>
+          </button>
+        `;
+      });
+    }
+    
+    suggestionResultsContainer.innerHTML = bangHtml;
+    
+    bookmarkResultsContainer.innerHTML = ''; 
+    lastBookmarkHtml = '';
+    lastSuggestionHtml = bangHtml;
+    
+    applySelectionToCurrentResults(null, query); 
+    updatePanelVisibility();
+    return;
+  }
+
+  if (isStaleSearch(currentToken, queryLower)) return;
+
+  const topSectionHtml = calcHtml + bookmarkHtml;
+  if (topSectionHtml !== lastBookmarkHtml) {
+    bookmarkResultsContainer.innerHTML = topSectionHtml;
+    lastBookmarkHtml = topSectionHtml;
+  }
+
+  applySelectionToCurrentResults(previousSelection, query.trim());
+  updatePanelVisibility();
+
+  // --- E. Start Async Fetches (Standard History/Suggestions) ---
+  let historyPromise = Promise.resolve([]);
+  if (appSearchShowHistoryPreference && browser.history) {
+    const startTime = Date.now() - (90 * 24 * 60 * 60 * 1000);
+    historyPromise = browser.history.search({
+      text: query,
+      maxResults: 5,
+      startTime
+    }).catch(err => []);
+  }
+
+  const suggestionsPromise = fetchSearchSuggestions(query.trim(), currentSearchEngine);
+
+  const [historyResults, suggestionResults] = await Promise.all([historyPromise, suggestionsPromise]);
+
+  if (isStaleSearch(currentToken, queryLower)) return;
+
+  // --- F. Build Bottom Section HTML ---
+  let bottomHtml = '';
+  const searchIcon = ICONS.search || '';
+  const clockIcon = ICONS.historyClock || '';
+
+  if (historyResults.length > 0) {
+    const uniqueHistory = historyResults.filter(item => !shownUrls.has(item.url));
+    if (uniqueHistory.length > 0) {
+      bottomHtml += `<div class="result-header">Recent History</div>`;
+      uniqueHistory.forEach(item => {
+        const url = item.url;
+        const title = item.title || url;
+        bottomHtml += `
+          <button type="button" class="result-item result-item-history" data-url="${escapeHtml(url)}">
+            ${clockIcon}
+            <div class="result-item-info">
+              <strong class="result-label">${escapeHtml(title)}</strong>
+            </div>
+          </button>
+        `;
+      });
+    }
+  }
+
   if (suggestionResults === null) {
     attachHoverSync();
     return;
   }
 
-  // 2. Render Suggestions
   if (suggestionResults && suggestionResults.length > 0) {
     const safeQuery = escapeHtml(query);
     const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
-    const safeSearchUrl = escapeHtml(searchUrl);
-
+    
     bottomHtml += `<div class="result-header">${currentSearchEngine.name} Search</div>`;
-
     bottomHtml += `
-      <button type="button" class="result-item result-item-suggestion" data-url="${safeSearchUrl}">
+      <button type="button" class="result-item result-item-suggestion" data-url="${escapeHtml(searchUrl)}">
         ${searchIcon}
         <div class="result-item-info">
           <strong class="result-label">${safeQuery}</strong>
@@ -5005,9 +5119,8 @@ async function handleSearchInput() {
       if (suggestion.toLowerCase() === query.toLowerCase()) return;
       const safeSuggestion = escapeHtml(suggestion);
       const suggestionUrl = `${currentSearchEngine.url}${encodeURIComponent(suggestion)}`;
-      const safeSuggestionUrl = escapeHtml(suggestionUrl);
       bottomHtml += `
-        <button type="button" class="result-item result-item-suggestion" data-url="${safeSuggestionUrl}">
+        <button type="button" class="result-item result-item-suggestion" data-url="${escapeHtml(suggestionUrl)}">
           ${searchIcon}
           <div class="result-item-info">
             <strong class="result-label">${safeSuggestion}</strong>
@@ -5017,11 +5130,8 @@ async function handleSearchInput() {
     });
   }
 
-  // --- G. Final Render ---
   if (bottomHtml !== lastSuggestionHtml) {
-    const prevScroll = suggestionResultsContainer.scrollTop;
     suggestionResultsContainer.innerHTML = bottomHtml;
-    suggestionResultsContainer.scrollTop = prevScroll;
     lastSuggestionHtml = bottomHtml;
   }
 

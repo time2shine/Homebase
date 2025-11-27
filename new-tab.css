@@ -411,21 +411,25 @@ body.sidebar-collapsed .collapsed-clock-slot {
   /* Define spacing variables */
   --icon-size: 36px;
   --icon-gap: 6px;
-  --visible-count: 3; /* Default collapsed count */
+  --visible-count: 1; /* CHANGED: Show only 1 icon */
   
-  /* Calculate collapsed width dynamically: (3 * 36) + (2 * 6) = 120px */
+  /* Calculate collapsed width dynamically */
   --collapsed-width: calc((var(--icon-size) * var(--visible-count)) + (var(--icon-gap) * (var(--visible-count) - 1)));
   
   height: var(--icon-size);
   width: var(--collapsed-width);
   
-  margin-right: 10px; /* Space between selector and divider */
+  /* === CHANGE START: Add Left Margin === */
+  margin-left: 8px;   /* Adds padding from the left edge */
+  margin-right: 10px; 
+  /* === CHANGE END === */
   position: relative;
-  overflow: hidden; /* Masks the list */
+  overflow: hidden; /* Default: Mask content */
   flex-shrink: 0;   /* Prevent shrinking */
   
   /* Smoothly animate width to push the search text */
-  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  /* When collapsing: Hide overflow IMMEDIATELY (0s delay) so content doesn't bleed out */
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), overflow 0s linear 0s;
   
   /* Fix for z-index to ensure tooltips (if any) work, though overflow:hidden clips them usually. 
      For an inline sliding list, clipping tooltips is standard behavior unless we use a very complex portal. 
@@ -454,6 +458,9 @@ body.sidebar-collapsed .collapsed-clock-slot {
 .search-engine-selector.expanded {
   /* Expand to show ALL items. Variable is set by JS. */
   width: var(--expanded-width, 200px);
+  overflow: visible; /* ALLOW TOOLTIPS TO POP OUT */
+  /* When expanding: Wait 0.3s (duration of width anim) before showing overflow */
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), overflow 0s linear 0.3s;
 }
 
 /* When expanded, reset the slide so we see 1, 2, 3, 4... in order */
@@ -548,6 +555,65 @@ body.sidebar-collapsed .collapsed-clock-slot {
 
 #search-select:focus {
   outline: none;
+}
+
+/* --- Tooltip Styles --- */
+.engine-icon-btn .tooltip {
+  position: absolute;
+  top: 0;
+  font-size: 14px;
+  background: #fff; /* Fallback */
+  color: #fff;
+  padding: 5px 8px;
+  border-radius: 5px;
+  box-shadow: 0 10px 10px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  z-index: 1000;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.engine-icon-btn .tooltip::before {
+  position: absolute;
+  content: "";
+  height: 8px;
+  width: 8px;
+  background: #fff; /* Fallback */
+  bottom: -3px;
+  left: 50%;
+  transform: translate(-50%) rotate(45deg);
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Show Tooltip on Hover */
+.engine-icon-btn:hover .tooltip {
+  top: -38px;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Show Active Tooltip ONLY when container is explicitly expanded (Keyboard nav) */
+.search-engine-selector.expanded .engine-icon-btn.active .tooltip {
+  top: -45px;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Dynamic Color Matching using the variable set in JS */
+.engine-icon-btn:hover .tooltip,
+.search-engine-selector.expanded .engine-icon-btn.active .tooltip {
+  background: var(--engine-color, #333);
+  text-shadow: 0px -1px 0px rgba(0, 0, 0, 0.1);
+}
+
+.engine-icon-btn:hover .tooltip::before,
+.search-engine-selector.expanded .engine-icon-btn.active .tooltip::before {
+  background: var(--engine-color, #333);
 }
 
 .calculator-result {

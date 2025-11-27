@@ -3473,6 +3473,7 @@ let searchEngines = [
   { 
     id: 'google', 
     name: 'Google', 
+    color: '#4285F4',
     enabled: true, 
     url: 'https://www.google.com/search?q=', 
     suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=',
@@ -3481,6 +3482,7 @@ let searchEngines = [
   { 
     id: 'youtube', 
     name: 'YouTube', 
+    color: '#FF0000',
     enabled: true, 
     url: 'https://www.youtube.com/results?search_query=', 
     suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=',
@@ -3489,6 +3491,7 @@ let searchEngines = [
   { 
     id: 'duckduckgo', 
     name: 'DuckDuckGo', 
+    color: '#DE5833',
     enabled: true, 
     url: 'https://duckduckgo.com/?q=', 
     suggestionUrl: 'https://duckduckgo.com/ac/?type=json&q=',
@@ -3497,6 +3500,7 @@ let searchEngines = [
   { 
     id: 'bing', 
     name: 'Bing', 
+    color: '#008373',
     enabled: true, 
     url: 'https://www.bing.com/search?q=', 
     suggestionUrl: 'https://api.bing.com/osjson.aspx?query=',
@@ -3505,6 +3509,7 @@ let searchEngines = [
   { 
     id: 'wikipedia', 
     name: 'Wikipedia', 
+    color: '#000000',
     enabled: true, 
     url: 'https://en.wikipedia.org/wiki/Special:Search?search=', 
     suggestionUrl: 'https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=',
@@ -3513,6 +3518,7 @@ let searchEngines = [
   { 
     id: 'reddit', 
     name: 'Reddit', 
+    color: '#FF4500',
     enabled: false, 
     url: 'https://www.reddit.com/search/?q=', 
     suggestionUrl: '',
@@ -3521,6 +3527,7 @@ let searchEngines = [
   { 
     id: 'github', 
     name: 'GitHub', 
+    color: '#181717',
     enabled: false, 
     url: 'https://github.com/search?q=', 
     suggestionUrl: '',
@@ -3529,15 +3536,16 @@ let searchEngines = [
   { 
     id: 'stackoverflow', 
     name: 'StackOverflow', 
+    color: '#F48024',
     enabled: false, 
     url: 'https://stackoverflow.com/search?q=', 
     suggestionUrl: '',
     icon: ICONS.stackoverflow 
   },
-  { id: 'amazon', name: 'Amazon', enabled: false, url: 'https://www.amazon.com/s?k=', suggestionUrl: 'https://completion.amazon.com/search/complete?search-alias=aps&client=amazon-search-ui&mkt=1&q=', icon: ICONS.amazon },
-  { id: 'maps', name: 'Maps', enabled: false, url: 'https://www.google.com/maps/search/', suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=', icon: ICONS.maps },
-  { id: 'yahoo', name: 'Yahoo', enabled: false, url: 'https://search.yahoo.com/search?p=', suggestionUrl: 'https://ff.search.yahoo.com/gossip?output=json&command=', icon: ICONS.yahoo },
-  { id: 'yandex', name: 'Yandex', enabled: false, url: 'https://yandex.com/search/?text=', suggestionUrl: 'https://suggest.yandex.com/suggest-ff.cgi?part=', icon: ICONS.yandex }
+  { id: 'amazon', name: 'Amazon', color: '#FF9900', enabled: false, url: 'https://www.amazon.com/s?k=', suggestionUrl: 'https://completion.amazon.com/search/complete?search-alias=aps&client=amazon-search-ui&mkt=1&q=', icon: ICONS.amazon },
+  { id: 'maps', name: 'Maps', color: '#34A853', enabled: false, url: 'https://www.google.com/maps/search/', suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=', icon: ICONS.maps },
+  { id: 'yahoo', name: 'Yahoo', color: '#6001D2', enabled: false, url: 'https://search.yahoo.com/search?p=', suggestionUrl: 'https://ff.search.yahoo.com/gossip?output=json&command=', icon: ICONS.yahoo },
+  { id: 'yandex', name: 'Yandex', color: '#FC3F1D', enabled: false, url: 'https://yandex.com/search/?text=', suggestionUrl: 'https://suggest.yandex.com/suggest-ff.cgi?part=', icon: ICONS.yandex }
 ];
 const bangMap = {
   g: 'google',
@@ -3745,14 +3753,14 @@ function updateSearchSelectorPosition() {
   const iconSize = 36;
   const gap = 6;
   const itemFullWidth = iconSize + gap;
-  const visibleCount = 3;
+  const visibleCount = 1; // CHANGED: Show only 1 item
 
-  // --- Logic: Center the selected item in the 3-item window ---
-  // Target: We want the selected item to be at index 1 (middle of 0, 1, 2)
-  // Offset = (currentIndex - 1) * itemFullWidth
+  // --- Logic: Show the selected item in the 1-item window ---
+  // Offset = currentIndex * itemFullWidth
   // We clamp this so we don't scroll past the start (0) or end.
+  
   const maxOffset = Math.max(0, (activeEngines.length - visibleCount) * itemFullWidth);
-  let offset = (currentIndex - 1) * itemFullWidth;
+  let offset = currentIndex * itemFullWidth;
 
   // Clamp
   offset = Math.max(0, Math.min(offset, maxOffset));
@@ -3776,7 +3784,7 @@ function renderSearchEngineSelector() {
   // 2. Calculate Dimensions
   const iconSize = 36;
   const gap = 6;
-  const visibleCount = Math.min(activeEngines.length, 3);
+  const visibleCount = Math.min(activeEngines.length, 1); // CHANGED to 1
   
   // Width = (N * 36) + ((N-1) * 6)
   const collapsedWidth = (visibleCount * iconSize) + (Math.max(0, visibleCount - 1) * gap);
@@ -3790,15 +3798,19 @@ function renderSearchEngineSelector() {
   // 3. Render Buttons
   activeEngines.forEach(engine => {
     const btn = document.createElement('div');
-    btn.className = 'engine-icon-btn cooltipz--bottom';
-    btn.setAttribute('aria-label', engine.name);
+    // Removed 'cooltipz--bottom', added tooltip span inside
+    btn.className = 'engine-icon-btn';
     btn.dataset.engineId = engine.id;
+    // Set color variable for CSS to use
+    btn.style.setProperty('--engine-color', engine.color || '#333');
     
     if (currentSearchEngine && currentSearchEngine.id === engine.id) {
       btn.classList.add('active');
     }
     
-    btn.innerHTML = engine.icon || `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
+    // Insert Tooltip HTML + Icon
+    const iconHtml = engine.icon || `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
+    btn.innerHTML = `<span class="tooltip">${engine.name}</span>${iconHtml}`;
     
     btn.addEventListener('click', (e) => {
       e.stopPropagation();

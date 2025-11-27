@@ -340,17 +340,19 @@ body.sidebar-collapsed .collapsed-clock-slot {
   overflow-y: auto; /* Allow main content to scroll */
 }
 
-/* --- Search Bar (in main) --- */
+/* ======================================= */
+/* --- UNIFIED SEARCH WIDGET STYLES --- */
+/* ======================================= */
 
 .search-area-wrapper {
   display: flex;
   align-items: center;
   max-width: none; /* Allow full width for a wider bar */
-  
+
   margin-top: 30px; /* Push down from the top */
   margin-left: 10px; /* Align with folder tabs */
   margin-right: auto; /* Keep remaining space on the right */
-  
+
   width: 88%; /* Ensure it fills the new max-width */
 }
 
@@ -364,52 +366,188 @@ body.sidebar-collapsed .collapsed-clock-slot {
 }
 
 .widget-search {
-  padding: 2px; /* Shorter height */
-  width: 100%;  
+  width: 100%;
+  height: 46px; /* Fixed height for stability */
   display: flex;
   align-items: center;
-  gap: 10px;
-
+  
   background-color: #ffffff;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  border: 1px solid #e2e8f0; /* Subtle modern gray */
+  border-radius: 12px;       /* Professional rounding */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* Soft lift */
   
-  border: 1px solid #ddd;
-  box-shadow: none; /* Shadow removed per your request */
-  
-  border-radius: 8px; /* Default radius */
-  box-sizing: border-box; 
+  padding: 0; /* Padding is handled by children */
+  position: relative; /* Context for the grid expansion */
+  box-sizing: border-box;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  z-index: 150;
 }
 
-
-/* This class is added by JS */
+/* Hover state for the whole bar */
+.widget-search:hover,
 .widget-search.results-open {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  box-shadow: none;
-  border-bottom: none; /* Merge with panel */
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 
 .search-container {
   display: flex;
   align-items: center;
   width: 100%;
-  flex: 1;
+  height: 100%;
+  position: relative;
 }
 
 .search-container.non-default-engine {
-  border-color: #2ca5ff;
-  background-color: rgba(44, 165, 255, 0.03);
+  background-color: rgba(14, 165, 233, 0.04);
 }
 
-.engine-switch-anim {
-  animation: engine-bump 0.2s ease-in-out;
+/* ======================================= */
+/* --- INLINE EXPANDING SEARCH SELECTOR --- */
+/* ======================================= */
+
+/* --- 1. The Selector Area --- */
+.search-engine-selector {
+  /* Define spacing variables */
+  --icon-size: 36px;
+  --icon-gap: 6px;
+  --visible-count: 3; /* Default collapsed count */
+  
+  /* Calculate collapsed width dynamically: (3 * 36) + (2 * 6) = 120px */
+  --collapsed-width: calc((var(--icon-size) * var(--visible-count)) + (var(--icon-gap) * (var(--visible-count) - 1)));
+  
+  height: var(--icon-size);
+  width: var(--collapsed-width);
+  
+  margin-right: 10px; /* Space between selector and divider */
+  position: relative;
+  overflow: hidden; /* Masks the list */
+  flex-shrink: 0;   /* Prevent shrinking */
+  
+  /* Smoothly animate width to push the search text */
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  
+  /* Fix for z-index to ensure tooltips (if any) work, though overflow:hidden clips them usually. 
+     For an inline sliding list, clipping tooltips is standard behavior unless we use a very complex portal. 
+     The expansion usually reveals enough context. */
+  z-index: 10;
 }
 
-@keyframes engine-bump {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-  100% { transform: scale(1); }
+/* --- Inner Sliding List --- */
+.search-engine-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--icon-gap);
+  height: 100%;
+  width: max-content; /* Allow list to be as wide as needed */
+  
+  /* Logic to center the active item */
+  transform: translateX(0);
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  will-change: transform;
+}
+
+/* --- Expanded State (Hover or Keyboard) --- */
+/* Only expand on hover if NOT suppressed */
+.search-engine-selector:not(.suppress-hover):hover,
+.search-engine-selector.expanded {
+  /* Expand to show ALL items. Variable is set by JS. */
+  width: var(--expanded-width, 200px);
+}
+
+/* When expanded, reset the slide so we see 1, 2, 3, 4... in order */
+.search-engine-selector:not(.suppress-hover):hover .search-engine-list,
+.search-engine-selector.expanded .search-engine-list {
+  transform: translateX(0) !important;
+}
+
+/* --- Icon Button Styles --- */
+.engine-icon-btn {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+  filter: grayscale(100%);
+  flex-shrink: 0;
+}
+
+.engine-icon-btn svg, 
+.engine-icon-btn img {
+  width: 20px;
+  height: 20px;
+  display: block;
+  pointer-events: none;
+}
+
+/* Hover State */
+.engine-icon-btn:hover {
+  opacity: 1;
+  filter: grayscale(0%);
+  background-color: #f1f5f9;
+}
+
+/* Active/Selected State */
+.engine-icon-btn.active {
+  opacity: 1;
+  filter: grayscale(0%);
+  background-color: #e0f2fe;
+  color: #0ea5e9;
+}
+
+/* --- 2. The Vertical Divider --- */
+.search-input-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #e2e8f0;
+  margin: 0 4px;
+}
+
+/* --- 3. The Input Field --- */
+#search-form {
+  flex: 1;
+  height: 100%;
+  display: flex;
+}
+
+#search-input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  padding: 0 16px;
+  font-size: 16px;
+  color: #1e293b;
+  border-radius: 0 12px 12px 0;
+  outline: none;
+}
+
+#search-input::placeholder {
+  color: #94a3b8;
+}
+
+#search-select {
+  background: #f0f0f0;
+  border-radius: 5px;
+  align-self: stretch;
+  border: none;
+  color: #333;
+  font-size: 14px;
+  padding: 0 10px 0 15px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+#search-select:focus {
+  outline: none;
 }
 
 .calculator-result {
@@ -418,15 +556,6 @@ body.sidebar-collapsed .collapsed-clock-slot {
   padding-right: 16px;
   position: relative;
   overflow: hidden;
-}
-
-.calculator-result .result-icon-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  font-size: 20px;
 }
 
 .calculator-result .result-item-info {
@@ -453,44 +582,39 @@ body.sidebar-collapsed .collapsed-clock-slot {
   border-color: #ccc;
 }
 
-#search-select {
-  background: #f0f0f0;
-  border-radius: 5px;
-  align-self: stretch;
-  border: none;
-  color: #333;
-  font-size: 14px;
-  padding: 0 10px 0 15px;
-  cursor: pointer;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-}
-#search-select:focus {
-  outline: none;
+/* --- Search Engine Reordering Styles --- */
+
+/* Style the drag handle (hamburger menu icon) */
+.engine-drag-handle {
+  cursor: grab;
+  color: #94a3b8; /* Slate-400 */
+  font-size: 1.2em;
+  margin-right: 10px;
+  line-height: 1;
+  user-select: none;
+  transition: color 0.2s;
 }
 
-#search-form {
-  flex: 1;
-  display: flex;
+.engine-toggle-item:hover .engine-drag-handle {
+  color: #475569; /* Darker on hover */
 }
 
-#search-input {
-  padding: 10px 15px; /* Shorter height */
-  font-size: 16px;
-  background-color: transparent;
-  border-radius: 0 5px 5px 0;
-  border: none;
-  color: #333;
-  width: 100%;
-}
-#search-input:focus {
-  outline: none;
-}
-#search-input::placeholder {
-  color: #555;
+.engine-toggle-item:active .engine-drag-handle {
+  cursor: grabbing;
 }
 
+/* Ghost class applied by Sortable.js while dragging */
+.sortable-ghost-engine {
+  background-color: #e2e8f0 !important; /* Light gray background */
+  border: 1px dashed #94a3b8 !important;
+  opacity: 0.5;
+}
+
+/* Ensure the row looks clickable for dragging */
+.engine-toggle-main {
+  cursor: grab;
+  flex: 1; /* Take up remaining space so you can drag from anywhere in the text area */
+}
 /* Styles for Search Toolbar Buttons */
 .search-toolbar-buttons {
   display: flex;
@@ -3664,62 +3788,4 @@ input:checked + .slider:before {
 }
 
 /* ======================================= */
-/* --- NEW: Visual Search Engine Selector --- */
-/* ======================================= */
-
-.search-engine-selector {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 8px 0 4px; /* Padding inside the search bar */
-  max-width: 260px;     /* Prevent it from eating all space */
-  overflow-x: auto;     /* Scroll if you enable too many engines */
-  scrollbar-width: none; 
-  -ms-overflow-style: none;
-  border-right: 1px solid #eee; /* Divider between icons and input */
-  margin-right: 8px;
-}
-
-.search-engine-selector::-webkit-scrollbar {
-  display: none;
-}
-
-.engine-icon-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: transparent;
-  transition: all 0.2s ease;
-  opacity: 0.4;         /* Dim inactive icons */
-  flex-shrink: 0;
-  filter: grayscale(100%); /* Optional: Make inactive icons grey */
-}
-
-/* Icons inside the button */
-.engine-icon-btn svg, 
-.engine-icon-btn img {
-  width: 18px;
-  height: 18px;
-  display: block;
-  pointer-events: none;
-}
-
-/* Hover state */
-.engine-icon-btn:hover {
-  opacity: 0.7;
-  background-color: rgba(0, 0, 0, 0.05);
-  filter: grayscale(0%);
-}
-
-/* Selected state */
-.engine-icon-btn.active {
-  opacity: 1;
-  background-color: rgba(0, 0, 0, 0.08); /* Highlight background */
-  transform: scale(1.05);
-  filter: grayscale(0%); /* Show full color */
-}
 

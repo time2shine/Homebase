@@ -885,6 +885,19 @@ const APP_SEARCH_SHOW_HISTORY_KEY = 'appSearchShowHistory';
 const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
 const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
 const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
+const COLOR_PRESETS = [
+  '#A1D5F8',
+  '#F87171',
+  '#FB923C',
+  '#FACC15',
+  '#4ADE80',
+  '#2DD4BF',
+  '#818CF8',
+  '#C084FC',
+  '#F472B6',
+  '#94A3B8',
+  '#FFFFFF'
+];
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -3274,12 +3287,89 @@ function closeAppSettingsModal() {
   syncAppSettingsForm();
 }
 
+/**
+ * Renders a swatch picker into a container.
+ * @param {string} containerId - The ID of the div to fill.
+ * @param {string} initialColor - The currently saved color.
+ * @param {function} onUpdate - Callback when color changes (hex) => void.
+ */
+function setupColorSwatch(containerId, initialColor, onUpdate) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = '';
+  let activeHex = (initialColor || '#A1D5F8').toUpperCase();
+
+  const setActive = (target) => {
+    container.querySelectorAll('.color-swatch, .color-custom-wrapper').forEach((el) => el.classList.remove('active'));
+    target.classList.add('active');
+  };
+
+  COLOR_PRESETS.forEach((color) => {
+    const swatch = document.createElement('div');
+    swatch.className = 'color-swatch';
+    swatch.style.backgroundColor = color;
+    swatch.dataset.color = color;
+
+    if (color.toUpperCase() === activeHex) {
+      swatch.classList.add('active');
+    }
+
+    swatch.addEventListener('click', () => {
+      setActive(swatch);
+      activeHex = color.toUpperCase();
+      onUpdate(color);
+    });
+
+    container.appendChild(swatch);
+  });
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'color-custom-wrapper';
+  wrapper.title = 'Custom Color';
+
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.value = activeHex;
+
+  if (!COLOR_PRESETS.includes(activeHex)) {
+    wrapper.classList.add('active');
+  }
+
+  input.addEventListener('input', (e) => {
+    setActive(wrapper);
+    activeHex = e.target.value.toUpperCase();
+    onUpdate(e.target.value);
+  });
+
+  wrapper.appendChild(input);
+  container.appendChild(wrapper);
+}
+
 function setupAppSettingsModal() {
   if (!appSettingsModal || !mainSettingsBtn) return;
 
   mainSettingsBtn.addEventListener('click', () => {
     openAppSettingsModal();
     updateDefaultEngineVisibilityControl();
+
+    setupColorSwatch(
+      'fallback-color-picker-container',
+      appBookmarkFallbackColorPreference || '#A1D5F8',
+      (newColor) => {
+        appBookmarkFallbackColorPreference = newColor;
+        applyBookmarkFallbackColor(newColor);
+      }
+    );
+
+    setupColorSwatch(
+      'folder-color-picker-container',
+      appBookmarkFolderColorPreference || '#FFFFFF',
+      (newColor) => {
+        appBookmarkFolderColorPreference = newColor;
+        applyBookmarkFolderColor(newColor);
+      }
+    );
   });
 
   if (appSearchRememberEngineToggle) {
@@ -3315,8 +3405,8 @@ function setupAppSettingsModal() {
       const nextAutoClose = appAutoCloseSelect ? parseInt(appAutoCloseSelect.value, 10) || 0 : 0;
       const nextSearchOpenNewTab = appSearchOpenNewTabToggle ? appSearchOpenNewTabToggle.checked : false;
       const nextBookmarkNewTab = document.getElementById('app-bookmark-open-new-tab-toggle')?.checked || false;
-      const nextFallbackColor = document.getElementById('app-bookmark-fallback-color-input')?.value || '#A1D5F8';
-      const nextFolderColor = document.getElementById('app-bookmark-folder-color-input')?.value || '#FFFFFF';
+      const nextFallbackColor = appBookmarkFallbackColorPreference || '#A1D5F8';
+      const nextFolderColor = appBookmarkFolderColorPreference || '#FFFFFF';
       const nextSingletonMode = (() => {
         const toggle = document.getElementById('app-singleton-mode-toggle');
         return toggle ? toggle.checked : false;

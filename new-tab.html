@@ -391,7 +391,31 @@
             </div>
           </section>
           <section class="app-settings-section" data-section="bookmarks">
-            <div class="app-settings-placeholder">Bookmark controls are coming soon.</div>
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Open bookmarks in new tab</div>
+                <div class="hint">Always launch clicked bookmarks in a separate tab.</div>
+              </div>
+              <label class="app-switch">
+                <input type="checkbox" id="app-bookmark-open-new-tab-toggle">
+                <span class="app-switch-track"></span>
+              </label>
+            </div>
+
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Fallback icon color</div>
+                <div class="hint">Background color for bookmarks without an image.</div>
+              </div>
+              <input type="color" id="app-bookmark-fallback-color-input" class="app-color-input" value="#A1D5F8">
+            </div>
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Folder icon color</div>
+                <div class="hint">Color for folder icons in the grid.</div>
+              </div>
+              <input type="color" id="app-bookmark-folder-color-input" class="app-color-input" value="#FFFFFF">
+            </div>
           </section>
           <section class="app-settings-section" data-section="gallery">
             <div class="app-settings-placeholder">Gallery settings live inside the Gallery modal today.</div>

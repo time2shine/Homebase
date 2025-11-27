@@ -1014,9 +1014,9 @@ body.sidebar-collapsed #bookmarks-grid {
 
 .bookmark-item span {
   font-size: 0.8em;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-  
-  width: 100%;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+
+  width: calc(100% - 4px);
   line-height: 1.3; /* A bit of space between lines */
   
   /* --- New Multi-line Ellipsis --- */
@@ -1031,8 +1031,9 @@ body.sidebar-collapsed #bookmarks-grid {
   
   /* Set a fixed height to prevent layout jank */
   /* (font-size * 0.8) * (line-height 1.3) * (2 lines) */
-  height: 2.4em;
+  height: 2.6em;
   width: 100%;
+  padding: 0 2px 4px 2px;
   text-align: center;
 }
 
@@ -3799,6 +3800,7 @@ input:checked + .slider:before {
   width: 50px; /* Changed from 40px */
   height: 50px; /* Changed from 40px */
   border-radius: 10px; 
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 /* This wrapper holds both the real icon and the fallback */
@@ -3811,7 +3813,7 @@ input:checked + .slider:before {
   justify-content: center;
 
   position: relative;          /* so ::after can sit on top */
-  overflow: hidden;            /* clip the Drop Here background */
+  overflow: visible;           /* allow shadows to render fully */
 
   transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;
 }
@@ -3824,16 +3826,39 @@ input:checked + .slider:before {
   height: 50px; /* Changed from 40px */
   border-radius: 10px; 
 
-  background-color: #A1D5F8; 
+  background-color: var(--bookmark-fallback-color, #A1D5F8); 
   color: #FFFFFF; 
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  font-size: 28px; /* Changed from 24px */
-  font-weight: 500;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  font-size: 30px;
+  font-weight: 400;
+  font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.app-color-input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 40px;
+  height: 40px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.app-color-input::-webkit-color-swatch {
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.app-color-input::-moz-color-swatch {
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.1);
 }
 
 /* ======================================= */
@@ -3841,10 +3866,23 @@ input:checked + .slider:before {
 /* ======================================= */
 
 .bookmark-folder-icon {
-  width: 84px; /* Changed from 40px */
-  height: 58px; /* Changed from 40px */
-  fill: #FFFFFF;
+  width: 84px;
+  height: 58px;
+  /* Remove basic fill here, we target children below */
   opacity: 0.9;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+}
+
+/* Force inner SVG shapes to use the variable */
+.bookmark-folder-icon path,
+.bookmark-folder-icon rect {
+  fill: var(--bookmark-folder-color, #FFFFFF) !important;
+  transition: fill 0.2s ease;
+}
+
+/* Make the back tab (path) slightly darker/transparent to create depth */
+.bookmark-folder-icon path {
+  filter: brightness(0.85); 
 }
 
 /* ======================================= */

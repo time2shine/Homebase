@@ -882,6 +882,9 @@ const APP_SEARCH_REMEMBER_ENGINE_KEY = 'appSearchRememberEngine';
 const APP_SEARCH_DEFAULT_ENGINE_KEY = 'appSearchDefaultEngine';
 const APP_SEARCH_MATH_KEY = 'appSearchMath';
 const APP_SEARCH_SHOW_HISTORY_KEY = 'appSearchShowHistory';
+const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
+const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
+const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -901,6 +904,9 @@ let appSearchRememberEnginePreference = true;
 let appSearchDefaultEnginePreference = 'google';
 let appSearchMathPreference = true;
 let appSearchShowHistoryPreference = false;
+let appBookmarkOpenNewTabPreference = false;
+let appBookmarkFallbackColorPreference = '#A1D5F8';
+let appBookmarkFolderColorPreference = '#FFFFFF';
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
@@ -2196,7 +2202,7 @@ function renderBookmark(bookmarkNode) {
   item.dataset.isFolder = 'false';
 
   const title = bookmarkNode.title || ' ';
-  const firstLetter = title.charAt(0).toUpperCase();
+  const firstLetter = title.charAt(0).toLowerCase();
 
   const iconWrapper = document.createElement('div');
   iconWrapper.className = 'bookmark-icon-wrapper';
@@ -3025,6 +3031,16 @@ function applySidebarVisibility(showSidebar = true) {
   updateSidebarCollapseState();
 }
 
+function applyBookmarkFallbackColor(color) {
+  if (!color) return;
+  document.documentElement.style.setProperty('--bookmark-fallback-color', color);
+}
+
+function applyBookmarkFolderColor(color) {
+  if (!color) return;
+  document.documentElement.style.setProperty('--bookmark-folder-color', color);
+}
+
 async function loadAppSettingsFromStorage() {
   try {
     const stored = await browser.storage.local.get([
@@ -3037,7 +3053,10 @@ async function loadAppSettingsFromStorage() {
       APP_SEARCH_REMEMBER_ENGINE_KEY,
       APP_SEARCH_DEFAULT_ENGINE_KEY,
       APP_SEARCH_MATH_KEY,
-      APP_SEARCH_SHOW_HISTORY_KEY
+      APP_SEARCH_SHOW_HISTORY_KEY,
+      APP_BOOKMARK_OPEN_NEW_TAB_KEY,
+      APP_BOOKMARK_FALLBACK_COLOR_KEY,
+      APP_BOOKMARK_FOLDER_COLOR_KEY
     ]);
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
@@ -3051,6 +3070,11 @@ async function loadAppSettingsFromStorage() {
     }
     appSearchMathPreference = stored[APP_SEARCH_MATH_KEY] !== false;
     appSearchShowHistoryPreference = stored[APP_SEARCH_SHOW_HISTORY_KEY] === true;
+    appBookmarkOpenNewTabPreference = stored[APP_BOOKMARK_OPEN_NEW_TAB_KEY] === true;
+    appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#A1D5F8';
+    appBookmarkFolderColorPreference = stored[APP_BOOKMARK_FOLDER_COLOR_KEY] || '#FFFFFF';
+    applyBookmarkFallbackColor(appBookmarkFallbackColorPreference);
+    applyBookmarkFolderColor(appBookmarkFolderColorPreference);
 
     if (appSingletonModePreference) {
       await handleSingletonMode();
@@ -3205,6 +3229,18 @@ function syncAppSettingsForm() {
   if (appSearchHistoryToggle) {
     appSearchHistoryToggle.checked = appSearchShowHistoryPreference;
   }
+  const bookmarkNewTabToggle = document.getElementById('app-bookmark-open-new-tab-toggle');
+  if (bookmarkNewTabToggle) {
+    bookmarkNewTabToggle.checked = appBookmarkOpenNewTabPreference;
+  }
+  const colorInput = document.getElementById('app-bookmark-fallback-color-input');
+  if (colorInput) {
+    colorInput.value = appBookmarkFallbackColorPreference;
+  }
+  const folderColorInput = document.getElementById('app-bookmark-folder-color-input');
+  if (folderColorInput) {
+    folderColorInput.value = appBookmarkFolderColorPreference;
+  }
   updateDefaultEngineVisibilityControl();
   const singletonToggle = document.getElementById('app-singleton-mode-toggle');
   if (singletonToggle) {
@@ -3278,6 +3314,9 @@ function setupAppSettingsModal() {
       const nextMaxTabs = appMaxTabsSelect ? parseInt(appMaxTabsSelect.value, 10) || 0 : 0;
       const nextAutoClose = appAutoCloseSelect ? parseInt(appAutoCloseSelect.value, 10) || 0 : 0;
       const nextSearchOpenNewTab = appSearchOpenNewTabToggle ? appSearchOpenNewTabToggle.checked : false;
+      const nextBookmarkNewTab = document.getElementById('app-bookmark-open-new-tab-toggle')?.checked || false;
+      const nextFallbackColor = document.getElementById('app-bookmark-fallback-color-input')?.value || '#A1D5F8';
+      const nextFolderColor = document.getElementById('app-bookmark-folder-color-input')?.value || '#FFFFFF';
       const nextSingletonMode = (() => {
         const toggle = document.getElementById('app-singleton-mode-toggle');
         return toggle ? toggle.checked : false;
@@ -3296,7 +3335,12 @@ function setupAppSettingsModal() {
       appSearchDefaultEnginePreference = nextDefaultEngine;
       appSearchMathPreference = nextMath;
       appSearchShowHistoryPreference = nextSearchHistory;
+      appBookmarkOpenNewTabPreference = nextBookmarkNewTab;
+      appBookmarkFallbackColorPreference = nextFallbackColor;
+      appBookmarkFolderColorPreference = nextFolderColor;
       appSingletonModePreference = nextSingletonMode;
+      applyBookmarkFallbackColor(nextFallbackColor);
+      applyBookmarkFolderColor(nextFolderColor);
       updateTime();
 
       try {
@@ -3306,6 +3350,9 @@ function setupAppSettingsModal() {
           [APP_MAX_TABS_KEY]: nextMaxTabs,
           [APP_AUTOCLOSE_KEY]: nextAutoClose,
           [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
+          [APP_BOOKMARK_OPEN_NEW_TAB_KEY]: nextBookmarkNewTab,
+          [APP_BOOKMARK_FALLBACK_COLOR_KEY]: nextFallbackColor,
+          [APP_BOOKMARK_FOLDER_COLOR_KEY]: nextFolderColor,
           [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
           [APP_SEARCH_MATH_KEY]: nextMath,
           [APP_SEARCH_SHOW_HISTORY_KEY]: nextSearchHistory,
@@ -5698,7 +5745,12 @@ async function initializePage() {
       item.classList.add('is-loading');
       requestAnimationFrame(() => {
         if (node.url) {
-          window.location.href = node.url;
+          if (appBookmarkOpenNewTabPreference) {
+            browser.tabs.create({ url: node.url, active: true });
+            setTimeout(() => item.classList.remove('is-loading'), 500);
+          } else {
+            window.location.href = node.url;
+          }
         }
       });
     });

@@ -3983,19 +3983,25 @@ function cycleSearchEngine(direction) {
   const activeEngines = searchEngines.filter((eng) => eng.enabled);
   if (activeEngines.length < 2) return;
 
+  // 1. Find index of currently selected engine
   let currentIndex = activeEngines.findIndex((eng) => eng.id === currentSearchEngine.id);
   if (currentIndex === -1) currentIndex = 0;
 
+  // 2. Calculate next index (handles wrapping around)
   const delta = direction === 'down' ? 1 : -1;
   const nextIndex = (currentIndex + delta + activeEngines.length) % activeEngines.length;
   const nextEngine = activeEngines[nextIndex];
 
+  // 3. Update UI
   updateSearchUI(nextEngine.id);
-  handleSearchChange();
+  handleSearchChange(); // Persist change if "Remember Engine" is on
 
-  const input = document.getElementById('search-input');
-  if (input) input.focus();
+  // 4. Focus input if we aren't already there (optional quality of life)
+  if (document.activeElement !== searchInput) {
+    searchInput.focus();
+  }
 
+  // 5. Trigger the visual "Slide Out" animation
   const selector = document.getElementById('search-engine-selector');
   if (selector) {
     selector.classList.remove('suppress-hover');
@@ -4022,19 +4028,9 @@ async function setupSearch() {
   searchSelect.addEventListener('change', handleSearchChange);
   searchSelect.addEventListener('wheel', (e) => {
     e.preventDefault();
-
-    const activeEngines = searchEngines.filter((eng) => eng.enabled);
-    if (activeEngines.length < 2) return;
-
-    let currentIndex = activeEngines.findIndex((eng) => eng.id === currentSearchEngine.id);
-    if (currentIndex === -1) currentIndex = 0;
-
-    const direction = e.deltaY > 0 ? 1 : -1;
-    const nextIndex = (currentIndex + direction + activeEngines.length) % activeEngines.length;
-    const nextEngine = activeEngines[nextIndex];
-
-    updateSearchUI(nextEngine.id);
-    handleSearchChange();
+    // Determine direction and let the helper handle the rest
+    const direction = e.deltaY > 0 ? 'down' : 'up';
+    cycleSearchEngine(direction);
   });
 
   searchInput.addEventListener('input', e => {

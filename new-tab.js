@@ -3276,9 +3276,10 @@ function syncAppSettingsForm() {
     colorTrigger.style.backgroundColor = appBookmarkFallbackColorPreference;
     colorTrigger.dataset.value = appBookmarkFallbackColorPreference;
   }
-  const folderColorInput = document.getElementById('app-bookmark-folder-color-input');
-  if (folderColorInput) {
-    folderColorInput.value = appBookmarkFolderColorPreference;
+  const folderColorTrigger = document.getElementById('app-bookmark-folder-color-trigger');
+  if (folderColorTrigger) {
+    folderColorTrigger.style.backgroundColor = appBookmarkFolderColorPreference;
+    folderColorTrigger.dataset.value = appBookmarkFolderColorPreference;
   }
   const perfToggle = document.getElementById('app-performance-mode-toggle');
   if (perfToggle) {
@@ -3360,7 +3361,8 @@ function setupAppSettingsModal() {
       const nextBookmarkNewTab = document.getElementById('app-bookmark-open-new-tab-toggle')?.checked || false;
       const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
       const nextFallbackColor = colorTrigger ? (colorTrigger.dataset.value || colorTrigger.style.backgroundColor) : '#A1D5F8';
-      const nextFolderColor = document.getElementById('app-bookmark-folder-color-input')?.value || '#FFFFFF';
+      const folderTrigger = document.getElementById('app-bookmark-folder-color-trigger');
+      const nextFolderColor = folderTrigger ? (folderTrigger.dataset.value || folderTrigger.style.backgroundColor) : '#FFFFFF';
       const nextPerformanceMode = document.getElementById('app-performance-mode-toggle')?.checked || false;
       const nextSingletonMode = (() => {
         const toggle = document.getElementById('app-singleton-mode-toggle');
@@ -5739,7 +5741,10 @@ function setupMaterialColorPicker() {
   const modal = document.getElementById('material-picker-modal');
   const grid = document.getElementById('material-color-grid');
   const closeBtn = document.getElementById('material-picker-close');
-  const triggerBtn = document.getElementById('app-bookmark-fallback-color-trigger');
+  
+  // Triggers
+  const fallbackTriggerBtn = document.getElementById('app-bookmark-fallback-color-trigger');
+  const folderTriggerBtn = document.getElementById('app-bookmark-folder-color-trigger');
 
   if (!modal || !grid) return;
 
@@ -5775,6 +5780,21 @@ function setupMaterialColorPicker() {
   function pickColor(color) {
     if (materialPickerCallback) materialPickerCallback(color);
     closeMaterialPicker();
+  }
+
+  // Helper to open picker relative to a button
+  function openPickerFor(button, callback) {
+    materialPickerCallback = callback;
+    modal.classList.remove('hidden');
+
+    const triggerRect = button.getBoundingClientRect();
+    const gridLeft = grid.offsetLeft;
+    const gridTop = grid.offsetTop;
+
+    const originX = (triggerRect.left + triggerRect.width / 2) - gridLeft;
+    const originY = (triggerRect.top + triggerRect.height / 2) - gridTop;
+
+    grid.style.transformOrigin = `${originX}px ${originY}px`;
   }
 
   // A. Render Standard Rows
@@ -5817,29 +5837,35 @@ function setupMaterialColorPicker() {
   footer.appendChild(footerBW);
   grid.appendChild(footer);
 
-  // Event Listeners for Trigger
-  if (triggerBtn) {
-    triggerBtn.style.backgroundColor = appBookmarkFallbackColorPreference;
-    triggerBtn.dataset.value = appBookmarkFallbackColorPreference;
+  // --- Attach Event Listeners ---
 
-    triggerBtn.addEventListener('click', () => {
-      materialPickerCallback = (newColor) => {
-        triggerBtn.style.backgroundColor = newColor;
-        triggerBtn.dataset.value = newColor;
+  // 1. Fallback Icon Color Trigger
+  if (fallbackTriggerBtn) {
+    fallbackTriggerBtn.style.backgroundColor = appBookmarkFallbackColorPreference;
+    fallbackTriggerBtn.dataset.value = appBookmarkFallbackColorPreference;
+
+    fallbackTriggerBtn.addEventListener('click', () => {
+      openPickerFor(fallbackTriggerBtn, (newColor) => {
+        fallbackTriggerBtn.style.backgroundColor = newColor;
+        fallbackTriggerBtn.dataset.value = newColor;
         appBookmarkFallbackColorPreference = newColor;
         applyBookmarkFallbackColor(newColor);
-      };
+      });
+    });
+  }
 
-      modal.classList.remove('hidden');
+  // 2. Folder Icon Color Trigger
+  if (folderTriggerBtn) {
+    folderTriggerBtn.style.backgroundColor = appBookmarkFolderColorPreference;
+    folderTriggerBtn.dataset.value = appBookmarkFolderColorPreference;
 
-      const triggerRect = triggerBtn.getBoundingClientRect();
-      const gridLeft = grid.offsetLeft;
-      const gridTop = grid.offsetTop;
-
-      const originX = (triggerRect.left + triggerRect.width / 2) - gridLeft;
-      const originY = (triggerRect.top + triggerRect.height / 2) - gridTop;
-
-      grid.style.transformOrigin = `${originX}px ${originY}px`;
+    folderTriggerBtn.addEventListener('click', () => {
+      openPickerFor(folderTriggerBtn, (newColor) => {
+        folderTriggerBtn.style.backgroundColor = newColor;
+        folderTriggerBtn.dataset.value = newColor;
+        appBookmarkFolderColorPreference = newColor;
+        applyBookmarkFolderColor(newColor);
+      });
     });
   }
 

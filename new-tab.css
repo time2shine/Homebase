@@ -3822,11 +3822,22 @@ input:checked + .slider:before {
 
 /* This is the fallback "F" icon */
 .bookmark-fallback-icon {
-  width: 50px; /* Changed from 40px */
-  height: 50px; /* Changed from 40px */
+  width: 50px; 
+  height: 50px; 
   border-radius: 10px; 
 
+  /* 1. Base Color (Set by JS from the Color Picker) */
   background-color: var(--bookmark-fallback-color, #A1D5F8); 
+
+  /* 2. Gradient Overlay (Creates the depth effect on ANY color) */
+  /* Top is 10% white (light), Bottom is 20% black (shadow) */
+  background-image: linear-gradient(
+    to bottom, 
+    rgba(255, 255, 255, 0.1) 0%, 
+    rgba(0, 0, 0, 0.02) 40%, 
+    rgba(0, 0, 0, 0.5) 100%
+  );
+
   color: #FFFFFF; 
 
   display: flex;
@@ -3837,28 +3848,9 @@ input:checked + .slider:before {
   font-weight: 400;
   font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
-}
-
-.app-color-input {
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  width: 40px;
-  height: 40px;
-  background-color: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-
-.app-color-input::-webkit-color-swatch {
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.1);
-}
-
-.app-color-input::-moz-color-swatch {
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.1);
+  
+  /* Ensure the background doesn't bleed outside the radius */
+  overflow: hidden; 
 }
 
 /* ======================================= */

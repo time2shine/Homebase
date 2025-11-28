@@ -4638,7 +4638,8 @@ body.performance-mode .context-submenu {
   align-items: center;
   justify-content: center;
   position: relative;
-  margin: 20px 0 35px;
+  /* Increase margins to ensure buttons don't clip text above/below */
+  margin: 65px 0 55px; 
   height: 100px;
 }
 
@@ -4659,7 +4660,7 @@ body.performance-mode .context-submenu {
 /* 3. The Folder Icon Inside the Circle */
 #edit-folder-icon-preview svg,
 #edit-folder-icon-preview img {
-  width: 88px;
+  width: 88px;  /* Or 64px/72px as per your previous preference */
   height: 88px;
   object-fit: contain;
   border-radius: 8px;
@@ -4670,41 +4671,68 @@ body.performance-mode .context-submenu {
 /* 4. Action Buttons Container */
 .edit-folder-actions {
   position: absolute;
-  width: 200px;
-  height: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  top: 0;
+  /* Define the center point exactly */
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  width: 0;
+  height: 0;
   z-index: 5;
   pointer-events: none;
 }
 
-/* 5. Positioning the 3 Buttons in a Triangle */
-#edit-folder-color-btn { 
-  order: 1; 
-  transform: translate(10px, -25px);
-}
-
-#edit-folder-upload-btn { 
-  order: 2; 
+/* 5. Shared Button Positioning */
+.edit-folder-actions .edit-action-btn {
   position: absolute;
-  left: 50%;
-  bottom: -45px;
-  transform: translateX(-50%);
-}
-
-#edit-folder-reset-btn { 
-  order: 3; 
-  transform: translate(-10px, -25px);
-}
-
-/* 6. Button Base Styles */
-.edit-action-btn {
-  position: relative;
+  /* Start centered */
+  left: 0;
+  top: 0;
+  /* Offset by half the button size (38px / 2 = 19px) to center it perfectly */
+  margin-left: -19px; 
+  margin-top: -19px;
+  
   pointer-events: auto;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              background-color 0.2s ease, 
+              box-shadow 0.2s ease;
+}
+
+/* 6. Specific Directions (Unified Radius: 82px) */
+
+/* TOP: Built-in Icons */
+#edit-folder-builtin-btn {
+  transform: translateY(-82px);
+}
+#edit-folder-builtin-btn:hover {
+  transform: translateY(-82px) scale(1.15);
+}
+
+/* BOTTOM: Upload */
+#edit-folder-upload-btn {
+  transform: translateY(82px);
+}
+#edit-folder-upload-btn:hover {
+  transform: translateY(82px) scale(1.15);
+}
+
+/* LEFT: Color */
+#edit-folder-color-btn {
+  transform: translateX(-82px);
+}
+#edit-folder-color-btn:hover {
+  transform: translateX(-82px) scale(1.15);
+}
+
+/* RIGHT: Reset */
+#edit-folder-reset-btn {
+  transform: translateX(82px);
+}
+#edit-folder-reset-btn:hover {
+  transform: translateX(82px) scale(1.15);
+}
+
+/* 7. Button Base Styles (Keep existing) */
+.edit-action-btn {
+  /* position: relative is handled above */
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -4716,20 +4744,15 @@ body.performance-mode .context-submenu {
   cursor: pointer;
   color: #4b5563;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  transition: all 0.2s ease;
 }
 
 .edit-action-btn:hover {
   background-color: #2ca5ff;
   color: white;
   border-color: #2ca5ff;
-  transform: scale(1.1) translate(var(--tw-translate-x), var(--tw-translate-y));
   box-shadow: 0 6px 12px rgba(44, 165, 255, 0.25);
+  z-index: 10;
 }
-
-#edit-folder-color-btn:hover { transform: translate(10px, -25px) scale(1.1); }
-#edit-folder-reset-btn:hover { transform: translate(-10px, -25px) scale(1.1); }
-#edit-folder-upload-btn:hover { transform: translateX(-50%) scale(1.1); }
 
 /* --- Edit Folder Tooltip Colors --- */
 .edit-action-btn .tooltip-popup {
@@ -4739,4 +4762,23 @@ body.performance-mode .context-submenu {
 
 .edit-action-btn .tooltip-popup::before {
   background-color: #2ca5ff !important;
+}
+
+/* --- Fix Edit Folder Input Alignment --- */
+#edit-folder-dialog .form-group label {
+  text-align: center;
+  width: 100%;
+  display: block;
+}
+
+#edit-folder-name-input {
+  text-align: center;
+  font-weight: 600;
+}
+
+/* --- Fix Input Box Sizing & Alignment --- */
+#edit-folder-dialog .dialog-input {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  text-align: center;
 }

@@ -3921,7 +3921,7 @@ input:checked + .slider:before {
   border-radius: 10px; 
 
   /* 1. Base Color (Set by JS from the Color Picker) */
-  background-color: var(--bookmark-fallback-color, #A1D5F8); 
+  background-color: var(--bookmark-fallback-color, #00b8d4); 
 
   /* 2. Gradient Overlay (Creates the depth effect on ANY color) */
   /* Top is 10% white (light), Bottom is 20% black (shadow) */
@@ -3929,7 +3929,7 @@ input:checked + .slider:before {
     to bottom, 
     rgba(255, 255, 255, 0.1) 0%, 
     rgba(0, 0, 0, 0.02) 40%, 
-    rgba(0, 0, 0, 0.5) 100%
+    rgba(0, 0, 0, 0.25) 100%
   );
 
   color: var(--bookmark-fallback-text-color, #FFFFFF); 

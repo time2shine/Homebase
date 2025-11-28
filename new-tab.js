@@ -936,7 +936,7 @@ let appSearchRememberEnginePreference = true;
 let appBookmarkTextBgColorPreference = '#2CA5FF';
 let appBookmarkTextBgOpacityPreference = 0.65;
 let appBookmarkTextBgBlurPreference = 4;
-let appBookmarkFallbackColorPreference = '#A1D5F8';
+let appBookmarkFallbackColorPreference = '#00b8d4';
 let appBookmarkFolderColorPreference = '#FFFFFF';
 let appPerformanceModePreference = false;
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
@@ -3214,7 +3214,7 @@ async function loadAppSettingsFromStorage() {
     applyBookmarkTextBgBlur(appBookmarkTextBgBlurPreference);
     appBookmarkTextBgColorPreference = stored[APP_BOOKMARK_TEXT_BG_COLOR_KEY] || '#2CA5FF';
     applyBookmarkTextBgColor(appBookmarkTextBgColorPreference);
-    appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#A1D5F8';
+    appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#00b8d4';
     appBookmarkFolderColorPreference = stored[APP_BOOKMARK_FOLDER_COLOR_KEY] || '#FFFFFF';
     appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
     appContainerModePreference = stored[APP_CONTAINER_MODE_KEY] !== false;
@@ -3556,7 +3556,7 @@ function setupAppSettingsModal() {
       const nextOpacity = parseFloat(document.getElementById('app-bookmark-text-opacity-slider')?.value || 0.65);
       const nextBlur = parseInt(document.getElementById('app-bookmark-text-blur-slider')?.value || 4, 10);
       const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
-      const nextFallbackColor = colorTrigger ? (colorTrigger.dataset.value || colorTrigger.style.backgroundColor) : '#A1D5F8';
+      const nextFallbackColor = colorTrigger ? (colorTrigger.dataset.value || colorTrigger.style.backgroundColor) : '#00b8d4';
       const folderTrigger = document.getElementById('app-bookmark-folder-color-trigger');
       const nextFolderColor = folderTrigger ? (folderTrigger.dataset.value || folderTrigger.style.backgroundColor) : '#FFFFFF';
       const nextPerformanceMode = document.getElementById('app-performance-mode-toggle')?.checked || false;

@@ -3900,7 +3900,8 @@ input:checked + .slider:before {
 /* This wrapper holds both the real icon and the fallback */
 .bookmark-icon-wrapper {
   width: 50px;
-  height: 50px;
+  /* Match folder height for aligned labels */
+  height: 58px;
 
   display: flex;
   align-items: center;
@@ -4384,8 +4385,26 @@ body.performance-mode * {
 /* Fallback backgrounds for readability when blur is gone */
 body.performance-mode .glass-box,
 body.performance-mode #quick-actions-bar {
-  background-color: rgba(30, 30, 30, 0.85); /* Darker, more opaque */
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  /* 40% transparent black for lighter performance-mode glass */
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Force Context Menus to be solid white in Performance Mode */
+body.performance-mode .context-menu {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #999 !important;
+}
+
+/* Ensure text inside the menu is black */
+body.performance-mode .context-menu .menu-item {
+  color: #000000 !important;
+}
+
+/* Ensure hover effect is visible (light gray) */
+body.performance-mode .context-menu .menu-item:hover {
+  background-color: #eee !important;
 }
 
 /* Re-add borders so elements keep definition without shadows */
@@ -4397,10 +4416,33 @@ body.performance-mode .mw-card {
   border: 1px solid #555 !important;
 }
 
-/* Ensure bookmark text stays readable without shadow */
+/* 1. Default Performance Mode (Setting is OFF): Subtle Gray Background */
 body.performance-mode .bookmark-item span {
-  background-color: rgba(0, 0, 0, 0.7);
+  /* 40% opacity black creates a "Little Bit Gray" look */
+  background-color: rgba(0, 0, 0, 0.4) !important; 
   color: white !important;
+  
+  /* Sizing fixes */
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 2px 6px !important;
+  border-radius: 6px !important;
+  width: auto !important;
+  max-width: 90% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* 2. Performance Mode (Setting is ON): Use User's Custom Color */
+body.performance-mode.bookmark-text-bg-enabled .bookmark-item span {
+  /* Use the custom color variable, solid/opaque */
+  background-color: rgba(var(--bookmark-text-bg-rgb, 44, 165, 255), 0.85) !important;
+  
+  /* Use correct text color (black or white) based on contrast */
+  color: var(--bookmark-text-color, white) !important;
+  
+  /* Add border for definition */
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 
 /* Ensure animating items are visible if animations are disabled */
@@ -4410,8 +4452,9 @@ body.performance-mode .bookmark-item.newly-rendered {
 }
 
 body.performance-mode .dock {
-  background-color: rgba(0, 0, 0, 0.6); /* Dark sidebar background */
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  /* Match other glass elements at 40% transparency */
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 body.performance-mode .result-header {

@@ -21,16 +21,19 @@
     "storage",
     "bookmarks",
     "history",
-    
+    "cookies",
+    "contextualIdentities",
+ 
     "https://suggestqueries.google.com/*",
     "https://duckduckgo.com/ac/*",
     "https://api.bing.com/osjson.aspx*",
     "https://ff.search.yahoo.com/*",
     "https://suggest.yandex.com/*",
-    
+     
     "https://en.wikipedia.org/*",
     "https://completion.amazon.com/*"
   ],
+  "optional_permissions": [],
 
   "web_accessible_resources": [
     "icons/*",

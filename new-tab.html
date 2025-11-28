@@ -412,20 +412,30 @@
               </select>
             </div>
 
-            <div class="app-setting-row">
-              <div class="app-setting-label">
-                <div class="title">Close inactive tabs after</div>
-                <div class="hint">Close background Homebase tabs if unused for this long.</div>
+              <div class="app-setting-row">
+                <div class="app-setting-label">
+                  <div class="title">Close inactive tabs after</div>
+                  <div class="hint">Close background Homebase tabs if unused for this long.</div>
+                </div>
+                <select id="app-autoclose-select" class="app-setting-select">
+                  <option value="0">Never (Default)</option>
+                  <option value="5">5 Minutes</option>
+                  <option value="15">15 Minutes</option>
+                  <option value="30">30 Minutes</option>
+                  <option value="60">1 Hour</option>
+                </select>
               </div>
-              <select id="app-autoclose-select" class="app-setting-select">
-                <option value="0">Never (Default)</option>
-                <option value="5">5 Minutes</option>
-                <option value="15">15 Minutes</option>
-                <option value="30">30 Minutes</option>
-                <option value="60">1 Hour</option>
-              </select>
-            </div>
-          </section>
+              <div class="app-setting-row" id="app-container-mode-row" style="display: none;">
+                <div class="app-setting-label">
+                  <div class="title">Enable Firefox Containers</div>
+                  <div class="hint">Show "Open in Container" option in bookmark context menu.</div>
+                </div>
+                <label class="app-switch">
+                  <input type="checkbox" id="app-container-mode-toggle">
+                  <span class="app-switch-track"></span>
+                </label>
+              </div>
+            </section>
           <section class="app-settings-section" data-section="bookmarks">
             <div class="app-setting-row">
               <div class="app-setting-label">
@@ -783,17 +793,23 @@
     <button class="menu-item" data-action="edit">Edit</button>
     <button class="menu-item" data-action="move">Move</button>
     <button class="menu-item" data-action="delete">Delete</button>
-  </div>
-
-  <!-- Context menu for ICONS in the grid -->
-  <div id="bookmark-icon-menu" class="context-menu glass-box hidden">
-    <button class="menu-item" data-action="open-new-tab">Open in New Tab</button>
-    <div class="menu-divider"></div>
-    <button class="menu-item" data-action="rename">Rename</button>
-    <button class="menu-item" data-action="edit">Edit</button>
-    <button class="menu-item" data-action="move">Move</button>
-    <button class="menu-item" data-action="delete">Delete</button>
-  </div>
+    </div>
+  
+    <!-- Context menu for ICONS in the grid -->
+    <div id="bookmark-icon-menu" class="context-menu glass-box hidden">
+      <button class="menu-item" data-action="open-new-tab">Open in New Tab</button>
+      
+      <div class="menu-item-group hidden" id="context-menu-container-group">
+        <button class="menu-item has-submenu">Open in Container</button>
+        <div class="context-submenu" id="context-menu-container-list">
+        </div>
+      </div>
+      <div class="menu-divider"></div>
+      <button class="menu-item" data-action="rename">Rename</button>
+      <button class="menu-item" data-action="edit">Edit</button>
+      <button class="menu-item" data-action="move">Move</button>
+      <button class="menu-item" data-action="delete">Delete</button>
+    </div>
 
   <!-- Context menu for blank space in the bookmarks grid -->
   <div id="bookmark-grid-blank-menu" class="context-menu glass-box hidden">

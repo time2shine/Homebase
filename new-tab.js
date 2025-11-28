@@ -904,10 +904,11 @@ const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
 const APP_BOOKMARK_TEXT_BG_KEY = 'appBookmarkTextBg';
 const APP_BOOKMARK_TEXT_BG_COLOR_KEY = 'appBookmarkTextBgColor';
 const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
-const APP_BOOKMARK_TEXT_BLUR_KEY = 'appBookmarkTextBgBlur';
-const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
-const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
-const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
+  const APP_BOOKMARK_TEXT_BLUR_KEY = 'appBookmarkTextBgBlur';
+  const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
+  const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
+  const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
+  const APP_CONTAINER_MODE_KEY = 'appContainerMode';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -920,15 +921,16 @@ let myWallpaperMediaObserver = null;
 let timeFormatPreference = '12-hour';
 let appShowSidebarPreference = true;
 let appMaxTabsPreference = 0; // 0 means unlimited
-let appAutoClosePreference = 0; // 0 means never
-let appSingletonModePreference = false;
-let appSearchOpenNewTabPreference = false;
+  let appAutoClosePreference = 0; // 0 means never
+  let appSingletonModePreference = false;
+  let appSearchOpenNewTabPreference = false;
 let appSearchRememberEnginePreference = true;
-let appSearchDefaultEnginePreference = 'google';
-let appSearchMathPreference = true;
-let appSearchShowHistoryPreference = false;
-let appBookmarkOpenNewTabPreference = false;
-let appBookmarkTextBgPreference = false;
+  let appSearchDefaultEnginePreference = 'google';
+  let appSearchMathPreference = true;
+  let appSearchShowHistoryPreference = false;
+  let appContainerModePreference = false;
+  let appBookmarkOpenNewTabPreference = false;
+  let appBookmarkTextBgPreference = false;
 let appBookmarkTextBgColorPreference = '#2CA5FF';
 let appBookmarkTextBgOpacityPreference = 0.65;
 let appBookmarkTextBgBlurPreference = 4;
@@ -3178,7 +3180,8 @@ async function loadAppSettingsFromStorage() {
       APP_BOOKMARK_TEXT_BLUR_KEY,
       APP_BOOKMARK_FALLBACK_COLOR_KEY,
       APP_BOOKMARK_FOLDER_COLOR_KEY,
-      APP_PERFORMANCE_MODE_KEY
+      APP_PERFORMANCE_MODE_KEY,
+      APP_CONTAINER_MODE_KEY
     ]);
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
@@ -3204,6 +3207,7 @@ async function loadAppSettingsFromStorage() {
     appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#A1D5F8';
     appBookmarkFolderColorPreference = stored[APP_BOOKMARK_FOLDER_COLOR_KEY] || '#FFFFFF';
     appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
+    appContainerModePreference = stored[APP_CONTAINER_MODE_KEY] === true;
     applyBookmarkFallbackColor(appBookmarkFallbackColorPreference);
     applyBookmarkFolderColor(appBookmarkFolderColorPreference);
     applyPerformanceMode(appPerformanceModePreference);
@@ -6136,15 +6140,135 @@ function isLightColor(hex, alpha = 1) {
 }
 
 // ===============================================
+// --- FIREFOX CONTAINER LOGIC ---
+// ===============================================
+
+async function setupContainerMode() {
+  const row = document.getElementById('app-container-mode-row');
+  const toggle = document.getElementById('app-container-mode-toggle');
+
+  // 1. Feature Detection: Only run if browser supports identities
+  if (!browser.contextualIdentities) {
+    if (row) row.style.display = 'none';
+    return;
+  }
+
+  // 2. Show the setting row
+  if (row) row.style.display = 'flex';
+
+  // 3. Sync Toggle State
+  if (toggle) {
+    // It's only "true" if the user wants it
+    toggle.checked = appContainerModePreference;
+
+    toggle.addEventListener('change', async (e) => {
+      const isEnabled = e.target.checked;
+
+      appContainerModePreference = isEnabled;
+      await browser.storage.local.set({ [APP_CONTAINER_MODE_KEY]: isEnabled });
+    });
+  }
+}
+
+async function populateContainerMenu() {
+  const containerGroup = document.getElementById('context-menu-container-group');
+  const containerList = document.getElementById('context-menu-container-list');
+
+  // Safety checks
+  if (!containerGroup || !containerList || !appContainerModePreference || !browser.contextualIdentities) {
+    if (containerGroup) containerGroup.classList.add('hidden');
+    return;
+  }
+
+  try {
+    const containers = await browser.contextualIdentities.query({});
+    
+    if (!containers || containers.length === 0) {
+      containerGroup.classList.add('hidden');
+      return;
+    }
+
+    containerList.innerHTML = '';
+    
+    containers.forEach((identity) => {
+      const btn = document.createElement('button');
+      btn.className = 'container-item';
+      
+      const icon = document.createElement('span');
+      icon.className = 'container-icon';
+      icon.style.backgroundColor = identity.colorCode || identity.color || '#333'; // FF usually returns color name, but sometimes hex
+      // Map basic FF color names to hex if needed, or rely on CSS/browser default handling
+      
+      // Simple color mapping if browser returns text like "blue", "red"
+      const colorMap = {
+        blue: '#37adff',
+        turquoise: '#00c79a',
+        green: '#51cd00',
+        yellow: '#ffcb00',
+        orange: '#ff9f00',
+        red: '#ff613d',
+        pink: '#ff4bda',
+        purple: '#af51f5'
+      };
+      if (colorMap[identity.color]) {
+        icon.style.backgroundColor = colorMap[identity.color];
+      }
+
+      btn.appendChild(icon);
+      
+      const text = document.createElement('span');
+      text.textContent = identity.name;
+      btn.appendChild(text);
+
+      btn.onclick = (e) => {
+        e.stopPropagation(); // Prevent closing menu immediately if we want animation, but usually we want to close
+        openBookmarkInContainer(currentContextItemId, identity.cookieStoreId);
+        // Hide menus
+        const menu = document.getElementById('bookmark-icon-menu');
+        if (menu) menu.classList.add('hidden');
+      };
+
+      containerList.appendChild(btn);
+    });
+
+    containerGroup.classList.remove('hidden');
+
+  } catch (err) {
+    console.warn('Failed to load containers', err);
+    containerGroup.classList.add('hidden');
+  }
+}
+
+async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
+  if (!bookmarkId) return;
+  const node = findBookmarkNodeById(bookmarkTree[0], bookmarkId);
+  if (!node || !node.url) {
+    alert('Invalid bookmark URL.');
+    return;
+  }
+
+  try {
+    await browser.tabs.create({
+      url: node.url,
+      cookieStoreId: cookieStoreId,
+      active: true
+    });
+  } catch (err) {
+    console.error('Failed to open in container', err);
+  }
+}
+
+// ===============================================
 // --- INITIALIZE THE PAGE (MODIFIED) ---
 // ===============================================
-async function initializePage() {
-  clearBookmarkLoadingStates();
-  await ensureDailyWallpaper();
-  setupBackgroundVideoCrossfade();
-  await loadAppSettingsFromStorage();
-  syncAppSettingsForm();
-  updateTime();
+  async function initializePage() {
+    clearBookmarkLoadingStates();
+    await ensureDailyWallpaper();
+    setupBackgroundVideoCrossfade();
+    await loadAppSettingsFromStorage();
+    syncAppSettingsForm();
+    setupContainerMode();
+    updateTime();
   setInterval(updateTime, 1000 * 60);
   setupDockNavigation();
   setupAppSettingsModal();
@@ -6252,16 +6376,26 @@ async function initializePage() {
 
       folderContextMenu.classList.add('hidden');
       gridFolderMenu.classList.add('hidden');
-      iconContextMenu.classList.add('hidden');
+        iconContextMenu.classList.add('hidden');
 
-      const targetMenu = isFolder ? gridFolderMenu : iconContextMenu;
-      if (!targetMenu) return;
+        const targetMenu = isFolder ? gridFolderMenu : iconContextMenu;
+        if (!targetMenu) return;
 
-      targetMenu.style.top = `${e.clientY}px`;
-      targetMenu.style.left = `${e.clientX}px`;
-      targetMenu.classList.remove('hidden');
-    });
-  }
+        // Populate container menu if enabled and opening bookmark icon menu
+        if (!isFolder) {
+          if (appContainerModePreference) {
+            populateContainerMenu();
+          } else {
+            const containerGroup = document.getElementById('context-menu-container-group');
+            if (containerGroup) containerGroup.classList.add('hidden');
+          }
+        }
+
+        targetMenu.style.top = `${e.clientY}px`;
+        targetMenu.style.left = `${e.clientX}px`;
+        targetMenu.classList.remove('hidden');
+      });
+    }
   if (bookmarksGrid && gridBlankMenu) {
     bookmarksGrid.addEventListener('contextmenu', (e) => {
       if (e.target.closest('.bookmark-item')) {

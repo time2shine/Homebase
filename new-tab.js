@@ -2500,6 +2500,12 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
         return;
       }
 
+      // Skip animation entirely when performance mode is enabled
+      if (appPerformanceModePreference) {
+        item.style.opacity = '';
+        return;
+      }
+
       const delay = Math.min(index * 25, 500); // 25ms per item, max 500ms
       item.style.animationDelay = `${delay}ms`;
       item.classList.add('newly-rendered');

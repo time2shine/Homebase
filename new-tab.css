@@ -4315,11 +4315,49 @@ body.performance-mode .bookmark-item span {
   -webkit-backdrop-filter: none !important;
 }
 
+/* Hide video backgrounds to save decode/battery when in performance mode */
+body.performance-mode .background-video {
+  display: none !important;
+}
+
+/* Strip heavy shadows for cheaper paints */
+body.performance-mode * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Disable transitions/animations for instant interactions */
+body.performance-mode * {
+  transition: none !important;
+  animation: none !important;
+}
+
 /* Fallback backgrounds for readability when blur is gone */
 body.performance-mode .glass-box,
 body.performance-mode #quick-actions-bar {
   background-color: rgba(30, 30, 30, 0.85); /* Darker, more opaque */
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Re-add borders so elements keep definition without shadows */
+body.performance-mode .dock-item, 
+body.performance-mode .widget-search,
+body.performance-mode .bookmark-folder-tab,
+body.performance-mode .gallery-card,
+body.performance-mode .mw-card {
+  border: 1px solid #555 !important;
+}
+
+/* Ensure bookmark text stays readable without shadow */
+body.performance-mode .bookmark-item span {
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white !important;
+}
+
+/* Ensure animating items are visible if animations are disabled */
+body.performance-mode .bookmark-item.newly-rendered {
+  opacity: 1 !important;
+  animation: none !important;
 }
 
 body.performance-mode .dock {

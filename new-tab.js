@@ -5748,10 +5748,10 @@ function setupMaterialColorPicker() {
 
   if (!modal || !grid) return;
 
-  // Clear existing content if any
+  // --- 1. Optimization: Build HTML first, attach 1 listener later ---
   grid.innerHTML = '';
 
-  // Helper to create a row
+  // Helper to create a row (No event listeners here anymore)
   function createRow(group) {
     const row = document.createElement('div');
     row.className = 'material-color-row';
@@ -5764,15 +5764,22 @@ function setupMaterialColorPicker() {
     label.style.backgroundColor = baseColor;
     label.style.color = '#ffffff';
     label.title = `Select ${group.name} (${baseColor})`;
-    label.addEventListener('click', () => pickColor(baseColor));
+    
+    // Store data for delegation
+    label.dataset.color = baseColor;
+    label.dataset.isClickable = 'true'; 
+    
     row.appendChild(label);
 
     group.colors.forEach(color => {
       const swatch = document.createElement('div');
       swatch.className = 'material-color-swatch';
       swatch.style.backgroundColor = color;
+      
+      // Store data for delegation
       swatch.dataset.color = color.toLowerCase();
-      swatch.addEventListener('click', () => pickColor(color));
+      swatch.dataset.isClickable = 'true';
+      
       row.appendChild(swatch);
     });
     return row;
@@ -5783,11 +5790,18 @@ function setupMaterialColorPicker() {
     closeMaterialPicker();
   }
 
+  // --- 2. Optimization: Efficient Highlighting ---
   function highlightSelectedColor(hexColor) {
     if (!hexColor) return;
     const target = hexColor.toLowerCase();
-    const allSwatches = grid.querySelectorAll('.material-color-swatch, .bw-swatch');
-    allSwatches.forEach(el => el.classList.remove('selected'));
+
+    // A. Efficiently remove old selection (don't loop through everything)
+    const oldSelected = grid.querySelector('.selected');
+    if (oldSelected) {
+      oldSelected.classList.remove('selected');
+    }
+
+    // B. Find new target
     const match = grid.querySelector(`[data-color="${target}"]`);
     if (match) {
       match.classList.add('selected');
@@ -5841,7 +5855,7 @@ function setupMaterialColorPicker() {
   whiteBox.style.color = '#000000';
   whiteBox.textContent = 'white';
   whiteBox.dataset.color = '#ffffff';
-  whiteBox.addEventListener('click', () => pickColor('#ffffff'));
+  whiteBox.dataset.isClickable = 'true';
   footerBW.appendChild(whiteBox);
 
   const blackBox = document.createElement('div');
@@ -5850,13 +5864,24 @@ function setupMaterialColorPicker() {
   blackBox.style.color = '#ffffff';
   blackBox.textContent = 'black';
   blackBox.dataset.color = '#000000';
-  blackBox.addEventListener('click', () => pickColor('#000000'));
+  blackBox.dataset.isClickable = 'true';
   footerBW.appendChild(blackBox);
 
   footer.appendChild(footerBW);
   grid.appendChild(footer);
 
-  // --- Attach Event Listeners ---
+  // --- 3. Optimization: Single Event Listener (Delegation) ---
+  grid.addEventListener('click', (e) => {
+    // Check if the clicked element has our specific data attribute
+    // We check dataset.isClickable or class names
+    const target = e.target.closest('[data-is-clickable=\"true\"]');
+    
+    if (target && target.dataset.color) {
+      pickColor(target.dataset.color);
+    }
+  });
+
+  // --- Attach Trigger Listeners ---
 
   // 1. Fallback Icon Color Trigger
   if (fallbackTriggerBtn) {

@@ -903,6 +903,7 @@ const APP_SEARCH_SHOW_HISTORY_KEY = 'appSearchShowHistory';
 const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
 const APP_BOOKMARK_TEXT_BG_KEY = 'appBookmarkTextBg';
 const APP_BOOKMARK_TEXT_BG_COLOR_KEY = 'appBookmarkTextBgColor';
+const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
 const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
 const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
 const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
@@ -928,6 +929,7 @@ let appSearchShowHistoryPreference = false;
 let appBookmarkOpenNewTabPreference = false;
 let appBookmarkTextBgPreference = false;
 let appBookmarkTextBgColorPreference = '#2CA5FF';
+let appBookmarkTextBgOpacityPreference = 0.65;
 let appBookmarkFallbackColorPreference = '#A1D5F8';
 let appBookmarkFolderColorPreference = '#FFFFFF';
 let appPerformanceModePreference = false;
@@ -3085,12 +3087,30 @@ function hexToRgbString(hex) {
   return `${r}, ${g}, ${b}`;
 }
 
+function applyBookmarkTextBgOpacity(opacity) {
+  const safeOpacity = Math.max(0, Math.min(1, parseFloat(opacity)));
+  const resolvedOpacity = Number.isFinite(safeOpacity) ? safeOpacity : 0.65;
+  appBookmarkTextBgOpacityPreference = resolvedOpacity;
+  document.documentElement.style.setProperty('--bookmark-text-bg-opacity', resolvedOpacity);
+
+  // Update the label text in settings
+  const label = document.getElementById('app-bookmark-text-opacity-value');
+  const slider = document.getElementById('app-bookmark-text-opacity-slider');
+  if (label) label.textContent = `${Math.round(resolvedOpacity * 100)}%`;
+  if (slider && slider.value !== String(resolvedOpacity)) {
+    slider.value = resolvedOpacity;
+  }
+
+  // Re-evaluate contrast since opacity influences perceived brightness
+  applyBookmarkTextBgColor(appBookmarkTextBgColorPreference);
+}
+
 function applyBookmarkTextBgColor(color) {
   if (!color) return;
   appBookmarkTextBgColorPreference = color;
   const rgbValues = hexToRgbString(color);
   document.documentElement.style.setProperty('--bookmark-text-bg-rgb', rgbValues);
-  if (isLightColor(color)) {
+  if (isLightColor(color, appBookmarkTextBgOpacityPreference)) {
     document.documentElement.style.setProperty('--bookmark-text-color', '#000000');
     document.documentElement.style.setProperty('--bookmark-text-shadow', 'none');
   } else {
@@ -3130,6 +3150,7 @@ async function loadAppSettingsFromStorage() {
       APP_BOOKMARK_OPEN_NEW_TAB_KEY,
       APP_BOOKMARK_TEXT_BG_KEY,
       APP_BOOKMARK_TEXT_BG_COLOR_KEY,
+      APP_BOOKMARK_TEXT_OPACITY_KEY,
       APP_BOOKMARK_FALLBACK_COLOR_KEY,
       APP_BOOKMARK_FOLDER_COLOR_KEY,
       APP_PERFORMANCE_MODE_KEY
@@ -3149,6 +3170,8 @@ async function loadAppSettingsFromStorage() {
     appBookmarkOpenNewTabPreference = stored[APP_BOOKMARK_OPEN_NEW_TAB_KEY] === true;
     appBookmarkTextBgPreference = stored[APP_BOOKMARK_TEXT_BG_KEY] === true;
     applyBookmarkTextBg(appBookmarkTextBgPreference);
+    appBookmarkTextBgOpacityPreference = parseFloat(stored[APP_BOOKMARK_TEXT_OPACITY_KEY] || 0.65);
+    applyBookmarkTextBgOpacity(appBookmarkTextBgOpacityPreference);
     appBookmarkTextBgColorPreference = stored[APP_BOOKMARK_TEXT_BG_COLOR_KEY] || '#2CA5FF';
     applyBookmarkTextBgColor(appBookmarkTextBgColorPreference);
     appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#A1D5F8';
@@ -3317,20 +3340,28 @@ function syncAppSettingsForm() {
   }
   const bookmarkTextBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
   const bookmarkTextBgColorRow = document.getElementById('app-bookmark-text-bg-color-row');
+  const bookmarkTextBgOpacityRow = document.getElementById('app-bookmark-text-bg-opacity-row');
   if (bookmarkTextBgToggle) {
     bookmarkTextBgToggle.checked = appBookmarkTextBgPreference;
     if (bookmarkTextBgColorRow) {
-      if (appBookmarkTextBgPreference) {
-        bookmarkTextBgColorRow.classList.remove('hidden');
-      } else {
-        bookmarkTextBgColorRow.classList.add('hidden');
-      }
+      bookmarkTextBgColorRow.classList.toggle('hidden', !appBookmarkTextBgPreference);
+    }
+    if (bookmarkTextBgOpacityRow) {
+      bookmarkTextBgOpacityRow.classList.toggle('hidden', !appBookmarkTextBgPreference);
     }
   }
   const textBgColorTrigger = document.getElementById('app-bookmark-text-bg-color-trigger');
   if (textBgColorTrigger) {
     textBgColorTrigger.style.backgroundColor = appBookmarkTextBgColorPreference;
     textBgColorTrigger.dataset.value = appBookmarkTextBgColorPreference;
+  }
+  const textBgOpacitySlider = document.getElementById('app-bookmark-text-opacity-slider');
+  const textBgOpacityValue = document.getElementById('app-bookmark-text-opacity-value');
+  if (textBgOpacitySlider) {
+    textBgOpacitySlider.value = appBookmarkTextBgOpacityPreference;
+  }
+  if (textBgOpacityValue) {
+    textBgOpacityValue.textContent = `${Math.round(appBookmarkTextBgOpacityPreference * 100)}%`;
   }
   const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
   if (colorTrigger) {
@@ -3414,13 +3445,19 @@ function setupAppSettingsModal() {
   }
   const textBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
   const textBgRow = document.getElementById('app-bookmark-text-bg-color-row');
-  if (textBgToggle && textBgRow) {
+  const textBgOpacityRow = document.getElementById('app-bookmark-text-bg-opacity-row');
+  const textBgOpacitySlider = document.getElementById('app-bookmark-text-opacity-slider');
+  if (textBgToggle) {
     textBgToggle.addEventListener('change', () => {
-      if (textBgToggle.checked) {
-        textBgRow.classList.remove('hidden');
-      } else {
-        textBgRow.classList.add('hidden');
-      }
+      const isHidden = !textBgToggle.checked;
+      if (textBgRow) textBgRow.classList.toggle('hidden', isHidden);
+      if (textBgOpacityRow) textBgOpacityRow.classList.toggle('hidden', isHidden);
+    });
+  }
+  if (textBgOpacitySlider) {
+    textBgOpacitySlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      applyBookmarkTextBgOpacity(val);
     });
   }
   if (appSettingsSaveBtn) {
@@ -3434,6 +3471,7 @@ function setupAppSettingsModal() {
       const nextBookmarkTextBg = document.getElementById('app-bookmark-text-bg-toggle')?.checked || false;
       const textBgColorTrigger = document.getElementById('app-bookmark-text-bg-color-trigger');
       const nextTextBgColor = textBgColorTrigger ? (textBgColorTrigger.dataset.value || textBgColorTrigger.style.backgroundColor) : '#2CA5FF';
+      const nextOpacity = parseFloat(document.getElementById('app-bookmark-text-opacity-slider')?.value || 0.65);
       const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
       const nextFallbackColor = colorTrigger ? (colorTrigger.dataset.value || colorTrigger.style.backgroundColor) : '#A1D5F8';
       const folderTrigger = document.getElementById('app-bookmark-folder-color-trigger');
@@ -3459,6 +3497,7 @@ function setupAppSettingsModal() {
       appSearchShowHistoryPreference = nextSearchHistory;
       appBookmarkOpenNewTabPreference = nextBookmarkNewTab;
       applyBookmarkTextBg(nextBookmarkTextBg);
+      applyBookmarkTextBgOpacity(nextOpacity);
       applyBookmarkTextBgColor(nextTextBgColor);
       appBookmarkFallbackColorPreference = nextFallbackColor;
       appBookmarkFolderColorPreference = nextFolderColor;
@@ -3479,6 +3518,7 @@ function setupAppSettingsModal() {
           [APP_BOOKMARK_OPEN_NEW_TAB_KEY]: nextBookmarkNewTab,
           [APP_BOOKMARK_TEXT_BG_KEY]: nextBookmarkTextBg,
           [APP_BOOKMARK_TEXT_BG_COLOR_KEY]: nextTextBgColor,
+          [APP_BOOKMARK_TEXT_OPACITY_KEY]: nextOpacity,
           [APP_BOOKMARK_FALLBACK_COLOR_KEY]: nextFallbackColor,
           [APP_BOOKMARK_FOLDER_COLOR_KEY]: nextFolderColor,
           [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
@@ -6026,13 +6066,22 @@ function closeMaterialPicker() {
   }, 150);
 }
 
-function isLightColor(hex) {
-  const c = hex.substring(1);
-  const rgb = parseInt(c, 16);
+function isLightColor(hex, alpha = 1) {
+  const clean = (hex || '').replace('#', '');
+  if (clean.length !== 6) return false;
+  const rgb = parseInt(clean, 16);
+  if (Number.isNaN(rgb)) return false;
   const r = (rgb >> 16) & 0xff;
   const g = (rgb >> 8) & 0xff;
   const b = rgb & 0xff;
-  const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+  // Blend against a light backdrop to account for transparency
+  const clampedAlpha = Math.max(0, Math.min(1, Number(alpha)));
+  const blendedR = r * clampedAlpha + 255 * (1 - clampedAlpha);
+  const blendedG = g * clampedAlpha + 255 * (1 - clampedAlpha);
+  const blendedB = b * clampedAlpha + 255 * (1 - clampedAlpha);
+
+  const luma = 0.2126 * blendedR + 0.7152 * blendedG + 0.0722 * blendedB;
   return luma > 150;
 }
 

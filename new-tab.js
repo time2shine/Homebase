@@ -2227,30 +2227,40 @@ function renderBookmark(bookmarkNode) {
   const iconWrapper = document.createElement('div');
   iconWrapper.className = 'bookmark-icon-wrapper';
 
+  // 1. Create Fallback (Default View)
   const fallbackIcon = document.createElement('div');
   fallbackIcon.className = 'bookmark-fallback-icon';
   fallbackIcon.textContent = firstLetter;
   iconWrapper.appendChild(fallbackIcon);
 
-  const imgIcon = document.createElement('img');
-
-  imgIcon.addEventListener('load', () => {
-    if (imgIcon.naturalWidth > 16) {
-      iconWrapper.innerHTML = '';
-      iconWrapper.appendChild(imgIcon);
-      iconWrapper.appendChild(loader);
-    }
-  });
-
-  imgIcon.addEventListener('error', () => {
-    // Do nothing, fallback is already visible
-  });
-
-  imgIcon.src = `https://s2.googleusercontent.com/s2/favicons?domain=${bookmarkNode.url}&sz=64`;
-
+  // 2. Prepare Loading Spinner (Defined early so we can use it immediately)
   const loader = document.createElement('div');
   loader.className = 'bookmark-loading-spinner';
-  iconWrapper.appendChild(loader);
+
+  // 3. Create and Load Image
+  const imgIcon = document.createElement('img');
+  const faviconUrl = `https://s2.googleusercontent.com/s2/favicons?domain=${bookmarkNode.url}&sz=64`;
+
+  // Common function to swap fallback -> image
+  const showImage = () => {
+    if (imgIcon.naturalWidth > 16) {
+      iconWrapper.innerHTML = '';     // Remove fallback
+      iconWrapper.appendChild(imgIcon); // Show image
+      iconWrapper.appendChild(loader);  // Keep loader structure (hidden by CSS usually)
+    }
+  };
+
+  imgIcon.addEventListener('load', showImage);
+  imgIcon.addEventListener('error', () => { /* Keep fallback */ });
+
+  // Start loading
+  imgIcon.src = faviconUrl;
+
+  // --- FIX: Check immediately if cached ---
+  // If the browser already has this image, show it NOW to prevent the "Fallback Flash"
+  if (imgIcon.complete && imgIcon.naturalWidth > 0) {
+    showImage();
+  }
 
   const titleSpan = document.createElement('span');
   titleSpan.textContent = bookmarkNode.title;

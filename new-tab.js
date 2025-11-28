@@ -910,6 +910,10 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
   const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
   const APP_CONTAINER_MODE_KEY = 'appContainerMode';
   const APP_CONTAINER_NEW_TAB_KEY = 'appContainerNewTab';
+// Map to store per-folder customization (id -> { color, icon })
+const FOLDER_META_KEY = 'folderCustomMetadata';
+let folderMetadata = {};
+let pendingFolderMeta = {};
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -1030,8 +1034,6 @@ let editFolderNameInput;
 let editFolderSaveBtn;
 let editFolderCancelBtn;
 let editFolderCloseBtn;
-let editFolderIconSpan;
-let editFolderTextSpan;
 let editFolderTargetId = null;
 
 // ===============================================
@@ -1393,21 +1395,82 @@ function setupFolderModal() {
 // ===============================================
 function setupEditFolderModal() {
   editFolderModal = document.getElementById('edit-folder-modal');
-  if (!editFolderModal) {
-    return;
-  }
+  if (!editFolderModal) return;
 
   editFolderDialog = document.getElementById('edit-folder-dialog');
   editFolderNameInput = document.getElementById('edit-folder-name-input');
   editFolderSaveBtn = document.getElementById('edit-folder-save-btn');
   editFolderCancelBtn = document.getElementById('edit-folder-cancel-btn');
   editFolderCloseBtn = document.getElementById('edit-folder-close-btn');
-  editFolderIconSpan = document.getElementById('edit-folder-icon');
-  editFolderTextSpan = document.getElementById('edit-folder-text');
+
+  const colorBtn = document.getElementById('edit-folder-color-btn');
+  const uploadBtn = document.getElementById('edit-folder-upload-btn');
+  const resetBtn = document.getElementById('edit-folder-reset-btn');
+  const fileInput = document.getElementById('edit-folder-file-input');
+
+  const openColorPicker = () => {
+    const modal = document.getElementById('material-picker-modal');
+    const grid = document.getElementById('material-color-grid');
+    if (!modal || !grid || !colorBtn) return;
+
+    const currentMeta = pendingFolderMeta[editFolderTargetId] || {};
+    const currentColor = currentMeta.color || appBookmarkFolderColorPreference;
+    colorBtn.dataset.value = currentColor;
+
+    const previousSelected = grid.querySelector('.selected');
+    if (previousSelected) previousSelected.classList.remove('selected');
+    const match = grid.querySelector(`[data-color="${(currentColor || '').toLowerCase()}"]`);
+    if (match) match.classList.add('selected');
+
+    materialPickerCallback = (newColor) => {
+      if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+      pendingFolderMeta[editFolderTargetId].color = newColor;
+      updateEditPreview();
+    };
+
+    modal.classList.remove('hidden');
+    const rect = colorBtn.getBoundingClientRect();
+    const gridLeft = grid.offsetLeft;
+    const gridTop = grid.offsetTop;
+    grid.style.transformOrigin = `${(rect.left + rect.width / 2) - gridLeft}px ${(rect.top + rect.height / 2) - gridTop}px`;
+  };
 
   editFolderSaveBtn.addEventListener('click', handleEditFolderSave);
   editFolderCancelBtn.addEventListener('click', hideEditFolderModal);
   editFolderCloseBtn.addEventListener('click', hideEditFolderModal);
+
+  if (colorBtn) {
+    colorBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      openColorPicker();
+    });
+  }
+
+  if (uploadBtn && fileInput) {
+    uploadBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+        pendingFolderMeta[editFolderTargetId].icon = evt.target.result;
+        updateEditPreview();
+      };
+      reader.readAsDataURL(file);
+      fileInput.value = '';
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      if (pendingFolderMeta[editFolderTargetId]) {
+        delete pendingFolderMeta[editFolderTargetId].color;
+        delete pendingFolderMeta[editFolderTargetId].icon;
+      }
+      updateEditPreview();
+    });
+  }
 
   editFolderModal.addEventListener('click', (e) => {
     if (e.target === editFolderModal) {
@@ -1435,25 +1498,17 @@ function setupEditFolderModal() {
 }
 
 function showEditFolderModal(folderNode) {
-  if (!editFolderModal || !folderNode) {
-    return;
-  }
+  if (!editFolderModal || !folderNode) return;
 
   editFolderTargetId = folderNode.id;
-  const folderTitle = folderNode.title || 'Folder';
+  if (editFolderNameInput) editFolderNameInput.value = folderNode.title || '';
 
-  if (editFolderIconSpan) {
-    editFolderIconSpan.innerHTML = ICONS.bookmarkFolderSmall || '';
+  pendingFolderMeta = {};
+  if (folderMetadata[folderNode.id]) {
+    pendingFolderMeta[folderNode.id] = { ...folderMetadata[folderNode.id] };
   }
 
-  if (editFolderTextSpan) {
-    editFolderTextSpan.textContent = `Edit "${folderTitle}"`;
-  }
-
-  if (editFolderNameInput) {
-    editFolderNameInput.value = folderNode.title || '';
-  }
-
+  updateEditPreview();
   editFolderModal.style.display = 'flex';
 
   if (editFolderNameInput) {
@@ -1463,32 +1518,60 @@ function showEditFolderModal(folderNode) {
 }
 
 function hideEditFolderModal() {
-  if (!editFolderModal) {
-    return;
-  }
+  if (!editFolderModal) return;
 
   editFolderModal.style.display = 'none';
   editFolderTargetId = null;
-  if (editFolderNameInput) {
-    editFolderNameInput.value = '';
+  pendingFolderMeta = {};
+  const previewContainer = document.getElementById('edit-folder-icon-preview');
+  if (previewContainer) {
+    previewContainer.innerHTML = '';
+  }
+  if (editFolderNameInput) editFolderNameInput.value = '';
+}
+
+function updateEditPreview() {
+  const previewContainer = document.getElementById('edit-folder-icon-preview');
+  if (!previewContainer || !editFolderTargetId) return;
+
+  const meta = pendingFolderMeta[editFolderTargetId] || {};
+  previewContainer.innerHTML = '';
+
+  if (meta.icon) {
+    const img = document.createElement('img');
+    img.src = meta.icon;
+    previewContainer.appendChild(img);
+  } else {
+    previewContainer.innerHTML = ICONS.bookmarkFolderLarge || '';
+    const color = meta.color || appBookmarkFolderColorPreference;
+    const paths = previewContainer.querySelectorAll('path, rect');
+    paths.forEach((p) => {
+      p.style.fill = color;
+      p.style.setProperty('fill', color, 'important');
+    });
   }
 }
 
 async function handleEditFolderSave() {
-  if (!editFolderTargetId || !editFolderNameInput) {
-    return;
-  }
+  if (!editFolderTargetId || !editFolderNameInput) return;
 
   const newName = editFolderNameInput.value.trim();
-  if (!newName) {
-    alert('Please provide a folder name.');
-    return;
-  }
+  if (!newName) return alert('Name required');
 
   try {
     await browser.bookmarks.update(editFolderTargetId, { title: newName });
 
-    const newTree = await getBookmarkTree(true);
+    const newMeta = pendingFolderMeta[editFolderTargetId];
+
+    if (newMeta && (newMeta.color || newMeta.icon)) {
+      folderMetadata[editFolderTargetId] = newMeta;
+    } else {
+      delete folderMetadata[editFolderTargetId];
+    }
+
+    await browser.storage.local.set({ [FOLDER_META_KEY]: folderMetadata });
+
+    await getBookmarkTree(true);
 
     let folderToRender = null;
     if (currentGridFolderNode) {
@@ -1507,8 +1590,8 @@ async function handleEditFolderSave() {
 
     hideEditFolderModal();
   } catch (err) {
-    console.error('Error updating folder name:', err);
-    alert('Error: Could not update the folder name.');
+    console.error('Save failed', err);
+    alert('Error: Could not update this folder.');
   }
 }
 
@@ -2393,22 +2476,40 @@ function autoResizeTextarea(textarea) {
  * All manual D&D listeners have been removed.
  */
 function renderBookmarkFolder(folderNode) {
-  // --- CHANGED from <a> to <div> ---
   const item = document.createElement('div');
   item.className = 'bookmark-item';
-
-  // --- D&D attributes ---
   item.dataset.bookmarkId = folderNode.id;
   item.dataset.isFolder = 'true';
 
-  const folderIcon = ICONS.bookmarkFolderLarge || '';
+  const meta = folderMetadata[folderNode.id] || {};
+  const customColor = meta.color || null;
+  const customIcon = meta.icon || null;
 
-  item.innerHTML = `
-    <div class="bookmark-icon-wrapper">
-      ${folderIcon}
-    </div>
-    <span>${folderNode.title}</span>
-  `;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'bookmark-icon-wrapper';
+
+  if (customIcon) {
+    const img = document.createElement('img');
+    img.src = customIcon;
+    img.className = 'bookmark-folder-icon';
+    img.style.objectFit = 'contain';
+    img.style.borderRadius = '12px';
+    wrapper.appendChild(img);
+  } else {
+    wrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
+    const svgPaths = wrapper.querySelectorAll('path, rect');
+    const appliedColor = customColor || appBookmarkFolderColorPreference;
+    svgPaths.forEach((p) => {
+      p.style.fill = appliedColor;
+      p.style.setProperty('fill', appliedColor, 'important');
+    });
+  }
+
+  item.appendChild(wrapper);
+
+  const span = document.createElement('span');
+  span.textContent = folderNode.title;
+  item.appendChild(span);
 
   return item;
 }
@@ -2906,6 +3007,16 @@ function processBookmarks(nodes, activeFolderId = null) {
       rootDisplayFolderId = nodes[0].id;
       createFolderTabs(nodes[0], activeFolderId);
     }
+  }
+}
+
+async function loadFolderMetadata() {
+  try {
+    const stored = await browser.storage.local.get(FOLDER_META_KEY);
+    folderMetadata = stored[FOLDER_META_KEY] || {};
+  } catch (e) {
+    console.warn('Failed to load folder metadata', e);
+    folderMetadata = {};
   }
 }
 
@@ -6415,6 +6526,7 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
     await ensureDailyWallpaper();
     setupBackgroundVideoCrossfade();
     await loadAppSettingsFromStorage();
+    await loadFolderMetadata();
     syncAppSettingsForm();
     setupContainerMode();
     updateTime();

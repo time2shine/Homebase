@@ -905,17 +905,31 @@
   
   <div id="edit-folder-modal" class="modal-overlay">
     <div id="edit-folder-dialog" class="dialog-content glass-box">
-      <button id="edit-folder-close-btn"
-              class="dialog-close-btn"
-              aria-label="Close">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-      </button>
+      <button id="edit-folder-close-btn" class="dialog-close-btn" aria-label="Close">×</button>
 
       <h3>Edit Folder</h3>
-      <p class="confirm-delete-message">
-        <span id="edit-folder-icon"></span>
-        <span id="edit-folder-text">Edit folder</span>
-      </p>
+      
+      <div class="edit-folder-preview-container">
+        <div id="edit-folder-icon-preview">
+          </div>
+        
+        <div class="edit-folder-actions">
+          <button id="edit-folder-color-btn" class="edit-action-btn">
+            <span class="tooltip-popup tooltip-top">Change Color</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
+          </button>
+          <button id="edit-folder-upload-btn" class="edit-action-btn">
+            <span class="tooltip-popup tooltip-bottom">Upload Icon</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          </button>
+          <button id="edit-folder-reset-btn" class="edit-action-btn">
+            <span class="tooltip-popup tooltip-top">Reset Default</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+          </button>
+        </div>
+        
+        <input type="file" id="edit-folder-file-input" accept="image/*" hidden>
+      </div>
 
       <div class="form-group">
         <label for="edit-folder-name-input">Folder Name</label>

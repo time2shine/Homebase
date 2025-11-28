@@ -954,8 +954,10 @@ function setNextWallpaperButtonLoading(isLoading) {
   if (!nextWallpaperBtn) return;
   nextWallpaperBtn.disabled = isLoading;
   nextWallpaperBtn.classList.toggle('is-loading', isLoading);
-  const tooltipText = isLoading ? NEXT_WALLPAPER_TOOLTIP_LOADING : NEXT_WALLPAPER_TOOLTIP_DEFAULT;
-  nextWallpaperBtn.setAttribute('aria-label', tooltipText);
+  const tooltip = nextWallpaperBtn.querySelector('.tooltip-popup');
+  if (tooltip) {
+    tooltip.textContent = isLoading ? NEXT_WALLPAPER_TOOLTIP_LOADING : NEXT_WALLPAPER_TOOLTIP_DEFAULT;
+  }
 }
 
 function waitForWallpaperReady(selection, type = 'video') {
@@ -4036,7 +4038,7 @@ function ensureEngineIconExists(engine) {
   btn.style.setProperty('--engine-color', engine.color || '#333');
 
   const iconHtml = engine.icon || `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
-  btn.innerHTML = `<span class="tooltip">${engine.name}</span>${iconHtml}`;
+  btn.innerHTML = `<span class="tooltip-popup tooltip-top">${engine.name}</span>${iconHtml}`;
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -4124,7 +4126,7 @@ function renderSearchEngineSelector() {
     
     // Insert Tooltip HTML + Icon
     const iconHtml = engine.icon || `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
-    btn.innerHTML = `<span class="tooltip">${engine.name}</span>${iconHtml}`;
+    btn.innerHTML = `<span class="tooltip-popup tooltip-top">${engine.name}</span>${iconHtml}`;
     
     btn.addEventListener('click', (e) => {
       e.stopPropagation();

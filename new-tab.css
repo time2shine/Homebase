@@ -75,14 +75,6 @@ body.ready .dock {
   --glass-blur: 12px;
   --glass-bg: rgba(255, 255, 255, 0.14);
   --overlay-blur: 6px;
-  --cooltipz-bg-color: rgba(91, 93, 99, 0.92);
-  --cooltipz-border-color: rgba(255, 255, 255, 0.28);
-  --cooltipz-border-radius: 8px;
-  --cooltipz-border-width: 1px;
-  --cooltipz-text-color: #ffffff;
-  --cooltipz-font-size: 0.85rem;
-  --cooltipz-slide: 8px;
-  --cooltipz-arrow-size: 0.5rem;
 }
 
 /* --- Shared "Glass" Style --- */
@@ -564,63 +556,120 @@ body.sidebar-collapsed .collapsed-clock-slot {
   outline: none;
 }
 
-/* --- Tooltip Styles --- */
-.engine-icon-btn .tooltip {
+/* ================================================= */
+/* --- UNIFIED TOOLTIP STYLES (Single System) --- */
+/* ================================================= */
+
+/* 1. Base Tooltip Style */
+.tooltip-popup {
   position: absolute;
-  top: 0;
-  font-size: 14px;
-  background: #fff; /* Fallback */
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  
+  /* Default Color: Gray */
+  background: #5b5d63; 
   color: #fff;
+  
   padding: 5px 8px;
-  border-radius: 5px;
-  box-shadow: 0 10px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  
+  /* Hidden State */
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  
+  transition: all 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   z-index: 1000;
-  white-space: nowrap;
-  font-weight: 500;
+  text-shadow: none;
 }
 
-.engine-icon-btn .tooltip::before {
+/* 2. The Arrow (Pseudo-element) */
+.tooltip-popup::before {
   position: absolute;
   content: "";
   height: 8px;
   width: 8px;
-  background: #fff; /* Fallback */
-  bottom: -3px;
+  background: #5b5d63; /* Match default gray */
+  transform: rotate(45deg);
+  z-index: -1;
+}
+
+/* 3. Hover Trigger (Show tooltip when parent is hovered) */
+*:hover > .tooltip-popup {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* --- POSITIONING VARIANTS --- */
+
+/* TOP (Default / Used for Search Engine) */
+.tooltip-top {
+  bottom: 100%;
   left: 50%;
-  transform: translate(-50%) rotate(45deg);
-  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  transform: translateX(-50%) translateY(0);
+  margin-bottom: 10px;
+}
+.tooltip-top::before {
+  top: 100%; /* Arrow at bottom */
+  left: 50%;
+  margin-left: -4px;
+  margin-top: -4px;
+}
+*:hover > .tooltip-top {
+  transform: translateX(-50%) translateY(-6px);
 }
 
-/* Show Tooltip on Hover */
-.engine-icon-btn:hover .tooltip {
-  top: -38px;
+/* BOTTOM (For Chat, Google Apps, Quick Actions) */
+.tooltip-bottom {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  margin-top: 10px;
+}
+.tooltip-bottom::before {
+  bottom: 100%; /* Arrow at top */
+  left: 50%;
+  margin-left: -4px;
+  margin-bottom: -4px;
+}
+*:hover > .tooltip-bottom {
+  transform: translateX(-50%) translateY(6px);
+}
+
+/* LEFT (For Dock) */
+.tooltip-left {
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%) translateX(0);
+  margin-right: 10px;
+}
+.tooltip-left::before {
+  left: 100%; /* Arrow at right */
+  top: 50%;
+  margin-top: -4px;
+  margin-left: -4px;
+}
+*:hover > .tooltip-left {
+  transform: translateY(-50%) translateX(-6px);
+}
+
+/* --- SEARCH ENGINE SPECIFIC OVERRIDES (Dynamic Color) --- */
+
+/* Apply dynamic variable color only to engine buttons */
+.engine-icon-btn .tooltip-popup {
+  background: var(--engine-color, #333);
+}
+.engine-icon-btn .tooltip-popup::before {
+  background: var(--engine-color, #333);
+}
+
+/* Keep the Search Selector 'expanded' logic for keyboard nav */
+.search-engine-selector.expanded .engine-icon-btn.active .tooltip-popup {
   opacity: 1;
   visibility: visible;
-  pointer-events: auto;
-}
-
-/* Show Active Tooltip ONLY when container is explicitly expanded (Keyboard nav) */
-.search-engine-selector.expanded .engine-icon-btn.active .tooltip {
-  top: -45px;
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-}
-
-/* Dynamic Color Matching using the variable set in JS */
-.engine-icon-btn:hover .tooltip,
-.search-engine-selector.expanded .engine-icon-btn.active .tooltip {
-  background: var(--engine-color, #333);
-  text-shadow: 0px -1px 0px rgba(0, 0, 0, 0.1);
-}
-
-.engine-icon-btn:hover .tooltip::before,
-.search-engine-selector.expanded .engine-icon-btn.active .tooltip::before {
-  background: var(--engine-color, #333);
+  transform: translateX(-50%) translateY(-6px); /* Trigger animation position */
 }
 
 .calculator-result {

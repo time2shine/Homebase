@@ -865,6 +865,34 @@ body.sidebar-collapsed #bookmarks-grid {
   }
 }
 
+/* === New Toggle Option: Text Background === */
+body.bookmark-text-bg-enabled .bookmark-item span {
+  background-color: rgba(44, 165, 255, 0.75);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+
+  /* Adjusted padding for a better fit */
+  padding: 3px 8px;
+
+  /* Ensure the background hugs the text width */
+  width: auto;
+  max-width: 96%;
+
+  margin-top: 4px;
+
+  /* === IMPORTANT FIX: Reset height to fit content === */
+  height: auto;
+  min-height: 0;
+
+  /* Keep line height comfortable */
+  line-height: 1.3;
+}
+
+body.bookmark-text-bg-enabled .grid-item-rename-input {
+  background-color: rgba(44, 165, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
 /* === ADD THIS NEW RULE === */
 /* When renaming, let the item grow to fit the text box */
 .bookmark-item.is-renaming {

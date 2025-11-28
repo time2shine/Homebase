@@ -901,6 +901,7 @@ const APP_SEARCH_DEFAULT_ENGINE_KEY = 'appSearchDefaultEngine';
 const APP_SEARCH_MATH_KEY = 'appSearchMath';
 const APP_SEARCH_SHOW_HISTORY_KEY = 'appSearchShowHistory';
 const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
+const APP_BOOKMARK_TEXT_BG_KEY = 'appBookmarkTextBg';
 const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
 const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
 const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
@@ -924,6 +925,7 @@ let appSearchDefaultEnginePreference = 'google';
 let appSearchMathPreference = true;
 let appSearchShowHistoryPreference = false;
 let appBookmarkOpenNewTabPreference = false;
+let appBookmarkTextBgPreference = false;
 let appBookmarkFallbackColorPreference = '#A1D5F8';
 let appBookmarkFolderColorPreference = '#FFFFFF';
 let appPerformanceModePreference = false;
@@ -3066,6 +3068,11 @@ function applyPerformanceMode(enabled) {
   document.body.classList.toggle('performance-mode', enabled);
 }
 
+function applyBookmarkTextBg(enabled) {
+  appBookmarkTextBgPreference = enabled;
+  document.body.classList.toggle('bookmark-text-bg-enabled', enabled);
+}
+
 function applyBookmarkFallbackColor(color) {
   if (!color) return;
   document.documentElement.style.setProperty('--bookmark-fallback-color', color);
@@ -3090,6 +3097,7 @@ async function loadAppSettingsFromStorage() {
       APP_SEARCH_MATH_KEY,
       APP_SEARCH_SHOW_HISTORY_KEY,
       APP_BOOKMARK_OPEN_NEW_TAB_KEY,
+      APP_BOOKMARK_TEXT_BG_KEY,
       APP_BOOKMARK_FALLBACK_COLOR_KEY,
       APP_BOOKMARK_FOLDER_COLOR_KEY,
       APP_PERFORMANCE_MODE_KEY
@@ -3107,6 +3115,8 @@ async function loadAppSettingsFromStorage() {
     appSearchMathPreference = stored[APP_SEARCH_MATH_KEY] !== false;
     appSearchShowHistoryPreference = stored[APP_SEARCH_SHOW_HISTORY_KEY] === true;
     appBookmarkOpenNewTabPreference = stored[APP_BOOKMARK_OPEN_NEW_TAB_KEY] === true;
+    appBookmarkTextBgPreference = stored[APP_BOOKMARK_TEXT_BG_KEY] === true;
+    applyBookmarkTextBg(appBookmarkTextBgPreference);
     appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#A1D5F8';
     appBookmarkFolderColorPreference = stored[APP_BOOKMARK_FOLDER_COLOR_KEY] || '#FFFFFF';
     appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
@@ -3271,6 +3281,10 @@ function syncAppSettingsForm() {
   if (bookmarkNewTabToggle) {
     bookmarkNewTabToggle.checked = appBookmarkOpenNewTabPreference;
   }
+  const bookmarkTextBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
+  if (bookmarkTextBgToggle) {
+    bookmarkTextBgToggle.checked = appBookmarkTextBgPreference;
+  }
   const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
   if (colorTrigger) {
     colorTrigger.style.backgroundColor = appBookmarkFallbackColorPreference;
@@ -3359,6 +3373,7 @@ function setupAppSettingsModal() {
       const nextAutoClose = appAutoCloseSelect ? parseInt(appAutoCloseSelect.value, 10) || 0 : 0;
       const nextSearchOpenNewTab = appSearchOpenNewTabToggle ? appSearchOpenNewTabToggle.checked : false;
       const nextBookmarkNewTab = document.getElementById('app-bookmark-open-new-tab-toggle')?.checked || false;
+      const nextBookmarkTextBg = document.getElementById('app-bookmark-text-bg-toggle')?.checked || false;
       const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
       const nextFallbackColor = colorTrigger ? (colorTrigger.dataset.value || colorTrigger.style.backgroundColor) : '#A1D5F8';
       const folderTrigger = document.getElementById('app-bookmark-folder-color-trigger');
@@ -3383,6 +3398,7 @@ function setupAppSettingsModal() {
       appSearchMathPreference = nextMath;
       appSearchShowHistoryPreference = nextSearchHistory;
       appBookmarkOpenNewTabPreference = nextBookmarkNewTab;
+      applyBookmarkTextBg(nextBookmarkTextBg);
       appBookmarkFallbackColorPreference = nextFallbackColor;
       appBookmarkFolderColorPreference = nextFolderColor;
       appPerformanceModePreference = nextPerformanceMode;
@@ -3400,6 +3416,7 @@ function setupAppSettingsModal() {
           [APP_AUTOCLOSE_KEY]: nextAutoClose,
           [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
           [APP_BOOKMARK_OPEN_NEW_TAB_KEY]: nextBookmarkNewTab,
+          [APP_BOOKMARK_TEXT_BG_KEY]: nextBookmarkTextBg,
           [APP_BOOKMARK_FALLBACK_COLOR_KEY]: nextFallbackColor,
           [APP_BOOKMARK_FOLDER_COLOR_KEY]: nextFolderColor,
           [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,

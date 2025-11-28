@@ -790,7 +790,25 @@ if (bookmarkTabsTrack) {
   });
 }
 
-window.addEventListener('pointermove', handleGridDragPointerMove);
+// Optimized: Throttle pointermove to Animation Frame to reduce CPU usage
+let dragMoveScheduled = false;
+let lastDragX = 0;
+let lastDragY = 0;
+
+window.addEventListener('pointermove', (e) => {
+  if (!isGridDragging) return;
+
+  lastDragX = e.clientX;
+  lastDragY = e.clientY;
+
+  if (!dragMoveScheduled) {
+    dragMoveScheduled = true;
+    requestAnimationFrame(() => {
+      handleGridDragPointerMove({ clientX: lastDragX, clientY: lastDragY });
+      dragMoveScheduled = false;
+    });
+  }
+});
 
 let allBookmarks = [];
 let suggestionAbortController = null; // To cancel old requests
@@ -885,6 +903,7 @@ const APP_SEARCH_SHOW_HISTORY_KEY = 'appSearchShowHistory';
 const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
 const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
 const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
+const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
 let galleryManifest = [];
 let galleryActiveFilterValue = 'all';
 let galleryActiveTag = null;
@@ -907,6 +926,7 @@ let appSearchShowHistoryPreference = false;
 let appBookmarkOpenNewTabPreference = false;
 let appBookmarkFallbackColorPreference = '#A1D5F8';
 let appBookmarkFolderColorPreference = '#FFFFFF';
+let appPerformanceModePreference = false;
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
 const galleryGridContainer = document.getElementById('gallery-grid');
 const galleryEmptyState = document.getElementById('gallery-empty-state');
@@ -3031,6 +3051,11 @@ function applySidebarVisibility(showSidebar = true) {
   updateSidebarCollapseState();
 }
 
+function applyPerformanceMode(enabled) {
+  appPerformanceModePreference = enabled;
+  document.body.classList.toggle('performance-mode', enabled);
+}
+
 function applyBookmarkFallbackColor(color) {
   if (!color) return;
   document.documentElement.style.setProperty('--bookmark-fallback-color', color);
@@ -3056,7 +3081,8 @@ async function loadAppSettingsFromStorage() {
       APP_SEARCH_SHOW_HISTORY_KEY,
       APP_BOOKMARK_OPEN_NEW_TAB_KEY,
       APP_BOOKMARK_FALLBACK_COLOR_KEY,
-      APP_BOOKMARK_FOLDER_COLOR_KEY
+      APP_BOOKMARK_FOLDER_COLOR_KEY,
+      APP_PERFORMANCE_MODE_KEY
     ]);
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
@@ -3073,8 +3099,10 @@ async function loadAppSettingsFromStorage() {
     appBookmarkOpenNewTabPreference = stored[APP_BOOKMARK_OPEN_NEW_TAB_KEY] === true;
     appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#A1D5F8';
     appBookmarkFolderColorPreference = stored[APP_BOOKMARK_FOLDER_COLOR_KEY] || '#FFFFFF';
+    appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
     applyBookmarkFallbackColor(appBookmarkFallbackColorPreference);
     applyBookmarkFolderColor(appBookmarkFolderColorPreference);
+    applyPerformanceMode(appPerformanceModePreference);
 
     if (appSingletonModePreference) {
       await handleSingletonMode();
@@ -3242,6 +3270,10 @@ function syncAppSettingsForm() {
   if (folderColorInput) {
     folderColorInput.value = appBookmarkFolderColorPreference;
   }
+  const perfToggle = document.getElementById('app-performance-mode-toggle');
+  if (perfToggle) {
+    perfToggle.checked = appPerformanceModePreference;
+  }
   updateDefaultEngineVisibilityControl();
   const singletonToggle = document.getElementById('app-singleton-mode-toggle');
   if (singletonToggle) {
@@ -3319,6 +3351,7 @@ function setupAppSettingsModal() {
       const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
       const nextFallbackColor = colorTrigger ? (colorTrigger.dataset.value || colorTrigger.style.backgroundColor) : '#A1D5F8';
       const nextFolderColor = document.getElementById('app-bookmark-folder-color-input')?.value || '#FFFFFF';
+      const nextPerformanceMode = document.getElementById('app-performance-mode-toggle')?.checked || false;
       const nextSingletonMode = (() => {
         const toggle = document.getElementById('app-singleton-mode-toggle');
         return toggle ? toggle.checked : false;
@@ -3340,9 +3373,11 @@ function setupAppSettingsModal() {
       appBookmarkOpenNewTabPreference = nextBookmarkNewTab;
       appBookmarkFallbackColorPreference = nextFallbackColor;
       appBookmarkFolderColorPreference = nextFolderColor;
+      appPerformanceModePreference = nextPerformanceMode;
       appSingletonModePreference = nextSingletonMode;
       applyBookmarkFallbackColor(nextFallbackColor);
       applyBookmarkFolderColor(nextFolderColor);
+      applyPerformanceMode(nextPerformanceMode);
       updateTime();
 
       try {
@@ -3359,7 +3394,8 @@ function setupAppSettingsModal() {
           [APP_SEARCH_MATH_KEY]: nextMath,
           [APP_SEARCH_SHOW_HISTORY_KEY]: nextSearchHistory,
           [APP_SEARCH_DEFAULT_ENGINE_KEY]: nextDefaultEngine,
-          [APP_SINGLETON_MODE_KEY]: nextSingletonMode
+          [APP_SINGLETON_MODE_KEY]: nextSingletonMode,
+          [APP_PERFORMANCE_MODE_KEY]: nextPerformanceMode
         });
         if (!nextRememberEngine) {
           await browser.storage.local.remove('currentSearchEngineId');

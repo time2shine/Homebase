@@ -4245,3 +4245,58 @@ input:checked + .slider:before {
 #material-picker-modal.closing .material-color-grid {
   animation: pickerOut 0.2s ease-in forwards;
 }
+
+/* ======================================= */
+/* --- OPTIMIZATION 1: PERFORMANCE MODE --- */
+/* ======================================= */
+
+/* When enabled, remove all backdrop-filters (GPU expensive) */
+body.performance-mode .glass-box,
+body.performance-mode .widget-weather, 
+body.performance-mode .widget-quote,
+body.performance-mode #settings-panel,
+body.performance-mode #quote-settings-panel,
+body.performance-mode #google-apps-panel,
+body.performance-mode .dock,
+body.performance-mode .context-menu,
+body.performance-mode .result-header,
+body.performance-mode .calc-item,
+body.performance-mode .dialog-content,
+body.performance-mode .gallery-dialog, 
+body.performance-mode .app-settings-dialog {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Fallback backgrounds for readability when blur is gone */
+body.performance-mode .glass-box,
+body.performance-mode #quick-actions-bar {
+  background-color: rgba(30, 30, 30, 0.85); /* Darker, more opaque */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.performance-mode .dock {
+  background-color: rgba(0, 0, 0, 0.6); /* Dark sidebar background */
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.performance-mode .result-header {
+  background-color: #f0f0f0; /* Solid header */
+}
+
+/* ======================================= */
+/* --- OPTIMIZATION 2: MARQUEE TWEAKS --- */
+/* ======================================= */
+
+/* Ensure the scrolling text is on its own GPU layer to prevent layout thrashing */
+.gallery-card-title.gallery-marquee span,
+.mw-card-title.mw-marquee span {
+  will-change: transform;
+  /* Ensure it's strictly paused when not hovering */
+  animation-play-state: paused; 
+}
+
+.gallery-card:hover .gallery-card-title.gallery-marquee span,
+.mw-card:hover .mw-card-title.mw-marquee span {
+  animation-play-state: running;
+}

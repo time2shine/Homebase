@@ -1535,20 +1535,24 @@ function updateEditPreview() {
   if (!previewContainer || !editFolderTargetId) return;
 
   const meta = pendingFolderMeta[editFolderTargetId] || {};
-  previewContainer.innerHTML = '';
 
+  // 1. ALWAYS render the Base Folder SVG
+  previewContainer.innerHTML = ICONS.bookmarkFolderLarge;
+  
+  // Apply Color
+  const color = meta.color || appBookmarkFolderColorPreference;
+  const paths = previewContainer.querySelectorAll('path, rect');
+  paths.forEach(p => {
+    p.style.fill = color;
+    p.style.setProperty('fill', color, 'important');
+  });
+
+  // 2. If a custom icon exists, append it ON TOP
   if (meta.icon) {
     const img = document.createElement('img');
     img.src = meta.icon;
+    img.className = 'edit-folder-custom-icon-preview'; // Uses absolute positioning
     previewContainer.appendChild(img);
-  } else {
-    previewContainer.innerHTML = ICONS.bookmarkFolderLarge || '';
-    const color = meta.color || appBookmarkFolderColorPreference;
-    const paths = previewContainer.querySelectorAll('path, rect');
-    paths.forEach((p) => {
-      p.style.fill = color;
-      p.style.setProperty('fill', color, 'important');
-    });
   }
 }
 
@@ -2488,21 +2492,23 @@ function renderBookmarkFolder(folderNode) {
   const wrapper = document.createElement('div');
   wrapper.className = 'bookmark-icon-wrapper';
 
+  // 1. ALWAYS render the Base Folder SVG
+  wrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
+  
+  // Apply Color to SVG
+  const appliedColor = customColor || appBookmarkFolderColorPreference;
+  const svgPaths = wrapper.querySelectorAll('path, rect');
+  svgPaths.forEach((p) => {
+    p.style.fill = appliedColor;
+    p.style.setProperty('fill', appliedColor, 'important');
+  });
+
+  // 2. If a custom icon exists, append it ON TOP (using the new CSS class)
   if (customIcon) {
     const img = document.createElement('img');
     img.src = customIcon;
-    img.className = 'bookmark-folder-icon';
-    img.style.objectFit = 'contain';
-    img.style.borderRadius = '12px';
+    img.className = 'bookmark-folder-custom-icon'; // Uses absolute positioning
     wrapper.appendChild(img);
-  } else {
-    wrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
-    const svgPaths = wrapper.querySelectorAll('path, rect');
-    const appliedColor = customColor || appBookmarkFolderColorPreference;
-    svgPaths.forEach((p) => {
-      p.style.fill = appliedColor;
-      p.style.setProperty('fill', appliedColor, 'important');
-    });
   }
 
   item.appendChild(wrapper);

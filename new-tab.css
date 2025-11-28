@@ -4782,3 +4782,33 @@ body.performance-mode .context-submenu {
   width: 100% !important;
   text-align: center;
 }
+
+/* --- Custom Icons Inside Folders --- */
+
+/* 1. For the Main Grid */
+.bookmark-folder-custom-icon {
+  position: absolute;
+  top: 60%; /* Push down slightly to sit visually inside the folder flap */
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px !important; /* Smaller size to fit inside */
+  height: 32px !important;
+  object-fit: contain;
+  border-radius: 4px !important; /* Slight radius */
+  z-index: 2; /* Sit on top of the SVG */
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+  pointer-events: none;
+}
+
+/* 2. For the Edit Folder Preview Modal */
+.edit-folder-custom-icon-preview {
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px !important; /* Slightly larger for the preview modal */
+  height: 40px !important;
+  object-fit: contain;
+  z-index: 10;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}

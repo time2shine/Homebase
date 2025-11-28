@@ -865,32 +865,39 @@ body.sidebar-collapsed #bookmarks-grid {
   }
 }
 
-/* === New Toggle Option: Text Background === */
+/* === New Toggle Option: Text Background (Dynamic Color) === */
 body.bookmark-text-bg-enabled .bookmark-item span {
-  background-color: rgba(44, 165, 255, 0.75);
+  /* Use the RGB variable with 0.65 opacity */
+  background-color: rgba(var(--bookmark-text-bg-rgb, 44, 165, 255), 0.65); 
+  
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
-
-  /* Adjusted padding for a better fit */
-  padding: 3px 8px;
-
-  /* Ensure the background hugs the text width */
+  
+  color: var(--bookmark-text-color, white);
+  text-shadow: var(--bookmark-text-shadow, 0 1px 2px rgba(0,0,0,0.3));
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+  
+  padding: 4px 8px;
   width: auto;
   max-width: 96%;
-
   margin-top: 4px;
-
-  /* === IMPORTANT FIX: Reset height to fit content === */
+  
   height: auto;
   min-height: 0;
-
-  /* Keep line height comfortable */
   line-height: 1.3;
+  
+  transition: background-color 0.2s ease, transform 0.2s ease, color 0.2s ease;
 }
 
+/* Ensure the rename input matches this color (slightly more opaque: 0.9) */
 body.bookmark-text-bg-enabled .grid-item-rename-input {
-  background-color: rgba(44, 165, 255, 0.9);
+  background-color: rgba(var(--bookmark-text-bg-rgb, 44, 165, 255), 0.9);
+  color: var(--bookmark-text-color, white);
   border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: none;
+  text-shadow: none;
 }
 
 /* === ADD THIS NEW RULE === */
@@ -3866,7 +3873,7 @@ input:checked + .slider:before {
     rgba(0, 0, 0, 0.5) 100%
   );
 
-  color: #FFFFFF; 
+  color: var(--bookmark-fallback-text-color, #FFFFFF); 
 
   display: flex;
   align-items: center;

@@ -902,6 +902,7 @@ const APP_SEARCH_MATH_KEY = 'appSearchMath';
 const APP_SEARCH_SHOW_HISTORY_KEY = 'appSearchShowHistory';
 const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
 const APP_BOOKMARK_TEXT_BG_KEY = 'appBookmarkTextBg';
+const APP_BOOKMARK_TEXT_BG_COLOR_KEY = 'appBookmarkTextBgColor';
 const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
 const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
 const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
@@ -926,6 +927,7 @@ let appSearchMathPreference = true;
 let appSearchShowHistoryPreference = false;
 let appBookmarkOpenNewTabPreference = false;
 let appBookmarkTextBgPreference = false;
+let appBookmarkTextBgColorPreference = '#2CA5FF';
 let appBookmarkFallbackColorPreference = '#A1D5F8';
 let appBookmarkFolderColorPreference = '#FFFFFF';
 let appPerformanceModePreference = false;
@@ -3073,9 +3075,38 @@ function applyBookmarkTextBg(enabled) {
   document.body.classList.toggle('bookmark-text-bg-enabled', enabled);
 }
 
+function hexToRgbString(hex) {
+  const clean = (hex || '').replace(/^#/, '');
+  const bigint = parseInt(clean, 16);
+  if (Number.isNaN(bigint)) return '44, 165, 255'; // fallback to default blue
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `${r}, ${g}, ${b}`;
+}
+
+function applyBookmarkTextBgColor(color) {
+  if (!color) return;
+  appBookmarkTextBgColorPreference = color;
+  const rgbValues = hexToRgbString(color);
+  document.documentElement.style.setProperty('--bookmark-text-bg-rgb', rgbValues);
+  if (isLightColor(color)) {
+    document.documentElement.style.setProperty('--bookmark-text-color', '#000000');
+    document.documentElement.style.setProperty('--bookmark-text-shadow', 'none');
+  } else {
+    document.documentElement.style.setProperty('--bookmark-text-color', '#ffffff');
+    document.documentElement.style.setProperty('--bookmark-text-shadow', '0 1px 2px rgba(0,0,0,0.3)');
+  }
+}
+
 function applyBookmarkFallbackColor(color) {
   if (!color) return;
   document.documentElement.style.setProperty('--bookmark-fallback-color', color);
+  if (isLightColor(color)) {
+    document.documentElement.style.setProperty('--bookmark-fallback-text-color', '#000000');
+  } else {
+    document.documentElement.style.setProperty('--bookmark-fallback-text-color', '#FFFFFF');
+  }
 }
 
 function applyBookmarkFolderColor(color) {
@@ -3098,6 +3129,7 @@ async function loadAppSettingsFromStorage() {
       APP_SEARCH_SHOW_HISTORY_KEY,
       APP_BOOKMARK_OPEN_NEW_TAB_KEY,
       APP_BOOKMARK_TEXT_BG_KEY,
+      APP_BOOKMARK_TEXT_BG_COLOR_KEY,
       APP_BOOKMARK_FALLBACK_COLOR_KEY,
       APP_BOOKMARK_FOLDER_COLOR_KEY,
       APP_PERFORMANCE_MODE_KEY
@@ -3117,6 +3149,8 @@ async function loadAppSettingsFromStorage() {
     appBookmarkOpenNewTabPreference = stored[APP_BOOKMARK_OPEN_NEW_TAB_KEY] === true;
     appBookmarkTextBgPreference = stored[APP_BOOKMARK_TEXT_BG_KEY] === true;
     applyBookmarkTextBg(appBookmarkTextBgPreference);
+    appBookmarkTextBgColorPreference = stored[APP_BOOKMARK_TEXT_BG_COLOR_KEY] || '#2CA5FF';
+    applyBookmarkTextBgColor(appBookmarkTextBgColorPreference);
     appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#A1D5F8';
     appBookmarkFolderColorPreference = stored[APP_BOOKMARK_FOLDER_COLOR_KEY] || '#FFFFFF';
     appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
@@ -3282,8 +3316,21 @@ function syncAppSettingsForm() {
     bookmarkNewTabToggle.checked = appBookmarkOpenNewTabPreference;
   }
   const bookmarkTextBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
+  const bookmarkTextBgColorRow = document.getElementById('app-bookmark-text-bg-color-row');
   if (bookmarkTextBgToggle) {
     bookmarkTextBgToggle.checked = appBookmarkTextBgPreference;
+    if (bookmarkTextBgColorRow) {
+      if (appBookmarkTextBgPreference) {
+        bookmarkTextBgColorRow.classList.remove('hidden');
+      } else {
+        bookmarkTextBgColorRow.classList.add('hidden');
+      }
+    }
+  }
+  const textBgColorTrigger = document.getElementById('app-bookmark-text-bg-color-trigger');
+  if (textBgColorTrigger) {
+    textBgColorTrigger.style.backgroundColor = appBookmarkTextBgColorPreference;
+    textBgColorTrigger.dataset.value = appBookmarkTextBgColorPreference;
   }
   const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
   if (colorTrigger) {
@@ -3365,6 +3412,17 @@ function setupAppSettingsModal() {
       setActiveAppSettingsSection(section);
     });
   }
+  const textBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
+  const textBgRow = document.getElementById('app-bookmark-text-bg-color-row');
+  if (textBgToggle && textBgRow) {
+    textBgToggle.addEventListener('change', () => {
+      if (textBgToggle.checked) {
+        textBgRow.classList.remove('hidden');
+      } else {
+        textBgRow.classList.add('hidden');
+      }
+    });
+  }
   if (appSettingsSaveBtn) {
     appSettingsSaveBtn.addEventListener('click', async () => {
       const nextFormat = appTimeFormatSelect && appTimeFormatSelect.value === '12-hour' ? '12-hour' : '24-hour';
@@ -3374,6 +3432,8 @@ function setupAppSettingsModal() {
       const nextSearchOpenNewTab = appSearchOpenNewTabToggle ? appSearchOpenNewTabToggle.checked : false;
       const nextBookmarkNewTab = document.getElementById('app-bookmark-open-new-tab-toggle')?.checked || false;
       const nextBookmarkTextBg = document.getElementById('app-bookmark-text-bg-toggle')?.checked || false;
+      const textBgColorTrigger = document.getElementById('app-bookmark-text-bg-color-trigger');
+      const nextTextBgColor = textBgColorTrigger ? (textBgColorTrigger.dataset.value || textBgColorTrigger.style.backgroundColor) : '#2CA5FF';
       const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
       const nextFallbackColor = colorTrigger ? (colorTrigger.dataset.value || colorTrigger.style.backgroundColor) : '#A1D5F8';
       const folderTrigger = document.getElementById('app-bookmark-folder-color-trigger');
@@ -3399,6 +3459,7 @@ function setupAppSettingsModal() {
       appSearchShowHistoryPreference = nextSearchHistory;
       appBookmarkOpenNewTabPreference = nextBookmarkNewTab;
       applyBookmarkTextBg(nextBookmarkTextBg);
+      applyBookmarkTextBgColor(nextTextBgColor);
       appBookmarkFallbackColorPreference = nextFallbackColor;
       appBookmarkFolderColorPreference = nextFolderColor;
       appPerformanceModePreference = nextPerformanceMode;
@@ -3417,6 +3478,7 @@ function setupAppSettingsModal() {
           [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
           [APP_BOOKMARK_OPEN_NEW_TAB_KEY]: nextBookmarkNewTab,
           [APP_BOOKMARK_TEXT_BG_KEY]: nextBookmarkTextBg,
+          [APP_BOOKMARK_TEXT_BG_COLOR_KEY]: nextTextBgColor,
           [APP_BOOKMARK_FALLBACK_COLOR_KEY]: nextFallbackColor,
           [APP_BOOKMARK_FOLDER_COLOR_KEY]: nextFolderColor,
           [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
@@ -5762,6 +5824,7 @@ function setupMaterialColorPicker() {
   // Triggers
   const fallbackTriggerBtn = document.getElementById('app-bookmark-fallback-color-trigger');
   const folderTriggerBtn = document.getElementById('app-bookmark-folder-color-trigger');
+  const textBgTriggerBtn = document.getElementById('app-bookmark-text-bg-color-trigger');
 
   if (!modal || !grid) return;
 
@@ -5926,6 +5989,21 @@ function setupMaterialColorPicker() {
         folderTriggerBtn.dataset.value = newColor;
         appBookmarkFolderColorPreference = newColor;
         applyBookmarkFolderColor(newColor);
+      });
+    });
+  }
+
+  // 3. Bookmark Text Background Color Trigger
+  if (textBgTriggerBtn) {
+    textBgTriggerBtn.style.backgroundColor = appBookmarkTextBgColorPreference;
+    textBgTriggerBtn.dataset.value = appBookmarkTextBgColorPreference;
+
+    textBgTriggerBtn.addEventListener('click', () => {
+      openPickerFor(textBgTriggerBtn, (newColor) => {
+        textBgTriggerBtn.style.backgroundColor = newColor;
+        textBgTriggerBtn.dataset.value = newColor;
+        appBookmarkTextBgColorPreference = newColor;
+        applyBookmarkTextBgColor(newColor);
       });
     });
   }

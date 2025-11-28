@@ -3,18 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>New Tab</title>
-  <script>
-    (function() {
-      const browserApi = window.browser || window.chrome;
-      if (!browserApi || !browserApi.storage || !browserApi.storage.local) return;
-
-      browserApi.storage.local.get('cachedAppliedPosterUrl').then((res) => {
-        const url = res && res.cachedAppliedPosterUrl;
-        if (!url) return;
-        document.write(`<style>:root { --initial-wallpaper: url("${url}"); }</style>`);
-      }).catch(() => {});
-    })();
-  </script>
+  <script src="preload.js"></script>
   <link rel="stylesheet" href="new-tab.css">
 </head>
 <body class="preload">
@@ -387,6 +376,34 @@
           </section>
           <section class="app-settings-section" data-section="tabs">
             
+            <div class="app-setting-row" id="app-container-mode-row" style="display: none;">
+              <div class="app-setting-label">
+                <div class="title">Enable Firefox Containers</div>
+                <div class="hint">Show "Open in Container" option in bookmark context menu.</div>
+              </div>
+              <label class="app-switch">
+                <input type="checkbox" id="app-container-mode-toggle" checked>
+                <span class="app-switch-track"></span>
+              </label>
+            </div>
+
+            <div class="app-setting-row" id="app-container-new-tab-row" style="display: none; align-items: flex-start;">
+              <div class="app-setting-label">
+                <div class="title">Container Behavior</div>
+                <div class="hint">Choose how Homebase behaves when opening a container.</div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 4px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em; cursor: pointer; color: #0f172a;">
+                  <input type="radio" name="container-behavior" value="keep" checked style="accent-color: #2ca5ff;">
+                  <span>Keep Homebase active (Open in background)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em; cursor: pointer; color: #0f172a;">
+                  <input type="radio" name="container-behavior" value="close" style="accent-color: #2ca5ff;">
+                  <span>Close Homebase (Switch to new tab)</span>
+                </label>
+              </div>
+            </div>
+
             <div class="app-setting-row">
               <div class="app-setting-label">
                 <div class="title">Jump to existing tab</div>
@@ -412,30 +429,21 @@
               </select>
             </div>
 
-              <div class="app-setting-row">
-                <div class="app-setting-label">
-                  <div class="title">Close inactive tabs after</div>
-                  <div class="hint">Close background Homebase tabs if unused for this long.</div>
-                </div>
-                <select id="app-autoclose-select" class="app-setting-select">
-                  <option value="0">Never (Default)</option>
-                  <option value="5">5 Minutes</option>
-                  <option value="15">15 Minutes</option>
-                  <option value="30">30 Minutes</option>
-                  <option value="60">1 Hour</option>
-                </select>
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Close inactive tabs after</div>
+                <div class="hint">Close background Homebase tabs if unused for this long.</div>
               </div>
-              <div class="app-setting-row" id="app-container-mode-row" style="display: none;">
-                <div class="app-setting-label">
-                  <div class="title">Enable Firefox Containers</div>
-                  <div class="hint">Show "Open in Container" option in bookmark context menu.</div>
-                </div>
-                <label class="app-switch">
-                  <input type="checkbox" id="app-container-mode-toggle">
-                  <span class="app-switch-track"></span>
-                </label>
-              </div>
-            </section>
+              <select id="app-autoclose-select" class="app-setting-select">
+                <option value="0">Never (Default)</option>
+                <option value="5">5 Minutes</option>
+                <option value="15">15 Minutes</option>
+                <option value="30">30 Minutes</option>
+                <option value="60">1 Hour</option>
+              </select>
+            </div>
+
+          </section>
           <section class="app-settings-section" data-section="bookmarks">
             <div class="app-setting-row">
               <div class="app-setting-label">
@@ -542,9 +550,7 @@
           <div class="gallery-settings-layout">
             <div class="gallery-settings-preview">
               <div class="settings-preview-box">
-                <video id="gallery-settings-preview-video" class="settings-preview-media hidden" muted loop playsinline>
-                  <source src="" type="video/mp4">
-                </video>
+                <video id="gallery-settings-preview-video" class="settings-preview-media hidden" muted loop playsinline></video>
                 <img id="gallery-settings-preview-img" class="settings-preview-media" src="assets/fallback.webp" alt="Preview wallpaper">
                 <div class="settings-preview-caption">
                   <div id="gallery-settings-preview-title" class="settings-preview-title">Daily Wallpaper</div>
@@ -783,16 +789,22 @@
   <div id="bookmark-folder-menu" class="context-menu glass-box hidden">
     <button id="menu-edit-btn" class="menu-item">Edit</button>
     <button id="menu-delete-btn" class="menu-item">Delete</button>
-  </div>
-
-  <!-- Context menu for SUBFOLDERS in the grid -->
-  <div id="bookmark-grid-folder-menu" class="context-menu glass-box hidden">
-    <button class="menu-item" data-action="open">Open</button>
-    <div class="menu-divider"></div>
-    <button class="menu-item" data-action="rename">Rename</button>
-    <button class="menu-item" data-action="edit">Edit</button>
-    <button class="menu-item" data-action="move">Move</button>
-    <button class="menu-item" data-action="delete">Delete</button>
+    </div>
+  
+    <!-- Context menu for SUBFOLDERS in the grid -->
+    <div id="bookmark-grid-folder-menu" class="context-menu glass-box hidden">
+      <button class="menu-item" data-action="open">Open</button>
+      <button class="menu-item" data-action="open-all">Open All in New Tabs</button>
+      <div class="menu-item-group hidden" id="folder-context-container-group">
+        <button class="menu-item has-submenu">Open All in Container</button>
+        <div class="context-submenu" id="folder-context-container-list">
+        </div>
+      </div>
+      <div class="menu-divider"></div>
+      <button class="menu-item" data-action="rename">Rename</button>
+      <button class="menu-item" data-action="edit">Edit</button>
+      <button class="menu-item" data-action="move">Move</button>
+      <button class="menu-item" data-action="delete">Delete</button>
     </div>
   
     <!-- Context menu for ICONS in the grid -->

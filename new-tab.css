@@ -3849,9 +3849,10 @@ input:checked + .slider:before {
   font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
   
-  /* Ensure the background doesn't bleed outside the radius */
+/* Ensure the background doesn't bleed outside the radius */
   overflow: hidden; 
 }
+
 
 /* ======================================= */
 /* --- BOOKMARK FOLDER ICON (MODIFIED) --- */
@@ -4291,4 +4292,53 @@ body.performance-mode .result-header {
 .gallery-card:hover .gallery-card-title.gallery-marquee span,
 .mw-card:hover .mw-card-title.mw-marquee span {
   animation-play-state: running;
+}
+
+/* --- Selected State for Color Swatches --- */
+.material-color-swatch.selected {
+  transform: scale(1.15);
+  z-index: 20;
+  /* Thick white border to indicate selection */
+  box-shadow: 0 0 0 2px #ffffff, 0 4px 12px rgba(0,0,0,0.5); 
+  border-radius: 4px;
+}
+
+/* Selected state for Black/White buttons in footer */
+.bw-swatch.selected {
+  transform: scale(1.1);
+  z-index: 20;
+  box-shadow: 0 0 0 2px #2ca5ff, 0 4px 12px rgba(0,0,0,0.3); /* Blue ring for high contrast */
+  border-color: transparent;
+}
+
+/* --- Interaction Update: Hide Selection on Hover --- */
+
+/* When mouse enters the grid, reset the 'selected' Color Swatch to look normal */
+.material-color-grid:hover .material-color-swatch.selected {
+  transform: none;
+  box-shadow: none;
+  z-index: 0;
+  border-radius: 3px; /* Returns to default radius */
+}
+
+/* When mouse enters the grid, reset the 'selected' Black/White Swatch */
+.material-color-grid:hover .bw-swatch.selected {
+  transform: none;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1); /* Returns to default inset shadow */
+  z-index: 0;
+}
+
+/* Ensure the specific item being hovered still gets its hover effect */
+.material-color-swatch.selected:hover {
+  transform: scale(1.3);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  border: 1px solid white;
+}
+
+.bw-swatch.selected:hover {
+  transform: scale(1.08);
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  border: 1px solid #999;
 }

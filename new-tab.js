@@ -5771,6 +5771,7 @@ function setupMaterialColorPicker() {
       const swatch = document.createElement('div');
       swatch.className = 'material-color-swatch';
       swatch.style.backgroundColor = color;
+      swatch.dataset.color = color.toLowerCase();
       swatch.addEventListener('click', () => pickColor(color));
       row.appendChild(swatch);
     });
@@ -5782,11 +5783,23 @@ function setupMaterialColorPicker() {
     closeMaterialPicker();
   }
 
+  function highlightSelectedColor(hexColor) {
+    if (!hexColor) return;
+    const target = hexColor.toLowerCase();
+    const allSwatches = grid.querySelectorAll('.material-color-swatch, .bw-swatch');
+    allSwatches.forEach(el => el.classList.remove('selected'));
+    const match = grid.querySelector(`[data-color="${target}"]`);
+    if (match) {
+      match.classList.add('selected');
+    }
+  }
+
   // Helper to open picker relative to a button
   function openPickerFor(button, callback) {
     materialPickerCallback = callback;
     modal.classList.remove('hidden');
 
+    // Calculate animation origin relative to trigger button
     const triggerRect = button.getBoundingClientRect();
     const gridLeft = grid.offsetLeft;
     const gridTop = grid.offsetTop;
@@ -5795,6 +5808,10 @@ function setupMaterialColorPicker() {
     const originY = (triggerRect.top + triggerRect.height / 2) - gridTop;
 
     grid.style.transformOrigin = `${originX}px ${originY}px`;
+
+    // Highlight the current color selection
+    const currentColor = button.dataset.value;
+    highlightSelectedColor(currentColor);
   }
 
   // A. Render Standard Rows
@@ -5823,6 +5840,7 @@ function setupMaterialColorPicker() {
   whiteBox.style.backgroundColor = '#ffffff';
   whiteBox.style.color = '#000000';
   whiteBox.textContent = 'white';
+  whiteBox.dataset.color = '#ffffff';
   whiteBox.addEventListener('click', () => pickColor('#ffffff'));
   footerBW.appendChild(whiteBox);
 
@@ -5831,6 +5849,7 @@ function setupMaterialColorPicker() {
   blackBox.style.backgroundColor = '#000000';
   blackBox.style.color = '#ffffff';
   blackBox.textContent = 'black';
+  blackBox.dataset.color = '#000000';
   blackBox.addEventListener('click', () => pickColor('#000000'));
   footerBW.appendChild(blackBox);
 

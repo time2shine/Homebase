@@ -1198,7 +1198,8 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
-  padding: 3px 12px;
+  padding: 0 16px;
+  height: 32px; /* Match quick actions bar height */
   font-size: 0.82em;
   font-weight: 400;
   color: rgba(255, 255, 255, 0.85);
@@ -1261,8 +1262,8 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   align-items: center;
   justify-content: center;
   align-self: center;
-  width: 28px; 
-  height: 28px; 
+  width: 32px; 
+  height: 32px; 
   padding: 0;
   font-size: 16px; 
   font-weight: 700;

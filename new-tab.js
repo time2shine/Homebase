@@ -904,6 +904,7 @@ const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
 const APP_BOOKMARK_TEXT_BG_KEY = 'appBookmarkTextBg';
 const APP_BOOKMARK_TEXT_BG_COLOR_KEY = 'appBookmarkTextBgColor';
 const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
+const APP_BOOKMARK_TEXT_BLUR_KEY = 'appBookmarkTextBgBlur';
 const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
 const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
 const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
@@ -930,6 +931,7 @@ let appBookmarkOpenNewTabPreference = false;
 let appBookmarkTextBgPreference = false;
 let appBookmarkTextBgColorPreference = '#2CA5FF';
 let appBookmarkTextBgOpacityPreference = 0.65;
+let appBookmarkTextBgBlurPreference = 4;
 let appBookmarkFallbackColorPreference = '#A1D5F8';
 let appBookmarkFolderColorPreference = '#FFFFFF';
 let appPerformanceModePreference = false;
@@ -3105,6 +3107,20 @@ function applyBookmarkTextBgOpacity(opacity) {
   applyBookmarkTextBgColor(appBookmarkTextBgColorPreference);
 }
 
+function applyBookmarkTextBgBlur(blurRadius) {
+  const parsed = parseInt(blurRadius, 10);
+  const safeBlur = Number.isFinite(parsed) ? Math.max(0, parsed) : 4;
+  appBookmarkTextBgBlurPreference = safeBlur;
+  document.documentElement.style.setProperty('--bookmark-text-bg-blur', `${safeBlur}px`);
+
+  const label = document.getElementById('app-bookmark-text-blur-value');
+  const slider = document.getElementById('app-bookmark-text-blur-slider');
+  if (label) label.textContent = `${safeBlur}px`;
+  if (slider && slider.value !== String(safeBlur)) {
+    slider.value = safeBlur;
+  }
+}
+
 function applyBookmarkTextBgColor(color) {
   if (!color) return;
   appBookmarkTextBgColorPreference = color;
@@ -3151,6 +3167,7 @@ async function loadAppSettingsFromStorage() {
       APP_BOOKMARK_TEXT_BG_KEY,
       APP_BOOKMARK_TEXT_BG_COLOR_KEY,
       APP_BOOKMARK_TEXT_OPACITY_KEY,
+      APP_BOOKMARK_TEXT_BLUR_KEY,
       APP_BOOKMARK_FALLBACK_COLOR_KEY,
       APP_BOOKMARK_FOLDER_COLOR_KEY,
       APP_PERFORMANCE_MODE_KEY
@@ -3172,6 +3189,8 @@ async function loadAppSettingsFromStorage() {
     applyBookmarkTextBg(appBookmarkTextBgPreference);
     appBookmarkTextBgOpacityPreference = parseFloat(stored[APP_BOOKMARK_TEXT_OPACITY_KEY] || 0.65);
     applyBookmarkTextBgOpacity(appBookmarkTextBgOpacityPreference);
+    appBookmarkTextBgBlurPreference = parseInt(stored[APP_BOOKMARK_TEXT_BLUR_KEY] || 4, 10);
+    applyBookmarkTextBgBlur(appBookmarkTextBgBlurPreference);
     appBookmarkTextBgColorPreference = stored[APP_BOOKMARK_TEXT_BG_COLOR_KEY] || '#2CA5FF';
     applyBookmarkTextBgColor(appBookmarkTextBgColorPreference);
     appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#A1D5F8';
@@ -3341,6 +3360,7 @@ function syncAppSettingsForm() {
   const bookmarkTextBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
   const bookmarkTextBgColorRow = document.getElementById('app-bookmark-text-bg-color-row');
   const bookmarkTextBgOpacityRow = document.getElementById('app-bookmark-text-bg-opacity-row');
+  const bookmarkTextBgBlurRow = document.getElementById('app-bookmark-text-blur-row');
   if (bookmarkTextBgToggle) {
     bookmarkTextBgToggle.checked = appBookmarkTextBgPreference;
     if (bookmarkTextBgColorRow) {
@@ -3348,6 +3368,9 @@ function syncAppSettingsForm() {
     }
     if (bookmarkTextBgOpacityRow) {
       bookmarkTextBgOpacityRow.classList.toggle('hidden', !appBookmarkTextBgPreference);
+    }
+    if (bookmarkTextBgBlurRow) {
+      bookmarkTextBgBlurRow.classList.toggle('hidden', !appBookmarkTextBgPreference);
     }
   }
   const textBgColorTrigger = document.getElementById('app-bookmark-text-bg-color-trigger');
@@ -3362,6 +3385,14 @@ function syncAppSettingsForm() {
   }
   if (textBgOpacityValue) {
     textBgOpacityValue.textContent = `${Math.round(appBookmarkTextBgOpacityPreference * 100)}%`;
+  }
+  const textBgBlurSlider = document.getElementById('app-bookmark-text-blur-slider');
+  const textBgBlurValue = document.getElementById('app-bookmark-text-blur-value');
+  if (textBgBlurSlider) {
+    textBgBlurSlider.value = appBookmarkTextBgBlurPreference;
+  }
+  if (textBgBlurValue) {
+    textBgBlurValue.textContent = `${appBookmarkTextBgBlurPreference}px`;
   }
   const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
   if (colorTrigger) {
@@ -3447,17 +3478,25 @@ function setupAppSettingsModal() {
   const textBgRow = document.getElementById('app-bookmark-text-bg-color-row');
   const textBgOpacityRow = document.getElementById('app-bookmark-text-bg-opacity-row');
   const textBgOpacitySlider = document.getElementById('app-bookmark-text-opacity-slider');
+  const textBgBlurRow = document.getElementById('app-bookmark-text-blur-row');
+  const textBgBlurSlider = document.getElementById('app-bookmark-text-blur-slider');
   if (textBgToggle) {
     textBgToggle.addEventListener('change', () => {
       const isHidden = !textBgToggle.checked;
       if (textBgRow) textBgRow.classList.toggle('hidden', isHidden);
       if (textBgOpacityRow) textBgOpacityRow.classList.toggle('hidden', isHidden);
+      if (textBgBlurRow) textBgBlurRow.classList.toggle('hidden', isHidden);
     });
   }
   if (textBgOpacitySlider) {
     textBgOpacitySlider.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
       applyBookmarkTextBgOpacity(val);
+    });
+  }
+  if (textBgBlurSlider) {
+    textBgBlurSlider.addEventListener('input', (e) => {
+      applyBookmarkTextBgBlur(parseInt(e.target.value, 10));
     });
   }
   if (appSettingsSaveBtn) {
@@ -3472,6 +3511,7 @@ function setupAppSettingsModal() {
       const textBgColorTrigger = document.getElementById('app-bookmark-text-bg-color-trigger');
       const nextTextBgColor = textBgColorTrigger ? (textBgColorTrigger.dataset.value || textBgColorTrigger.style.backgroundColor) : '#2CA5FF';
       const nextOpacity = parseFloat(document.getElementById('app-bookmark-text-opacity-slider')?.value || 0.65);
+      const nextBlur = parseInt(document.getElementById('app-bookmark-text-blur-slider')?.value || 4, 10);
       const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
       const nextFallbackColor = colorTrigger ? (colorTrigger.dataset.value || colorTrigger.style.backgroundColor) : '#A1D5F8';
       const folderTrigger = document.getElementById('app-bookmark-folder-color-trigger');
@@ -3498,6 +3538,7 @@ function setupAppSettingsModal() {
       appBookmarkOpenNewTabPreference = nextBookmarkNewTab;
       applyBookmarkTextBg(nextBookmarkTextBg);
       applyBookmarkTextBgOpacity(nextOpacity);
+      applyBookmarkTextBgBlur(nextBlur);
       applyBookmarkTextBgColor(nextTextBgColor);
       appBookmarkFallbackColorPreference = nextFallbackColor;
       appBookmarkFolderColorPreference = nextFolderColor;
@@ -3519,6 +3560,7 @@ function setupAppSettingsModal() {
           [APP_BOOKMARK_TEXT_BG_KEY]: nextBookmarkTextBg,
           [APP_BOOKMARK_TEXT_BG_COLOR_KEY]: nextTextBgColor,
           [APP_BOOKMARK_TEXT_OPACITY_KEY]: nextOpacity,
+          [APP_BOOKMARK_TEXT_BLUR_KEY]: nextBlur,
           [APP_BOOKMARK_FALLBACK_COLOR_KEY]: nextFallbackColor,
           [APP_BOOKMARK_FOLDER_COLOR_KEY]: nextFolderColor,
           [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,

@@ -407,7 +407,7 @@
                 <div class="title">Fallback icon color</div>
                 <div class="hint">Background color for bookmarks without an image.</div>
               </div>
-              <input type="color" id="app-bookmark-fallback-color-input" class="app-color-input" value="#A1D5F8">
+              <button id="app-bookmark-fallback-color-trigger" class="color-picker-trigger"></button>
             </div>
             <div class="app-setting-row">
               <div class="app-setting-label">
@@ -862,6 +862,17 @@
         </p>
       <div class="dialog-buttons" style="justify-content: center;">
         <button id="custom-alert-ok-btn" class="dialog-btn primary-btn">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="material-picker-modal" class="modal-overlay hidden">
+    <div class="material-picker-dialog">
+      <div class="material-picker-header">
+        <h3>Select Color</h3>
+        <button id="material-picker-close" class="icon-btn close-btn">&times;</button>
+      </div>
+      <div id="material-color-grid" class="material-color-grid">
       </div>
     </div>
   </div>

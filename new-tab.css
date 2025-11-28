@@ -3980,3 +3980,260 @@ input:checked + .slider:before {
   height: 20px;
 }
 
+/* --- Custom Material Color Picker --- */
+
+/* The button that opens the picker */
+.color-picker-trigger {
+  width: 60px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.color-picker-trigger:hover {
+  transform: scale(1.05);
+}
+
+/* The Picker Modal Overlay */
+#material-picker-modal {
+  z-index: 2500;
+  
+  /* Transparent overlay */
+  background-color: transparent; 
+  backdrop-filter: none;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; 
+}
+
+/* The Dialog Box Container */
+.material-picker-dialog {
+  background: transparent; 
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  
+  width: 380px; 
+  max-width: 90vw; 
+  max-height: 80vh;
+  
+  display: flex;
+  flex-direction: column;
+  color: white;
+  box-sizing: border-box;
+}
+
+/* HIDE the header */
+.material-picker-header {
+  display: none; 
+}
+
+/* The Color Grid Container */
+.material-color-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  
+  /* Glass Background */
+  background: rgba(0, 0, 0, 0.75); 
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); 
+  
+  overflow-y: auto; 
+  overflow-x: hidden; 
+  
+  flex: 1;
+  width: 100%;
+  padding: 8px 0; 
+  
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.3) transparent; 
+}
+
+/* Webkit Scrollbar Styling */
+.material-color-grid::-webkit-scrollbar {
+  width: 8px; 
+}
+.material-color-grid::-webkit-scrollbar-track {
+  background: transparent; 
+}
+.material-color-grid::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3); 
+  border-radius: 4px; 
+  border: 2px solid transparent; 
+  background-clip: content-box; 
+}
+.material-color-grid::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+/* --- Row Styles --- */
+.material-color-row {
+  display: flex;
+  height: 24px;
+  width: 100%;
+  flex-shrink: 0;
+  padding: 0 8px; 
+  box-sizing: border-box;
+  margin-bottom: 1px;
+}
+
+.material-color-label {
+  width: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Center Text */
+  text-align: center;
+  
+  font-size: 0.65rem;
+  font-weight: bold;
+  text-transform: capitalize;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  flex-shrink: 0;
+  margin-right: 6px; 
+  border-radius: 4px;
+  
+  /* --- NEW: Interactive Cursor & Transition --- */
+  cursor: pointer;
+  transition: transform 0.1s ease, filter 0.1s ease;
+}
+
+/* --- NEW: Hover Effect for Labels --- */
+.material-color-label:hover {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+  z-index: 5;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.material-color-swatch {
+  flex: 1; 
+  cursor: pointer;
+  transition: transform 0.1s, z-index 0.1s;
+  position: relative;
+  min-width: 0;
+  border-radius: 3px;
+}
+
+.material-color-swatch:hover {
+  transform: scale(1.3); 
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  border: 1px solid white;
+}
+
+/* Add a gap before the first Accent color (A100) to separate it from the Dark 900 shade */
+.material-color-swatch:nth-child(12) {
+  margin-left: 6px; /* Creates a visual break */
+  position: relative; /* Context for the separator line */
+}
+
+/* Optional: Add a subtle divider line in the gap */
+.material-color-swatch:nth-child(12)::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* --- Footer Layout (Split B/W) --- */
+.material-picker-footer {
+  display: flex;
+  width: 100%;
+  /* Padding matches .material-color-row padding to align outer edges */
+  padding: 0 8px; 
+  box-sizing: border-box;
+  gap: 4px; /* Space between the rows block and the BW block */
+}
+
+/* Left Column: Contains Grey/BlueGrey/Brown rows */
+.material-footer-rows {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Since rows are inside .material-footer-rows, we remove their default horizontal padding
+   so they flush with the container, otherwise double padding happens. */
+.material-footer-rows .material-color-row {
+  padding: 0; 
+}
+
+/* Right Column: Contains White/Black boxes */
+.material-footer-bw {
+  width: 80px; /* Fixed width for the B/W column */
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* White/Black Buttons */
+.bw-swatch {
+  flex: 1; /* Stretch to fill half height each */
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: lowercase;
+  transition: transform 0.1s, z-index 0.1s;
+  /* Add subtle border for contrast if background matches */
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1); 
+}
+
+.bw-swatch:hover {
+  transform: scale(1.08);
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  border: 1px solid #999;
+}
+
+/* --- Animations --- */
+
+/* Keyframes for appearing (Grow from Button) */
+@keyframes pickerIn {
+  from {
+    opacity: 0;
+    transform: scale(0); /* Starts effectively invisible at the button location */
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Keyframes for disappearing (Shrink to Button) */
+@keyframes pickerOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0); /* Shrinks back into the button */
+  }
+}
+
+/* 1. Opening Animation:
+   Runs automatically when the 'hidden' class is removed. */
+#material-picker-modal:not(.hidden) .material-color-grid {
+  animation: pickerIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* 2. Closing Animation:
+   Triggered when JS adds the 'closing' class. */
+#material-picker-modal.closing .material-color-grid {
+  animation: pickerOut 0.2s ease-in forwards;
+}

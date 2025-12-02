@@ -3468,6 +3468,21 @@ function updateDefaultEngineVisibilityControl() {
   }
 }
 
+function updateColorTrigger(triggerEl, color) {
+  if (!triggerEl) return;
+
+  triggerEl.style.backgroundColor = color;
+
+  const normalized = (color || '').trim().toLowerCase();
+  const isWhite =
+    normalized === '#fff' ||
+    normalized === '#ffffff' ||
+    normalized === 'white' ||
+    normalized.startsWith('rgb(255, 255, 255');
+
+  triggerEl.style.setProperty('--color-picker-ring', isWhite ? '#000000' : '#ffffff');
+}
+
 function syncAppSettingsForm() {
   if (appTimeFormatSelect) {
     appTimeFormatSelect.value = timeFormatPreference;
@@ -3532,7 +3547,7 @@ function syncAppSettingsForm() {
   }
   const textBgColorTrigger = document.getElementById('app-bookmark-text-bg-color-trigger');
   if (textBgColorTrigger) {
-    textBgColorTrigger.style.backgroundColor = appBookmarkTextBgColorPreference;
+    updateColorTrigger(textBgColorTrigger, appBookmarkTextBgColorPreference);
     textBgColorTrigger.dataset.value = appBookmarkTextBgColorPreference;
   }
   const textBgOpacitySlider = document.getElementById('app-bookmark-text-opacity-slider');
@@ -3553,12 +3568,12 @@ function syncAppSettingsForm() {
   }
   const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
   if (colorTrigger) {
-    colorTrigger.style.backgroundColor = appBookmarkFallbackColorPreference;
+    updateColorTrigger(colorTrigger, appBookmarkFallbackColorPreference);
     colorTrigger.dataset.value = appBookmarkFallbackColorPreference;
   }
   const folderColorTrigger = document.getElementById('app-bookmark-folder-color-trigger');
   if (folderColorTrigger) {
-    folderColorTrigger.style.backgroundColor = appBookmarkFolderColorPreference;
+    updateColorTrigger(folderColorTrigger, appBookmarkFolderColorPreference);
     folderColorTrigger.dataset.value = appBookmarkFolderColorPreference;
   }
   const perfToggle = document.getElementById('app-performance-mode-toggle');
@@ -6211,12 +6226,12 @@ function setupMaterialColorPicker() {
 
   // 1. Fallback Icon Color Trigger
   if (fallbackTriggerBtn) {
-    fallbackTriggerBtn.style.backgroundColor = appBookmarkFallbackColorPreference;
+    updateColorTrigger(fallbackTriggerBtn, appBookmarkFallbackColorPreference);
     fallbackTriggerBtn.dataset.value = appBookmarkFallbackColorPreference;
 
     fallbackTriggerBtn.addEventListener('click', () => {
       openPickerFor(fallbackTriggerBtn, (newColor) => {
-        fallbackTriggerBtn.style.backgroundColor = newColor;
+        updateColorTrigger(fallbackTriggerBtn, newColor);
         fallbackTriggerBtn.dataset.value = newColor;
         appBookmarkFallbackColorPreference = newColor;
         applyBookmarkFallbackColor(newColor);
@@ -6226,27 +6241,35 @@ function setupMaterialColorPicker() {
 
   // 2. Folder Icon Color Trigger
   if (folderTriggerBtn) {
-    folderTriggerBtn.style.backgroundColor = appBookmarkFolderColorPreference;
+    updateColorTrigger(folderTriggerBtn, appBookmarkFolderColorPreference);
     folderTriggerBtn.dataset.value = appBookmarkFolderColorPreference;
 
     folderTriggerBtn.addEventListener('click', () => {
       openPickerFor(folderTriggerBtn, (newColor) => {
-        folderTriggerBtn.style.backgroundColor = newColor;
+        updateColorTrigger(folderTriggerBtn, newColor);
         folderTriggerBtn.dataset.value = newColor;
         appBookmarkFolderColorPreference = newColor;
         applyBookmarkFolderColor(newColor);
+
+        // Re-render current grid so folder icons update immediately
+        if (currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
+          const freshNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id) || currentGridFolderNode;
+          if (freshNode) {
+            renderBookmarkGrid(freshNode);
+          }
+        }
       });
     });
   }
 
   // 3. Bookmark Text Background Color Trigger
   if (textBgTriggerBtn) {
-    textBgTriggerBtn.style.backgroundColor = appBookmarkTextBgColorPreference;
+    updateColorTrigger(textBgTriggerBtn, appBookmarkTextBgColorPreference);
     textBgTriggerBtn.dataset.value = appBookmarkTextBgColorPreference;
 
     textBgTriggerBtn.addEventListener('click', () => {
       openPickerFor(textBgTriggerBtn, (newColor) => {
-        textBgTriggerBtn.style.backgroundColor = newColor;
+        updateColorTrigger(textBgTriggerBtn, newColor);
         textBgTriggerBtn.dataset.value = newColor;
         appBookmarkTextBgColorPreference = newColor;
         applyBookmarkTextBgColor(newColor);

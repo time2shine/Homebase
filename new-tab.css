@@ -1198,9 +1198,12 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
-  padding: 0 16px;
-  height: 32px; /* Match quick actions bar height */
-  font-size: 0.82em;
+
+  /* Thinner pill */
+  padding: 0 12px;
+  height: 26px;
+
+  font-size: 0.8em;
   font-weight: 400;
   color: rgba(255, 255, 255, 0.85);
   background-color: rgba(0, 0, 0, 0.2);
@@ -1262,13 +1265,14 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   align-items: center;
   justify-content: center;
   align-self: center;
-  width: 32px; 
-  height: 32px; 
+
+  width: 26px;
+  height: 26px;
+
   padding: 0;
-  font-size: 16px; 
+  font-size: 14px;
   font-weight: 700;
   line-height: 1;
-  color: white;
   background-color: rgba(0, 0, 0, 0.32);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
@@ -2008,22 +2012,25 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   /* Removed position: fixed, bottom, right, z-index */
   display: flex;
   align-items: center;
-  height: 32px;
+
+  /* Thinner bar */
+  height: 26px;
   gap: 4px;
-  padding: 0 6px; /* MODIFIED: Match tab height */
-  border-radius: 20px; /* MODIFIED: Matched folder tabs */
-  margin-right: 0; /* === ADDED THIS LINE === */
+  padding: 0 4px;
+  border-radius: 18px;
+
+  margin-right: 0;
 }
 
 .quick-action-btn {
-  position: relative; /* For tooltip */
+  position: relative;
   background: transparent;
   border: none;
   color: white;
-  font-size: 0.9em; /* MODIFIED: Made smaller */
-  width: 28px;
-  height: 28px;
-  padding: 0; /* Fixed size circle */
+  font-size: 0.85em;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -2038,7 +2045,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 .quick-action-divider {
   width: 1px;
-  height: 16px;
+  height: 14px; /* was 16px */
   background-color: rgba(255, 255, 255, 0.3);
   margin: 0 4px;
 }
@@ -4077,8 +4084,8 @@ input:checked + .slider:before {
   height: 26px;      /* Matches the toggle switch height */
   border-radius: 999px; /* Capsule/Pill shape */
   
-  /* White ring around the color */
-  border: 2px solid #ffffff; 
+  /* Ring color now driven by a CSS variable */
+  border: 2px solid var(--color-picker-ring, #ffffff); 
   
   /* Shadow for depth */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); 

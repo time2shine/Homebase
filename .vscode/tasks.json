@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Homebase (Dev Profile)",
+      "type": "shell",
+      "windows": {
+        "command": "C:\\Program Files\\nodejs\\npx.cmd"
+      },
+      "linux": {
+        "command": "npx"
+      },
+      "osx": {
+        "command": "npx"
+      },
+      "args": [
+        "web-ext",
+        "run",
+        "--firefox",
+        "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+        "--source-dir",
+        "${workspaceFolder}",
+        "--verbose",
+        "--firefox-profile",
+        "C:\\Users\\rokon\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles\\2cyyp2nk.homebase-dev",
+        "--keep-profile-changes"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

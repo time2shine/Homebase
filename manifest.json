@@ -8,6 +8,12 @@
     "48": "icon-48.png"
   },
 
+  "applications": {
+    "gecko": {
+      "id": "rokonmagura@egmail.com"
+    }
+  },
+
   "chrome_url_overrides": {
     "newtab": "new-tab.html"
   },

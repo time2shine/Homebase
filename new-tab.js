@@ -1549,11 +1549,151 @@ function updateEditPreview() {
 
   // 2. If a custom icon exists, append it ON TOP
   if (meta.icon) {
-    const img = document.createElement('img');
-    img.src = meta.icon;
-    img.className = 'edit-folder-custom-icon-preview'; // Uses absolute positioning
-    previewContainer.appendChild(img);
+    if (meta.icon.startsWith('builtin:')) {
+      const key = meta.icon.replace('builtin:', '');
+      const svgString = ICONS.FOLDER_GLYPHS ? ICONS.FOLDER_GLYPHS[key] : null;
+
+      if (svgString) {
+        const div = document.createElement('div');
+        div.className = 'edit-folder-custom-icon-preview';
+        div.innerHTML = svgString;
+        previewContainer.appendChild(div);
+      }
+    } else {
+      const img = document.createElement('img');
+      img.src = meta.icon;
+      img.className = 'edit-folder-custom-icon-preview'; // Uses absolute positioning
+      previewContainer.appendChild(img);
+    }
   }
+}
+
+function setupBuiltInIconPicker() {
+  const modal = document.getElementById('builtin-icon-picker-modal');
+  const dialog = document.getElementById('builtin-icon-picker-dialog');
+  const container = document.getElementById('builtin-icon-list');
+  const triggerBtn = document.getElementById('edit-folder-builtin-btn');
+
+  // State to track original icon for hover-revert effect
+  let originalIconState = null;
+
+  if (!modal || !container || !triggerBtn || !dialog) return;
+
+  const renderIcons = () => {
+    // Only render if empty to save performance
+    if (container.children.length > 0) return;
+
+    container.innerHTML = '';
+    
+    Object.entries(ICON_CATEGORIES).forEach(([categoryName, iconKeys]) => {
+      const section = document.createElement('div');
+      section.className = 'icon-picker-category';
+      
+      const title = document.createElement('h4');
+      title.className = 'icon-picker-category-title';
+      title.textContent = categoryName;
+      section.appendChild(title);
+      
+      const grid = document.createElement('div');
+      grid.className = 'icon-picker-grid';
+      
+      iconKeys.forEach(key => {
+        const svgString = ICONS.FOLDER_GLYPHS ? ICONS.FOLDER_GLYPHS[key] : null;
+        if (!svgString) return;
+
+        const btn = document.createElement('div');
+        btn.className = 'icon-picker-item';
+        btn.innerHTML = svgString;
+        btn.title = key;
+        
+        // --- 1. Real-time Hover Preview ---
+        btn.addEventListener('mouseenter', () => {
+          if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+          pendingFolderMeta[editFolderTargetId].icon = `builtin:${key}`;
+          updateEditPreview();
+        });
+
+        // --- 2. Select Icon (Save) ---
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+          
+          const newIcon = `builtin:${key}`;
+          pendingFolderMeta[editFolderTargetId].icon = newIcon;
+          
+          // Update the "original" state so moving mouse away doesn't revert it
+          originalIconState = newIcon; 
+          
+          updateEditPreview();
+          modal.classList.add('hidden');
+        });
+
+        grid.appendChild(btn);
+      });
+      
+      if (grid.children.length > 0) {
+        section.appendChild(grid);
+        container.appendChild(section);
+      }
+    });
+  };
+
+  // --- 3. Revert on Mouse Leave (The whole list) ---
+  container.addEventListener('mouseleave', () => {
+    if (!editFolderTargetId) return;
+    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+
+    if (originalIconState) {
+      pendingFolderMeta[editFolderTargetId].icon = originalIconState;
+    } else {
+      delete pendingFolderMeta[editFolderTargetId].icon;
+    }
+    updateEditPreview();
+  });
+
+  triggerBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    renderIcons();
+    
+    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+    originalIconState = pendingFolderMeta[editFolderTargetId].icon || null;
+
+    // --- 4. Always scroll to top ---
+    container.scrollTop = 0;
+    
+    // --- 5. Positioning Logic (Align Top) ---
+    const rect = triggerBtn.getBoundingClientRect();
+    const dialogHeight = 400; 
+    const gap = 15; 
+
+    let top = rect.top; 
+    
+    if (top + dialogHeight > window.innerHeight - 10) {
+      top = window.innerHeight - dialogHeight - 10;
+    }
+
+    const left = rect.right + gap;
+
+    dialog.style.top = `${top}px`;
+    dialog.style.left = `${left}px`;
+
+    modal.classList.remove('hidden');
+  });
+
+  // Close when clicking outside
+  modal.addEventListener('click', (e) => {
+    if (!dialog.contains(e.target)) {
+      modal.classList.add('hidden');
+      
+      if (originalIconState) {
+        pendingFolderMeta[editFolderTargetId].icon = originalIconState;
+      } else {
+        if (pendingFolderMeta[editFolderTargetId]) delete pendingFolderMeta[editFolderTargetId].icon;
+      }
+      updateEditPreview();
+    }
+  });
 }
 
 async function handleEditFolderSave() {
@@ -2503,12 +2643,24 @@ function renderBookmarkFolder(folderNode) {
     p.style.setProperty('fill', appliedColor, 'important');
   });
 
-  // 2. If a custom icon exists, append it ON TOP (using the new CSS class)
+  // 2. Render Custom Icon (Updated)
   if (customIcon) {
-    const img = document.createElement('img');
-    img.src = customIcon;
-    img.className = 'bookmark-folder-custom-icon'; // Uses absolute positioning
-    wrapper.appendChild(img);
+    if (customIcon.startsWith('builtin:')) {
+      const key = customIcon.replace('builtin:', '');
+      const svgString = ICONS.FOLDER_GLYPHS ? ICONS.FOLDER_GLYPHS[key] : null;
+
+      if (svgString) {
+        const iconDiv = document.createElement('div');
+        iconDiv.className = 'bookmark-folder-custom-icon';
+        iconDiv.innerHTML = svgString;
+        wrapper.appendChild(iconDiv);
+      }
+    } else {
+      const img = document.createElement('img');
+      img.src = customIcon;
+      img.className = 'bookmark-folder-custom-icon';
+      wrapper.appendChild(img);
+    }
   }
 
   item.appendChild(wrapper);
@@ -3925,6 +4077,22 @@ const SEARCH_ENGINES_PREF_KEY = 'searchEnginesConfig';
 
 // Icons are defined in icons.js and exposed globally.
 const ICONS = window.ICONS || {};
+const ICON_CATEGORIES = {
+  'Essentials': ['home', 'star', 'heart', 'globe', 'flag', 'fire', 'bolt'],
+  'Finance': ['bank', 'wallet', 'dollar', 'euro', 'bitcoin', 'piggy'],
+  'Shopping': ['cart', 'bag', 'tag', 'store', 'gift'],
+  'Gaming': ['gamepad', 'controller', 'pacman', 'dice', 'puzzle'],
+  'Religion': ['cross', 'moon_star', 'star_david', 'om', 'yin_yang', 'peace'],
+  'Moods': ['smile', 'sad', 'wink', 'cool', 'neutral'],
+  'Nature': ['paw', 'dog', 'cat', 'bird', 'fish', 'leaf'],
+  'Brands': ['apple', 'android', 'windows', 'chrome', 'google', 'twitter', 'facebook', 'instagram', 'youtube', 'amazon'],
+  'Work': ['briefcase', 'mail', 'calendar', 'chart', 'document'],
+  'Education': ['school', 'book', 'microscope', 'lightbulb'],
+  'Media': ['play', 'music', 'game', 'image'],
+  'Social': ['chat', 'group', 'user', 'phone'],
+  'Travel': ['flight', 'map', 'car', 'camera'],
+  'System': ['settings', 'lock', 'shield', 'trash', 'download']
+};
 
 let searchEngines = [
   { 
@@ -6571,6 +6739,7 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
   setupBookmarkModal();
   setupFolderModal();
   setupEditFolderModal();
+  setupBuiltInIconPicker();
   setupMoveModal();
   
   try {

@@ -1,4 +1,4 @@
-/* --- Global Styles --- */
+﻿/* --- Global Styles --- */
 body {
   margin: 0;
   padding: 0;
@@ -4550,7 +4550,7 @@ body.performance-mode .result-header {
 }
 
 .menu-item.has-submenu::after {
-  content: '▸';
+  content: 'â–¸';
   font-size: 1.2em;
   margin-left: 8px;
   line-height: 1;
@@ -4790,32 +4790,149 @@ body.performance-mode .context-submenu {
   text-align: center;
 }
 
-/* --- Custom Icons Inside Folders --- */
+/* ======================================= */
+/* --- BUILT-IN ICON POPOVER STYLES --- */
+/* ======================================= */
 
-/* 1. For the Main Grid */
-.bookmark-folder-custom-icon {
-  position: absolute;
-  top: 60%; /* Push down slightly to sit visually inside the folder flap */
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 32px !important; /* Smaller size to fit inside */
-  height: 32px !important;
-  object-fit: contain;
-  border-radius: 4px !important; /* Slight radius */
-  z-index: 2; /* Sit on top of the SVG */
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+/* 1. Transparent Overlay (No Blur, Handles Click-Outside) */
+.popover-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2200;
+  background-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  display: block;
+}
+
+.popover-overlay.hidden {
+  display: none;
   pointer-events: none;
 }
 
-/* 2. For the Edit Folder Preview Modal */
-.edit-folder-custom-icon-preview {
+/* 2. The Popover Box */
+.popover-dialog {
   position: absolute;
-  top: 60%;
+  width: 360px;
+  max-height: 400px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  
+  /* Animation */
+  opacity: 0;
+  transform: scale(0.9);
+  transform-origin: top left; /* Expands from the button */
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+              transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.popover-overlay:not(.hidden) .popover-dialog {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 3. Scroll Area */
+#builtin-icon-list.builtin-icon-scroll-area {
+  padding: 12px;
+  overflow-y: auto;
+  background-color: #ffffff;
+  max-height: 380px;
+}
+
+/* 4. Category Headers */
+#builtin-icon-picker-modal .icon-picker-category-title {
+  color: #0f172a;
+  font-size: 0.75em;
+  margin: 10px 0 8px 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+#builtin-icon-picker-modal .icon-picker-category:first-child .icon-picker-category-title {
+  margin-top: 0;
+}
+
+/* 5. Icons in Grid */
+#builtin-icon-picker-modal .icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  gap: 4px;
+}
+
+#builtin-icon-picker-modal .icon-picker-item {
+  width: 42px;
+  height: 42px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+#builtin-icon-picker-modal .icon-picker-item svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+  pointer-events: none;
+}
+
+#builtin-icon-picker-modal .icon-picker-item:hover {
+  background-color: #2ca5ff;
+  color: #ffffff;
+  border-color: #2ca5ff;
+  box-shadow: 0 4px 12px rgba(44, 165, 255, 0.3);
+  transform: scale(1.1);
+  z-index: 5;
+}
+
+/* --- Shared Icon Alignment (Matches Main Grid) --- */
+
+/* 1. Main Grid Folder Icons */
+.bookmark-folder-custom-icon {
+  position: absolute;
+  top: 55%; /* Centered vertically in the folder body */
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 40px !important; /* Slightly larger for the preview modal */
+  width: 32px !important;
+  height: 32px !important;
+  object-fit: contain;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+}
+
+.bookmark-folder-custom-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: rgba(255, 255, 255, 0.95);
+}
+
+/* 2. Edit Modal Preview Icons */
+.edit-folder-custom-icon-preview {
+  position: absolute;
+  top: 55%; /* Matches main grid exactly */
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px !important;
   height: 40px !important;
   object-fit: contain;
   z-index: 10;
+  pointer-events: none;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.edit-folder-custom-icon-preview svg {
+  width: 100%;
+  height: 100%;
+  fill: rgba(255, 255, 255, 0.9);
 }

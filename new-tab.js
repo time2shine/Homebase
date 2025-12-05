@@ -1530,42 +1530,50 @@ function hideEditFolderModal() {
   if (editFolderNameInput) editFolderNameInput.value = '';
 }
 
-function updateEditPreview() {
+function updateEditPreview(iconOverride) {
   const previewContainer = document.getElementById('edit-folder-icon-preview');
   if (!previewContainer || !editFolderTargetId) return;
 
   const meta = pendingFolderMeta[editFolderTargetId] || {};
+  const customColor = meta.color || null;
 
-  // 1. ALWAYS render the Base Folder SVG
-  previewContainer.innerHTML = ICONS.bookmarkFolderLarge;
-  
-  // Apply Color
-  const color = meta.color || appBookmarkFolderColorPreference;
-  const paths = previewContainer.querySelectorAll('path, rect');
-  paths.forEach(p => {
-    p.style.fill = color;
-    p.style.setProperty('fill', color, 'important');
+  const effectiveIcon = iconOverride !== undefined
+    ? iconOverride
+    : (meta.icon || null);
+
+  previewContainer.innerHTML = '';
+
+  // Base folder inside the gray circle
+  const baseWrapper = document.createElement('div');
+  baseWrapper.className = 'edit-folder-base-wrapper';
+  baseWrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
+  previewContainer.appendChild(baseWrapper);
+
+  // Apply color tint
+  const appliedColor = customColor || appBookmarkFolderColorPreference;
+  const svgPaths = baseWrapper.querySelectorAll('path, rect');
+  svgPaths.forEach((p) => {
+    p.style.fill = appliedColor;
+    p.style.setProperty('fill', appliedColor, 'important');
   });
 
-  // 2. If a custom icon exists, append it ON TOP
-  if (meta.icon) {
-    if (meta.icon.startsWith('builtin:')) {
-      const key = meta.icon.replace('builtin:', '');
-      const svgString = ICONS.FOLDER_GLYPHS ? ICONS.FOLDER_GLYPHS[key] : null;
+  if (!effectiveIcon) return;
 
-      if (svgString) {
-        const div = document.createElement('div');
-        div.className = 'edit-folder-custom-icon-preview';
-        div.innerHTML = svgString;
-        previewContainer.appendChild(div);
-      }
-    } else {
-      const img = document.createElement('img');
-      img.src = meta.icon;
-      img.className = 'edit-folder-custom-icon-preview'; // Uses absolute positioning
-      previewContainer.appendChild(img);
-    }
+  let iconEl;
+  if (typeof effectiveIcon === 'string' && effectiveIcon.startsWith('builtin:')) {
+    const key = effectiveIcon.slice('builtin:'.length);
+    const svgString = ICONS.FOLDER_GLYPHS && ICONS.FOLDER_GLYPHS[key];
+    if (!svgString) return;
+    iconEl = document.createElement('div');
+    iconEl.className = 'edit-folder-custom-icon-preview';
+    iconEl.innerHTML = svgString;
+  } else {
+    iconEl = document.createElement('img');
+    iconEl.className = 'edit-folder-custom-icon-preview';
+    iconEl.src = effectiveIcon;
   }
+
+  previewContainer.appendChild(iconEl);
 }
 
 function setupBuiltInIconPicker() {
@@ -1603,14 +1611,14 @@ function setupBuiltInIconPicker() {
 
         const btn = document.createElement('div');
         btn.className = 'icon-picker-item';
+        btn.dataset.iconId = key;
         btn.innerHTML = svgString;
         btn.title = key;
         
         // --- 1. Real-time Hover Preview ---
         btn.addEventListener('mouseenter', () => {
-          if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
-          pendingFolderMeta[editFolderTargetId].icon = `builtin:${key}`;
-          updateEditPreview();
+          if (!editFolderTargetId) return;
+          updateEditPreview(`builtin:${key}`);
         });
 
         // --- 2. Select Icon (Save) ---

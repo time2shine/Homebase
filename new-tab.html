@@ -1,4 +1,4 @@
-ï»¿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -50,7 +50,7 @@
           <div class="toggle-switch">
             <input type="checkbox" id="temp-unit-toggle">
             <label for="temp-unit-toggle" class="toggle-label">
-              <span class="toggle-label-text" data-on="Â°F" data-off="Â°C"></span>
+              <span class="toggle-label-text" data-on="°F" data-off="°C"></span>
             </label>
           </div>
         </div>
@@ -527,7 +527,7 @@
     <div class="gallery-dialog glass-box">
       <div class="gallery-header">
         <h3 id="gallery-header-title">Gallery</h3>
-        <button id="gallery-close-btn" class="icon-btn close-btn" aria-label="Close Gallery">Ã—</button>
+        <button id="gallery-close-btn" class="icon-btn close-btn" aria-label="Close Gallery">×</button>
       </div>
       <div class="gallery-filters">
         <button class="gallery-filter active" data-filter="all">All</button>
@@ -905,7 +905,7 @@
   
   <div id="edit-folder-modal" class="modal-overlay">
     <div id="edit-folder-dialog" class="dialog-content glass-box">
-      <button id="edit-folder-close-btn" class="dialog-close-btn" aria-label="Close">Ã—</button>
+      <button id="edit-folder-close-btn" class="dialog-close-btn" aria-label="Close">×</button>
 
       <h3>Edit Folder</h3>
       
@@ -932,7 +932,7 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
           </button>
           <button id="edit-folder-reset-btn" class="edit-action-btn">
-            <span class="tooltip-popup tooltip-top">Reset Default</span>
+            <span class="tooltip-popup tooltip-top">Clear Icon (Shift: Reset All)</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
           </button>
         </div>
@@ -940,9 +940,26 @@
         <input type="file" id="edit-folder-file-input" accept="image/*" hidden>
       </div>
 
+      <div class="edit-folder-controls">
+        <div class="control-row">
+          <label for="edit-folder-scale">Scale</label>
+          <input type="range" id="edit-folder-scale" min="0.5" max="1.5" step="0.1" value="1">
+        </div>
+        <div class="control-row">
+          <label for="edit-folder-offset-y">Position</label>
+          <input type="range" id="edit-folder-offset-y" min="-20" max="20" step="2" value="0">
+        </div>
+      </div>
+
       <div class="form-group">
-        <label for="edit-folder-name-input">Folder Name</label>
-        <input type="text" id="edit-folder-name-input" class="dialog-input">
+        <input type="text" id="edit-folder-name-input" class="dialog-input" placeholder="Folder Name">
+      </div>
+
+      <div class="form-group checkbox-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="edit-folder-recursive">
+          <span>Apply color to all subfolders</span>
+        </label>
       </div>
 
       <div class="dialog-buttons">

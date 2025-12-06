@@ -1,4 +1,4 @@
-// ===============================================
+﻿// ===============================================
 // --- GLOBAL ELEMENTS ---
 // ===============================================
 const browser = window.browser || window.chrome;
@@ -1407,10 +1407,26 @@ function setupEditFolderModal() {
   const uploadBtn = document.getElementById('edit-folder-upload-btn');
   const resetBtn = document.getElementById('edit-folder-reset-btn');
   const fileInput = document.getElementById('edit-folder-file-input');
+  
+  // New Inputs
+  const scaleInput = document.getElementById('edit-folder-scale');
+  const offsetInput = document.getElementById('edit-folder-offset-y');
+  const recursiveInput = document.getElementById('edit-folder-recursive');
+
+  // --- 1. SLIDER LISTENERS (Feature 3) ---
+  const updateMetaFromSliders = () => {
+    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+    pendingFolderMeta[editFolderTargetId].scale = parseFloat(scaleInput.value);
+    pendingFolderMeta[editFolderTargetId].offsetY = parseInt(offsetInput.value, 10);
+    updateEditPreview();
+  };
+
+  if (scaleInput) scaleInput.addEventListener('input', updateMetaFromSliders);
+  if (offsetInput) offsetInput.addEventListener('input', updateMetaFromSliders);
 
   const openColorPicker = () => {
+    // ... existing color picker logic (no changes needed here) ...
     const modal = document.getElementById('material-picker-modal');
-    // We target the wrapper dialog for positioning
     const dialog = modal ? modal.querySelector('.material-picker-dialog') : null;
     const grid = document.getElementById('material-color-grid');
     
@@ -1432,51 +1448,30 @@ function setupEditFolderModal() {
     };
 
     modal.classList.remove('hidden');
-    
-    // --- POSITIONING LOGIC START ---
-    // 1. Force block display to allow absolute positioning
     modal.style.display = 'block';
     
     const rect = colorBtn.getBoundingClientRect();
     const dialogWidth = 380; 
-    const dialogHeight = 420; // Approximate height of the picker
+    const dialogHeight = 420;
     
-    // 2. Adjustments
-    // "Middle": Align dialog center with button center
-    // Formula: (Button Top + Half Button Height) - (Half Dialog Height)
     let top = (rect.top + (rect.height / 2)) - (dialogHeight / 2);
-    
-    // "Left": Place to the left of button (-dialogWidth - gap)
     let left = rect.left - dialogWidth - 15; 
 
-    // Safety: If it goes off-screen to the left, flip it to the right
-    if (left < 10) {
-      left = rect.right + 15;
-    }
-    
-    // Safety: If it goes off-screen to the bottom, push it up
-    if (top + dialogHeight > window.innerHeight) {
-        top = window.innerHeight - dialogHeight - 20;
-    }
-    // Safety: If it goes off-screen to the top, push it down
-    if (top < 10) {
-        top = 10;
-    }
+    if (left < 10) left = rect.right + 15;
+    if (top + dialogHeight > window.innerHeight) top = window.innerHeight - dialogHeight - 20;
+    if (top < 10) top = 10;
 
-    // 3. Apply Styles
     dialog.style.position = 'absolute';
     dialog.style.margin = '0';
     dialog.style.top = `${top}px`;
     dialog.style.left = `${left}px`;
 
-    // 4. Set Animation Origin (Pop form button)
     const btnCenterX = rect.left + (rect.width / 2);
     const btnCenterY = rect.top + (rect.height / 2);
     const originX = btnCenterX - left;
     const originY = btnCenterY - top;
     
     grid.style.transformOrigin = `${originX}px ${originY}px`;
-    // --- POSITIONING LOGIC END ---
   };
 
   editFolderSaveBtn.addEventListener('click', handleEditFolderSave);
@@ -1492,25 +1487,68 @@ function setupEditFolderModal() {
 
   if (uploadBtn && fileInput) {
     uploadBtn.addEventListener('click', () => fileInput.click());
+    
+    // --- 2. IMAGE RESIZING (Feature 2) ---
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
+
+      const img = new Image();
       const reader = new FileReader();
+      
       reader.onload = (evt) => {
-        if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
-        pendingFolderMeta[editFolderTargetId].icon = evt.target.result;
-        updateEditPreview();
+        img.src = evt.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 128; // Resize to max 128px
+          let w = img.width;
+          let h = img.height;
+          
+          if (w > h) {
+            if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; }
+          } else {
+            if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; }
+          }
+          
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          
+          const resizedDataUrl = canvas.toDataURL('image/png');
+          
+          if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+          pendingFolderMeta[editFolderTargetId].icon = resizedDataUrl;
+          updateEditPreview();
+        };
       };
       reader.readAsDataURL(file);
       fileInput.value = '';
     });
   }
 
+  // --- 3. GRANULAR RESET (Feature 4) ---
   if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      if (pendingFolderMeta[editFolderTargetId]) {
+    resetBtn.addEventListener('click', (e) => {
+      if (!pendingFolderMeta[editFolderTargetId]) return;
+
+      if (e.shiftKey) {
+        // Shift+Click: Reset Everything (Color + Icon + Scale + Offset)
         delete pendingFolderMeta[editFolderTargetId].color;
         delete pendingFolderMeta[editFolderTargetId].icon;
+        delete pendingFolderMeta[editFolderTargetId].scale;
+        delete pendingFolderMeta[editFolderTargetId].offsetY;
+        
+        // Reset inputs
+        if (scaleInput) scaleInput.value = 1;
+        if (offsetInput) offsetInput.value = 0;
+      } else {
+        // Normal Click: Reset Icon & Transforms Only (Keep Color)
+        delete pendingFolderMeta[editFolderTargetId].icon;
+        delete pendingFolderMeta[editFolderTargetId].scale;
+        delete pendingFolderMeta[editFolderTargetId].offsetY;
+        if (scaleInput) scaleInput.value = 1;
+        if (offsetInput) offsetInput.value = 0;
       }
       updateEditPreview();
     });
@@ -1541,6 +1579,7 @@ function setupEditFolderModal() {
   });
 }
 
+
 function showEditFolderModal(folderNode) {
   if (!editFolderModal || !folderNode) return;
 
@@ -1552,6 +1591,15 @@ function showEditFolderModal(folderNode) {
     pendingFolderMeta[folderNode.id] = { ...folderMetadata[folderNode.id] };
   }
 
+  // --- Initialize Sliders ---
+  const scaleInput = document.getElementById('edit-folder-scale');
+  const offsetInput = document.getElementById('edit-folder-offset-y');
+  const recursiveInput = document.getElementById('edit-folder-recursive');
+
+  if (scaleInput) scaleInput.value = pendingFolderMeta[editFolderTargetId]?.scale ?? 1;
+  if (offsetInput) offsetInput.value = pendingFolderMeta[editFolderTargetId]?.offsetY ?? 0;
+  if (recursiveInput) recursiveInput.checked = false; // Always reset checkbox
+
   updateEditPreview();
   editFolderModal.style.display = 'flex';
 
@@ -1560,6 +1608,7 @@ function showEditFolderModal(folderNode) {
     editFolderNameInput.select();
   }
 }
+
 
 function hideEditFolderModal() {
   if (!editFolderModal) return;
@@ -1580,6 +1629,8 @@ function updateEditPreview(iconOverride) {
 
   const meta = pendingFolderMeta[editFolderTargetId] || {};
   const customColor = meta.color || null;
+  const scale = meta.scale ?? 1;
+  const offsetY = meta.offsetY ?? 0;
 
   const effectiveIcon = iconOverride !== undefined
     ? iconOverride
@@ -1603,6 +1654,11 @@ function updateEditPreview(iconOverride) {
 
   if (!effectiveIcon) return;
 
+  // Calculate transform string
+  // Note: CSS scale/translate might conflict with existing 'transform: translate(-50%, -50%)' in CSS class.
+  // We handle this by applying the variable parts to a style string that preserves the centering.
+  const transformStyle = `transform: translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.85});`;
+
   let iconEl;
   if (typeof effectiveIcon === 'string' && effectiveIcon.startsWith('builtin:')) {
     const key = effectiveIcon.slice('builtin:'.length);
@@ -1611,14 +1667,17 @@ function updateEditPreview(iconOverride) {
     iconEl = document.createElement('div');
     iconEl.className = 'edit-folder-custom-icon-preview';
     iconEl.innerHTML = svgString;
+    iconEl.setAttribute('style', transformStyle); // Apply transform
   } else {
     iconEl = document.createElement('img');
     iconEl.className = 'edit-folder-custom-icon-preview';
     iconEl.src = effectiveIcon;
+    iconEl.setAttribute('style', transformStyle); // Apply transform
   }
 
   previewContainer.appendChild(iconEl);
 }
+
 
 // Duration must match the CSS animation (0.2s closing)
 const ICON_PICKER_CLOSE_DURATION = 200;
@@ -1800,18 +1859,49 @@ async function handleEditFolderSave() {
   if (!newName) return alert('Name required');
 
   try {
+    // 1. Update Bookmark Title
     await browser.bookmarks.update(editFolderTargetId, { title: newName });
 
     const newMeta = pendingFolderMeta[editFolderTargetId];
-
-    if (newMeta && (newMeta.color || newMeta.icon)) {
+    
+    // 2. Save Metadata for CURRENT folder
+    if (newMeta && (newMeta.color || newMeta.icon || newMeta.scale !== undefined)) {
       folderMetadata[editFolderTargetId] = newMeta;
     } else {
       delete folderMetadata[editFolderTargetId];
     }
 
+    // --- 3. SUBFOLDER RECURSION (Feature 5) ---
+    const recursiveInput = document.getElementById('edit-folder-recursive');
+    if (recursiveInput && recursiveInput.checked && newMeta && newMeta.color) {
+      
+      // Helper: recursively find folder nodes
+      const applyColorToChildren = (parentId, color) => {
+        const parentNode = findBookmarkNodeById(bookmarkTree[0], parentId);
+        if (!parentNode || !parentNode.children) return;
+
+        parentNode.children.forEach(child => {
+          // Is it a folder? (no URL)
+          if (!child.url) {
+            // Apply color
+            if (!folderMetadata[child.id]) folderMetadata[child.id] = {};
+            folderMetadata[child.id].color = color;
+            
+            // Recurse
+            applyColorToChildren(child.id, color);
+          }
+        });
+      };
+
+      // Ensure we have fresh tree before traversing
+      await getBookmarkTree(true);
+      applyColorToChildren(editFolderTargetId, newMeta.color);
+    }
+
+    // 4. Save to Storage
     await browser.storage.local.set({ [FOLDER_META_KEY]: folderMetadata });
 
+    // 5. Refresh UI
     await getBookmarkTree(true);
 
     let folderToRender = null;
@@ -1835,6 +1925,7 @@ async function handleEditFolderSave() {
     alert('Error: Could not update this folder.');
   }
 }
+
 
 // ===============================================
 // --- MOVE BOOKMARK/FOLDER MODAL FUNCTIONS ---
@@ -2725,6 +2816,10 @@ function renderBookmarkFolder(folderNode) {
   const meta = folderMetadata[folderNode.id] || {};
   const customColor = meta.color || null;
   const customIcon = meta.icon || null;
+  
+  // Defaults
+  const scale = meta.scale ?? 1;
+  const offsetY = meta.offsetY ?? 0;
 
   const wrapper = document.createElement('div');
   wrapper.className = 'bookmark-icon-wrapper';
@@ -2740,8 +2835,13 @@ function renderBookmarkFolder(folderNode) {
     p.style.setProperty('fill', appliedColor, 'important');
   });
 
-  // 2. Render Custom Icon (Updated)
+  // 2. Render Custom Icon (Updated with transforms)
   if (customIcon) {
+    // Base style for the icon (centered + custom offset/scale)
+    // NOTE: Base CSS has transform: translate(-50%, -50%) scale(0.9). 
+    // We override it here.
+    const transformStyle = `transform: translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.9});`;
+
     if (customIcon.startsWith('builtin:')) {
       const key = customIcon.replace('builtin:', '');
       const svgString = ICONS.FOLDER_GLYPHS ? ICONS.FOLDER_GLYPHS[key] : null;
@@ -2750,12 +2850,14 @@ function renderBookmarkFolder(folderNode) {
         const iconDiv = document.createElement('div');
         iconDiv.className = 'bookmark-folder-custom-icon';
         iconDiv.innerHTML = svgString;
+        iconDiv.setAttribute('style', transformStyle);
         wrapper.appendChild(iconDiv);
       }
     } else {
       const img = document.createElement('img');
       img.src = customIcon;
       img.className = 'bookmark-folder-custom-icon';
+      img.setAttribute('style', transformStyle);
       wrapper.appendChild(img);
     }
   }
@@ -2768,6 +2870,7 @@ function renderBookmarkFolder(folderNode) {
 
   return item;
 }
+
 
 
 /**
@@ -4049,7 +4152,7 @@ function setupSearchEnginesModal() {
       div.className = 'engine-toggle-item';
       div.innerHTML = `
         <div class="engine-toggle-main">
-          <span class="engine-drag-handle">☰</span>
+          <span class="engine-drag-handle">â˜°</span>
           <span class="engine-toggle-icon" aria-hidden="true">${engine.icon}</span>
           <span class="engine-toggle-name">${engine.name}</span>
         </div>

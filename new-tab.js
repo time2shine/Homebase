@@ -1434,19 +1434,20 @@ function setupEditFolderModal() {
     modal.classList.remove('hidden');
     
     // --- POSITIONING LOGIC START ---
-    // 1. Force block display to allow absolute positioning (overrides CSS flex centering)
+    // 1. Force block display to allow absolute positioning
     modal.style.display = 'block';
     
     const rect = colorBtn.getBoundingClientRect();
-    const dialogWidth = 380; // approximate width from CSS
+    const dialogWidth = 380; 
+    const dialogHeight = 420; // Approximate height of the picker
     
     // 2. Adjustments
-    // "Same level": Align top of dialog with top of button
-    // "Down": Add small vertical offset (+10px)
-    // "Left": Place it to the left of the button (-dialogWidth - gap)
+    // "Middle": Align dialog center with button center
+    // Formula: (Button Top + Half Button Height) - (Half Dialog Height)
+    let top = (rect.top + (rect.height / 2)) - (dialogHeight / 2);
     
-    let top = rect.top + 10; 
-    let left = rect.left - dialogWidth - 15; // 15px gap to the left
+    // "Left": Place to the left of button (-dialogWidth - gap)
+    let left = rect.left - dialogWidth - 15; 
 
     // Safety: If it goes off-screen to the left, flip it to the right
     if (left < 10) {
@@ -1454,14 +1455,17 @@ function setupEditFolderModal() {
     }
     
     // Safety: If it goes off-screen to the bottom, push it up
-    const dialogHeight = 420; // approximate height
     if (top + dialogHeight > window.innerHeight) {
         top = window.innerHeight - dialogHeight - 20;
     }
+    // Safety: If it goes off-screen to the top, push it down
+    if (top < 10) {
+        top = 10;
+    }
 
-    // 3. Apply Styles to Dialog
+    // 3. Apply Styles
     dialog.style.position = 'absolute';
-    dialog.style.margin = '0'; // Remove 'auto' centering
+    dialog.style.margin = '0';
     dialog.style.top = `${top}px`;
     dialog.style.left = `${left}px`;
 
@@ -1471,7 +1475,6 @@ function setupEditFolderModal() {
     const originX = btnCenterX - left;
     const originY = btnCenterY - top;
     
-    // Apply to the grid which handles the scale animation
     grid.style.transformOrigin = `${originX}px ${originY}px`;
     // --- POSITIONING LOGIC END ---
   };
@@ -1627,47 +1630,32 @@ function showBuiltinIconPicker(anchorButton) {
   const dialog = overlay.querySelector('.popover-dialog');
   const list = document.getElementById('builtin-icon-list');
 
+  // Reset scroll to top
   if (list) list.scrollTop = 0;
 
+  // Clear manual positioning so CSS centering can take over; keep CSS left offset
+  if (dialog) {
+    dialog.style.top = '';
+  }
+
+  // Calculate transform origin from button to centered dialog
   if (dialog && anchorButton) {
-    const rect = anchorButton.getBoundingClientRect();
+    const btnRect = anchorButton.getBoundingClientRect();
+    const btnCenterX = btnRect.left + (btnRect.width / 2);
+    const btnCenterY = btnRect.top + (btnRect.height / 2);
 
-    // Dialog Dimensions
-    const dialogWidth = 360;
-    const dialogHeight = 400;
-    
-    // --- POSITIONING TWEAKS ---
-    // 1. Move Down: aligns with the color icon level
-    const verticalOffset = 85; 
-    
-    // 2. Move Left: pulls closer to the button
-    const horizontalOffset = -10; 
-    
-    const gap = 12; // Base gap
+    // Dialog is centered in the viewport via flex; its center is screen center plus offset
+    const offsetX = 322; // matches CSS left shift
+    const dialogCenterX = (window.innerWidth / 2) + offsetX;
+    const dialogCenterY = window.innerHeight / 2;
 
-    // Calculate Initial Position
-    let left = rect.right + gap + horizontalOffset;
-    let top = rect.top + verticalOffset;
+    const originX = btnCenterX - dialogCenterX;
+    const originY = btnCenterY - dialogCenterY;
 
-    // Prevent right overflow: move to left side if needed
-    if (left + dialogWidth > window.innerWidth - 10) {
-      left = rect.left - dialogWidth - gap - horizontalOffset;
-    }
-
-    // Prevent bottom overflow: nudge up if needed
-    if (top + dialogHeight > window.innerHeight - 10) {
-      top = window.innerHeight - dialogHeight - 10;
-    }
-
-    dialog.style.top = `${top}px`;
-    dialog.style.left = `${left}px`;
-
-    // Transform origin from button center relative to dialog
-    const btnCenterX = rect.left + (rect.width / 2);
-    const btnCenterY = rect.top + (rect.height / 2);
-    const originX = btnCenterX - left;
-    const originY = btnCenterY - top;
-    dialog.style.setProperty('--popover-origin', `${originX}px ${originY}px`);
+    dialog.style.setProperty(
+      '--popover-origin',
+      `calc(50% + ${originX}px) calc(50% + ${originY}px)`
+    );
   }
 
   overlay.classList.remove('hidden', 'closing');

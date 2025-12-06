@@ -4827,10 +4827,9 @@ body.performance-mode .context-submenu {
   background-color: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  
-  /* Flex centering not needed here as we manually position the dialog, 
-     but display:block ensures it renders. */
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .popover-overlay.hidden {
@@ -4840,9 +4839,15 @@ body.performance-mode .context-submenu {
 
 /* 2. The Popover Box (Rebuilt for Animation) */
 .popover-dialog {
-  position: absolute;
-  width: 360px;
-  max-height: 400px;
+  position: relative;
+  top: auto;
+  left: auto;
+  
+  /* Taller and shifted right */
+  width: 380px;
+  height: 700px;
+  max-height: 90vh;
+  left: 322px;
   background-color: #ffffff;
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0,0,0,0.05);
@@ -4852,7 +4857,7 @@ body.performance-mode .context-submenu {
 
   /* --- ANIMATION SETUP --- */
   /* 1. Origin: Set dynamically by JS to match the trigger button position */
-  transform-origin: var(--popover-origin, top left);
+  transform-origin: var(--popover-origin, center center);
   
   /* 2. Initial State: Invisible and Scaled Down completely */
   opacity: 0;
@@ -4876,7 +4881,11 @@ body.performance-mode .context-submenu {
   padding: 12px;
   overflow-y: auto;
   background-color: #ffffff;
-  max-height: 380px;
+  
+  /* Fill the fixed-height container */
+  flex: 1;
+  height: 100%;
+  max-height: none;
 }
 
 /* 4. Category Headers */

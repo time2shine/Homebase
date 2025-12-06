@@ -1410,8 +1410,11 @@ function setupEditFolderModal() {
 
   const openColorPicker = () => {
     const modal = document.getElementById('material-picker-modal');
+    // We target the wrapper dialog for positioning
+    const dialog = modal ? modal.querySelector('.material-picker-dialog') : null;
     const grid = document.getElementById('material-color-grid');
-    if (!modal || !grid || !colorBtn) return;
+    
+    if (!modal || !dialog || !grid || !colorBtn) return;
 
     const currentMeta = pendingFolderMeta[editFolderTargetId] || {};
     const currentColor = currentMeta.color || appBookmarkFolderColorPreference;
@@ -1429,10 +1432,48 @@ function setupEditFolderModal() {
     };
 
     modal.classList.remove('hidden');
+    
+    // --- POSITIONING LOGIC START ---
+    // 1. Force block display to allow absolute positioning (overrides CSS flex centering)
+    modal.style.display = 'block';
+    
     const rect = colorBtn.getBoundingClientRect();
-    const gridLeft = grid.offsetLeft;
-    const gridTop = grid.offsetTop;
-    grid.style.transformOrigin = `${(rect.left + rect.width / 2) - gridLeft}px ${(rect.top + rect.height / 2) - gridTop}px`;
+    const dialogWidth = 380; // approximate width from CSS
+    
+    // 2. Adjustments
+    // "Same level": Align top of dialog with top of button
+    // "Down": Add small vertical offset (+10px)
+    // "Left": Place it to the left of the button (-dialogWidth - gap)
+    
+    let top = rect.top + 10; 
+    let left = rect.left - dialogWidth - 15; // 15px gap to the left
+
+    // Safety: If it goes off-screen to the left, flip it to the right
+    if (left < 10) {
+      left = rect.right + 15;
+    }
+    
+    // Safety: If it goes off-screen to the bottom, push it up
+    const dialogHeight = 420; // approximate height
+    if (top + dialogHeight > window.innerHeight) {
+        top = window.innerHeight - dialogHeight - 20;
+    }
+
+    // 3. Apply Styles to Dialog
+    dialog.style.position = 'absolute';
+    dialog.style.margin = '0'; // Remove 'auto' centering
+    dialog.style.top = `${top}px`;
+    dialog.style.left = `${left}px`;
+
+    // 4. Set Animation Origin (Pop form button)
+    const btnCenterX = rect.left + (rect.width / 2);
+    const btnCenterY = rect.top + (rect.height / 2);
+    const originX = btnCenterX - left;
+    const originY = btnCenterY - top;
+    
+    // Apply to the grid which handles the scale animation
+    grid.style.transformOrigin = `${originX}px ${originY}px`;
+    // --- POSITIONING LOGIC END ---
   };
 
   editFolderSaveBtn.addEventListener('click', handleEditFolderSave);
@@ -1576,6 +1617,84 @@ function updateEditPreview(iconOverride) {
   previewContainer.appendChild(iconEl);
 }
 
+// Duration must match the CSS animation (0.2s closing)
+const ICON_PICKER_CLOSE_DURATION = 200;
+
+function showBuiltinIconPicker(anchorButton) {
+  const overlay = document.getElementById('builtin-icon-picker-modal');
+  if (!overlay) return;
+
+  const dialog = overlay.querySelector('.popover-dialog');
+  const list = document.getElementById('builtin-icon-list');
+
+  if (list) list.scrollTop = 0;
+
+  if (dialog && anchorButton) {
+    const rect = anchorButton.getBoundingClientRect();
+
+    // Dialog Dimensions
+    const dialogWidth = 360;
+    const dialogHeight = 400;
+    
+    // --- POSITIONING TWEAKS ---
+    // 1. Move Down: aligns with the color icon level
+    const verticalOffset = 85; 
+    
+    // 2. Move Left: pulls closer to the button
+    const horizontalOffset = -10; 
+    
+    const gap = 12; // Base gap
+
+    // Calculate Initial Position
+    let left = rect.right + gap + horizontalOffset;
+    let top = rect.top + verticalOffset;
+
+    // Prevent right overflow: move to left side if needed
+    if (left + dialogWidth > window.innerWidth - 10) {
+      left = rect.left - dialogWidth - gap - horizontalOffset;
+    }
+
+    // Prevent bottom overflow: nudge up if needed
+    if (top + dialogHeight > window.innerHeight - 10) {
+      top = window.innerHeight - dialogHeight - 10;
+    }
+
+    dialog.style.top = `${top}px`;
+    dialog.style.left = `${left}px`;
+
+    // Transform origin from button center relative to dialog
+    const btnCenterX = rect.left + (rect.width / 2);
+    const btnCenterY = rect.top + (rect.height / 2);
+    const originX = btnCenterX - left;
+    const originY = btnCenterY - top;
+    dialog.style.setProperty('--popover-origin', `${originX}px ${originY}px`);
+  }
+
+  overlay.classList.remove('hidden', 'closing');
+}
+
+function hideBuiltinIconPicker() {
+  const overlay = document.getElementById('builtin-icon-picker-modal');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+
+  const dialog = overlay.querySelector('.popover-dialog');
+  let finished = false;
+
+  const finalizeClose = () => {
+    if (finished) return;
+    finished = true;
+    overlay.classList.add('hidden');
+    overlay.classList.remove('closing');
+    if (dialog) dialog.removeEventListener('animationend', finalizeClose);
+  };
+
+  overlay.classList.add('closing');
+
+  if (dialog) dialog.addEventListener('animationend', finalizeClose, { once: true });
+  // Fallback in case transitionend doesn't fire
+  setTimeout(finalizeClose, ICON_PICKER_CLOSE_DURATION + 50);
+}
+
 function setupBuiltInIconPicker() {
   const builtinIconOverlay = document.getElementById('builtin-icon-picker-modal');
   const builtinIconDialog = document.getElementById('builtin-icon-picker-dialog');
@@ -1584,29 +1703,8 @@ function setupBuiltInIconPicker() {
 
   // State to track original icon for hover-revert effect
   let originalIconState = null;
-  let closePopoverTimeout = null;
 
   if (!builtinIconOverlay || !builtinIconList || !triggerBtn || !builtinIconDialog) return;
-
-  const POPOVER_ANIM_MS = 200; // match CSS 0.2s
-
-  const openPopover = () => {
-    if (closePopoverTimeout) {
-      clearTimeout(closePopoverTimeout);
-      closePopoverTimeout = null;
-    }
-    builtinIconOverlay.classList.remove('hidden');
-    builtinIconOverlay.classList.remove('closing');
-  };
-
-  const closePopover = () => {
-    builtinIconOverlay.classList.add('closing');
-    closePopoverTimeout = setTimeout(() => {
-      builtinIconOverlay.classList.add('hidden');
-      builtinIconOverlay.classList.remove('closing');
-      closePopoverTimeout = null;
-    }, POPOVER_ANIM_MS);
-  };
 
   const renderIcons = () => {
     // Only render if empty to save performance
@@ -1654,7 +1752,7 @@ function setupBuiltInIconPicker() {
           originalIconState = newIcon; 
           
           updateEditPreview();
-          closePopover();
+          hideBuiltinIconPicker();
         });
 
         grid.appendChild(btn);
@@ -1688,33 +1786,14 @@ function setupBuiltInIconPicker() {
     if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
     originalIconState = pendingFolderMeta[editFolderTargetId].icon || null;
 
-    // --- 5. Positioning Logic (Align Top) ---
-    const rect = triggerBtn.getBoundingClientRect();
-    const dialogHeight = 400; 
-    const gap = 15; 
-
-    let top = rect.top; 
-    
-    if (top + dialogHeight > window.innerHeight - 10) {
-      top = window.innerHeight - dialogHeight - 10;
-    }
-
-    const left = rect.right + gap;
-
-    builtinIconDialog.style.top = `${top}px`;
-    builtinIconDialog.style.left = `${left}px`;
-
     // Show picker and reset scroll so it always starts at the top
-    openPopover();
-    if (builtinIconList) {
-      builtinIconList.scrollTop = 0;
-    }
+    showBuiltinIconPicker(triggerBtn);
   });
 
   // Close when clicking outside
   builtinIconOverlay.addEventListener('click', (e) => {
     if (!builtinIconDialog.contains(e.target)) {
-      closePopover();
+      hideBuiltinIconPicker();
       
       if (originalIconState) {
         pendingFolderMeta[editFolderTargetId].icon = originalIconState;
@@ -6490,6 +6569,23 @@ function closeMaterialPicker() {
   setTimeout(() => {
     modal.classList.add('hidden');
     modal.classList.remove('closing');
+    
+    // --- RESET POSITIONING STYLES ---
+    // This ensures the picker returns to center mode for other uses (like Settings)
+    modal.style.display = ''; // Reverts to CSS (flex)
+    
+    const dialog = modal.querySelector('.material-picker-dialog');
+    if (dialog) {
+      dialog.style.position = '';
+      dialog.style.top = '';
+      dialog.style.left = '';
+      dialog.style.margin = '';
+    }
+    
+    const grid = document.getElementById('material-color-grid');
+    if (grid) {
+      grid.style.transformOrigin = '';
+    }
   }, 150);
 }
 

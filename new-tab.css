@@ -4816,7 +4816,7 @@ body.performance-mode .context-submenu {
 /* --- BUILT-IN ICON POPOVER STYLES --- */
 /* ======================================= */
 
-/* 1. Transparent Overlay (No Blur, Handles Click-Outside) */
+/* 1. Transparent Overlay */
 .popover-overlay {
   position: fixed;
   top: 0;
@@ -4827,6 +4827,9 @@ body.performance-mode .context-submenu {
   background-color: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  
+  /* Flex centering not needed here as we manually position the dialog, 
+     but display:block ensures it renders. */
   display: block;
 }
 
@@ -4835,7 +4838,7 @@ body.performance-mode .context-submenu {
   pointer-events: none;
 }
 
-/* 2. The Popover Box */
+/* 2. The Popover Box (Rebuilt for Animation) */
 .popover-dialog {
   position: absolute;
   width: 360px;
@@ -4846,24 +4849,26 @@ body.performance-mode .context-submenu {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+
+  /* --- ANIMATION SETUP --- */
+  /* 1. Origin: Set dynamically by JS to match the trigger button position */
+  transform-origin: var(--popover-origin, top left);
   
-  /* Animation */
+  /* 2. Initial State: Invisible and Scaled Down completely */
   opacity: 0;
-  transform: scale(0.9);
-  transform-origin: top left; /* Expands from the button */
-  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
-              transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: scale(0);
 }
 
-.popover-overlay:not(.hidden) .popover-dialog {
-  opacity: 1;
-  transform: scale(1);
+/* 3. Opening State */
+/* When the overlay is visible (not hidden, not closing), run the 'Grow' animation */
+.popover-overlay:not(.hidden):not(.closing) .popover-dialog {
+  animation: pickerIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
-/* Closing animation state */
+/* 4. Closing State */
+/* When JS adds the .closing class, run the 'Shrink' animation */
 .popover-overlay.closing .popover-dialog {
-  opacity: 0;
-  transform: scale(0.9);
+  animation: pickerOut 0.2s ease-in forwards;
 }
 
 /* 3. Scroll Area */

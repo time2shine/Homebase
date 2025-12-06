@@ -4680,9 +4680,9 @@ body.performance-mode .context-submenu {
 /* The glyph / icon that sits in the middle */
 .edit-folder-custom-icon-preview {
   position: absolute;
-  top: 52%;              /* centered over folder body */
+  top: 58%;              /* centered over folder body */
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(0.85);
   width: 32px;
   height: 32px;
   object-fit: contain;
@@ -4694,7 +4694,7 @@ body.performance-mode .context-submenu {
 .edit-folder-custom-icon-preview svg {
   width: 100%;
   height: 100%;
-  fill: rgba(255, 255, 255, 0.95);
+  fill: rgba(148, 163, 184, 0.95);
 }
 
 /* 4. Action Buttons Container */
@@ -4860,6 +4860,12 @@ body.performance-mode .context-submenu {
   transform: scale(1);
 }
 
+/* Closing animation state */
+.popover-overlay.closing .popover-dialog {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
 /* 3. Scroll Area */
 #builtin-icon-list.builtin-icon-scroll-area {
   padding: 12px;
@@ -4874,6 +4880,11 @@ body.performance-mode .context-submenu {
   font-size: 0.75em;
   margin: 10px 0 8px 4px;
   border-bottom: 1px solid #e2e8f0;
+
+  /* stop text selection */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
 }
 
 #builtin-icon-picker-modal .icon-picker-category:first-child .icon-picker-category-title {
@@ -4922,9 +4933,9 @@ body.performance-mode .context-submenu {
 /* 1. Main Grid Folder Icons */
 .bookmark-folder-custom-icon {
   position: absolute;
-  top: 55%; /* Centered vertically in the folder body */
+  top: 60%; /* Centered vertically in the folder body */
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(0.9);
   width: 32px !important;
   height: 32px !important;
   object-fit: contain;
@@ -4936,5 +4947,6 @@ body.performance-mode .context-submenu {
 .bookmark-folder-custom-icon svg {
   width: 100%;
   height: 100%;
-  fill: rgba(255, 255, 255, 0.95);
+  /* neutral gray that works on most folder colors */
+  fill: rgba(148, 163, 184, 0.95);
 }

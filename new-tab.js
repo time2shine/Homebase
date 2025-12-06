@@ -1577,21 +1577,42 @@ function updateEditPreview(iconOverride) {
 }
 
 function setupBuiltInIconPicker() {
-  const modal = document.getElementById('builtin-icon-picker-modal');
-  const dialog = document.getElementById('builtin-icon-picker-dialog');
-  const container = document.getElementById('builtin-icon-list');
+  const builtinIconOverlay = document.getElementById('builtin-icon-picker-modal');
+  const builtinIconDialog = document.getElementById('builtin-icon-picker-dialog');
+  const builtinIconList = document.getElementById('builtin-icon-list');
   const triggerBtn = document.getElementById('edit-folder-builtin-btn');
 
   // State to track original icon for hover-revert effect
   let originalIconState = null;
+  let closePopoverTimeout = null;
 
-  if (!modal || !container || !triggerBtn || !dialog) return;
+  if (!builtinIconOverlay || !builtinIconList || !triggerBtn || !builtinIconDialog) return;
+
+  const POPOVER_ANIM_MS = 200; // match CSS 0.2s
+
+  const openPopover = () => {
+    if (closePopoverTimeout) {
+      clearTimeout(closePopoverTimeout);
+      closePopoverTimeout = null;
+    }
+    builtinIconOverlay.classList.remove('hidden');
+    builtinIconOverlay.classList.remove('closing');
+  };
+
+  const closePopover = () => {
+    builtinIconOverlay.classList.add('closing');
+    closePopoverTimeout = setTimeout(() => {
+      builtinIconOverlay.classList.add('hidden');
+      builtinIconOverlay.classList.remove('closing');
+      closePopoverTimeout = null;
+    }, POPOVER_ANIM_MS);
+  };
 
   const renderIcons = () => {
     // Only render if empty to save performance
-    if (container.children.length > 0) return;
+    if (builtinIconList.children.length > 0) return;
 
-    container.innerHTML = '';
+    builtinIconList.innerHTML = '';
     
     Object.entries(ICON_CATEGORIES).forEach(([categoryName, iconKeys]) => {
       const section = document.createElement('div');
@@ -1633,7 +1654,7 @@ function setupBuiltInIconPicker() {
           originalIconState = newIcon; 
           
           updateEditPreview();
-          modal.classList.add('hidden');
+          closePopover();
         });
 
         grid.appendChild(btn);
@@ -1641,13 +1662,13 @@ function setupBuiltInIconPicker() {
       
       if (grid.children.length > 0) {
         section.appendChild(grid);
-        container.appendChild(section);
+        builtinIconList.appendChild(section);
       }
     });
   };
 
   // --- 3. Revert on Mouse Leave (The whole list) ---
-  container.addEventListener('mouseleave', () => {
+  builtinIconList.addEventListener('mouseleave', () => {
     if (!editFolderTargetId) return;
     if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
 
@@ -1667,9 +1688,6 @@ function setupBuiltInIconPicker() {
     if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
     originalIconState = pendingFolderMeta[editFolderTargetId].icon || null;
 
-    // --- 4. Always scroll to top ---
-    container.scrollTop = 0;
-    
     // --- 5. Positioning Logic (Align Top) ---
     const rect = triggerBtn.getBoundingClientRect();
     const dialogHeight = 400; 
@@ -1683,16 +1701,20 @@ function setupBuiltInIconPicker() {
 
     const left = rect.right + gap;
 
-    dialog.style.top = `${top}px`;
-    dialog.style.left = `${left}px`;
+    builtinIconDialog.style.top = `${top}px`;
+    builtinIconDialog.style.left = `${left}px`;
 
-    modal.classList.remove('hidden');
+    // Show picker and reset scroll so it always starts at the top
+    openPopover();
+    if (builtinIconList) {
+      builtinIconList.scrollTop = 0;
+    }
   });
 
   // Close when clicking outside
-  modal.addEventListener('click', (e) => {
-    if (!dialog.contains(e.target)) {
-      modal.classList.add('hidden');
+  builtinIconOverlay.addEventListener('click', (e) => {
+    if (!builtinIconDialog.contains(e.target)) {
+      closePopover();
       
       if (originalIconState) {
         pendingFolderMeta[editFolderTargetId].icon = originalIconState;

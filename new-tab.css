@@ -4964,35 +4964,103 @@ body.performance-mode .context-submenu {
   /* neutral gray that works on most folder colors */
   fill: rgba(148, 163, 184, 0.95);
 }
-/* --- Edit Folder New Controls --- */
+/* --- Elastic Gooey Slider Styles --- */
+
 .edit-folder-controls {
   display: flex;
+  flex-direction: row;
   gap: 15px;
   justify-content: center;
-  margin-bottom: 15px;
-  padding: 0 20px;
+  
+  /* REMOVED vertical padding (was 5px 0) */
+  padding: 0; 
+  
+  /* Pop-Up Animation Logic */
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(10px) scale(0.9);
+  margin-bottom: 0;
+  pointer-events: none;
+  overflow: visible; /* Important: Allow bubble to bounce outside */
+  
+  transition: 
+    max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease,
+    transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.control-row {
+.edit-folder-controls.visible {
+  max-height: 160px; /* Reduced from 240px */
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  
+  /* REMOVED bottom margin (was 10px) */
+  margin-bottom: 0; 
+  pointer-events: auto;
+}
+
+.gooey-control-row {
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 1;
+  width: 300px; /* Keep width wide */
+  position: relative;
 }
 
-.control-row label {
+.gooey-control-row label {
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 0.75em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #64748b;
-  margin-bottom: 4px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #94a3b8;
+  margin-top: -2px; 
+  margin-bottom: -15px; 
+  z-index: 1;
+  user-select: none;
+  pointer-events: none;
 }
 
-.control-row input[type="range"] {
+.gooey-slider-container {
   width: 100%;
-  accent-color: #2ca5ff;
-  height: 4px;
-  cursor: pointer;
+  height: 50px; /* Reduced from 80px */
+  position: relative;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  margin-top: 5px;
+}
+
+.gooey-slider-container:active {
+  cursor: grabbing;
+}
+
+/* The SVG itself */
+.elastic-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  display: block;
+}
+
+/* The Text inside the bubble */
+.elastic-text {
+  fill: #2ca5ff; /* Blue text */
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0; /* Hidden by default */
+  transition: opacity 0.2s ease;
+}
+
+.elastic-svg.active .elastic-text {
+  opacity: 1;
+  fill: white; /* White text when active (inside blue bubble) */
 }
 
 /* Checkbox Row */

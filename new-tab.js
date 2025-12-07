@@ -1407,22 +1407,6 @@ function setupEditFolderModal() {
   const uploadBtn = document.getElementById('edit-folder-upload-btn');
   const resetBtn = document.getElementById('edit-folder-reset-btn');
   const fileInput = document.getElementById('edit-folder-file-input');
-  
-  // New Inputs
-  const scaleInput = document.getElementById('edit-folder-scale');
-  const offsetInput = document.getElementById('edit-folder-offset-y');
-  const recursiveInput = document.getElementById('edit-folder-recursive');
-
-  // --- 1. SLIDER LISTENERS (Feature 3) ---
-  const updateMetaFromSliders = () => {
-    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
-    pendingFolderMeta[editFolderTargetId].scale = parseFloat(scaleInput.value);
-    pendingFolderMeta[editFolderTargetId].offsetY = parseInt(offsetInput.value, 10);
-    updateEditPreview();
-  };
-
-  if (scaleInput) scaleInput.addEventListener('input', updateMetaFromSliders);
-  if (offsetInput) offsetInput.addEventListener('input', updateMetaFromSliders);
 
   const openColorPicker = () => {
     // ... existing color picker logic (no changes needed here) ...
@@ -1527,29 +1511,23 @@ function setupEditFolderModal() {
     });
   }
 
-  // --- 3. GRANULAR RESET (Feature 4) ---
+  // --- 3. SIMPLIFIED RESET (Single Click) ---
   if (resetBtn) {
-    resetBtn.addEventListener('click', (e) => {
+    resetBtn.addEventListener('click', () => {
       if (!pendingFolderMeta[editFolderTargetId]) return;
 
-      if (e.shiftKey) {
-        // Shift+Click: Reset Everything (Color + Icon + Scale + Offset)
-        delete pendingFolderMeta[editFolderTargetId].color;
-        delete pendingFolderMeta[editFolderTargetId].icon;
-        delete pendingFolderMeta[editFolderTargetId].scale;
-        delete pendingFolderMeta[editFolderTargetId].offsetY;
-        
-        // Reset inputs
-        if (scaleInput) scaleInput.value = 1;
-        if (offsetInput) offsetInput.value = 0;
-      } else {
-        // Normal Click: Reset Icon & Transforms Only (Keep Color)
-        delete pendingFolderMeta[editFolderTargetId].icon;
-        delete pendingFolderMeta[editFolderTargetId].scale;
-        delete pendingFolderMeta[editFolderTargetId].offsetY;
-        if (scaleInput) scaleInput.value = 1;
-        if (offsetInput) offsetInput.value = 0;
-      }
+      // Reset Everything (Color + Icon + Scale + Offset) immediately
+      delete pendingFolderMeta[editFolderTargetId].color;
+      delete pendingFolderMeta[editFolderTargetId].icon;
+      delete pendingFolderMeta[editFolderTargetId].scale;
+      delete pendingFolderMeta[editFolderTargetId].offsetY;
+
+      // Reset gooey sliders to defaults visually
+      const scaleSlider = document.getElementById('gooey-slider-scale');
+      const offsetSlider = document.getElementById('gooey-slider-offset');
+      if (scaleSlider && scaleSlider.setValue) scaleSlider.setValue(1);
+      if (offsetSlider && offsetSlider.setValue) offsetSlider.setValue(0);
+
       updateEditPreview();
     });
   }
@@ -1591,14 +1569,23 @@ function showEditFolderModal(folderNode) {
     pendingFolderMeta[folderNode.id] = { ...folderMetadata[folderNode.id] };
   }
 
-  // --- Initialize Sliders ---
-  const scaleInput = document.getElementById('edit-folder-scale');
-  const offsetInput = document.getElementById('edit-folder-offset-y');
-  const recursiveInput = document.getElementById('edit-folder-recursive');
+  // --- Initialize Elastic Sliders ---
+  const currentScale = pendingFolderMeta[editFolderTargetId]?.scale ?? 1;
+  const currentOffsetY = pendingFolderMeta[editFolderTargetId]?.offsetY ?? 0;
+  
+  // 1. Scale Slider (0.5 to 1.5) --> higher resolution step for smoother feel
+  initElasticSlider('gooey-slider-scale', 0.5, 1.5, currentScale, 0.01, (val) => {
+    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+    pendingFolderMeta[editFolderTargetId].scale = val;
+    updateEditPreview();
+  });
 
-  if (scaleInput) scaleInput.value = pendingFolderMeta[editFolderTargetId]?.scale ?? 1;
-  if (offsetInput) offsetInput.value = pendingFolderMeta[editFolderTargetId]?.offsetY ?? 0;
-  if (recursiveInput) recursiveInput.checked = false; // Always reset checkbox
+  // 2. Position Slider (-20 to 20)
+  initElasticSlider('gooey-slider-offset', -20, 20, currentOffsetY, 1, (val) => {
+    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+    pendingFolderMeta[editFolderTargetId].offsetY = val;
+    updateEditPreview();
+  });
 
   updateEditPreview();
   editFolderModal.style.display = 'flex';
@@ -1632,32 +1619,59 @@ function updateEditPreview(iconOverride) {
   const scale = meta.scale ?? 1;
   const offsetY = meta.offsetY ?? 0;
 
-  const effectiveIcon = iconOverride !== undefined
-    ? iconOverride
-    : (meta.icon || null);
+  // Toggle controls visibility
+  const controlsContainer = document.querySelector('.edit-folder-controls');
+  if (controlsContainer) {
+    if (meta.icon) {
+      controlsContainer.classList.add('visible');
+    } else {
+      controlsContainer.classList.remove('visible');
+    }
+  }
 
-  previewContainer.innerHTML = '';
-
-  // Base folder inside the gray circle
-  const baseWrapper = document.createElement('div');
-  baseWrapper.className = 'edit-folder-base-wrapper';
-  baseWrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
-  previewContainer.appendChild(baseWrapper);
-
-  // Apply color tint
-  const appliedColor = customColor || appBookmarkFolderColorPreference;
-  const svgPaths = baseWrapper.querySelectorAll('path, rect');
-  svgPaths.forEach((p) => {
-    p.style.fill = appliedColor;
-    p.style.setProperty('fill', appliedColor, 'important');
-  });
-
-  if (!effectiveIcon) return;
-
-  // Calculate transform string
-  // Note: CSS scale/translate might conflict with existing 'transform: translate(-50%, -50%)' in CSS class.
-  // We handle this by applying the variable parts to a style string that preserves the centering.
+  const effectiveIcon = iconOverride !== undefined ? iconOverride : (meta.icon || null);
   const transformStyle = `transform: translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.85});`;
+
+  // --- OPTIMIZATION START ---
+  const existingIcon = previewContainer.querySelector('.edit-folder-custom-icon-preview');
+  const existingBase = previewContainer.querySelector('.edit-folder-base-wrapper');
+
+  // Ensure base exists and color is applied
+  if (existingBase) {
+    const appliedColor = customColor || appBookmarkFolderColorPreference;
+    const svgPaths = existingBase.querySelectorAll('path, rect');
+    svgPaths.forEach((p) => {
+      p.style.fill = appliedColor;
+      p.style.setProperty('fill', appliedColor, 'important');
+    });
+  } else {
+    previewContainer.innerHTML = '';
+    const baseWrapper = document.createElement('div');
+    baseWrapper.className = 'edit-folder-base-wrapper';
+    baseWrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
+    previewContainer.appendChild(baseWrapper);
+
+    const appliedColor = customColor || appBookmarkFolderColorPreference;
+    const svgPaths = baseWrapper.querySelectorAll('path, rect');
+    svgPaths.forEach((p) => {
+      p.style.fill = appliedColor;
+      p.style.setProperty('fill', appliedColor, 'important');
+    });
+  }
+
+  if (!effectiveIcon) {
+    if (existingIcon) existingIcon.remove();
+    return;
+  }
+
+  if (existingIcon) {
+    const currentSrc = existingIcon.dataset.src || existingIcon.src;
+    if (currentSrc === effectiveIcon || (effectiveIcon.startsWith('builtin:') && existingIcon.dataset.iconKey === effectiveIcon)) {
+      existingIcon.setAttribute('style', transformStyle);
+      return;
+    }
+    existingIcon.remove();
+  }
 
   let iconEl;
   if (typeof effectiveIcon === 'string' && effectiveIcon.startsWith('builtin:')) {
@@ -1667,16 +1681,256 @@ function updateEditPreview(iconOverride) {
     iconEl = document.createElement('div');
     iconEl.className = 'edit-folder-custom-icon-preview';
     iconEl.innerHTML = svgString;
-    iconEl.setAttribute('style', transformStyle); // Apply transform
+    iconEl.dataset.iconKey = effectiveIcon;
   } else {
     iconEl = document.createElement('img');
     iconEl.className = 'edit-folder-custom-icon-preview';
     iconEl.src = effectiveIcon;
-    iconEl.setAttribute('style', transformStyle); // Apply transform
+    iconEl.dataset.src = effectiveIcon;
+  }
+  
+  iconEl.setAttribute('style', transformStyle);
+  previewContainer.appendChild(iconEl);
+  // --- OPTIMIZATION END ---
+}
+
+/**
+ * Initialize a Physics-based Elastic Slider (Memory Leak Fixed)
+ */
+function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = ''; 
+
+  // --- COMPACT CONFIGURATION ---
+  const width = 300;     
+  const height = 50;     
+  const trackY = 35;     
+  const padding = 20;    
+  const trackWidth = width - (padding * 2);
+  
+  // Radius Settings
+  const baseRadius = 12; 
+  const popRadius = 20;  
+  
+  // Physics Constants
+  const TENSION = 0.15;
+  const FRICTION = 0.75;
+  const POP_SPEED = 0.2;
+
+  // --- Helpers ---
+  const valToX = (v) => {
+    const percent = (v - min) / (max - min);
+    return padding + (percent * trackWidth);
+  };
+
+  const xToVal = (x) => {
+    let relativeX = x - padding;
+    relativeX = Math.max(0, Math.min(relativeX, trackWidth));
+    const percent = relativeX / trackWidth;
+    let rawVal = min + (percent * (max - min));
+    const inverse = 1 / step;
+    const stepped = Math.round(rawVal * inverse) / inverse;
+    const decimals = step < 1 ? 2 : 0;
+    return parseFloat(stepped.toFixed(decimals));
+  };
+
+  // --- State ---
+  let isDragging = false;
+  let isAnimating = false;
+  let animationId = null;
+
+  let targetX = valToX(initialValue);
+  let currentX = targetX;
+  let velocityX = 0;
+  
+  let targetY = trackY;
+  let currentY = trackY;
+  let velocityY = 0;
+
+  let displayVal = initialValue;
+
+  // --- Build SVG ---
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.classList.add("elastic-svg");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.style.overflow = "visible"; 
+
+  const defs = document.createElementNS(svgNS, "defs");
+  const filter = document.createElementNS(svgNS, "filter");
+  filter.id = `goo-${containerId}`;
+  filter.innerHTML = `
+    <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
+    <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
+    <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+  `;
+  defs.appendChild(filter);
+  svg.appendChild(defs);
+
+  const track = document.createElementNS(svgNS, "path");
+  track.setAttribute("d", `M${padding},${trackY} L${width - padding},${trackY}`);
+  track.setAttribute("stroke", "#e2e8f0");
+  track.setAttribute("stroke-width", "6");
+  track.setAttribute("stroke-linecap", "round");
+  svg.appendChild(track);
+
+  const gooGroup = document.createElementNS(svgNS, "g");
+  gooGroup.style.filter = `url(#goo-${containerId})`;
+
+  const knob = document.createElementNS(svgNS, "circle");
+  knob.setAttribute("cx", targetX);
+  knob.setAttribute("cy", trackY);
+  knob.setAttribute("r", baseRadius);
+  knob.setAttribute("fill", "#2ca5ff");
+
+  const bubble = document.createElementNS(svgNS, "circle");
+  bubble.setAttribute("cx", targetX);
+  bubble.setAttribute("cy", trackY);
+  bubble.setAttribute("r", baseRadius);
+  bubble.setAttribute("fill", "#2ca5ff");
+
+  gooGroup.appendChild(bubble);
+  gooGroup.appendChild(knob);
+  svg.appendChild(gooGroup);
+
+  const text = document.createElementNS(svgNS, "text");
+  text.classList.add("elastic-text");
+  text.setAttribute("x", targetX);
+  text.setAttribute("y", trackY); 
+  text.setAttribute("font-size", "14"); 
+  text.textContent = initialValue;
+  svg.appendChild(text);
+
+  container.appendChild(svg);
+
+  // --- Animation Loop ---
+  function startLoop() {
+    if (!isAnimating) {
+      isAnimating = true;
+      animate();
+    }
   }
 
-  previewContainer.appendChild(iconEl);
+  function animate() {
+    if (!container.isConnected) {
+      isAnimating = false;
+      return;
+    }
+
+    const tensionX = (targetX - currentX) * TENSION;
+    velocityX += tensionX;
+    velocityX *= FRICTION;
+    currentX += velocityX;
+
+    const tensionY = (targetY - currentY) * POP_SPEED;
+    velocityY += tensionY;
+    velocityY *= 0.6;
+    currentY += velocityY;
+
+    if (!isDragging && 
+        Math.abs(velocityX) < 0.05 && 
+        Math.abs(velocityY) < 0.05 &&
+        Math.abs(targetX - currentX) < 0.1 &&
+        Math.abs(targetY - currentY) < 0.1) {
+      
+      currentX = targetX;
+      currentY = targetY;
+      updateVisuals();
+      isAnimating = false;
+      return;
+    }
+
+    updateVisuals();
+    animationId = requestAnimationFrame(animate);
+  }
+
+  function updateVisuals() {
+    const progress = Math.max(0, (trackY - currentY) / 25);
+    const bubbleRadius = baseRadius + ((popRadius - baseRadius) * progress);
+
+    knob.setAttribute("cx", targetX);
+    bubble.setAttribute("cx", currentX);
+    bubble.setAttribute("cy", currentY);
+    bubble.setAttribute("r", bubbleRadius);
+
+    text.setAttribute("x", currentX);
+    text.setAttribute("y", currentY + 1);
+    
+    const newText = (step < 1) ? displayVal : Math.round(displayVal);
+    if (text.textContent != newText) {
+      text.textContent = newText;
+    }
+  }
+
+  // --- Input Handlers (FIXED) ---
+  const handleStart = (e) => {
+    isDragging = true;
+    svg.classList.add('active');
+    targetY = trackY - 25; 
+    startLoop();  
+    handleMove(e);
+    
+    // Attach window listeners ONLY during drag
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove, {passive: false});
+    window.addEventListener('touchend', handleEnd);
+  };
+
+  const handleEnd = () => {
+    isDragging = false;
+    svg.classList.remove('active');
+    targetY = trackY; 
+    targetX = valToX(displayVal);
+    startLoop();
+    
+    // Clean up window listeners
+    window.removeEventListener('mousemove', handleMove);
+    window.removeEventListener('mouseup', handleEnd);
+    window.removeEventListener('touchmove', handleMove);
+    window.removeEventListener('touchend', handleEnd);
+  };
+
+  const handleMove = (e) => {
+    if (!isDragging) return;
+    
+    const rect = svg.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const scaleX = width / rect.width;
+    
+    let rawX = (clientX - rect.left) * scaleX;
+    let constrainedX = Math.max(padding, Math.min(rawX, width - padding));
+    
+    targetX = constrainedX;
+    
+    let calculatedVal = xToVal(constrainedX);
+    
+    if (calculatedVal !== displayVal) {
+      displayVal = calculatedVal;
+      if (onUpdate) onUpdate(calculatedVal);
+    }
+    
+    startLoop();
+  };
+
+  container.addEventListener('mousedown', handleStart);
+  container.addEventListener('touchstart', handleStart, {passive: false});
+
+  container.setValue = (val) => {
+    const clamped = Math.max(min, Math.min(max, val));
+    targetX = valToX(clamped);
+    currentX = targetX; 
+    displayVal = clamped;
+    updateVisuals();
+  };
+  
+  updateVisuals();
 }
+
+
+
 
 
 // Duration must match the CSS animation (0.2s closing)
@@ -1871,37 +2125,10 @@ async function handleEditFolderSave() {
       delete folderMetadata[editFolderTargetId];
     }
 
-    // --- 3. SUBFOLDER RECURSION (Feature 5) ---
-    const recursiveInput = document.getElementById('edit-folder-recursive');
-    if (recursiveInput && recursiveInput.checked && newMeta && newMeta.color) {
-      
-      // Helper: recursively find folder nodes
-      const applyColorToChildren = (parentId, color) => {
-        const parentNode = findBookmarkNodeById(bookmarkTree[0], parentId);
-        if (!parentNode || !parentNode.children) return;
-
-        parentNode.children.forEach(child => {
-          // Is it a folder? (no URL)
-          if (!child.url) {
-            // Apply color
-            if (!folderMetadata[child.id]) folderMetadata[child.id] = {};
-            folderMetadata[child.id].color = color;
-            
-            // Recurse
-            applyColorToChildren(child.id, color);
-          }
-        });
-      };
-
-      // Ensure we have fresh tree before traversing
-      await getBookmarkTree(true);
-      applyColorToChildren(editFolderTargetId, newMeta.color);
-    }
-
-    // 4. Save to Storage
+    // 3. Save to Storage
     await browser.storage.local.set({ [FOLDER_META_KEY]: folderMetadata });
 
-    // 5. Refresh UI
+    // 4. Refresh UI
     await getBookmarkTree(true);
 
     let folderToRender = null;

@@ -1811,8 +1811,8 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
   const trackY = 35;     
   const padding = 20;    
   const trackWidth = width - (padding * 2);
-  const baseRadius = 12; 
-  const popRadius = 20;  
+  const baseRadius = 18; // Increased for larger value bubble
+  const popRadius = 28;  // Increased for larger value bubble
   
   // Physics Constants
   const TENSION = 0.15;
@@ -3499,7 +3499,7 @@ function showGridItemRenameInput(gridItem, bookmarkNode) {
   gridItem.appendChild(input);
 
   // --- NEW: Call resize function immediately after append ---
-  autoResizeTextarea(input); // Also fixed a typo here from your original file
+  autoResizeTextarea(input); 
   input.focus();
   input.select();
 

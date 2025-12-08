@@ -5066,7 +5066,7 @@ body.performance-mode .context-submenu {
   fill: #2ca5ff; /* Blue text */
   font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 20px; /* Increased to match larger bubble */
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;

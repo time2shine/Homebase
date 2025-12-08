@@ -1603,6 +1603,10 @@ function hideEditFolderModal() {
   editFolderModal.style.display = 'none';
   editFolderTargetId = null;
   pendingFolderMeta = {};
+  
+  // Clear the cached preview container reference so it re-fetches next time
+  cachedPreviewContainer = null;
+  
   const previewContainer = document.getElementById('edit-folder-icon-preview');
   if (previewContainer) {
     previewContainer.innerHTML = '';
@@ -1610,53 +1614,64 @@ function hideEditFolderModal() {
   if (editFolderNameInput) editFolderNameInput.value = '';
 }
 
+// --- OPTIMIZATION: Cache the container to avoid ID lookups on every frame ---
+let cachedPreviewContainer = null;
+
 function updateEditPreview(iconOverride) {
-  const previewContainer = document.getElementById('edit-folder-icon-preview');
+  if (!cachedPreviewContainer) {
+    cachedPreviewContainer = document.getElementById('edit-folder-icon-preview');
+  }
+  const previewContainer = cachedPreviewContainer;
+  
   if (!previewContainer || !editFolderTargetId) return;
 
   const meta = pendingFolderMeta[editFolderTargetId] || {};
-  const customColor = meta.color || null;
+  const customColor = meta.color || appBookmarkFolderColorPreference;
   const scale = meta.scale ?? 1;
   const offsetY = meta.offsetY ?? 0;
 
-  // Toggle controls visibility
+  // Toggle controls visibility (unchanged)
   const controlsContainer = document.querySelector('.edit-folder-controls');
   if (controlsContainer) {
-    if (meta.icon) {
-      controlsContainer.classList.add('visible');
-    } else {
-      controlsContainer.classList.remove('visible');
-    }
+    controlsContainer.classList.toggle('visible', !!meta.icon);
   }
 
   const effectiveIcon = iconOverride !== undefined ? iconOverride : (meta.icon || null);
-  const transformStyle = `transform: translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.85});`;
+  
+  // OPTIMIZATION 1: Construct the transform string once
+  const transformValue = `translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.85})`;
 
-  // --- OPTIMIZATION START ---
   const existingIcon = previewContainer.querySelector('.edit-folder-custom-icon-preview');
   const existingBase = previewContainer.querySelector('.edit-folder-base-wrapper');
 
-  // Ensure base exists and color is applied
+  // OPTIMIZATION 2: Only update color if it actually changed
   if (existingBase) {
-    const appliedColor = customColor || appBookmarkFolderColorPreference;
-    const svgPaths = existingBase.querySelectorAll('path, rect');
-    svgPaths.forEach((p) => {
-      p.style.fill = appliedColor;
-      p.style.setProperty('fill', appliedColor, 'important');
-    });
+    const lastColor = existingBase.dataset.lastAppliedColor;
+    
+    if (lastColor !== customColor) {
+      const svgPaths = existingBase.querySelectorAll('path, rect');
+      svgPaths.forEach((p) => {
+        p.style.fill = customColor;
+        p.style.setProperty('fill', customColor, 'important');
+      });
+      existingBase.dataset.lastAppliedColor = customColor;
+    }
   } else {
+    // Create Base if missing
     previewContainer.innerHTML = '';
     const baseWrapper = document.createElement('div');
     baseWrapper.className = 'edit-folder-base-wrapper';
     baseWrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
-    previewContainer.appendChild(baseWrapper);
-
-    const appliedColor = customColor || appBookmarkFolderColorPreference;
+    
+    // Apply color immediately
     const svgPaths = baseWrapper.querySelectorAll('path, rect');
     svgPaths.forEach((p) => {
-      p.style.fill = appliedColor;
-      p.style.setProperty('fill', appliedColor, 'important');
+      p.style.fill = customColor;
+      p.style.setProperty('fill', customColor, 'important');
     });
+    baseWrapper.dataset.lastAppliedColor = customColor;
+    
+    previewContainer.appendChild(baseWrapper);
   }
 
   if (!effectiveIcon) {
@@ -1664,10 +1679,18 @@ function updateEditPreview(iconOverride) {
     return;
   }
 
+  // OPTIMIZATION 3: Update existing icon transform directly without removing/adding DOM nodes
   if (existingIcon) {
     const currentSrc = existingIcon.dataset.src || existingIcon.src;
-    if (currentSrc === effectiveIcon || (effectiveIcon.startsWith('builtin:') && existingIcon.dataset.iconKey === effectiveIcon)) {
-      existingIcon.setAttribute('style', transformStyle);
+    // Check if it's the same icon source
+    const isBuiltinMatch = effectiveIcon.startsWith('builtin:') && existingIcon.dataset.iconKey === effectiveIcon;
+    const isUrlMatch = !effectiveIcon.startsWith('builtin:') && currentSrc === effectiveIcon;
+
+    if (isBuiltinMatch || isUrlMatch) {
+      // Only touch the DOM if the transform actually changed (browser handles this check mostly, but explicit is safer)
+      if (existingIcon.style.transform !== transformValue) {
+        existingIcon.style.transform = transformValue;
+      }
       return;
     }
     existingIcon.remove();
@@ -1689,13 +1712,12 @@ function updateEditPreview(iconOverride) {
     iconEl.dataset.src = effectiveIcon;
   }
   
-  iconEl.setAttribute('style', transformStyle);
+  iconEl.style.transform = transformValue;
   previewContainer.appendChild(iconEl);
-  // --- OPTIMIZATION END ---
 }
 
 /**
- * Initialize a Physics-based Elastic Slider (Memory Leak Fixed)
+ * Initialize a Physics-based Elastic Slider (Memory Leak & Performance Fixed)
  */
 function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) {
   const container = document.getElementById(containerId);
@@ -1740,6 +1762,7 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
   let isDragging = false;
   let isAnimating = false;
   let animationId = null;
+  let cachedRect = null; // OPTIMIZATION: Cache rect during drag
 
   let targetX = valToX(initialValue);
   let currentX = targetX;
@@ -1864,9 +1887,14 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
     }
   }
 
-  // --- Input Handlers (FIXED) ---
+  // --- Input Handlers (OPTIMIZED) ---
   const handleStart = (e) => {
     isDragging = true;
+    
+    // OPTIMIZATION 4: Cache bounding rect ONCE at start of drag
+    // This prevents Layout Thrashing during the 'mousemove' loop
+    cachedRect = svg.getBoundingClientRect();
+    
     svg.classList.add('active');
     
     // Dim the label text when dragging starts
@@ -1886,6 +1914,7 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
 
   const handleEnd = () => {
     isDragging = false;
+    cachedRect = null; // Clear cache
     svg.classList.remove('active');
     
     // Restore the label text opacity
@@ -1906,7 +1935,8 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
   const handleMove = (e) => {
     if (!isDragging) return;
     
-    const rect = svg.getBoundingClientRect();
+    // Use cached rect if available, fallback if somehow missing
+    const rect = cachedRect || svg.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const scaleX = width / rect.width;
     

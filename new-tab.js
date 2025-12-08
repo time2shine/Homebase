@@ -1035,6 +1035,7 @@ let editFolderSaveBtn;
 let editFolderCancelBtn;
 let editFolderCloseBtn;
 let editFolderTargetId = null;
+let editFolderEscBound = false;
 
 // ===============================================
 // --- MOVE BOOKMARK MODAL ELEMENTS ---
@@ -1397,6 +1398,8 @@ function setupEditFolderModal() {
   editFolderModal = document.getElementById('edit-folder-modal');
   if (!editFolderModal) return;
 
+  cachedControlsContainer = document.querySelector('.edit-folder-controls');
+
   editFolderDialog = document.getElementById('edit-folder-dialog');
   editFolderNameInput = document.getElementById('edit-folder-name-input');
   editFolderSaveBtn = document.getElementById('edit-folder-save-btn');
@@ -1514,7 +1517,7 @@ function setupEditFolderModal() {
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, w, h);
           
-          const resizedDataUrl = canvas.toDataURL('image/png');
+          const resizedDataUrl = canvas.toDataURL('image/webp', 0.85);
           
           if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
           pendingFolderMeta[editFolderTargetId].icon = resizedDataUrl;
@@ -1568,11 +1571,14 @@ function setupEditFolderModal() {
     });
   }
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && editFolderModal.style.display === 'flex') {
-      hideEditFolderModal();
-    }
-  });
+  if (!editFolderEscBound) {
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && editFolderModal.style.display === 'flex') {
+        hideEditFolderModal();
+      }
+    });
+    editFolderEscBound = true;
+  }
 }
 
 
@@ -1591,27 +1597,43 @@ function showEditFolderModal(folderNode) {
   const currentScale = pendingFolderMeta[editFolderTargetId]?.scale ?? 1;
   const currentOffsetY = pendingFolderMeta[editFolderTargetId]?.offsetY ?? 0;
   const currentRotation = pendingFolderMeta[editFolderTargetId]?.rotation ?? 0;
+
+  const scaleEl = document.getElementById('gooey-slider-scale');
+  const offsetEl = document.getElementById('gooey-slider-offset');
+  const rotateEl = document.getElementById('gooey-slider-rotate');
   
-  // 1. Scale Slider (0.5 to 1.5) --> higher resolution step for smoother feel
-  initElasticSlider('gooey-slider-scale', 0.5, 1.5, currentScale, 0.01, (val) => {
-    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
-    pendingFolderMeta[editFolderTargetId].scale = val;
-    updateEditPreview();
-  });
+  // Initialize once per element to avoid stacking listeners
+  if (scaleEl && !scaleEl.dataset.initialized) {
+    initElasticSlider('gooey-slider-scale', 0.5, 1.5, 1, 0.01, (val) => {
+      if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+      pendingFolderMeta[editFolderTargetId].scale = val;
+      updateEditPreview();
+    });
+    scaleEl.dataset.initialized = '1';
+  }
 
-  // 2. Position Slider (-20 to 20)
-  initElasticSlider('gooey-slider-offset', -20, 20, currentOffsetY, 1, (val) => {
-    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
-    pendingFolderMeta[editFolderTargetId].offsetY = val;
-    updateEditPreview();
-  });
+  if (offsetEl && !offsetEl.dataset.initialized) {
+    initElasticSlider('gooey-slider-offset', -20, 20, 0, 1, (val) => {
+      if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+      pendingFolderMeta[editFolderTargetId].offsetY = val;
+      updateEditPreview();
+    });
+    offsetEl.dataset.initialized = '1';
+  }
 
-  // 3. Rotation Slider (-180 to 180)
-  initElasticSlider('gooey-slider-rotate', -180, 180, currentRotation, 1, (val) => {
-    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
-    pendingFolderMeta[editFolderTargetId].rotation = val;
-    updateEditPreview();
-  });
+  if (rotateEl && !rotateEl.dataset.initialized) {
+    initElasticSlider('gooey-slider-rotate', -180, 180, 0, 1, (val) => {
+      if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+      pendingFolderMeta[editFolderTargetId].rotation = val;
+      updateEditPreview();
+    });
+    rotateEl.dataset.initialized = '1';
+  }
+
+  // Refresh slider positions to current values without re-binding listeners
+  if (scaleEl && scaleEl.setValue) scaleEl.setValue(currentScale);
+  if (offsetEl && offsetEl.setValue) offsetEl.setValue(currentOffsetY);
+  if (rotateEl && rotateEl.setValue) rotateEl.setValue(currentRotation);
 
   updateEditPreview();
   editFolderModal.style.display = 'flex';
@@ -1630,8 +1652,9 @@ function hideEditFolderModal() {
   editFolderTargetId = null;
   pendingFolderMeta = {};
   
-  // Clear the cached preview container reference so it re-fetches next time
+  // Clear cached references so they refresh next time
   cachedPreviewContainer = null;
+  cachedControlsContainer = null;
   
   const previewContainer = document.getElementById('edit-folder-icon-preview');
   if (previewContainer) {
@@ -1640,15 +1663,15 @@ function hideEditFolderModal() {
   if (editFolderNameInput) editFolderNameInput.value = '';
 }
 
-// --- OPTIMIZATION: Cache the container to avoid ID lookups on every frame ---
 let cachedPreviewContainer = null;
+let cachedControlsContainer = null;
 
 function updateEditPreview(iconOverride) {
+  // 1. Lazy-load the container reference once
   if (!cachedPreviewContainer) {
     cachedPreviewContainer = document.getElementById('edit-folder-icon-preview');
   }
   const previewContainer = cachedPreviewContainer;
-  
   if (!previewContainer || !editFolderTargetId) return;
 
   const meta = pendingFolderMeta[editFolderTargetId] || {};
@@ -1657,97 +1680,89 @@ function updateEditPreview(iconOverride) {
   const offsetY = meta.offsetY ?? 0;
   const rotation = meta.rotation ?? 0;
 
-  // Tone-on-tone color for built-in icons based on folder color
-  const contrastFill = getComplementaryColor(customColor);
-  const embeddedFilter = 'drop-shadow(0 1px 0 rgba(255,255,255,0.35))'; // subtle etched highlight
-
-  // Toggle controls visibility (unchanged)
-  const controlsContainer = document.querySelector('.edit-folder-controls');
-  if (controlsContainer) {
-    controlsContainer.classList.toggle('visible', !!meta.icon);
-  }
-
-  const effectiveIcon = iconOverride !== undefined ? iconOverride : (meta.icon || null);
-  
-  // OPTIMIZATION 1: Construct the transform string once
+  // 2. Optimization: Calculate Transform String first (Cheap)
   const transformValue = `translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.85}) rotate(${rotation}deg)`;
 
-  const existingIcon = previewContainer.querySelector('.edit-folder-custom-icon-preview');
-  const existingBase = previewContainer.querySelector('.edit-folder-base-wrapper');
+  // 3. Optimization: Select children only once
+  const existingBase = previewContainer.children[0];
+  const existingIcon = previewContainer.children[1];
 
-  // OPTIMIZATION 2: Only update color if it actually changed
-  if (existingBase) {
-    const lastColor = existingBase.dataset.lastAppliedColor;
-    
-    if (lastColor !== customColor) {
+  if (cachedControlsContainer) {
+    cachedControlsContainer.classList.toggle('visible', !!meta.icon);
+  }
+
+  // --- BASE ICON & COLOR UPDATE ---
+  // Optimization: Only run heavy color math if the color actually CHANGED
+  if (existingBase && existingBase.classList && existingBase.classList.contains('edit-folder-base-wrapper')) {
+    if (existingBase.dataset.lastAppliedColor !== customColor) {
       const svgPaths = existingBase.querySelectorAll('path, rect');
-      svgPaths.forEach((p) => {
-        p.style.fill = customColor;
-        p.style.setProperty('fill', customColor, 'important');
-      });
+      for (let i = 0; i < svgPaths.length; i++) {
+        svgPaths[i].style.fill = customColor;
+        svgPaths[i].style.setProperty('fill', customColor, 'important');
+      }
       existingBase.dataset.lastAppliedColor = customColor;
 
-      // If we already have a built-in icon, update its contrast fill too
+      // Update contrast fill for existing BUILT-IN icon immediately
       if (existingIcon && existingIcon.tagName === 'DIV') {
+        const contrastFill = getComplementaryColor(customColor);
         const svg = existingIcon.querySelector('svg');
         if (svg) {
           svg.style.fill = contrastFill;
-          svg.querySelectorAll('path').forEach(p => p.style.fill = contrastFill);
+          const innerPaths = svg.querySelectorAll('path');
+          for (let k = 0; k < innerPaths.length; k++) {
+            innerPaths[k].style.fill = contrastFill;
+          }
         }
       }
     }
   } else {
-    // Create Base if missing
+    // Initial Render (slow path, runs once)
     previewContainer.innerHTML = '';
     const baseWrapper = document.createElement('div');
     baseWrapper.className = 'edit-folder-base-wrapper';
     baseWrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
     
-    // Apply color immediately
     const svgPaths = baseWrapper.querySelectorAll('path, rect');
-    svgPaths.forEach((p) => {
-      p.style.fill = customColor;
-      p.style.setProperty('fill', customColor, 'important');
-    });
+    for (let i = 0; i < svgPaths.length; i++) {
+      svgPaths[i].style.fill = customColor;
+      svgPaths[i].style.setProperty('fill', customColor, 'important');
+    }
     baseWrapper.dataset.lastAppliedColor = customColor;
-    
     previewContainer.appendChild(baseWrapper);
   }
 
+  // --- CUSTOM ICON UPDATE ---
+  const effectiveIcon = iconOverride !== undefined ? iconOverride : (meta.icon || null);
+
   if (!effectiveIcon) {
-    if (existingIcon) existingIcon.remove();
+    // If we have an icon but shouldn't, remove it
+    if (existingIcon && (existingIcon.classList && existingIcon.classList.contains('edit-folder-custom-icon-preview'))) {
+      existingIcon.remove();
+    }
     return;
   }
 
-  // OPTIMIZATION 3: Update existing icon transform directly without removing/adding DOM nodes
-  if (existingIcon) {
-    const currentSrc = existingIcon.dataset.src || existingIcon.src;
-    // Check if it's the same icon source
-    const isBuiltinMatch = effectiveIcon.startsWith('builtin:') && existingIcon.dataset.iconKey === effectiveIcon;
-    const isUrlMatch = !effectiveIcon.startsWith('builtin:') && currentSrc === effectiveIcon;
+  // Check if we can reuse the existing icon DOM element
+  if (existingIcon && existingIcon.classList && existingIcon.classList.contains('edit-folder-custom-icon-preview')) {
+    const currentSrc = existingIcon.dataset.src || existingIcon.dataset.iconKey;
+    const isMatch = (effectiveIcon.startsWith('builtin:') && existingIcon.dataset.iconKey === effectiveIcon) ||
+                    (!effectiveIcon.startsWith('builtin:') && existingIcon.src === effectiveIcon);
 
-    if (isBuiltinMatch || isUrlMatch) {
-      // Only touch the DOM if the transform actually changed (browser handles this check mostly, but explicit is safer)
-      if (existingIcon.style.transform !== transformValue) {
-        existingIcon.style.transform = transformValue;
-      }
-      // Update fill for built-in icons to tone-on-tone color in case the base changed
-      if (isBuiltinMatch) {
-        const svg = existingIcon.querySelector('svg');
-        if (svg) {
-          svg.style.fill = contrastFill;
-          svg.querySelectorAll('path').forEach(p => p.style.fill = contrastFill);
-        }
-      }
-      if (existingIcon.style.filter !== embeddedFilter) {
-        existingIcon.style.filter = embeddedFilter;
-      }
-      return;
+    if (isMatch) {
+      // SUPER FAST PATH: Just update transform. 
+      // Browser handles this on the compositor thread (GPU).
+      existingIcon.style.transform = transformValue;
+      return; 
     }
+    // Icon source changed, remove old one
     existingIcon.remove();
   }
 
+  // Slow Path: Create new icon element
   let iconEl;
+  // (We need contrast fill here for new built-ins)
+  const contrastFill = getComplementaryColor(customColor); 
+
   if (typeof effectiveIcon === 'string' && effectiveIcon.startsWith('builtin:')) {
     const key = effectiveIcon.slice('builtin:'.length);
     const svgString = ICONS.FOLDER_GLYPHS && ICONS.FOLDER_GLYPHS[key];
@@ -1757,11 +1772,13 @@ function updateEditPreview(iconOverride) {
     iconEl.innerHTML = svgString;
     iconEl.dataset.iconKey = effectiveIcon;
 
-    // Apply tone-on-tone fill to built-in SVGs
     const svg = iconEl.querySelector('svg');
     if (svg) {
       svg.style.fill = contrastFill;
-      svg.querySelectorAll('path').forEach(p => p.style.fill = contrastFill);
+      const innerPaths = svg.querySelectorAll('path');
+      for (let k = 0; k < innerPaths.length; k++) {
+        innerPaths[k].style.fill = contrastFill;
+      }
     }
   } else {
     iconEl = document.createElement('img');
@@ -1771,27 +1788,29 @@ function updateEditPreview(iconOverride) {
   }
   
   iconEl.style.transform = transformValue;
-  iconEl.style.filter = embeddedFilter;
   previewContainer.appendChild(iconEl);
 }
 
 /**
- * Initialize a Physics-based Elastic Slider (Memory Leak & Performance Fixed)
+ * Initialize a Physics-based Elastic Slider (Optimized with rAF Throttling)
  */
 function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  // Clean up any previous animation frames if re-initializing
+  if (container.dataset.animId) {
+    cancelAnimationFrame(parseInt(container.dataset.animId));
+  }
+
   container.innerHTML = ''; 
 
-  // --- COMPACT CONFIGURATION ---
+  // --- Configuration ---
   const width = 300;     
   const height = 50;     
   const trackY = 35;     
   const padding = 20;    
   const trackWidth = width - (padding * 2);
-  
-  // Radius Settings
   const baseRadius = 12; 
   const popRadius = 20;  
   
@@ -1820,20 +1839,22 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
   // --- State ---
   let isDragging = false;
   let isAnimating = false;
-  let animationId = null;
-  let cachedRect = null; // OPTIMIZATION: Cache rect during drag
+  let cachedRect = null; // Layout Thrashing Fix
 
+  // Physics State
   let targetX = valToX(initialValue);
   let currentX = targetX;
   let velocityX = 0;
-  
   let targetY = trackY;
   let currentY = trackY;
   let velocityY = 0;
 
+  // Value State
   let displayVal = initialValue;
+  let lastEmittedVal = initialValue; // For rAF throttling
+  let updateRafId = null;            // Lock for output throttling
 
-  // --- Build SVG ---
+  // --- Build SVG (Same as before) ---
   const svgNS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgNS, "svg");
   svg.classList.add("elastic-svg");
@@ -1887,7 +1908,7 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
 
   container.appendChild(svg);
 
-  // --- Animation Loop ---
+  // --- Animation Loop (Visuals) ---
   function startLoop() {
     if (!isAnimating) {
       isAnimating = true;
@@ -1898,6 +1919,7 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
   function animate() {
     if (!container.isConnected) {
       isAnimating = false;
+      container.dataset.animId = '';
       return;
     }
 
@@ -1911,6 +1933,7 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
     velocityY *= 0.6;
     currentY += velocityY;
 
+    // Stop condition
     if (!isDragging && 
         Math.abs(velocityX) < 0.05 && 
         Math.abs(velocityY) < 0.05 &&
@@ -1921,14 +1944,17 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
       currentY = targetY;
       updateVisuals();
       isAnimating = false;
+      container.dataset.animId = '';
       return;
     }
 
     updateVisuals();
-    animationId = requestAnimationFrame(animate);
+    const id = requestAnimationFrame(animate);
+    container.dataset.animId = id;
   }
 
   function updateVisuals() {
+    // Only touch DOM attributes
     const progress = Math.max(0, (trackY - currentY) / 25);
     const bubbleRadius = baseRadius + ((popRadius - baseRadius) * progress);
 
@@ -1941,22 +1967,20 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
     text.setAttribute("y", currentY + 1);
     
     const newText = (step < 1) ? displayVal : Math.round(displayVal);
+    // Cheap DOM read check
     if (text.textContent != newText) {
       text.textContent = newText;
     }
   }
 
-  // --- Input Handlers (OPTIMIZED) ---
+  // --- Input Handlers ---
   const handleStart = (e) => {
     isDragging = true;
     
-    // OPTIMIZATION 4: Cache bounding rect ONCE at start of drag
-    // This prevents Layout Thrashing during the 'mousemove' loop
+    // OPTIMIZATION: Cache the rect once on start, not every move
     cachedRect = svg.getBoundingClientRect();
     
     svg.classList.add('active');
-    
-    // Dim the label text when dragging starts
     const parentRow = container.closest('.gooey-control-row');
     if (parentRow) parentRow.classList.add('is-dragging');
 
@@ -1964,7 +1988,6 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
     startLoop();  
     handleMove(e);
     
-    // Attach window listeners ONLY during drag
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleEnd);
     window.addEventListener('touchmove', handleMove, {passive: false});
@@ -1976,7 +1999,6 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
     cachedRect = null; // Clear cache
     svg.classList.remove('active');
     
-    // Restore the label text opacity
     const parentRow = container.closest('.gooey-control-row');
     if (parentRow) parentRow.classList.remove('is-dragging');
 
@@ -1984,7 +2006,6 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
     targetX = valToX(displayVal);
     startLoop();
     
-    // Clean up window listeners
     window.removeEventListener('mousemove', handleMove);
     window.removeEventListener('mouseup', handleEnd);
     window.removeEventListener('touchmove', handleMove);
@@ -1994,8 +2015,10 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
   const handleMove = (e) => {
     if (!isDragging) return;
     
-    // Use cached rect if available, fallback if somehow missing
-    const rect = cachedRect || svg.getBoundingClientRect();
+    // OPTIMIZATION: Use cached rect
+    const rect = cachedRect; 
+    if (!rect) return;
+
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const scaleX = width / rect.width;
     
@@ -2004,11 +2027,27 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
     
     targetX = constrainedX;
     
-    let calculatedVal = xToVal(constrainedX);
+    const calculatedVal = xToVal(constrainedX);
     
     if (calculatedVal !== displayVal) {
       displayVal = calculatedVal;
-      if (onUpdate) onUpdate(calculatedVal);
+      // --- OPTIMIZATION START: THROTTLE OUTPUT ---
+      // We schedule the callback for the next animation frame.
+      // If one is already scheduled, we do nothing (the scheduled one will pick up the latest 'displayVal').
+      if (onUpdate && !updateRafId) {
+        updateRafId = requestAnimationFrame(() => {
+          if (!container.isConnected) {
+            updateRafId = null;
+            return;
+          }
+          if (lastEmittedVal !== displayVal) {
+            onUpdate(displayVal);
+            lastEmittedVal = displayVal;
+          }
+          updateRafId = null;
+        });
+      }
+      // --- OPTIMIZATION END ---
     }
     
     startLoop();
@@ -2022,6 +2061,7 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
     targetX = valToX(clamped);
     currentX = targetX; 
     displayVal = clamped;
+    lastEmittedVal = clamped;
     updateVisuals();
   };
   
@@ -3161,9 +3201,8 @@ function renderBookmarkFolder(folderNode) {
     p.style.setProperty('fill', appliedColor, 'important');
   });
 
-  // Tone-on-tone color for inner icon based on folder color
+  // Complementary color for inner icon based on folder color
   const iconFillColor = getComplementaryColor(appliedColor);
-  const embeddedFilter = 'drop-shadow(0 1px 0 rgba(255,255,255,0.35))'; // etched highlight
 
   // 2. Render Custom Icon (Updated with transforms)
   if (customIcon) {
@@ -3181,13 +3220,12 @@ function renderBookmarkFolder(folderNode) {
         iconDiv.className = 'bookmark-folder-custom-icon';
         iconDiv.innerHTML = svgString;
         iconDiv.setAttribute('style', transformStyle);
-        iconDiv.style.filter = embeddedFilter;
 
-        // Apply tone-on-tone fill to built-in SVG paths
+        // Apply contrast fill to built-in SVG paths
         const svg = iconDiv.querySelector('svg');
         if (svg) {
-            svg.style.fill = iconFillColor;
-            svg.querySelectorAll('path').forEach(p => p.style.fill = iconFillColor);
+          svg.style.fill = iconFillColor;
+          svg.querySelectorAll('path').forEach(p => p.style.fill = iconFillColor);
         }
         wrapper.appendChild(iconDiv);
       }
@@ -3196,7 +3234,6 @@ function renderBookmarkFolder(folderNode) {
       img.src = customIcon;
       img.className = 'bookmark-folder-custom-icon';
       img.setAttribute('style', transformStyle);
-      img.style.filter = embeddedFilter;
       wrapper.appendChild(img);
     }
   }
@@ -7172,10 +7209,10 @@ function rgbToHsl(r, g, b) {
 }
 
 /**
- * Tone-on-tone engraved color:
- * - Uses original hue (no 180° shift)
- * - Low saturation for grayish look
- * - Lightness chosen via perceived luma for contrast
+ * Grayish complementary color using HSL:
+ * - Hue shifted 180°
+ * - Saturation clamped to 20-40%
+ * - Lightness set to 30% for light backgrounds, 70% for dark
  */
 function getComplementaryColor(hex) {
   const clean = (hex || '#ffffff').replace(/^#/, '').toLowerCase();
@@ -7197,12 +7234,16 @@ function getComplementaryColor(hex) {
 
   const [hOrig] = rgbToHsl(r, g, b);
 
-  // Tone-on-tone: keep hue, clamp saturation low, adjust lightness by luma
-  const hFinal = hOrig;
-  const sFinal = 0.25;
-  const lFinal = isBgLight ? 0.30 : 0.85;
+  // Complementary hue
+  const hComp = (hOrig + 180) % 360;
 
-  const [finalR, finalG, finalB] = hslToRgb(hFinal / 360, sFinal, lFinal);
+  // Fixed grayish saturation for non-neon look
+  const sFinal = 0.25;
+
+  // High-contrast lightness based on perceived brightness
+  const lFinal = isBgLight ? 0.25 : 0.85;
+
+  const [finalR, finalG, finalB] = hslToRgb(hComp / 360, sFinal, lFinal);
 
   const toHex = (n) => {
     const clamped = Math.min(255, Math.max(0, Math.round(n)));
@@ -7606,7 +7647,6 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
         showAddFolderModal();
       } else if (action === 'manage') {
         // Placeholder for future functionality
-        console.log('Manage Bookmarks menu clicked');
       }
     };
 

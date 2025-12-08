@@ -4689,6 +4689,7 @@ body.performance-mode .context-submenu {
   z-index: 10;
   pointer-events: none;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  will-change: transform;
 }
 
 .edit-folder-custom-icon-preview svg {

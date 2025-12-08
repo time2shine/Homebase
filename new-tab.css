@@ -4925,6 +4925,16 @@ body.performance-mode .context-submenu {
   justify-content: center;
   cursor: pointer;
   transition: all 0.15s ease;
+  position: relative;
+}
+
+#builtin-icon-picker-modal .icon-picker-item .tooltip-popup {
+  background-color: #2ca5ff;
+  color: #ffffff;
+}
+
+#builtin-icon-picker-modal .icon-picker-item .tooltip-popup::before {
+  background-color: #2ca5ff;
 }
 
 #builtin-icon-picker-modal .icon-picker-item svg {

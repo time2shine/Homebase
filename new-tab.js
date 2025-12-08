@@ -2172,8 +2172,8 @@ function setupBuiltInIconPicker() {
         const btn = document.createElement('div');
         btn.className = 'icon-picker-item';
         btn.dataset.iconId = key;
-        btn.innerHTML = svgString;
-        btn.title = key;
+        // Use custom tooltip markup instead of native title
+        btn.innerHTML = `<span class="tooltip-popup tooltip-top">${key}</span>${svgString}`;
         
         // --- 1. Real-time Hover Preview ---
         btn.addEventListener('mouseenter', () => {

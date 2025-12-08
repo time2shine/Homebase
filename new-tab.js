@@ -1657,8 +1657,9 @@ function updateEditPreview(iconOverride) {
   const offsetY = meta.offsetY ?? 0;
   const rotation = meta.rotation ?? 0;
 
-  // Complementary color for built-in icons based on folder color
+  // Tone-on-tone color for built-in icons based on folder color
   const contrastFill = getComplementaryColor(customColor);
+  const embeddedFilter = 'drop-shadow(0 1px 0 rgba(255,255,255,0.35))'; // subtle etched highlight
 
   // Toggle controls visibility (unchanged)
   const controlsContainer = document.querySelector('.edit-folder-controls');
@@ -1730,13 +1731,16 @@ function updateEditPreview(iconOverride) {
       if (existingIcon.style.transform !== transformValue) {
         existingIcon.style.transform = transformValue;
       }
-      // Update fill for built-in icons to complementary color in case the base changed
+      // Update fill for built-in icons to tone-on-tone color in case the base changed
       if (isBuiltinMatch) {
         const svg = existingIcon.querySelector('svg');
         if (svg) {
           svg.style.fill = contrastFill;
           svg.querySelectorAll('path').forEach(p => p.style.fill = contrastFill);
         }
+      }
+      if (existingIcon.style.filter !== embeddedFilter) {
+        existingIcon.style.filter = embeddedFilter;
       }
       return;
     }
@@ -1753,7 +1757,7 @@ function updateEditPreview(iconOverride) {
     iconEl.innerHTML = svgString;
     iconEl.dataset.iconKey = effectiveIcon;
 
-    // Apply contrast fill to built-in SVGs
+    // Apply tone-on-tone fill to built-in SVGs
     const svg = iconEl.querySelector('svg');
     if (svg) {
       svg.style.fill = contrastFill;
@@ -1767,6 +1771,7 @@ function updateEditPreview(iconOverride) {
   }
   
   iconEl.style.transform = transformValue;
+  iconEl.style.filter = embeddedFilter;
   previewContainer.appendChild(iconEl);
 }
 
@@ -3156,8 +3161,9 @@ function renderBookmarkFolder(folderNode) {
     p.style.setProperty('fill', appliedColor, 'important');
   });
 
-  // Complementary color for inner icon based on folder color
+  // Tone-on-tone color for inner icon based on folder color
   const iconFillColor = getComplementaryColor(appliedColor);
+  const embeddedFilter = 'drop-shadow(0 1px 0 rgba(255,255,255,0.35))'; // etched highlight
 
   // 2. Render Custom Icon (Updated with transforms)
   if (customIcon) {
@@ -3175,12 +3181,13 @@ function renderBookmarkFolder(folderNode) {
         iconDiv.className = 'bookmark-folder-custom-icon';
         iconDiv.innerHTML = svgString;
         iconDiv.setAttribute('style', transformStyle);
+        iconDiv.style.filter = embeddedFilter;
 
-        // Apply contrast fill to built-in SVG paths
+        // Apply tone-on-tone fill to built-in SVG paths
         const svg = iconDiv.querySelector('svg');
         if (svg) {
-          svg.style.fill = iconFillColor;
-          svg.querySelectorAll('path').forEach(p => p.style.fill = iconFillColor);
+            svg.style.fill = iconFillColor;
+            svg.querySelectorAll('path').forEach(p => p.style.fill = iconFillColor);
         }
         wrapper.appendChild(iconDiv);
       }
@@ -3189,6 +3196,7 @@ function renderBookmarkFolder(folderNode) {
       img.src = customIcon;
       img.className = 'bookmark-folder-custom-icon';
       img.setAttribute('style', transformStyle);
+      img.style.filter = embeddedFilter;
       wrapper.appendChild(img);
     }
   }
@@ -7164,10 +7172,10 @@ function rgbToHsl(r, g, b) {
 }
 
 /**
- * Grayish complementary color using HSL:
- * - Hue shifted 180°
- * - Saturation clamped to 20-40%
- * - Lightness set to 30% for light backgrounds, 70% for dark
+ * Tone-on-tone engraved color:
+ * - Uses original hue (no 180° shift)
+ * - Low saturation for grayish look
+ * - Lightness chosen via perceived luma for contrast
  */
 function getComplementaryColor(hex) {
   const clean = (hex || '#ffffff').replace(/^#/, '').toLowerCase();
@@ -7189,16 +7197,12 @@ function getComplementaryColor(hex) {
 
   const [hOrig] = rgbToHsl(r, g, b);
 
-  // Complementary hue
-  const hComp = (hOrig + 180) % 360;
-
-  // Fixed grayish saturation for non-neon look
+  // Tone-on-tone: keep hue, clamp saturation low, adjust lightness by luma
+  const hFinal = hOrig;
   const sFinal = 0.25;
+  const lFinal = isBgLight ? 0.30 : 0.85;
 
-  // High-contrast lightness based on perceived brightness
-  const lFinal = isBgLight ? 0.25 : 0.85;
-
-  const [finalR, finalG, finalB] = hslToRgb(hComp / 360, sFinal, lFinal);
+  const [finalR, finalG, finalB] = hslToRgb(hFinal / 360, sFinal, lFinal);
 
   const toHex = (n) => {
     const clamped = Math.min(255, Math.max(0, Math.round(n)));

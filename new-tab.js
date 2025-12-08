@@ -1418,6 +1418,7 @@ function setupEditFolderModal() {
 
     const currentMeta = pendingFolderMeta[editFolderTargetId] || {};
     const currentColor = currentMeta.color || appBookmarkFolderColorPreference;
+    const originalColor = currentColor;
     colorBtn.dataset.value = currentColor;
 
     const previousSelected = grid.querySelector('.selected');
@@ -1428,6 +1429,20 @@ function setupEditFolderModal() {
     materialPickerCallback = (newColor) => {
       if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
       pendingFolderMeta[editFolderTargetId].color = newColor;
+      updateEditPreview();
+    };
+
+    // Live hover preview
+    materialPreviewCallback = (previewColor) => {
+      if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+      pendingFolderMeta[editFolderTargetId].color = previewColor;
+      updateEditPreview();
+    };
+
+    // Revert when leaving/canceling without pick
+    materialRevertCallback = () => {
+      if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+      pendingFolderMeta[editFolderTargetId].color = originalColor;
       updateEditPreview();
     };
 
@@ -1516,17 +1531,20 @@ function setupEditFolderModal() {
     resetBtn.addEventListener('click', () => {
       if (!pendingFolderMeta[editFolderTargetId]) return;
 
-      // Reset Everything (Color + Icon + Scale + Offset) immediately
+      // Reset Everything (Color + Icon + Scale + Offset + Rotation)
       delete pendingFolderMeta[editFolderTargetId].color;
       delete pendingFolderMeta[editFolderTargetId].icon;
       delete pendingFolderMeta[editFolderTargetId].scale;
       delete pendingFolderMeta[editFolderTargetId].offsetY;
+      delete pendingFolderMeta[editFolderTargetId].rotation;
 
       // Reset gooey sliders to defaults visually
       const scaleSlider = document.getElementById('gooey-slider-scale');
       const offsetSlider = document.getElementById('gooey-slider-offset');
+      const rotateSlider = document.getElementById('gooey-slider-rotate');
       if (scaleSlider && scaleSlider.setValue) scaleSlider.setValue(1);
       if (offsetSlider && offsetSlider.setValue) offsetSlider.setValue(0);
+      if (rotateSlider && rotateSlider.setValue) rotateSlider.setValue(0);
 
       updateEditPreview();
     });
@@ -1572,6 +1590,7 @@ function showEditFolderModal(folderNode) {
   // --- Initialize Elastic Sliders ---
   const currentScale = pendingFolderMeta[editFolderTargetId]?.scale ?? 1;
   const currentOffsetY = pendingFolderMeta[editFolderTargetId]?.offsetY ?? 0;
+  const currentRotation = pendingFolderMeta[editFolderTargetId]?.rotation ?? 0;
   
   // 1. Scale Slider (0.5 to 1.5) --> higher resolution step for smoother feel
   initElasticSlider('gooey-slider-scale', 0.5, 1.5, currentScale, 0.01, (val) => {
@@ -1584,6 +1603,13 @@ function showEditFolderModal(folderNode) {
   initElasticSlider('gooey-slider-offset', -20, 20, currentOffsetY, 1, (val) => {
     if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
     pendingFolderMeta[editFolderTargetId].offsetY = val;
+    updateEditPreview();
+  });
+
+  // 3. Rotation Slider (-180 to 180)
+  initElasticSlider('gooey-slider-rotate', -180, 180, currentRotation, 1, (val) => {
+    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+    pendingFolderMeta[editFolderTargetId].rotation = val;
     updateEditPreview();
   });
 
@@ -1629,6 +1655,7 @@ function updateEditPreview(iconOverride) {
   const customColor = meta.color || appBookmarkFolderColorPreference;
   const scale = meta.scale ?? 1;
   const offsetY = meta.offsetY ?? 0;
+  const rotation = meta.rotation ?? 0;
 
   // Toggle controls visibility (unchanged)
   const controlsContainer = document.querySelector('.edit-folder-controls');
@@ -1639,7 +1666,7 @@ function updateEditPreview(iconOverride) {
   const effectiveIcon = iconOverride !== undefined ? iconOverride : (meta.icon || null);
   
   // OPTIMIZATION 1: Construct the transform string once
-  const transformValue = `translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.85})`;
+  const transformValue = `translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.85}) rotate(${rotation}deg)`;
 
   const existingIcon = previewContainer.querySelector('.edit-folder-custom-icon-preview');
   const existingBase = previewContainer.querySelector('.edit-folder-base-wrapper');
@@ -6711,6 +6738,8 @@ const PALETTE_BOTTOM = [
 ];
 
 let materialPickerCallback = null;
+let materialPreviewCallback = null; // Hover preview
+let materialRevertCallback = null;  // Revert on leave/cancel
 
 function setupMaterialColorPicker() {
   const modal = document.getElementById('material-picker-modal');
@@ -6762,6 +6791,10 @@ function setupMaterialColorPicker() {
   }
 
   function pickColor(color) {
+    // A confirmed pick means hover/revert callbacks are no longer needed
+    materialPreviewCallback = null;
+    materialRevertCallback = null;
+
     if (materialPickerCallback) materialPickerCallback(color);
     closeMaterialPicker();
   }
@@ -6785,8 +6818,10 @@ function setupMaterialColorPicker() {
   }
 
   // Helper to open picker relative to a button
-  function openPickerFor(button, callback) {
-    materialPickerCallback = callback;
+  function openPickerFor(button, onPick, onPreview, onRevert) {
+    materialPickerCallback = onPick;
+    materialPreviewCallback = onPreview;
+    materialRevertCallback = onRevert;
     modal.classList.remove('hidden');
 
     // Calculate animation origin relative to trigger button
@@ -6850,10 +6885,25 @@ function setupMaterialColorPicker() {
   grid.addEventListener('click', (e) => {
     // Check if the clicked element has our specific data attribute
     // We check dataset.isClickable or class names
-    const target = e.target.closest('[data-is-clickable=\"true\"]');
+    const target = e.target.closest('[data-is-clickable="true"]');
     
     if (target && target.dataset.color) {
       pickColor(target.dataset.color);
+    }
+  });
+
+  // --- Hover Preview ---
+  grid.addEventListener('mouseover', (e) => {
+    const target = e.target.closest('[data-is-clickable="true"]');
+    if (target && target.dataset.color && materialPreviewCallback) {
+      materialPreviewCallback(target.dataset.color);
+    }
+  });
+
+  // --- Leave Revert ---
+  grid.addEventListener('mouseleave', () => {
+    if (materialRevertCallback) {
+      materialRevertCallback();
     }
   });
 
@@ -6865,12 +6915,25 @@ function setupMaterialColorPicker() {
     fallbackTriggerBtn.dataset.value = appBookmarkFallbackColorPreference;
 
     fallbackTriggerBtn.addEventListener('click', () => {
-      openPickerFor(fallbackTriggerBtn, (newColor) => {
-        updateColorTrigger(fallbackTriggerBtn, newColor);
-        fallbackTriggerBtn.dataset.value = newColor;
-        appBookmarkFallbackColorPreference = newColor;
-        applyBookmarkFallbackColor(newColor);
-      });
+      const originalColor = appBookmarkFallbackColorPreference;
+
+      openPickerFor(
+        fallbackTriggerBtn,
+        (newColor) => {
+          updateColorTrigger(fallbackTriggerBtn, newColor);
+          fallbackTriggerBtn.dataset.value = newColor;
+          appBookmarkFallbackColorPreference = newColor;
+          applyBookmarkFallbackColor(newColor);
+        },
+        (previewColor) => {
+          applyBookmarkFallbackColor(previewColor);
+          updateColorTrigger(fallbackTriggerBtn, previewColor);
+        },
+        () => {
+          applyBookmarkFallbackColor(originalColor);
+          updateColorTrigger(fallbackTriggerBtn, originalColor);
+        }
+      );
     });
   }
 
@@ -6880,20 +6943,33 @@ function setupMaterialColorPicker() {
     folderTriggerBtn.dataset.value = appBookmarkFolderColorPreference;
 
     folderTriggerBtn.addEventListener('click', () => {
-      openPickerFor(folderTriggerBtn, (newColor) => {
-        updateColorTrigger(folderTriggerBtn, newColor);
-        folderTriggerBtn.dataset.value = newColor;
-        appBookmarkFolderColorPreference = newColor;
-        applyBookmarkFolderColor(newColor);
+      const originalColor = appBookmarkFolderColorPreference;
 
-        // Re-render current grid so folder icons update immediately
-        if (currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
-          const freshNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id) || currentGridFolderNode;
-          if (freshNode) {
-            renderBookmarkGrid(freshNode);
+      openPickerFor(
+        folderTriggerBtn,
+        (newColor) => {
+          updateColorTrigger(folderTriggerBtn, newColor);
+          folderTriggerBtn.dataset.value = newColor;
+          appBookmarkFolderColorPreference = newColor;
+          applyBookmarkFolderColor(newColor);
+
+          // Re-render current grid so folder icons update immediately
+          if (currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
+            const freshNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id) || currentGridFolderNode;
+            if (freshNode) {
+              renderBookmarkGrid(freshNode);
+            }
           }
+        },
+        (previewColor) => {
+          applyBookmarkFolderColor(previewColor);
+          updateColorTrigger(folderTriggerBtn, previewColor);
+        },
+        () => {
+          applyBookmarkFolderColor(originalColor);
+          updateColorTrigger(folderTriggerBtn, originalColor);
         }
-      });
+      );
     });
   }
 
@@ -6903,12 +6979,25 @@ function setupMaterialColorPicker() {
     textBgTriggerBtn.dataset.value = appBookmarkTextBgColorPreference;
 
     textBgTriggerBtn.addEventListener('click', () => {
-      openPickerFor(textBgTriggerBtn, (newColor) => {
-        updateColorTrigger(textBgTriggerBtn, newColor);
-        textBgTriggerBtn.dataset.value = newColor;
-        appBookmarkTextBgColorPreference = newColor;
-        applyBookmarkTextBgColor(newColor);
-      });
+      const originalColor = appBookmarkTextBgColorPreference;
+
+      openPickerFor(
+        textBgTriggerBtn,
+        (newColor) => {
+          updateColorTrigger(textBgTriggerBtn, newColor);
+          textBgTriggerBtn.dataset.value = newColor;
+          appBookmarkTextBgColorPreference = newColor;
+          applyBookmarkTextBgColor(newColor);
+        },
+        (previewColor) => {
+          applyBookmarkTextBgColor(previewColor);
+          updateColorTrigger(textBgTriggerBtn, previewColor);
+        },
+        () => {
+          applyBookmarkTextBgColor(originalColor);
+          updateColorTrigger(textBgTriggerBtn, originalColor);
+        }
+      );
     });
   }
 
@@ -6921,6 +7010,13 @@ function setupMaterialColorPicker() {
 function closeMaterialPicker() {
   const modal = document.getElementById('material-picker-modal');
   if (!modal) return;
+
+  // If we have a revert callback (meaning no final pick yet), revert on close
+  if (materialRevertCallback) {
+    materialRevertCallback();
+  }
+  materialRevertCallback = null;
+  materialPreviewCallback = null;
 
   modal.classList.add('closing');
 

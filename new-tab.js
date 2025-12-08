@@ -1853,6 +1853,7 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
   let displayVal = initialValue;
   let lastEmittedVal = initialValue; // For rAF throttling
   let updateRafId = null;            // Lock for output throttling
+  let lastRenderedText = String(initialValue);
 
   // --- Build SVG (Same as before) ---
   const svgNS = "http://www.w3.org/2000/svg";
@@ -1967,9 +1968,9 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
     text.setAttribute("y", currentY + 1);
     
     const newText = (step < 1) ? displayVal : Math.round(displayVal);
-    // Cheap DOM read check
-    if (text.textContent != newText) {
+    if (lastRenderedText !== String(newText)) {
       text.textContent = newText;
+      lastRenderedText = String(newText);
     }
   }
 
@@ -2254,6 +2255,15 @@ async function handleEditFolderSave() {
   try {
     // 1. Update Bookmark Title
     await browser.bookmarks.update(editFolderTargetId, { title: newName });
+
+    // --- Prevent stale overwrite: pull latest metadata before merging ---
+    try {
+      const stored = await browser.storage.local.get(FOLDER_META_KEY);
+      const freshMetadata = stored[FOLDER_META_KEY] || {};
+      folderMetadata = freshMetadata;
+    } catch (_) {
+      // If storage read fails, continue with current in-memory state
+    }
 
     const newMeta = pendingFolderMeta[editFolderTargetId];
     
@@ -7769,6 +7779,16 @@ if (browser?.storage?.onChanged) {
       const newId = changes.currentSearchEngineId.newValue;
       if (appSearchRememberEnginePreference && newId && newId !== currentSearchEngine.id) {
         updateSearchUI(newId);
+      }
+    }
+
+    if (changes[FOLDER_META_KEY]) {
+      folderMetadata = changes[FOLDER_META_KEY].newValue || {};
+
+      // If currently viewing a folder that changed elsewhere, refresh that grid
+      if (currentGridFolderNode && folderMetadata[currentGridFolderNode.id]) {
+        const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+        if (activeNode) renderBookmarkGrid(activeNode);
       }
     }
   });

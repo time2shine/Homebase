@@ -5020,6 +5020,11 @@ body.performance-mode .context-submenu {
   z-index: 1;
   user-select: none;
   pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.gooey-control-row.is-dragging label {
+  opacity: 0.1;
 }
 
 .gooey-slider-container {

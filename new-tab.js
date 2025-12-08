@@ -1868,6 +1868,11 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
   const handleStart = (e) => {
     isDragging = true;
     svg.classList.add('active');
+    
+    // Dim the label text when dragging starts
+    const parentRow = container.closest('.gooey-control-row');
+    if (parentRow) parentRow.classList.add('is-dragging');
+
     targetY = trackY - 25; 
     startLoop();  
     handleMove(e);
@@ -1882,6 +1887,11 @@ function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) 
   const handleEnd = () => {
     isDragging = false;
     svg.classList.remove('active');
+    
+    // Restore the label text opacity
+    const parentRow = container.closest('.gooey-control-row');
+    if (parentRow) parentRow.classList.remove('is-dragging');
+
     targetY = trackY; 
     targetX = valToX(displayVal);
     startLoop();

@@ -1657,6 +1657,9 @@ function updateEditPreview(iconOverride) {
   const offsetY = meta.offsetY ?? 0;
   const rotation = meta.rotation ?? 0;
 
+  // Complementary color for built-in icons based on folder color
+  const contrastFill = getComplementaryColor(customColor);
+
   // Toggle controls visibility (unchanged)
   const controlsContainer = document.querySelector('.edit-folder-controls');
   if (controlsContainer) {
@@ -1682,6 +1685,15 @@ function updateEditPreview(iconOverride) {
         p.style.setProperty('fill', customColor, 'important');
       });
       existingBase.dataset.lastAppliedColor = customColor;
+
+      // If we already have a built-in icon, update its contrast fill too
+      if (existingIcon && existingIcon.tagName === 'DIV') {
+        const svg = existingIcon.querySelector('svg');
+        if (svg) {
+          svg.style.fill = contrastFill;
+          svg.querySelectorAll('path').forEach(p => p.style.fill = contrastFill);
+        }
+      }
     }
   } else {
     // Create Base if missing
@@ -1718,6 +1730,14 @@ function updateEditPreview(iconOverride) {
       if (existingIcon.style.transform !== transformValue) {
         existingIcon.style.transform = transformValue;
       }
+      // Update fill for built-in icons to complementary color in case the base changed
+      if (isBuiltinMatch) {
+        const svg = existingIcon.querySelector('svg');
+        if (svg) {
+          svg.style.fill = contrastFill;
+          svg.querySelectorAll('path').forEach(p => p.style.fill = contrastFill);
+        }
+      }
       return;
     }
     existingIcon.remove();
@@ -1732,6 +1752,13 @@ function updateEditPreview(iconOverride) {
     iconEl.className = 'edit-folder-custom-icon-preview';
     iconEl.innerHTML = svgString;
     iconEl.dataset.iconKey = effectiveIcon;
+
+    // Apply contrast fill to built-in SVGs
+    const svg = iconEl.querySelector('svg');
+    if (svg) {
+      svg.style.fill = contrastFill;
+      svg.querySelectorAll('path').forEach(p => p.style.fill = contrastFill);
+    }
   } else {
     iconEl = document.createElement('img');
     iconEl.className = 'edit-folder-custom-icon-preview';
@@ -3129,6 +3156,9 @@ function renderBookmarkFolder(folderNode) {
     p.style.setProperty('fill', appliedColor, 'important');
   });
 
+  // Complementary color for inner icon based on folder color
+  const iconFillColor = getComplementaryColor(appliedColor);
+
   // 2. Render Custom Icon (Updated with transforms)
   if (customIcon) {
     // Base style for the icon (centered + custom offset/scale)
@@ -3145,6 +3175,13 @@ function renderBookmarkFolder(folderNode) {
         iconDiv.className = 'bookmark-folder-custom-icon';
         iconDiv.innerHTML = svgString;
         iconDiv.setAttribute('style', transformStyle);
+
+        // Apply contrast fill to built-in SVG paths
+        const svg = iconDiv.querySelector('svg');
+        if (svg) {
+          svg.style.fill = iconFillColor;
+          svg.querySelectorAll('path').forEach(p => p.style.fill = iconFillColor);
+        }
         wrapper.appendChild(iconDiv);
       }
     } else {
@@ -7060,6 +7097,107 @@ function isLightColor(hex, alpha = 1) {
 
   const luma = 0.2126 * blendedR + 0.7152 * blendedG + 0.0722 * blendedB;
   return luma > 150;
+}
+
+/**
+ * Converts HSL (0-1) to RGB (0-255)
+ */
+function hslToRgb(h, s, l) {
+  let r, g, b;
+
+  if (s === 0) {
+    r = g = b = l; // achromatic
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+/**
+ * Converts RGB (0-255) to HSL (h 0-360, s/l 0-1)
+ */
+function rgbToHsl(r, g, b) {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h;
+  let s;
+  const l = (max + min) / 2;
+
+  if (max === min) {
+    h = s = 0; // achromatic
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      default:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+
+  return [h * 360, s, l];
+}
+
+/**
+ * Grayish complementary color using HSL:
+ * - Hue shifted 180°
+ * - Saturation clamped to 20-40%
+ * - Lightness set to 30% for light backgrounds, 70% for dark
+ */
+function getComplementaryColor(hex) {
+  const clean = (hex || '#ffffff').replace(/^#/, '').toLowerCase();
+  if (clean.length !== 6) return '#000000';
+
+  // Special case: original slate gray for pure white folders
+  if (clean === 'ffffff') {
+    return '#94a3b8';
+  }
+
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  if ([r, g, b].some((v) => Number.isNaN(v))) return '#000000';
+
+  const [hOrig, sOrig, lOrig] = rgbToHsl(r, g, b);
+  const isBgLight = lOrig > 0.5;
+
+  const hComp = (hOrig + 180) % 360;
+  const sFinal = Math.max(0.2, Math.min(0.4, sOrig * 0.7));
+  const lFinal = isBgLight ? 0.3 : 0.7;
+
+  const [finalR, finalG, finalB] = hslToRgb(hComp / 360, sFinal, lFinal);
+
+  const toHex = (n) => {
+    const clamped = Math.min(255, Math.max(0, Math.round(n)));
+    return clamped.toString(16).padStart(2, '0');
+  };
+
+  return `#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`;
 }
 
 // ===============================================

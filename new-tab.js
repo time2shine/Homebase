@@ -7183,12 +7183,20 @@ function getComplementaryColor(hex) {
   const b = parseInt(clean.substring(4, 6), 16);
   if ([r, g, b].some((v) => Number.isNaN(v))) return '#000000';
 
-  const [hOrig, sOrig, lOrig] = rgbToHsl(r, g, b);
-  const isBgLight = lOrig > 0.5;
+  // Perceived luminance (luma) for better light/dark decision
+  const luma = (0.299 * r) + (0.587 * g) + (0.114 * b);
+  const isBgLight = luma > 140;
 
+  const [hOrig] = rgbToHsl(r, g, b);
+
+  // Complementary hue
   const hComp = (hOrig + 180) % 360;
-  const sFinal = Math.max(0.2, Math.min(0.4, sOrig * 0.7));
-  const lFinal = isBgLight ? 0.3 : 0.7;
+
+  // Fixed grayish saturation for non-neon look
+  const sFinal = 0.25;
+
+  // High-contrast lightness based on perceived brightness
+  const lFinal = isBgLight ? 0.25 : 0.85;
 
   const [finalR, finalG, finalB] = hslToRgb(hComp / 360, sFinal, lFinal);
 

@@ -1593,7 +1593,7 @@ function showEditFolderModal(folderNode) {
     pendingFolderMeta[folderNode.id] = { ...folderMetadata[folderNode.id] };
   }
 
-  // --- Initialize Elastic Sliders ---
+  // --- Initialize BUBBLE Sliders ---
   const currentScale = pendingFolderMeta[editFolderTargetId]?.scale ?? 1;
   const currentOffsetY = pendingFolderMeta[editFolderTargetId]?.offsetY ?? 0;
   const currentRotation = pendingFolderMeta[editFolderTargetId]?.rotation ?? 0;
@@ -1602,9 +1602,9 @@ function showEditFolderModal(folderNode) {
   const offsetEl = document.getElementById('gooey-slider-offset');
   const rotateEl = document.getElementById('gooey-slider-rotate');
   
-  // Initialize once per element to avoid stacking listeners
+  // Scale: 0.5 to 1.5
   if (scaleEl && !scaleEl.dataset.initialized) {
-    initElasticSlider('gooey-slider-scale', 0.5, 1.5, 1, 0.01, (val) => {
+    initBubbleSlider('gooey-slider-scale', 0.5, 1.5, 1, 0.01, (val) => {
       if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
       pendingFolderMeta[editFolderTargetId].scale = val;
       updateEditPreview();
@@ -1612,8 +1612,9 @@ function showEditFolderModal(folderNode) {
     scaleEl.dataset.initialized = '1';
   }
 
+  // Position: -20 to 20
   if (offsetEl && !offsetEl.dataset.initialized) {
-    initElasticSlider('gooey-slider-offset', -20, 20, 0, 1, (val) => {
+    initBubbleSlider('gooey-slider-offset', -20, 20, 0, 1, (val) => {
       if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
       pendingFolderMeta[editFolderTargetId].offsetY = val;
       updateEditPreview();
@@ -1621,8 +1622,9 @@ function showEditFolderModal(folderNode) {
     offsetEl.dataset.initialized = '1';
   }
 
+  // Rotation: -180 to 180
   if (rotateEl && !rotateEl.dataset.initialized) {
-    initElasticSlider('gooey-slider-rotate', -180, 180, 0, 1, (val) => {
+    initBubbleSlider('gooey-slider-rotate', -180, 180, 0, 5, (val) => {
       if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
       pendingFolderMeta[editFolderTargetId].rotation = val;
       updateEditPreview();
@@ -1630,7 +1632,7 @@ function showEditFolderModal(folderNode) {
     rotateEl.dataset.initialized = '1';
   }
 
-  // Refresh slider positions to current values without re-binding listeners
+  // Refresh values on open
   if (scaleEl && scaleEl.setValue) scaleEl.setValue(currentScale);
   if (offsetEl && offsetEl.setValue) offsetEl.setValue(currentOffsetY);
   if (rotateEl && rotateEl.setValue) rotateEl.setValue(currentRotation);
@@ -1671,6 +1673,12 @@ function updateEditPreview(iconOverride) {
   if (!cachedPreviewContainer) {
     cachedPreviewContainer = document.getElementById('edit-folder-icon-preview');
   }
+  
+  // --- FIX: Ensure we have the controls container reference ---
+  if (!cachedControlsContainer) {
+    cachedControlsContainer = document.querySelector('.edit-folder-controls');
+  }
+  
   const previewContainer = cachedPreviewContainer;
   if (!previewContainer || !editFolderTargetId) return;
 
@@ -1688,7 +1696,7 @@ function updateEditPreview(iconOverride) {
   const existingIcon = previewContainer.children[1];
 
   if (cachedControlsContainer) {
-    cachedControlsContainer.classList.toggle('visible', !!meta.icon);
+    cachedControlsContainer.classList.toggle('visible', !!(meta.icon || iconOverride));
   }
 
   // --- BASE ICON & COLOR UPDATE ---
@@ -1792,281 +1800,78 @@ function updateEditPreview(iconOverride) {
 }
 
 /**
- * Initialize a Physics-based Elastic Slider (Optimized with rAF Throttling)
+ * Initialize Custom Range Slider (Replaces Bubble Slider)
  */
-function initElasticSlider(containerId, min, max, initialValue, step, onUpdate) {
+function initBubbleSlider(containerId, min, max, initialValue, step, onUpdate) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  // Clean up any previous animation frames if re-initializing
-  if (container.dataset.animId) {
-    cancelAnimationFrame(parseInt(container.dataset.animId));
-  }
+  container.innerHTML = '';
+  container.className = 'range-slider-wrapper gooey-slider-container'; // Keep existing class for layout
 
-  container.innerHTML = ''; 
+  // 1. Build the HTML Structure
+  const wrapper = document.createElement('div');
+  wrapper.className = 'range-slider';
 
-  // --- Configuration ---
-  const width = 300;     
-  const height = 50;     
-  const trackY = 35;     
-  const padding = 20;    
-  const trackWidth = width - (padding * 2);
-  const baseRadius = 18; // Increased for larger value bubble
-  const popRadius = 28;  // Increased for larger value bubble
+  const bar = document.createElement('div');
+  bar.className = 'range-slider__bar';
+
+  const fill = document.createElement('div');
+  fill.className = 'range-slider__fill';
+  bar.appendChild(fill);
+
+  const thumb = document.createElement('div');
+  thumb.className = 'range-slider__thumb';
+
+  const valueTooltip = document.createElement('div');
+  valueTooltip.className = 'range-slider__value';
+  valueTooltip.textContent = initialValue;
+  thumb.appendChild(valueTooltip);
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.className = 'range-slider__input';
+  input.min = min;
+  input.max = max;
+  input.step = step;
+  input.value = initialValue;
+
+  // Append everything
+  wrapper.appendChild(bar);
+  wrapper.appendChild(input);
+  wrapper.appendChild(thumb);
+  container.appendChild(wrapper);
+
+  // 2. Update Function
+  const updateUI = () => {
+    const val = parseFloat(input.value);
+    const minVal = parseFloat(input.min);
+    const maxVal = parseFloat(input.max);
+    const percent = ((val - minVal) * 100) / (maxVal - minVal);
+
+    // Move Fill
+    fill.style.width = `${percent}%`;
+
+    // Move Thumb (Left %)
+    thumb.style.left = `${percent}%`;
+
+    // Update Text
+    valueTooltip.textContent = val;
+
+    if (onUpdate) onUpdate(val);
+  };
+
+  // 3. Listeners
+  input.addEventListener('input', updateUI);
   
-  // Physics Constants
-  const TENSION = 0.15;
-  const FRICTION = 0.75;
-  const POP_SPEED = 0.2;
+  // Init
+  updateUI();
 
-  // --- Helpers ---
-  const valToX = (v) => {
-    const percent = (v - min) / (max - min);
-    return padding + (percent * trackWidth);
-  };
-
-  const xToVal = (x) => {
-    let relativeX = x - padding;
-    relativeX = Math.max(0, Math.min(relativeX, trackWidth));
-    const percent = relativeX / trackWidth;
-    let rawVal = min + (percent * (max - min));
-    const inverse = 1 / step;
-    const stepped = Math.round(rawVal * inverse) / inverse;
-    const decimals = step < 1 ? 2 : 0;
-    return parseFloat(stepped.toFixed(decimals));
-  };
-
-  // --- State ---
-  let isDragging = false;
-  let isAnimating = false;
-  let cachedRect = null; // Layout Thrashing Fix
-
-  // Physics State
-  let targetX = valToX(initialValue);
-  let currentX = targetX;
-  let velocityX = 0;
-  let targetY = trackY;
-  let currentY = trackY;
-  let velocityY = 0;
-
-  // Value State
-  let displayVal = initialValue;
-  let lastEmittedVal = initialValue; // For rAF throttling
-  let updateRafId = null;            // Lock for output throttling
-  let lastRenderedText = String(initialValue);
-
-  // --- Build SVG (Same as before) ---
-  const svgNS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(svgNS, "svg");
-  svg.classList.add("elastic-svg");
-  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.style.overflow = "visible"; 
-
-  const defs = document.createElementNS(svgNS, "defs");
-  const filter = document.createElementNS(svgNS, "filter");
-  filter.id = `goo-${containerId}`;
-  filter.innerHTML = `
-    <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
-    <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
-    <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
-  `;
-  defs.appendChild(filter);
-  svg.appendChild(defs);
-
-  const track = document.createElementNS(svgNS, "path");
-  track.setAttribute("d", `M${padding},${trackY} L${width - padding},${trackY}`);
-  track.setAttribute("stroke", "#e2e8f0");
-  track.setAttribute("stroke-width", "6");
-  track.setAttribute("stroke-linecap", "round");
-  svg.appendChild(track);
-
-  const gooGroup = document.createElementNS(svgNS, "g");
-  gooGroup.style.filter = `url(#goo-${containerId})`;
-
-  const knob = document.createElementNS(svgNS, "circle");
-  knob.setAttribute("cx", targetX);
-  knob.setAttribute("cy", trackY);
-  knob.setAttribute("r", baseRadius);
-  knob.setAttribute("fill", "#2ca5ff");
-
-  const bubble = document.createElementNS(svgNS, "circle");
-  bubble.setAttribute("cx", targetX);
-  bubble.setAttribute("cy", trackY);
-  bubble.setAttribute("r", baseRadius);
-  bubble.setAttribute("fill", "#2ca5ff");
-
-  gooGroup.appendChild(bubble);
-  gooGroup.appendChild(knob);
-  svg.appendChild(gooGroup);
-
-  const text = document.createElementNS(svgNS, "text");
-  text.classList.add("elastic-text");
-  text.setAttribute("x", targetX);
-  text.setAttribute("y", trackY); 
-  text.setAttribute("font-size", "14"); 
-  text.textContent = initialValue;
-  svg.appendChild(text);
-
-  container.appendChild(svg);
-
-  // --- Animation Loop (Visuals) ---
-  function startLoop() {
-    if (!isAnimating) {
-      isAnimating = true;
-      animate();
-    }
-  }
-
-  function animate() {
-    if (!container.isConnected) {
-      isAnimating = false;
-      container.dataset.animId = '';
-      return;
-    }
-
-    const tensionX = (targetX - currentX) * TENSION;
-    velocityX += tensionX;
-    velocityX *= FRICTION;
-    currentX += velocityX;
-
-    const tensionY = (targetY - currentY) * POP_SPEED;
-    velocityY += tensionY;
-    velocityY *= 0.6;
-    currentY += velocityY;
-
-    // Stop condition
-    if (!isDragging && 
-        Math.abs(velocityX) < 0.05 && 
-        Math.abs(velocityY) < 0.05 &&
-        Math.abs(targetX - currentX) < 0.1 &&
-        Math.abs(targetY - currentY) < 0.1) {
-      
-      currentX = targetX;
-      currentY = targetY;
-      updateVisuals();
-      isAnimating = false;
-      container.dataset.animId = '';
-      return;
-    }
-
-    updateVisuals();
-    const id = requestAnimationFrame(animate);
-    container.dataset.animId = id;
-  }
-
-  function updateVisuals() {
-    // Only touch DOM attributes
-    const progress = Math.max(0, (trackY - currentY) / 25);
-    const bubbleRadius = baseRadius + ((popRadius - baseRadius) * progress);
-
-    knob.setAttribute("cx", targetX);
-    bubble.setAttribute("cx", currentX);
-    bubble.setAttribute("cy", currentY);
-    bubble.setAttribute("r", bubbleRadius);
-
-    text.setAttribute("x", currentX);
-    text.setAttribute("y", currentY + 1);
-    
-    const newText = (step < 1) ? displayVal : Math.round(displayVal);
-    if (lastRenderedText !== String(newText)) {
-      text.textContent = newText;
-      lastRenderedText = String(newText);
-    }
-  }
-
-  // --- Input Handlers ---
-  const handleStart = (e) => {
-    isDragging = true;
-    
-    // OPTIMIZATION: Cache the rect once on start, not every move
-    cachedRect = svg.getBoundingClientRect();
-    
-    svg.classList.add('active');
-    const parentRow = container.closest('.gooey-control-row');
-    if (parentRow) parentRow.classList.add('is-dragging');
-
-    targetY = trackY - 25; 
-    startLoop();  
-    handleMove(e);
-    
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleEnd);
-    window.addEventListener('touchmove', handleMove, {passive: false});
-    window.addEventListener('touchend', handleEnd);
-  };
-
-  const handleEnd = () => {
-    isDragging = false;
-    cachedRect = null; // Clear cache
-    svg.classList.remove('active');
-    
-    const parentRow = container.closest('.gooey-control-row');
-    if (parentRow) parentRow.classList.remove('is-dragging');
-
-    targetY = trackY; 
-    targetX = valToX(displayVal);
-    startLoop();
-    
-    window.removeEventListener('mousemove', handleMove);
-    window.removeEventListener('mouseup', handleEnd);
-    window.removeEventListener('touchmove', handleMove);
-    window.removeEventListener('touchend', handleEnd);
-  };
-
-  const handleMove = (e) => {
-    if (!isDragging) return;
-    
-    // OPTIMIZATION: Use cached rect
-    const rect = cachedRect; 
-    if (!rect) return;
-
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const scaleX = width / rect.width;
-    
-    let rawX = (clientX - rect.left) * scaleX;
-    let constrainedX = Math.max(padding, Math.min(rawX, width - padding));
-    
-    targetX = constrainedX;
-    
-    const calculatedVal = xToVal(constrainedX);
-    
-    if (calculatedVal !== displayVal) {
-      displayVal = calculatedVal;
-      // --- OPTIMIZATION START: THROTTLE OUTPUT ---
-      // We schedule the callback for the next animation frame.
-      // If one is already scheduled, we do nothing (the scheduled one will pick up the latest 'displayVal').
-      if (onUpdate && !updateRafId) {
-        updateRafId = requestAnimationFrame(() => {
-          if (!container.isConnected) {
-            updateRafId = null;
-            return;
-          }
-          if (lastEmittedVal !== displayVal) {
-            onUpdate(displayVal);
-            lastEmittedVal = displayVal;
-          }
-          updateRafId = null;
-        });
-      }
-      // --- OPTIMIZATION END ---
-    }
-    
-    startLoop();
-  };
-
-  container.addEventListener('mousedown', handleStart);
-  container.addEventListener('touchstart', handleStart, {passive: false});
-
+  // 4. Expose setValue for Reset buttons
   container.setValue = (val) => {
-    const clamped = Math.max(min, Math.min(max, val));
-    targetX = valToX(clamped);
-    currentX = targetX; 
-    displayVal = clamped;
-    lastEmittedVal = clamped;
-    updateVisuals();
+    input.value = val;
+    updateUI();
   };
-  
-  updateVisuals();
 }
 
 

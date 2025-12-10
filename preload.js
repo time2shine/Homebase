@@ -2,22 +2,12 @@
   function applyInitial(url) {
     if (!url) return;
 
-    // 1) Make it available to CSS immediately for first paint
+    // 1. Store the raw URL so new-tab.js can compare without CSS normalization
+    document.documentElement.dataset.initialWallpaper = url;
+
+    // 2. Make it available to CSS immediately
     document.documentElement.style.setProperty('--initial-wallpaper', `url("${url}")`);
 
-    // 2) Push it into the HTML <video> poster as soon as the body exists
-    const applyToVideos = () => {
-      const videos = document.querySelectorAll('.background-video');
-      videos.forEach((v) => {
-        v.poster = url;
-      });
-    };
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', applyToVideos, { once: true });
-    } else {
-      applyToVideos();
-    }
   }
 
   // Fast path: synchronous localStorage
@@ -42,7 +32,9 @@
     .get('cachedAppliedPosterUrl')
     .then((res) => {
       const asyncUrl = res && res.cachedAppliedPosterUrl;
-      if (!asyncUrl) return;
+      // Avoid double-paint if we already used this URL from localStorage
+      if (!asyncUrl || asyncUrl === url) return;
+
       applyInitial(asyncUrl);
       try {
         if (window.localStorage) {

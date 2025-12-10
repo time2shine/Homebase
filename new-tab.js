@@ -654,13 +654,6 @@ async function hydrateWallpaperSelection(selection) {
     }
   }
 
-  if (hydrated.posterCacheKey) {
-    const cachedPoster = await getCachedObjectUrl(hydrated.posterCacheKey);
-    if (cachedPoster) {
-      hydrated.posterUrl = cachedPoster;
-    }
-  }
-
   if (!hydrated.posterUrl) {
     hydrated.posterUrl = 'assets/fallback.webp';
   }
@@ -691,12 +684,14 @@ function setBackgroundVideoSources(videoUrl, posterUrl = '') {
 }
 
 function applyWallpaperBackground(posterUrl) {
+  const next = posterUrl ? `url("${posterUrl}")` : '';
+  const current = document.documentElement.style.getPropertyValue('--initial-wallpaper');
+  if (current === next) return;
+
   if (posterUrl) {
-    document.body.style.backgroundImage = `url("${posterUrl}")`;
-    document.body.style.backgroundSize = 'cover';
-    document.body.style.backgroundPosition = 'center';
+    document.documentElement.style.setProperty('--initial-wallpaper', next);
   } else {
-    document.body.style.backgroundImage = '';
+    document.documentElement.style.removeProperty('--initial-wallpaper');
   }
 }
 

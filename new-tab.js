@@ -519,6 +519,11 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
     if (!posterUrl) {
       await browser.storage.local.remove(CACHED_APPLIED_POSTER_URL_KEY);
       await deleteCachedObject(CACHED_APPLIED_POSTER_CACHE_KEY);
+      try {
+        if (window.localStorage) {
+          localStorage.removeItem('cachedAppliedPosterUrl');
+        }
+      } catch (e) {}
       return;
     }
 
@@ -547,6 +552,12 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
     }
 
     await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: storedUrl });
+
+    try {
+      if (window.localStorage) {
+        localStorage.setItem('cachedAppliedPosterUrl', storedUrl);
+      }
+    } catch (e) {}
   } catch (err) {
     console.warn('Failed to cache applied wallpaper poster', err);
   }
@@ -676,7 +687,6 @@ function setBackgroundVideoSources(videoUrl, posterUrl = '') {
       v.load();
       v.currentTime = 0;
     }
-    v.play().catch(() => {});
   });
 }
 
@@ -6538,11 +6548,30 @@ function setupBackgroundVideoCrossfade() {
 
   const [first, second] = videos;
 
+  let revealed = false;
+  const revealAndStartCycle = () => {
+    if (revealed) return;
+    revealed = true;
+    first.classList.add('is-active');
+    startCycle(first, second);
+  };
+
   const startPlayback = async () => {
     try {
       await first.play();
-      first.classList.add('is-active');
-      startCycle(first, second);
+      if (first.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        revealAndStartCycle();
+      } else {
+        const onReady = () => {
+          first.removeEventListener('loadeddata', onReady);
+          first.removeEventListener('canplay', onReady);
+          first.removeEventListener('playing', onReady);
+          revealAndStartCycle();
+        };
+        first.addEventListener('loadeddata', onReady);
+        first.addEventListener('canplay', onReady);
+        first.addEventListener('playing', onReady);
+      }
     } catch (err) {
       console.warn('Autoplay blocked for background video:', err);
     }
@@ -7308,6 +7337,8 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
     clearBookmarkLoadingStates();
     await ensureDailyWallpaper();
     setupBackgroundVideoCrossfade();
+    const type = await getWallpaperTypePreference();
+    await waitForWallpaperReady(currentWallpaperSelection, type);
     await loadAppSettingsFromStorage();
     await loadFolderMetadata();
     syncAppSettingsForm();
@@ -8744,13 +8775,11 @@ function clearBackgroundVideos() {
 function startBackgroundVideos() {
   const videos = Array.from(document.querySelectorAll('.background-video'));
   if (!videos.length) return;
-  videos.forEach((v, idx) => {
+  videos.forEach((v) => {
     v.muted = true;
     v.playsInline = true;
-    if (idx === 0) {
-      v.classList.add('is-active');
-    }
-    v.play().catch(() => {});
+    v.loop = false; // crossfade manages looping
+    v.classList.remove('is-active'); // stay hidden until crossfade activates
   });
 }
 

@@ -6486,23 +6486,63 @@ function setupBackgroundVideoCrossfade() {
   const videos = Array.from(document.querySelectorAll('.background-video'));
   if (videos.length < 2) return;
 
-  // Control loop manually so we can overlap and fade
+  // 1. Initialize: Muted, Preload settings
   videos.forEach((v, idx) => {
-    v.loop = false;
-    v.preload = idx === 0 ? 'auto' : 'metadata'; // avoid eager downloads
+    v.loop = false; 
     v.muted = true;
     v.playsInline = true;
+    
+    // --- FIX: Remove the poster from the video element ---
+    // We rely on the body's CSS background-image for the poster.
+    // Setting it here creates a second layer that flashes black when removed.
+    v.removeAttribute('poster'); 
+    
+    v.preload = idx === 0 ? 'auto' : 'metadata';
   });
 
-  const fadeMs = 1400;   // Duration of the crossfade (slightly longer)
-  const bufferMs = 400;  // Padding before the end to start the fade
-  const safeDurationMs = 15000; // Fallback if metadata is missing
+  const fadeMs = 1400;   // Crossfade duration
+  const bufferMs = 400;  // Start fade this many ms before end
+  const safeDurationMs = 15000;
   const fadeSec = fadeMs / 1000;
   const bufferSec = bufferMs / 1000;
+
+  // --- HELPER: Only show video once it has ACTUALLY advanced ---
+  const playAndFadeIn = async (videoEl, onReady) => {
+    try {
+      // Ensure it starts invisible
+      videoEl.classList.remove('is-active'); 
+      
+      // Start playing blindly (it is invisible, so black frames don't matter)
+      await videoEl.play();
+
+      // 2. Define the check function
+      const checkFrame = () => {
+        // If video has advanced past 0, the black buffer is gone
+        if (videoEl.currentTime > 0) {
+          videoEl.removeEventListener('timeupdate', checkFrame);
+
+          // 3. Reveal the video (Fade in)
+          videoEl.classList.add('is-active');
+          if (onReady) onReady();
+        }
+      };
+
+      // 3. Attach check. If already playing, it fires immediately.
+      if (videoEl.currentTime > 0) {
+        checkFrame();
+      } else {
+        videoEl.addEventListener('timeupdate', checkFrame);
+      }
+
+    } catch (err) {
+      console.warn('Background playback failed:', err);
+    }
+  };
 
   const startCycle = (current, next) => {
     let fading = false;
 
+    // Load the next video file if needed
     const primeNext = () => {
       if (next.preload !== 'auto') {
         next.preload = 'auto';
@@ -6510,24 +6550,22 @@ function setupBackgroundVideoCrossfade() {
       }
     };
 
-    const doFade = async () => {
+    const doFade = () => {
       if (fading) return;
       fading = true;
-      try {
-        primeNext();
-        next.currentTime = 0;
-        await next.play();
-        next.classList.add('is-active');
-        current.classList.remove('is-active');
+      primeNext();
+      next.currentTime = 0;
 
+      // Play next video on top of current one
+      playAndFadeIn(next, () => {
+        // Wait for crossfade to finish before hiding old one
         setTimeout(() => {
+          current.classList.remove('is-active');
           current.pause();
           current.currentTime = 0;
-          startCycle(next, current);
-        }, fadeMs + 50);
-      } catch (err) {
-        console.warn('Background video crossfade failed:', err);
-      }
+          startCycle(next, current); // Loop
+        }, fadeMs + 100);
+      });
     };
 
     const onTimeUpdate = () => {
@@ -6548,39 +6586,17 @@ function setupBackgroundVideoCrossfade() {
 
   const [first, second] = videos;
 
-  let revealed = false;
-  const revealAndStartCycle = () => {
-    if (revealed) return;
-    revealed = true;
-    first.classList.add('is-active');
-    startCycle(first, second);
-  };
-
-  const startPlayback = async () => {
-    try {
-      await first.play();
-      if (first.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        revealAndStartCycle();
-      } else {
-        const onReady = () => {
-          first.removeEventListener('loadeddata', onReady);
-          first.removeEventListener('canplay', onReady);
-          first.removeEventListener('playing', onReady);
-          revealAndStartCycle();
-        };
-        first.addEventListener('loadeddata', onReady);
-        first.addEventListener('canplay', onReady);
-        first.addEventListener('playing', onReady);
-      }
-    } catch (err) {
-      console.warn('Autoplay blocked for background video:', err);
-    }
-  };
+  // --- INITIAL LOAD ---
+  // Ensure we start cleanly
+  first.removeAttribute('poster');
+  second.removeAttribute('poster');
 
   if (first.readyState >= 1) {
-    startPlayback();
+    playAndFadeIn(first, () => startCycle(first, second));
   } else {
-    first.addEventListener('loadedmetadata', startPlayback, { once: true });
+    first.addEventListener('loadedmetadata', () => {
+      playAndFadeIn(first, () => startCycle(first, second));
+    }, { once: true });
   }
 }
 

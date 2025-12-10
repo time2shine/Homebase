@@ -64,7 +64,7 @@ body.ready .dock {
   z-index: -1;
   pointer-events: none;
   opacity: 0;
-  background-color: transparent;
+  background-color: transparent; /* Keep render buffer from flashing black */
   transition: opacity 0.8s linear;
   will-change: opacity;
 }

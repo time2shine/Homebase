@@ -6488,15 +6488,10 @@ function setupBackgroundVideoCrossfade() {
 
   // 1. Initialize: Muted, Preload settings
   videos.forEach((v, idx) => {
-    v.loop = false; 
+    v.loop = false; // We handle looping manually for crossfade
     v.muted = true;
     v.playsInline = true;
-    
-    // --- FIX: Remove the poster from the video element ---
-    // We rely on the body's CSS background-image for the poster.
-    // Setting it here creates a second layer that flashes black when removed.
-    v.removeAttribute('poster'); 
-    
+    // Load first video immediately, others later
     v.preload = idx === 0 ? 'auto' : 'metadata';
   });
 
@@ -6509,15 +6504,12 @@ function setupBackgroundVideoCrossfade() {
   // --- HELPER: Only show video once it has ACTUALLY advanced ---
   const playAndFadeIn = async (videoEl, onReady) => {
     try {
-      // Ensure it starts invisible
-      videoEl.classList.remove('is-active'); 
-      
-      // Start playing blindly (it is invisible, so black frames don't matter)
+      // 1. Start playing (while still invisible/opacity: 0)
       await videoEl.play();
 
       // 2. Define the check function
       const checkFrame = () => {
-        // If video has advanced past 0, the black buffer is gone
+        // If video has advanced past 0, it means frames are rendering
         if (videoEl.currentTime > 0) {
           videoEl.removeEventListener('timeupdate', checkFrame);
 
@@ -6558,13 +6550,13 @@ function setupBackgroundVideoCrossfade() {
 
       // Play next video on top of current one
       playAndFadeIn(next, () => {
-        // Wait for crossfade to finish before hiding old one
+        // Once next video is visible, hide the old one after transition
         setTimeout(() => {
           current.classList.remove('is-active');
           current.pause();
           current.currentTime = 0;
           startCycle(next, current); // Loop
-        }, fadeMs + 100);
+        }, fadeMs + 50);
       });
     };
 
@@ -6587,10 +6579,7 @@ function setupBackgroundVideoCrossfade() {
   const [first, second] = videos;
 
   // --- INITIAL LOAD ---
-  // Ensure we start cleanly
-  first.removeAttribute('poster');
-  second.removeAttribute('poster');
-
+  // Wait for metadata, then play and fade in
   if (first.readyState >= 1) {
     playAndFadeIn(first, () => startCycle(first, second));
   } else {

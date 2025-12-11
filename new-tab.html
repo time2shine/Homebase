@@ -89,53 +89,7 @@
 
   </aside>
 
-  <script>
-    (function() {
-      try {
-        // --- 1. Instant Clock ---
-        const now = new Date();
-        const timeEl = document.getElementById('current-time');
-        const dateEl = document.getElementById('current-date');
-
-        // Default to 12-hour for instant render (JS will correct preference later)
-        timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-        dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-
-        // --- 2. Instant Weather ---
-        const wData = localStorage.getItem('fast-weather');
-        if (wData) {
-          const w = JSON.parse(wData);
-          document.getElementById('weather-city').textContent = w.city;
-          document.getElementById('weather-temp').textContent = w.temp;
-          document.getElementById('weather-desc').textContent = w.desc;
-
-          const iconEl = document.getElementById('weather-icon');
-          iconEl.textContent = w.icon;
-          iconEl.style.fontSize = '3.5em';
-          iconEl.style.lineHeight = '1';
-
-          const wWidget = document.querySelector('.widget-weather');
-          wWidget.classList.remove('widget-hidden');
-          wWidget.classList.add('widget-visible');
-        }
-
-        // --- 3. Instant Quote ---
-        const qData = localStorage.getItem('fast-quote');
-        if (qData) {
-          const q = JSON.parse(qData);
-          document.getElementById('quote-text').textContent = '\"' + q.text + '\"';
-          document.getElementById('quote-author').textContent = q.author ? '- ' + q.author : '';
-
-          const qWidget = document.querySelector('.widget-quote');
-          qWidget.classList.remove('widget-hidden');
-          qWidget.classList.add('widget-visible');
-        }
-
-      } catch (e) {
-        // If anything fails, the main JS will handle it normally a few ms later.
-      }
-    })();
-  </script>
+  <script src="instant_load.js"></script>
 
   <main class="main-content">
 

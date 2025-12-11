@@ -12621,7 +12621,15 @@ function updateWeatherUI(data, cityName, units) {
       city: cityName,
       temp: `${temp}\u00b0${units === 'celsius' ? 'C' : 'F'}`,
       desc: getWeatherDescription(code),
-      icon: getWeatherEmoji(code)
+      icon: getWeatherEmoji(code),
+      // --- NEW: Cache detailed stats for instant load ---
+      pressure: `Pressure: ${pressure}${pressure !== '--' ? ' mmHg' : ''}`,
+      humidity: `Humidity: ${humidity}${humidity !== '--' ? '%' : ''}`,
+      cloudcover: `Cloudcover: ${cloudcover}${cloudcover !== '--' ? '%' : ''}`,
+      precipProb: `Rain Chance: ${precipProb}${precipProb !== '--' ? '%' : ''}`,
+      sunrise: `Sunrise: ${sunrise}`,
+      sunset: `Sunset: ${sunset}`,
+      __timestamp: Date.now()
     };
     localStorage.setItem('fast-weather', JSON.stringify(fastWeather));
   } catch (e) {

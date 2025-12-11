@@ -13164,20 +13164,38 @@ function setupBackgroundVideoCrossfade() {
 
   const playAndFadeIn = async (videoEl, onReady) => {
     try {
+      // 1. Start decoding
       await videoEl.play();
-      const checkFrame = () => {
-        if (videoEl.currentTime > 0) {
-          // Native remove is fine here for normal operation
-          videoEl.removeEventListener('timeupdate', checkFrame);
-          videoEl.classList.add('is-active');
-          if (onReady) onReady();
-        }
+
+      const showVideo = () => {
+        // 2. The Hard Cut: Instantly set opacity to 1
+        videoEl.classList.add('is-active');
+        if (onReady) onReady();
       };
-      if (videoEl.currentTime > 0) {
-        checkFrame();
+
+      // 3. The Safety Check
+      if ('requestVideoFrameCallback' in videoEl) {
+        // Gold standard: Browser notifies us when the frame is ready to paint
+        videoEl.requestVideoFrameCallback(() => {
+          // Double rAF ensures the compositor has picked up the frame
+          requestAnimationFrame(() => {
+            showVideo();
+          });
+        });
       } else {
-        // OPTIMIZATION: Pass { signal } so cleanup() can kill this listener
-        videoEl.addEventListener('timeupdate', checkFrame, { signal });
+        // Fallback for older browsers
+        const checkFrame = () => {
+          if (videoEl.currentTime > 0) {
+            videoEl.removeEventListener('timeupdate', checkFrame);
+            requestAnimationFrame(() => showVideo());
+          }
+        };
+        // Use timeupdate as a fallback trigger
+        if (videoEl.currentTime > 0) {
+          checkFrame();
+        } else {
+          videoEl.addEventListener('timeupdate', checkFrame, { signal });
+        }
       }
     } catch (err) {
       console.warn('Background playback failed:', err);

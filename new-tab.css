@@ -62,8 +62,9 @@ body::before {
   pointer-events: none;
   opacity: 0;
   background-color: transparent; /* Keep render buffer from flashing black */
-  transition: opacity 0.8s linear, filter 0.4s ease, transform 0.4s ease;
-  will-change: opacity;
+
+  /* Keep transform/filter transitions if you use effects like blur on search */
+  transition: filter 0.4s ease, transform 0.4s ease;
 }
 .background-video.is-active {
   opacity: 1;

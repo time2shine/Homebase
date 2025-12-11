@@ -3,7 +3,19 @@
 <head>
   <meta charset="utf-8">
   <title>New Tab</title>
-  <script src="preload.js"></script>
+  <script>
+    (function () {
+      try {
+        let url = '';
+        if (window.localStorage) {
+          url = localStorage.getItem('cachedAppliedPosterUrl') || '';
+        }
+        if (url) {
+          document.documentElement.style.setProperty('--initial-wallpaper', `url("${url}")`);
+        }
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="new-tab.css">
 </head>
 <body class="preload">

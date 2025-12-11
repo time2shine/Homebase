@@ -50,11 +50,6 @@ body::before {
   display: none !important;
 }
 
-/* Show a neutral poster + hide UI until JS hydrates to avoid flashing the old layout */
-body.preload {
-  /* Background handled by body::before */
-}
-
 /* Full-bleed video background */
 .background-video {
   position: fixed;

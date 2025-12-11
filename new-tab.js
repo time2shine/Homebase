@@ -7419,6 +7419,16 @@ async function fetchQuote() {
 
     revealWidget('.widget-quote');
 
+    // Mirror quote to localStorage for instant paint on next load
+    try {
+      localStorage.setItem('fast-quote', JSON.stringify({
+        text: q.content,
+        author: q.author
+      }));
+    } catch (e) {
+      // If localStorage is unavailable, fail silently.
+    }
+
   } catch (err) {
 
     console.error('Quote Error:', err);
@@ -12604,6 +12614,19 @@ function updateWeatherUI(data, cityName, units) {
 
 
   revealWidget('.widget-weather');
+
+  // Mirror simplified weather info to localStorage for instant paint on next load
+  try {
+    const fastWeather = {
+      city: cityName,
+      temp: `${temp}\u00b0${units === 'celsius' ? 'C' : 'F'}`,
+      desc: getWeatherDescription(code),
+      icon: getWeatherEmoji(code)
+    };
+    localStorage.setItem('fast-weather', JSON.stringify(fastWeather));
+  } catch (e) {
+    // If localStorage is unavailable, fail silently; the async path still works.
+  }
 
 }
 

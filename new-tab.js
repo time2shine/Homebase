@@ -12595,7 +12595,9 @@ function updateWeatherUI(data, cityName, units) {
 
     cachedCityName: cityName,
 
-    cachedUnits: units
+    cachedUnits: units,
+
+    weatherFetchedAt: Date.now()
 
   });
 
@@ -13049,18 +13051,29 @@ async function setupWeather() {
 
 
 
-  const data = await browser.storage.local.get(['weatherLat', 'weatherLon', 'weatherCityName', 'weatherUnits']);
+  const data = await browser.storage.local.get([
+    'weatherLat',
+    'weatherLon',
+    'weatherCityName',
+    'weatherUnits',
+    'weatherFetchedAt'
+  ]);
 
   const units = data.weatherUnits || 'celsius';
+  const now = Date.now();
+  const lastFetch = data.weatherFetchedAt || 0;
+  const WEATHER_TTL = 30 * 60 * 1000; // 30 Minutes
 
   if (data.weatherLat && data.weatherLon) {
-
-    fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName);
-
+    // Only fetch if data is older than 30 mins
+    if (now - lastFetch > WEATHER_TTL) {
+      console.log('Weather cache expired. Fetching new data...');
+      fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName);
+    } else {
+      console.log('Using cached weather data.');
+    }
   } else {
-
     startGeolocation();
-
   }
 
 }
@@ -17690,4 +17703,3 @@ function updateSettingsPreview(selection, type = 'video') {
   }
 
 }
-

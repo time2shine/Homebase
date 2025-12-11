@@ -93,8 +93,8 @@ body.search-focus-active #wallpaper-layer {
 body.preload .sidebar,
 body.preload .main-content,
 body.preload .dock {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 body.ready .sidebar,

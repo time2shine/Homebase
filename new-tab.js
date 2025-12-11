@@ -14801,34 +14801,35 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
 
 
-  // 1. Load cached content immediately (no idle delay)
-  loadCachedQuote();
-  loadCachedWeather();
-  setupSearch();
-
-  // 2. Reveal the page ASAP
-  requestAnimationFrame(() => {
-
-    if (document && document.body) {
-
-      document.body.classList.remove('preload');
-
-      document.body.classList.add('ready');
-
-    }
-
-  });
-
-  // 3. Defer heavy network/setup tasks
   runWhenIdle(async () => {
 
+    await loadCachedQuote();
+
+    await loadCachedWeather();
+
     setupQuoteWidget();
+
+    await setupSearch();
 
     await setupWeather();
 
     setupAppLauncher();
 
     fetchQuote();
+
+
+
+    requestAnimationFrame(() => {
+
+      if (document && document.body) {
+
+        document.body.classList.remove('preload');
+
+        document.body.classList.add('ready');
+
+      }
+
+    });
 
   });
 

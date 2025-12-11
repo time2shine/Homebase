@@ -3,19 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>New Tab</title>
-  <script>
-    (function () {
-      try {
-        let url = '';
-        if (window.localStorage) {
-          url = localStorage.getItem('cachedAppliedPosterUrl') || '';
-        }
-        if (url) {
-          document.documentElement.style.setProperty('--initial-wallpaper', `url("${url}")`);
-        }
-      } catch (e) {}
-    })();
-  </script>
+  <script src="preload.js"></script>
   <link rel="stylesheet" href="new-tab.css">
 </head>
 <body class="preload">
@@ -100,6 +88,8 @@
     </div>
 
   </aside>
+
+  <script src="instant_load.js"></script>
 
   <main class="main-content">
 
@@ -1062,12 +1052,11 @@
       </div>
     </div>
   </div>
-
-  <script src="instant_load.js"></script>
+
   <script src="Sortable.min.js" defer></script>
   <script src="icons.js" defer></script>
   <script src="new-tab.js" defer></script>
-</body>
+</body>
 </html>
 
 

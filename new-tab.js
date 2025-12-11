@@ -10033,6 +10033,30 @@ function updateSearchUI(engineId) {
 
   }
 
+  // --- Cache Search State for Instant Load ---
+  try {
+    const iconHtml = currentSearchEngine.icon || `<span style="font-weight:bold; font-size:12px; color:#555;">${currentSearchEngine.name.charAt(0)}</span>`;
+
+    const activeBtnHtml = `
+      <div class="search-engine-list" style="transform: translateX(0px);">
+        <div class="engine-icon-btn active" style="--engine-color: ${currentSearchEngine.color || '#333'};">
+          <span class="tooltip-popup tooltip-top">${currentSearchEngine.name}</span>
+          ${iconHtml}
+        </div>
+      </div>
+    `;
+
+    const fastSearch = {
+      placeholder: searchInput.placeholder,
+      selectorHtml: activeBtnHtml,
+      engineId: currentSearchEngine.id
+    };
+
+    localStorage.setItem('fast-search', JSON.stringify(fastSearch));
+  } catch (e) {
+    // Ignore storage errors
+  }
+
 }
 
 

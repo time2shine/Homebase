@@ -65,7 +65,32 @@
       }
     }
 
-    // --- 3. Instant Quote ---
+    // --- 3. Instant Search ---
+    const sData = localStorage.getItem('fast-search');
+    if (sData) {
+      const s = JSON.parse(sData);
+      const searchWidget = document.querySelector('.widget-search');
+      const searchInput = document.getElementById('search-input');
+      const searchSelector = document.getElementById('search-engine-selector');
+
+      if (searchWidget && searchInput && searchSelector) {
+        if (s.placeholder) {
+          searchInput.placeholder = s.placeholder;
+        }
+
+        if (s.selectorHtml) {
+          searchSelector.innerHTML = s.selectorHtml;
+          searchSelector.style.setProperty('--collapsed-width', '42px');
+          searchSelector.style.setProperty('--expanded-width', '42px');
+        }
+
+        searchWidget.classList.remove('widget-hidden');
+        searchWidget.style.opacity = '1';
+        searchWidget.style.transform = 'translateY(0)';
+      }
+    }
+
+    // --- 4. Instant Quote ---
     const qData = localStorage.getItem('fast-quote');
     if (qData) {
       const q = JSON.parse(qData);

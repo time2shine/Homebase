@@ -6348,7 +6348,7 @@ function createBackButton(parentId) {
 
 
 
-/**
+/** 
 
  * Calculates layout metrics and renders the visible slice.
 
@@ -6362,9 +6362,7 @@ function updateVirtualGrid() {
 
   if (!mainContentEl || !gridEl) return;
   
-  // 1. Calculate Columns (dynamic based on window width)
-  // We use the grid's clientWidth. 
-  // Note: CSS grid 'repeat(auto-fill, 100px)' logic roughly matches floor(width / 105)
+  // 1. Calculate Columns
   const gridWidth = gridEl.clientWidth;
   const cols = Math.floor(gridWidth / itemWidth) || 1;
   virtualizerState.cols = cols;
@@ -6373,24 +6371,23 @@ function updateVirtualGrid() {
   const totalRows = Math.ceil(items.length / cols);
   const totalHeight = totalRows * rowHeight;
   
-  // 3. Determine Scroll Position & Viewport
+  // 3. Determine Scroll Position
   const scrollTop = mainContentEl.scrollTop;
   const viewportHeight = mainContentEl.clientHeight;
-  const bufferRows = 2; // Render 2 rows above/below for smooth scrolling
+  const bufferRows = 2; 
 
   // 4. Calculate Visible Range
   let startRow = Math.floor(scrollTop / rowHeight) - bufferRows;
   let endRow = Math.ceil((scrollTop + viewportHeight) / rowHeight) + bufferRows;
 
-  // Clamp values
   startRow = Math.max(0, startRow);
   endRow = Math.min(totalRows, endRow);
 
   const startIndex = startRow * cols;
   const endIndex = Math.min(items.length, endRow * cols);
 
-  // 5. Optimization: Only render if the range changed
-  if (startIndex === virtualizerState.lastStart && endIndex === virtualizerState.lastEnd) {
+  // 5. Optimization: Only render if range changed (unless it's the first render)
+  if (!virtualizerState.initialRender && startIndex === virtualizerState.lastStart && endIndex === virtualizerState.lastEnd) {
 
     return;
 
@@ -6399,43 +6396,49 @@ function updateVirtualGrid() {
   virtualizerState.lastEnd = endIndex;
 
   // 6. Apply Styles
-  // Set the total height so the scrollbar remains accurate
   gridEl.style.height = `${totalHeight}px`;
-  // Push the items down to where they belong
   gridEl.style.paddingTop = `${startRow * rowHeight}px`;
-  // Reset paddingBottom to fill the rest (optional, but good for flex alignment)
   gridEl.style.paddingBottom = '0px'; 
 
   // 7. Render Slice
   gridEl.innerHTML = '';
   
-  // Re-add Back button if we are at the very top (and it exists in the original list)
-  // Note: For simplicity in virtualization, we treat the Back button as just item[0] 
-  // if you inject it into the array before calling this.
-  
   const visibleItems = items.slice(startIndex, endIndex);
   
-  visibleItems.forEach(node => {
+  visibleItems.forEach((node, index) => {
+    let el = null;
 
-    // Check if it's our special "Back" button object or a real node
     if (node.isBackButton) {
-
-        const backBtn = createBackButton(node.parentId);
-
-        backBtn.classList.add('back-button');
-
-        gridEl.appendChild(backBtn);
-
+        el = createBackButton(node.parentId);
+        el.classList.add('back-button');
     } else if (node.url) {
-
-        gridEl.appendChild(renderBookmark(node));
-
+        el = renderBookmark(node);
     } else if (node.children) {
+        el = renderBookmarkFolder(node);
+    }
 
-        gridEl.appendChild(renderBookmarkFolder(node));
+    if (el) {
+        gridEl.appendChild(el);
 
+        // --- NEW: Apply Entrance Animation (First Render Only) ---
+        if (virtualizerState.initialRender && !appPerformanceModePreference) {
+            const delay = Math.min(index * 25, 500);
+            el.style.animationDelay = `${delay}ms`;
+            el.classList.add('newly-rendered');
+            
+            el.addEventListener('animationend', () => {
+                el.classList.remove('newly-rendered');
+                el.style.animationDelay = '';
+            }, { once: true });
+        }
     }
   });
+
+  // --- NEW: Disable animation for future scrolls ---
+  if (virtualizerState.initialRender) {
+      // Force a reflow if needed, or just flip the flag so scrolling is instant
+      virtualizerState.initialRender = false;
+  }
 
   // *Important*: Re-initialize drag-and-drop ONLY for visible items
   // Note: D&D across large virtual lists is buggy. We usually disable it or limit it.
@@ -6473,6 +6476,9 @@ function initVirtualizer(allItems) {
   virtualizerState.isEnabled = true;
   virtualizerState.lastStart = -1;
   virtualizerState.lastEnd = -1;
+  
+  // --- NEW: Flag to trigger animation only on first paint ---
+  virtualizerState.initialRender = true; 
 
   // Attach Scroll Listener (Throttled via RequestAnimationFrame)
   let ticking = false;

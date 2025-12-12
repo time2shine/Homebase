@@ -366,6 +366,7 @@ body.sidebar-collapsed .collapsed-clock-slot {
   gap: 20px;
   height: 100vh; /* Full height */
   overflow-y: auto; /* Allow main content to scroll */
+  will-change: scroll-position;
 }
 
 /* ======================================= */
@@ -868,6 +869,10 @@ body.sidebar-collapsed .collapsed-clock-slot {
 /* ======================================= */
 
 #bookmarks-grid {
+  /* Virtualization helpers */
+  box-sizing: border-box;
+  position: relative;
+  min-height: 0;
   display: grid;
   
   /* Keep your column settings */
@@ -878,6 +883,7 @@ body.sidebar-collapsed .collapsed-clock-slot {
   
   /* CHANGED: Align items to the start (left) instead of center */
   justify-content: start; 
+  align-content: start;
   
   /* NEW: Match the width and margin of the Search & Tab bars */
   width: 88%; 

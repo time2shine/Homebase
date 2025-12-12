@@ -1749,6 +1749,23 @@ let folderHoverStart = 0;
 
 const FOLDER_HOVER_DELAY_MS = 250; // tweak this (200-400ms) to taste
 
+// --- VIRTUALIZATION GLOBALS ---
+let virtualizerState = {
+  isEnabled: false,
+  items: [],
+  rowHeight: 115, // Approximate height (110px item + 5px gap)
+  itemWidth: 105, // Approximate width (100px item + 5px gap)
+  cols: 1,
+  totalRows: 0,
+  mainContentEl: document.querySelector('.main-content'),
+  gridEl: document.getElementById('bookmarks-grid'),
+  scrollListener: null,
+  resizeObserver: null,
+  // Cache the last rendered range to avoid DOM thrashing
+  lastStart: -1,
+  lastEnd: -1
+};
+
 
 
 // === CONTEXT MENU ELEMENTS ===
@@ -6333,6 +6350,197 @@ function createBackButton(parentId) {
 
 /**
 
+ * Calculates layout metrics and renders the visible slice.
+
+ */
+
+function updateVirtualGrid() {
+
+  if (!virtualizerState.isEnabled || !virtualizerState.items.length) return;
+
+  const { mainContentEl, gridEl, items, rowHeight, itemWidth } = virtualizerState;
+
+  if (!mainContentEl || !gridEl) return;
+  
+  // 1. Calculate Columns (dynamic based on window width)
+  // We use the grid's clientWidth. 
+  // Note: CSS grid 'repeat(auto-fill, 100px)' logic roughly matches floor(width / 105)
+  const gridWidth = gridEl.clientWidth;
+  const cols = Math.floor(gridWidth / itemWidth) || 1;
+  virtualizerState.cols = cols;
+
+  // 2. Calculate Total Height
+  const totalRows = Math.ceil(items.length / cols);
+  const totalHeight = totalRows * rowHeight;
+  
+  // 3. Determine Scroll Position & Viewport
+  const scrollTop = mainContentEl.scrollTop;
+  const viewportHeight = mainContentEl.clientHeight;
+  const bufferRows = 2; // Render 2 rows above/below for smooth scrolling
+
+  // 4. Calculate Visible Range
+  let startRow = Math.floor(scrollTop / rowHeight) - bufferRows;
+  let endRow = Math.ceil((scrollTop + viewportHeight) / rowHeight) + bufferRows;
+
+  // Clamp values
+  startRow = Math.max(0, startRow);
+  endRow = Math.min(totalRows, endRow);
+
+  const startIndex = startRow * cols;
+  const endIndex = Math.min(items.length, endRow * cols);
+
+  // 5. Optimization: Only render if the range changed
+  if (startIndex === virtualizerState.lastStart && endIndex === virtualizerState.lastEnd) {
+
+    return;
+
+  }
+  virtualizerState.lastStart = startIndex;
+  virtualizerState.lastEnd = endIndex;
+
+  // 6. Apply Styles
+  // Set the total height so the scrollbar remains accurate
+  gridEl.style.height = `${totalHeight}px`;
+  // Push the items down to where they belong
+  gridEl.style.paddingTop = `${startRow * rowHeight}px`;
+  // Reset paddingBottom to fill the rest (optional, but good for flex alignment)
+  gridEl.style.paddingBottom = '0px'; 
+
+  // 7. Render Slice
+  gridEl.innerHTML = '';
+  
+  // Re-add Back button if we are at the very top (and it exists in the original list)
+  // Note: For simplicity in virtualization, we treat the Back button as just item[0] 
+  // if you inject it into the array before calling this.
+  
+  const visibleItems = items.slice(startIndex, endIndex);
+  
+  visibleItems.forEach(node => {
+
+    // Check if it's our special "Back" button object or a real node
+    if (node.isBackButton) {
+
+        const backBtn = createBackButton(node.parentId);
+
+        backBtn.classList.add('back-button');
+
+        gridEl.appendChild(backBtn);
+
+    } else if (node.url) {
+
+        gridEl.appendChild(renderBookmark(node));
+
+    } else if (node.children) {
+
+        gridEl.appendChild(renderBookmarkFolder(node));
+
+    }
+  });
+
+  // *Important*: Re-initialize drag-and-drop ONLY for visible items
+  // Note: D&D across large virtual lists is buggy. We usually disable it or limit it.
+  setupGridSortable(gridEl); 
+}
+
+/**
+
+ * Setup listeners for scrolling and resizing
+
+ */
+
+function initVirtualizer(allItems) {
+
+  // Cleanup old listeners
+  if (virtualizerState.scrollListener) {
+
+    virtualizerState.mainContentEl.removeEventListener('scroll', virtualizerState.scrollListener);
+
+  }
+  if (virtualizerState.resizeObserver) {
+
+    virtualizerState.resizeObserver.disconnect();
+
+  }
+
+  if (!virtualizerState.mainContentEl || !virtualizerState.gridEl) {
+
+    return;
+
+  }
+
+  // Set State
+  virtualizerState.items = allItems;
+  virtualizerState.isEnabled = true;
+  virtualizerState.lastStart = -1;
+  virtualizerState.lastEnd = -1;
+
+  // Attach Scroll Listener (Throttled via RequestAnimationFrame)
+  let ticking = false;
+  virtualizerState.scrollListener = () => {
+
+    if (!ticking) {
+
+      window.requestAnimationFrame(() => {
+
+        updateVirtualGrid();
+
+        ticking = false;
+
+      });
+
+      ticking = true;
+
+    }
+  };
+  virtualizerState.mainContentEl.addEventListener('scroll', virtualizerState.scrollListener, { passive: true });
+
+  // Attach Resize Listener
+  virtualizerState.resizeObserver = new ResizeObserver(() => {
+
+    updateVirtualGrid();
+
+  });
+  virtualizerState.resizeObserver.observe(virtualizerState.gridEl);
+
+  // Initial Paint
+  updateVirtualGrid();
+}
+
+/**
+
+ * Disable virtualization and clean up styles
+
+ */
+
+function disableVirtualizer() {
+
+  virtualizerState.isEnabled = false;
+
+  if (!virtualizerState.mainContentEl || !virtualizerState.gridEl) {
+
+    return;
+
+  }
+  if (virtualizerState.scrollListener) {
+
+    virtualizerState.mainContentEl.removeEventListener('scroll', virtualizerState.scrollListener);
+
+  }
+  if (virtualizerState.resizeObserver) {
+
+    virtualizerState.resizeObserver.disconnect();
+
+  }
+  // Reset grid styles
+  virtualizerState.gridEl.style.height = '';
+  virtualizerState.gridEl.style.paddingTop = '';
+  virtualizerState.gridEl.style.paddingBottom = '';
+}
+
+
+
+/**
+
  * Clears and re-renders the bookmarks grid (MODIFIED for Sortable.js)
 
  * @param {object} folderNode - The bookmark folder node to render.
@@ -6347,47 +6555,66 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
 
   const grid = document.getElementById('bookmarks-grid');
 
-  const previousPositions = droppedItemId ? captureGridItemPositions(grid) : null;
+  // Keep virtualization references fresh
+  virtualizerState.gridEl = grid;
+  virtualizerState.mainContentEl = virtualizerState.mainContentEl || document.querySelector('.main-content');
 
   grid.innerHTML = '';
 
-  
-
   // --- Store the current folder node ---
-
   currentGridFolderNode = folderNode;
 
-  
+  // Reset virtualization state/styles for this render
+  disableVirtualizer();
 
-  // 1. Add a "Back" button
+  // 2. Prepare Data List
+  let itemsToRender = [];
 
+  // Add Back Button object to the list if needed
   if (folderNode.id !== rootDisplayFolderId && folderNode.parentId !== rootDisplayFolderId && folderNode.parentId !== '0' && folderNode.parentId !== 'root________') {
 
     const parentNode = findBookmarkNodeById(bookmarkTree[0], folderNode.parentId);
 
     if (parentNode && parentNode.id !== rootDisplayFolderId) {
 
-       // --- NEW: Add 'back-button' class for Sortable.js filter ---
-
-       const backButton = createBackButton(parentNode.id);
-
-       backButton.classList.add('back-button');
-
-       grid.appendChild(backButton);
+       itemsToRender.push({ isBackButton: true, parentId: parentNode.id });
 
     }
 
   }
 
-
-
-  // 2. Render all children (folders and bookmarks)
-
   if (folderNode.children) {
 
-    folderNode.children.forEach(node => {
+    itemsToRender = itemsToRender.concat(folderNode.children);
 
-      if (node.url) {
+  }
+
+  // 3. DECISION: Virtualize or Standard?
+  const VIRTUALIZATION_THRESHOLD = 150; // Enable if > 150 items
+
+  if (itemsToRender.length > VIRTUALIZATION_THRESHOLD && !appPerformanceModePreference) {
+
+    // --- VIRTUAL MODE ---
+    initVirtualizer(itemsToRender);
+    
+    // NOTE: In virtual mode, we skip the "drop-in" animation for performance
+
+  } else {
+
+    // --- STANDARD MODE (Original Logic) ---
+    const previousPositions = droppedItemId ? captureGridItemPositions(grid) : null;
+
+    itemsToRender.forEach(node => {
+
+      if (node.isBackButton) {
+
+        const btn = createBackButton(node.parentId);
+
+        btn.classList.add('back-button');
+
+        grid.appendChild(btn);
+
+      } else if (node.url) {
 
         grid.appendChild(renderBookmark(node));
 
@@ -6399,81 +6626,50 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
 
     });
 
-  }
+    setupGridSortable(grid);
 
+    // Apply Animations (Standard Mode Only)
+    const domItems = grid.querySelectorAll('.bookmark-item');
 
+    if (droppedItemId) {
 
-  // 3. --- NEW: Initialize Sortable.js on the newly rendered grid ---
+      animateGridReorder(domItems, previousPositions);
 
-  setupGridSortable(grid);
+    } else {
 
+      domItems.forEach((item, index) => {
 
+        if (item.classList.contains('back-button') || appPerformanceModePreference) {
 
-  // 4. Apply staggered "drop-in" animation (unmodified)
+          item.style.opacity = 1;
 
-  const items = grid.querySelectorAll('.bookmark-item');
+          return;
 
-  
+        }
 
-  if (droppedItemId) {
+        const delay = Math.min(index * 25, 500);
 
-    animateGridReorder(items, previousPositions);
+        item.style.animationDelay = `${delay}ms`;
 
-  } else {
+        item.classList.add('newly-rendered');
 
-    // This is a folder change or initial load.
+        
 
-    // Do the cool "drop-in" animation.
+        item.addEventListener('animationend', () => {
 
-    items.forEach((item, index) => {
+          item.classList.remove('newly-rendered');
 
-      // (But still skip the 'Back' button)
+          item.style.animationDelay = '';
 
-      if (item.classList.contains('back-button')) {
+        }, { once: true });
 
-        item.style.opacity = 1;
+      });
 
-        return;
-
-      }
-
-
-
-      // Skip animation entirely when performance mode is enabled
-
-      if (appPerformanceModePreference) {
-
-        item.style.opacity = '';
-
-        return;
-
-      }
-
-
-
-      const delay = Math.min(index * 25, 500); // 25ms per item, max 500ms
-
-      item.style.animationDelay = `${delay}ms`;
-
-      item.classList.add('newly-rendered');
-
-      
-
-      item.addEventListener('animationend', () => {
-
-        item.classList.remove('newly-rendered');
-
-        item.style.animationDelay = '';
-
-      }, { once: true });
-
-    });
+    }
 
   }
 
 }
-
-
 
 
 
@@ -7447,9 +7643,7 @@ async function refillQuoteBuffer(tags = []) {
 
 
 async function fetchQuote() {
-
   try {
-
     const data = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY, QUOTE_LAST_FETCH_KEY, 'cachedQuote', 'cachedAuthor', QUOTE_BUFFER_KEY]);
     const freq = data[QUOTE_FREQUENCY_KEY] || 'hourly';
     const lastFetch = data[QUOTE_LAST_FETCH_KEY] || 0;
@@ -7461,10 +7655,21 @@ async function fetchQuote() {
     else if (freq === 'hourly' && (now - lastFetch > 3600 * 1000)) shouldUpdate = true;
     else if (freq === 'daily' && (now - lastFetch > 86400 * 1000)) shouldUpdate = true;
 
+    // Helper to sync instant_load cache
+    const syncFastQuote = (text, author) => {
+      try {
+        localStorage.setItem('fast-quote', JSON.stringify({ text, author }));
+      } catch (e) {}
+    };
+
     if (!shouldUpdate && data.cachedQuote) {
-      quoteText.textContent = `\"${data.cachedQuote}\"`;
+      quoteText.textContent = `"${data.cachedQuote}"`;
       quoteAuthor.textContent = data.cachedAuthor ? `- ${data.cachedAuthor}` : '';
       revealWidget('.widget-quote');
+      
+      // FIX: Sync cache immediately so next tab load matches this one
+      syncFastQuote(data.cachedQuote, data.cachedAuthor);
+      
       runWhenIdle(() => refillQuoteBuffer(tags));
       return;
     }
@@ -7481,9 +7686,13 @@ async function fetchQuote() {
         [QUOTE_LAST_FETCH_KEY]: now
       });
 
-      quoteText.textContent = `\"${nextQuote.content}\"`;
+      quoteText.textContent = `"${nextQuote.content}"`;
       quoteAuthor.textContent = nextQuote.author ? `- ${nextQuote.author}` : '';
       revealWidget('.widget-quote');
+      
+      // FIX: Sync cache
+      syncFastQuote(nextQuote.content, nextQuote.author);
+
       runWhenIdle(() => refillQuoteBuffer(tags));
     } else {
       console.log('Quote buffer empty, fetching live...');
@@ -7493,7 +7702,7 @@ async function fetchQuote() {
       const arr = await res.json();
       nextQuote = Array.isArray(arr) ? arr[0] : arr;
 
-      quoteText.textContent = `\"${nextQuote.content}\"`;
+      quoteText.textContent = `"${nextQuote.content}"`;
       quoteAuthor.textContent = nextQuote.author ? `- ${nextQuote.author}` : '';
       revealWidget('.widget-quote');
 
@@ -7502,6 +7711,9 @@ async function fetchQuote() {
         cachedAuthor: nextQuote.author,
         [QUOTE_LAST_FETCH_KEY]: now
       });
+      
+      // FIX: Sync cache
+      syncFastQuote(nextQuote.content, nextQuote.author);
 
       runWhenIdle(() => refillQuoteBuffer(tags));
     }
@@ -7509,12 +7721,16 @@ async function fetchQuote() {
   } catch (err) {
     console.warn('Quote failed, using fallback', err);
     if (!quoteText.textContent) {
-      quoteText.textContent = '"The only way to do great work is to love what you do."';
-      quoteAuthor.textContent = '- Steve Jobs';
+      const fallbackText = "The only way to do great work is to love what you do.";
+      const fallbackAuthor = "Steve Jobs";
+      quoteText.textContent = `"${fallbackText}"`;
+      quoteAuthor.textContent = `- ${fallbackAuthor}`;
+      
+      // FIX: Sync fallback to avoid flash next time
+      try { localStorage.setItem('fast-quote', JSON.stringify({ text: fallbackText, author: fallbackAuthor })); } catch(e){}
     }
     revealWidget('.widget-quote');
   }
-
 }
 
 

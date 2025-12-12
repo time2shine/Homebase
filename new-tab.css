@@ -5350,3 +5350,82 @@ body.performance-mode .context-submenu {
 .gooey-slider-container {
   height: 45px !important; /* Reduced from 50px */
 }
+
+/* Fix for invisible modals in Performance Mode */
+body.performance-mode .modal-overlay:not(.hidden) {
+  opacity: 1 !important;
+  display: flex !important; /* Ensure flex layout is enforced */
+}
+
+/* ========================================================= */
+/* --- PERFORMANCE MODE: FORCE SOLID WHITE DIALOGS --- */
+/* ========================================================= */
+
+body.performance-mode .dialog-content,
+body.performance-mode .gallery-dialog,
+body.performance-mode .app-settings-dialog,
+body.performance-mode .popover-dialog,
+body.performance-mode #search-engines-dialog,
+body.performance-mode #custom-alert-dialog {
+  background-color: #ffffff !important;
+  color: #0f172a !important; /* Dark Slate Text */
+  border: 1px solid #cbd5e1 !important; /* Light Gray Border */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Fix Labels inside white dialogs */
+body.performance-mode .dialog-content label,
+body.performance-mode .form-group label,
+body.performance-mode .move-folder-row label {
+  color: #334155 !important; /* Dark Gray for labels */
+}
+
+/* Fix Input Fields inside white dialogs */
+body.performance-mode .dialog-input,
+body.performance-mode #location-search-input {
+  background-color: #f1f5f9 !important; /* Light Gray Background */
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important; /* Dark Text */
+}
+
+body.performance-mode .dialog-input:focus {
+  background-color: #ffffff !important;
+  border-color: #3b82f6 !important; /* Blue Focus Ring */
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Fix Secondary Buttons (Cancel, etc.) */
+body.performance-mode .dialog-btn,
+body.performance-mode .gallery-secondary-btn {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+body.performance-mode .dialog-btn:hover,
+body.performance-mode .gallery-secondary-btn:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Fix Primary Buttons (Save, OK) - Keep Blue */
+body.performance-mode .dialog-btn.primary-btn,
+body.performance-mode .gallery-primary-btn {
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
+  border: 1px solid #3b82f6 !important;
+}
+
+body.performance-mode .dialog-btn.primary-btn:hover,
+body.performance-mode .gallery-primary-btn:hover {
+  background-color: #2563eb !important;
+}
+
+/* Fix Close 'X' Buttons */
+body.performance-mode .dialog-close-btn,
+body.performance-mode .gallery-header .close-btn {
+  color: #64748b !important;
+}
+body.performance-mode .dialog-close-btn:hover,
+body.performance-mode .gallery-header .close-btn:hover {
+  color: #0f172a !important;
+}

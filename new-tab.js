@@ -2209,6 +2209,86 @@ let moveModalState = {
 
 
 
+// --- HELPER: ANIMATED MODALS ---
+
+function openModalWithAnimation(modalId, triggerSource, dialogSelector) {
+  const modal = document.getElementById(modalId);
+  const dialog = modal ? modal.querySelector(dialogSelector) : null;
+  if (!modal || !dialog) return;
+
+  // Ensure the overlay is visible for the animation
+  modal.style.display = 'flex';
+
+  // Identify trigger element (string id or DOM element)
+  let btn = null;
+  if (typeof triggerSource === 'string') {
+    btn = document.getElementById(triggerSource);
+  } else if (triggerSource instanceof Element) {
+    btn = triggerSource;
+  }
+
+  // Calculate transform origin
+  if (btn) {
+    const btnRect = btn.getBoundingClientRect();
+    const viewportCenterX = window.innerWidth / 2;
+    const viewportCenterY = window.innerHeight / 2;
+    const btnCenterX = btnRect.left + (btnRect.width / 2);
+    const btnCenterY = btnRect.top + (btnRect.height / 2);
+    const originX = btnCenterX - viewportCenterX;
+    const originY = btnCenterY - viewportCenterY;
+    dialog.style.transformOrigin = `calc(50% + ${originX}px) calc(50% + ${originY}px)`;
+  } else {
+    dialog.style.transformOrigin = 'center center';
+  }
+
+  modal.classList.remove('hidden', 'closing');
+  document.body.classList.add('modal-open');
+
+  const input = dialog.querySelector('input[type=\"text\"]');
+  if (input) setTimeout(() => input.focus(), 50);
+}
+
+function closeModalWithAnimation(modalId, dialogSelector, onCleanup) {
+  const modal = document.getElementById(modalId);
+  const dialog = modal ? modal.querySelector(dialogSelector) : null;
+
+  if (!modal || modal.classList.contains('hidden')) return;
+
+  modal.classList.add('closing');
+
+  const onAnimEnd = () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('closing');
+    if (document.querySelectorAll('.modal-overlay:not(.hidden)').length === 0) {
+      document.body.classList.remove('modal-open');
+    }
+    if (onCleanup) onCleanup();
+    if (dialog) {
+      dialog.removeEventListener('animationend', onAnimEnd);
+      dialog.removeEventListener('animationcancel', onAnimEnd);
+    }
+  };
+
+  if (dialog) {
+    const styles = window.getComputedStyle(dialog);
+    const animationName = styles.animationName || '';
+    const animationDuration = parseFloat(styles.animationDuration) || 0;
+    const animationDelay = parseFloat(styles.animationDelay) || 0;
+
+    if (!animationName || animationName === 'none' || animationDuration + animationDelay === 0) {
+      onAnimEnd();
+      return;
+    }
+
+    dialog.addEventListener('animationend', onAnimEnd, { once: true });
+    dialog.addEventListener('animationcancel', onAnimEnd, { once: true });
+  } else {
+    onAnimEnd();
+  }
+}
+
+
+
 // ===============================================
 
 // --- NEW: ADD BOOKMARK MODAL FUNCTIONS ---
@@ -2251,13 +2331,7 @@ async function showAddBookmarkModal() {
 
   // 2. Show the modal
 
-  addBookmarkModal.style.display = 'flex';
-
-  
-
-  // 3. Focus the name input
-
-  bookmarkNameInput.focus();
+  openModalWithAnimation('add-bookmark-modal', 'quick-add-bookmark', '.dialog-content');
 
 }
 
@@ -2271,13 +2345,11 @@ async function showAddBookmarkModal() {
 
 function hideAddBookmarkModal() {
 
-  addBookmarkModal.style.display = 'none';
-
-  bookmarkNameInput.value = '';
-
-  bookmarkUrlInput.value = '';
-
-  resetBookmarkModalState();
+  closeModalWithAnimation('add-bookmark-modal', '.dialog-content', () => {
+    bookmarkNameInput.value = '';
+    bookmarkUrlInput.value = '';
+    resetBookmarkModalState();
+  });
 
 }
 
@@ -2359,7 +2431,7 @@ function showEditBookmarkModal(bookmarkId) {
 
 
 
-  addBookmarkModal.style.display = 'flex';
+  openModalWithAnimation('add-bookmark-modal', null, '.dialog-content');
 
   bookmarkNameInput.focus();
 
@@ -2633,7 +2705,7 @@ function setupBookmarkModal() {
 
   document.addEventListener('keydown', (e) => {
 
-    if (e.key === 'Escape' && addBookmarkModal.style.display === 'flex') {
+    if (e.key === 'Escape' && addBookmarkModal && !addBookmarkModal.classList.contains('hidden')) {
 
       hideAddBookmarkModal();
 
@@ -2679,13 +2751,7 @@ async function showAddFolderModal() {
 
   // 2. Show the modal
 
-  addFolderModal.style.display = 'flex';
-
-  
-
-  // 3. Focus the name input
-
-  folderNameInput.focus();
+  openModalWithAnimation('add-folder-modal', 'quick-add-folder', '.dialog-content');
 
 }
 
@@ -2699,9 +2765,9 @@ async function showAddFolderModal() {
 
 function hideAddFolderModal() {
 
-  addFolderModal.style.display = 'none';
-
-  folderNameInput.value = '';
+  closeModalWithAnimation('add-folder-modal', '.dialog-content', () => {
+    folderNameInput.value = '';
+  });
 
 }
 
@@ -2863,7 +2929,7 @@ function setupFolderModal() {
 
   document.addEventListener('keydown', (e) => {
 
-    if (e.key === 'Escape' && addFolderModal.style.display === 'flex') {
+    if (e.key === 'Escape' && addFolderModal && !addFolderModal.classList.contains('hidden')) {
 
       hideAddFolderModal();
 
@@ -2994,6 +3060,7 @@ function setupEditFolderModal() {
     modal.classList.remove('hidden');
 
     modal.style.display = 'block';
+    document.body.classList.add('modal-open');
 
     
 
@@ -3239,7 +3306,7 @@ function setupEditFolderModal() {
 
     document.addEventListener('keydown', (e) => {
 
-      if (e.key === 'Escape' && editFolderModal.style.display === 'flex') {
+      if (e.key === 'Escape' && editFolderModal && !editFolderModal.classList.contains('hidden')) {
 
         hideEditFolderModal();
 
@@ -3369,7 +3436,7 @@ function showEditFolderModal(folderNode) {
 
   updateEditPreview();
 
-  editFolderModal.style.display = 'flex';
+  openModalWithAnimation('edit-folder-modal', null, '.dialog-content');
 
 
 
@@ -3391,33 +3458,20 @@ function hideEditFolderModal() {
 
   if (!editFolderModal) return;
 
-
-
-  editFolderModal.style.display = 'none';
-
-  editFolderTargetId = null;
-
-  pendingFolderMeta = {};
-
-  
-
-  // Clear cached references so they refresh next time
-
-  cachedPreviewContainer = null;
-
-  cachedControlsContainer = null;
-
-  
-
-  const previewContainer = document.getElementById('edit-folder-icon-preview');
-
-  if (previewContainer) {
-
-    previewContainer.innerHTML = '';
-
-  }
-
-  if (editFolderNameInput) editFolderNameInput.value = '';
+  closeModalWithAnimation('edit-folder-modal', '.dialog-content', () => {
+    editFolderTargetId = null;
+    pendingFolderMeta = {};
+    
+    // Clear cached references so they refresh next time
+    cachedPreviewContainer = null;
+    cachedControlsContainer = null;
+    
+    const previewContainer = document.getElementById('edit-folder-icon-preview');
+    if (previewContainer) {
+      previewContainer.innerHTML = '';
+    }
+    if (editFolderNameInput) editFolderNameInput.value = '';
+  });
 
 }
 
@@ -4387,7 +4441,7 @@ function setupMoveModal() {
 
   document.addEventListener('keydown', (e) => {
 
-    if (e.key === 'Escape' && moveBookmarkModal.style.display === 'flex') {
+    if (e.key === 'Escape' && moveBookmarkModal && !moveBookmarkModal.classList.contains('hidden')) {
 
       hideMoveBookmarkModal();
 
@@ -4399,7 +4453,7 @@ function setupMoveModal() {
 
   document.addEventListener('click', (e) => {
 
-    if (!moveBookmarkModal || moveBookmarkModal.style.display !== 'flex') return;
+    if (!moveBookmarkModal || moveBookmarkModal.classList.contains('hidden')) return;
 
     if (!moveFolderDropdown) return;
 
@@ -4415,39 +4469,25 @@ function setupMoveModal() {
 
 function hideMoveBookmarkModal() {
 
-  if (moveBookmarkModal) {
+  closeModalWithAnimation('move-bookmark-modal', '.dialog-content', () => {
+    closeMoveFolderDropdown();
 
-    moveBookmarkModal.style.display = 'none';
+    if (moveFolderDropdownMenu) {
+      moveFolderDropdownMenu.innerHTML = '';
+    }
 
-  }
+    if (moveFolderSelectedLabel) {
+      moveFolderSelectedLabel.textContent = 'Select folder';
+    }
 
-  closeMoveFolderDropdown();
-
-  if (moveFolderDropdownMenu) {
-
-    moveFolderDropdownMenu.innerHTML = '';
-
-  }
-
-  if (moveFolderSelectedLabel) {
-
-    moveFolderSelectedLabel.textContent = 'Select folder';
-
-  }
-
-  moveModalState = {
-
-    targetId: null,
-
-    isFolder: false,
-
-    originParentId: null,
-
-    blockedIds: new Set(),
-
-    selectedFolderId: null,
-
-  };
+    moveModalState = {
+      targetId: null,
+      isFolder: false,
+      originParentId: null,
+      blockedIds: new Set(),
+      selectedFolderId: null,
+    };
+  });
 
 }
 
@@ -4567,7 +4607,7 @@ function openMoveBookmarkModal(itemId, isFolder) {
 
   moveDialogTitle.textContent = `Move "${safeTitle}" to:`;
 
-  moveBookmarkModal.style.display = 'flex';
+  openModalWithAnimation('move-bookmark-modal', null, '.dialog-content');
 
   closeMoveFolderDropdown();
 
@@ -8417,9 +8457,7 @@ function openAppSettingsModal() {
 
   setActiveAppSettingsSection('general');
 
-  appSettingsModal.classList.remove('hidden');
-
-  document.body.classList.add('modal-open');
+  openModalWithAnimation('app-settings-modal', 'main-settings-btn', '.app-settings-dialog');
 
 }
 
@@ -8429,11 +8467,9 @@ function closeAppSettingsModal() {
 
   if (!appSettingsModal) return;
 
-  appSettingsModal.classList.add('hidden');
-
-  document.body.classList.remove('modal-open');
-
-  syncAppSettingsForm();
+  closeModalWithAnimation('app-settings-modal', '.app-settings-dialog', () => {
+    syncAppSettingsForm();
+  });
 
 }
 
@@ -8787,7 +8823,7 @@ function setupSearchEnginesModal() {
 
   const closeModal = () => {
 
-    modal.style.display = 'none';
+    closeModalWithAnimation('search-engines-modal', '.dialog-content');
 
   };
 
@@ -8909,7 +8945,7 @@ function setupSearchEnginesModal() {
 
     renderList();
 
-    modal.style.display = 'flex';
+    openModalWithAnimation('search-engines-modal', 'manage-search-engines-btn', '.dialog-content');
 
   });
 
@@ -12734,15 +12770,24 @@ function showCustomAlert(message) {
 
   msgElement.textContent = message;
 
-  modal.style.display = 'flex';
+  openModalWithAnimation('custom-alert-modal', null, '.dialog-content');
 
 
 
   const closeAlert = () => {
 
-    modal.style.display = 'none';
+    closeModalWithAnimation('custom-alert-modal', '.dialog-content', () => {
+      okBtn.removeEventListener('click', closeAlert);
+      modal.removeEventListener('click', onOverlayClick);
+    });
 
-    okBtn.removeEventListener('click', closeAlert);
+  };
+
+
+
+  const onOverlayClick = (e) => {
+
+    if (e.target === modal) closeAlert();
 
   };
 
@@ -12752,11 +12797,7 @@ function showCustomAlert(message) {
 
 
 
-  modal.onclick = (e) => {
-
-    if (e.target === modal) closeAlert();
-
-  };
+  modal.addEventListener('click', onOverlayClick);
 
 
 
@@ -12864,13 +12905,11 @@ function showDeleteConfirm(message, options = {}) {
 
     // ---------- SHOW + HANDLERS ----------
 
-    modal.style.display = 'flex';
+    openModalWithAnimation('confirm-delete-modal', null, '.dialog-content');
 
+    let resolved = false;
 
-
-    const cleanup = () => {
-
-      modal.style.display = 'none';
+    const cleanup = (result) => {
 
       cancelBtn.removeEventListener('click', onCancel);
 
@@ -12878,15 +12917,27 @@ function showDeleteConfirm(message, options = {}) {
 
       if (closeBtn) closeBtn.removeEventListener('click', onCancel);
 
+      resolve(result);
+
+    };
+
+
+
+    const closeWithResult = (result) => {
+
+      if (resolved) return;
+
+      resolved = true;
+
+      closeModalWithAnimation('confirm-delete-modal', '.dialog-content', () => cleanup(result));
+
     };
 
 
 
     const onCancel = () => {
 
-      cleanup();
-
-      resolve(false);
+      closeWithResult(false);
 
     };
 
@@ -12894,9 +12945,7 @@ function showDeleteConfirm(message, options = {}) {
 
     const onOk = () => {
 
-      cleanup();
-
-      resolve(true);
+      closeWithResult(true);
 
     };
 
@@ -13986,6 +14035,12 @@ function closeMaterialPicker() {
     modal.classList.add('hidden');
 
     modal.classList.remove('closing');
+
+    if (document.querySelectorAll('.modal-overlay:not(.hidden)').length === 0) {
+
+      document.body.classList.remove('modal-open');
+
+    }
 
     
 
@@ -15709,9 +15764,7 @@ async function openGalleryModal() {
 
   if (!galleryModal || !galleryGrid) return;
 
-  galleryModal.classList.remove('hidden');
-
-  document.body.classList.add('modal-open');
+  openModalWithAnimation('gallery-modal', 'dock-gallery-btn', '.gallery-dialog');
 
 
 
@@ -15745,7 +15798,7 @@ async function openGalleryModal() {
 
     hydrationPromise.then((hydrated) => {
 
-      if (!hydrated || !galleryModal || galleryModal.classList.contains('hidden')) return;
+      if (!hydrated || !galleryModal || galleryModal.classList.contains('hidden') || galleryModal.classList.contains('closing')) return;
 
       galleryManifest = Array.isArray(hydrated) ? hydrated : manifestList;
 
@@ -15767,9 +15820,7 @@ function closeGalleryModal() {
 
   if (!galleryModal) return;
 
-  galleryModal.classList.add('hidden');
-
-  document.body.classList.remove('modal-open');
+  closeModalWithAnimation('gallery-modal', '.gallery-dialog');
 
 }
 

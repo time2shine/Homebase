@@ -3817,6 +3817,29 @@ input:checked + .slider:before {
   /* These rules center the dialog box when display is set to 'flex' */
   justify-content: center;
   align-items: center;
+
+  /* Default state for overlay fade animation */
+  opacity: 0;
+}
+
+/* Opening Animation (fade in overlay/blur) */
+.modal-overlay:not(.hidden):not(.closing) {
+  animation: overlayFadeIn 0.3s ease-out forwards;
+}
+
+/* Closing Animation (fade out overlay/blur) */
+.modal-overlay.closing {
+  animation: overlayFadeOut 0.2s ease-in forwards;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 /* This is the pop-up box itself */
@@ -3932,6 +3955,33 @@ input:checked + .slider:before {
 .dialog-btn.primary-btn:hover {
   background-color: #1d4ed8;   /* hover state */
   border-color: #1d4ed8;
+}
+
+/* ========================================= */
+/* --- UNIVERSAL POPUP ANIMATIONS --- */
+/* ========================================= */
+
+/* 1. Initial State for ALL dialogs */
+.dialog-content,
+.gallery-dialog,
+.app-settings-dialog {
+  opacity: 0;
+  transform: scale(0);
+  transform-origin: center center; /* Default origin */
+}
+
+/* 2. Opening Animation (Grow) */
+.modal-overlay:not(.hidden):not(.closing) .dialog-content,
+.modal-overlay:not(.hidden):not(.closing) .gallery-dialog,
+.modal-overlay:not(.hidden):not(.closing) .app-settings-dialog {
+  animation: pickerIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* 3. Closing Animation (Shrink) */
+.modal-overlay.closing .dialog-content,
+.modal-overlay.closing .gallery-dialog,
+.modal-overlay.closing .app-settings-dialog {
+  animation: pickerOut 0.2s ease-in forwards;
 }
 
 /* DELETE DIALOG - Cancel button */
@@ -4441,6 +4491,14 @@ body.performance-mode * {
 body.performance-mode * {
   transition: none !important;
   animation: none !important;
+}
+
+body.performance-mode .dialog-content,
+body.performance-mode .gallery-dialog,
+body.performance-mode .app-settings-dialog,
+body.performance-mode .popover-dialog {
+  opacity: 1 !important;
+  transform: scale(1) !important;
 }
 
 /* Fallback backgrounds for readability when blur is gone */

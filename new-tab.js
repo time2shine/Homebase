@@ -7585,32 +7585,6 @@ async function fetchAndCacheQuoteCategories() {
 }
 
 
-async function loadCachedQuote() {
-
-  try {
-
-    const data = await browser.storage.local.get(['cachedQuote', 'cachedAuthor']);
-
-    if (data.cachedQuote) {
-
-      quoteText.textContent = `\"${data.cachedQuote}\"`;
-
-      quoteAuthor.textContent = data.cachedAuthor ? `- ${data.cachedAuthor}` : '';
-
-      revealWidget('.widget-quote');
-
-    }
-
-  } catch (err) {
-
-    console.warn('Could not load cached quote:', err);
-
-  }
-
-}
-
-
-
 // Buffer quotes in advance so they can render instantly even if offline
 async function refillQuoteBuffer(tags = []) {
   try {
@@ -7642,95 +7616,53 @@ async function refillQuoteBuffer(tags = []) {
 
 
 
+// --- Rebuilt Quote Logic: The "Refiller" ---
 async function fetchQuote() {
   try {
-    const data = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY, QUOTE_LAST_FETCH_KEY, 'cachedQuote', 'cachedAuthor', QUOTE_BUFFER_KEY]);
-    const freq = data[QUOTE_FREQUENCY_KEY] || 'hourly';
-    const lastFetch = data[QUOTE_LAST_FETCH_KEY] || 0;
-    const now = Date.now();
-    let tags = data.quoteTags || [DEFAULT_QUOTE_TAG];
+    // 1. Read the state from LocalStorage (Source of Truth)
+    let localStateRaw = localStorage.getItem('fast-quote-state');
+    let localState = localStateRaw ? JSON.parse(localStateRaw) : { current: null, next: null, config: {} };
 
-    let shouldUpdate = false;
-    if (freq === 'always') shouldUpdate = true;
-    else if (freq === 'hourly' && (now - lastFetch > 3600 * 1000)) shouldUpdate = true;
-    else if (freq === 'daily' && (now - lastFetch > 86400 * 1000)) shouldUpdate = true;
+    // 2. Get Settings
+    const stored = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY]);
+    const freq = stored[QUOTE_FREQUENCY_KEY] || 'hourly';
+    const tags = stored.quoteTags || ['inspirational'];
 
-    // Helper to sync instant_load cache
-    const syncFastQuote = (text, author) => {
-      try {
-        localStorage.setItem('fast-quote', JSON.stringify({ text, author }));
-      } catch (e) {}
-    };
+    // 3. Update Config in State
+    localState.config.frequency = freq;
 
-    if (!shouldUpdate && data.cachedQuote) {
-      quoteText.textContent = `"${data.cachedQuote}"`;
-      quoteAuthor.textContent = data.cachedAuthor ? `- ${data.cachedAuthor}` : '';
+    // 4. EMERGENCY RENDER: Only if instant_load failed (Current is empty)
+    if (!localState.current) {
+      const q = await getOnlineQuote(tags);
+      localState.current = q;
+      localState.config.lastShown = Date.now();
+      
+      // Update DOM immediately
+      quoteText.textContent = `"${q.text}"`;
+      quoteAuthor.textContent = q.author ? `- ${q.author}` : '';
       revealWidget('.widget-quote');
-      
-      // FIX: Sync cache immediately so next tab load matches this one
-      syncFastQuote(data.cachedQuote, data.cachedAuthor);
-      
-      runWhenIdle(() => refillQuoteBuffer(tags));
-      return;
     }
 
-    let buffer = data[QUOTE_BUFFER_KEY] || [];
-    let nextQuote = null;
-
-    if (buffer.length > 0) {
-      nextQuote = buffer.shift();
-      await browser.storage.local.set({
-        [QUOTE_BUFFER_KEY]: buffer,
-        cachedQuote: nextQuote.content,
-        cachedAuthor: nextQuote.author,
-        [QUOTE_LAST_FETCH_KEY]: now
-      });
-
-      quoteText.textContent = `"${nextQuote.content}"`;
-      quoteAuthor.textContent = nextQuote.author ? `- ${nextQuote.author}` : '';
-      revealWidget('.widget-quote');
-      
-      // FIX: Sync cache
-      syncFastQuote(nextQuote.content, nextQuote.author);
-
-      runWhenIdle(() => refillQuoteBuffer(tags));
-    } else {
-      console.log('Quote buffer empty, fetching live...');
-      const tagsQuery = tags.join('|');
-      const res = await fetch(`https://api.quotable.io/quotes/random?limit=1&tags=${encodeURIComponent(tagsQuery)}`);
-      if (!res.ok) throw new Error('API Fail');
-      const arr = await res.json();
-      nextQuote = Array.isArray(arr) ? arr[0] : arr;
-
-      quoteText.textContent = `"${nextQuote.content}"`;
-      quoteAuthor.textContent = nextQuote.author ? `- ${nextQuote.author}` : '';
-      revealWidget('.widget-quote');
-
-      await browser.storage.local.set({
-        cachedQuote: nextQuote.content,
-        cachedAuthor: nextQuote.author,
-        [QUOTE_LAST_FETCH_KEY]: now
-      });
-      
-      // FIX: Sync cache
-      syncFastQuote(nextQuote.content, nextQuote.author);
-
-      runWhenIdle(() => refillQuoteBuffer(tags));
+    // 5. THE FIX: Refill the "Next" slot silently
+    if (!localState.next) {
+      const nextQ = await getOnlineQuote(tags);
+      localState.next = nextQ;
     }
 
-  } catch (err) {
-    console.warn('Quote failed, using fallback', err);
-    if (!quoteText.textContent) {
-      const fallbackText = "The only way to do great work is to love what you do.";
-      const fallbackAuthor = "Steve Jobs";
-      quoteText.textContent = `"${fallbackText}"`;
-      quoteAuthor.textContent = `- ${fallbackAuthor}`;
-      
-      // FIX: Sync fallback to avoid flash next time
-      try { localStorage.setItem('fast-quote', JSON.stringify({ text: fallbackText, author: fallbackAuthor })); } catch(e){}
-    }
-    revealWidget('.widget-quote');
+    // 6. Save everything back for next time
+    localStorage.setItem('fast-quote-state', JSON.stringify(localState));
+
+  } catch (e) {
+    console.warn("Quote Logic Error", e);
   }
+}
+
+// Helper to fetch from API
+async function getOnlineQuote(tags) {
+  const res = await fetch(`https://api.quotable.io/quotes/random?limit=1&tags=${encodeURIComponent(tags.join('|'))}`);
+  const data = await res.json();
+  const item = Array.isArray(data) ? data[0] : data;
+  return { text: item.content, author: item.author };
 }
 
 
@@ -15470,8 +15402,6 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
 
   runWhenIdle(async () => {
-
-    await loadCachedQuote();
 
     await loadCachedWeather();
 

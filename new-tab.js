@@ -1766,6 +1766,8 @@ let virtualizerState = {
   lastEnd: -1
 };
 
+let sortableTimeout = null;
+
 
 
 // === CONTEXT MENU ELEMENTS ===
@@ -4441,7 +4443,56 @@ async function handleEditFolderSave() {
 }
 
 
+/**
+ * OPTIMIZATION: Background Cache Warming
+ * Silently pre-loads favicons for all bookmarks when the CPU is idle.
+ * This ensures that when you scroll down, images are already in the
+ * browser cache and render instantly without flashing.
+ */
+function warmFaviconCache(nodes) {
+  const uniqueDomains = new Set();
 
+  const traverse = (list) => {
+    list.forEach(node => {
+      if (node.url) {
+        try {
+          const domain = new URL(node.url).hostname;
+          if (domain && domain.includes('.')) {
+            uniqueDomains.add(domain);
+          }
+        } catch (e) {
+          // Ignore malformed URLs
+        }
+      }
+      if (node.children) traverse(node.children);
+    });
+  };
+
+  traverse(nodes);
+
+  const domains = Array.from(uniqueDomains);
+  let index = 0;
+
+  function processChunk(deadline) {
+    while (index < domains.length && (deadline.timeRemaining() > 0 || deadline.didTimeout)) {
+      const domain = domains[index++];
+      const img = new Image();
+      img.src = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
+    }
+
+    if (index < domains.length) {
+      requestIdleCallback(processChunk);
+    } else {
+      console.log('Favicon cache warming complete.');
+    }
+  }
+
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(processChunk);
+  } else {
+    setTimeout(() => processChunk({ timeRemaining: () => 50, didTimeout: true }), 2000);
+  }
+}
 
 
 // ===============================================
@@ -5864,7 +5915,7 @@ function renderBookmark(bookmarkNode) {
 
   const item = document.createElement('div');
 
-  item.className = 'bookmark-item';
+  item.className = 'bookmark-item back-button';
 
 
 
@@ -5911,6 +5962,7 @@ function renderBookmark(bookmarkNode) {
   // 3. Create and Load Image
 
   const imgIcon = document.createElement('img');
+  imgIcon.decoding = 'async';
 
   let domain = '';
 
@@ -6400,22 +6452,6 @@ function createBackButton(parentId) {
 
   `;
 
-  
-
-  item.addEventListener('click', (e) => {
-
-    e.preventDefault();
-
-    const parentNode = findBookmarkNodeById(bookmarkTree[0], parentId);
-
-    if (parentNode) {
-
-      renderBookmarkGrid(parentNode);
-
-    }
-
-  });
-
   return item;
 
 }
@@ -6476,43 +6512,50 @@ function updateVirtualGrid() {
   gridEl.style.paddingTop = `${startRow * rowHeight}px`;
   gridEl.style.paddingBottom = '0px'; 
 
-  // 7. Render Slice
-  gridEl.innerHTML = '';
-  
+  // 7. Render Slice (DOM recycling)
+  const existingNodes = Array.from(gridEl.children);
   const visibleItems = items.slice(startIndex, endIndex);
-  
-  visibleItems.forEach((node, index) => {
-    let el = null;
 
-    if (node.isBackButton) {
-        el = createBackButton(node.parentId);
-        el.classList.add('back-button');
-    } else if (node.url) {
-        el = renderBookmark(node);
-    } else if (node.children) {
-        el = renderBookmarkFolder(node);
+  visibleItems.forEach((node, index) => {
+    let el = existingNodes[index];
+    const neededType = node.isBackButton ? 'back' : (node.children ? 'folder' : 'bookmark');
+    const existingType = el ? el.dataset.recyclingType : null;
+
+    if (el && existingType === neededType) {
+      updateElementData(el, node);
+    } else {
+      const newEl = createNodeForVirtualizer(node);
+      newEl.dataset.recyclingType = neededType;
+
+      if (virtualizerState.initialRender && !appPerformanceModePreference && appGridAnimationEnabledPreference) {
+        const delay = index * 15;
+        newEl.style.animationDelay = `${delay}ms`;
+        newEl.classList.add('newly-rendered');
+
+        newEl.addEventListener('animationend', () => {
+          newEl.classList.remove('newly-rendered');
+          newEl.style.animationDelay = '';
+        }, { once: true });
+      }
+
+      if (el) {
+        gridEl.replaceChild(newEl, el);
+      } else {
+        gridEl.appendChild(newEl);
+      }
+
+      el = newEl;
     }
 
     if (el) {
-        gridEl.appendChild(el);
-
-        // --- NEW: Apply Entrance Animation (First Render Only) ---
-        if (virtualizerState.initialRender && !appPerformanceModePreference && appGridAnimationEnabledPreference) {
-            
-            // OPTIMIZED: No cap, but faster speed (15ms).
-            // This prevents the "wall of icons" effect while keeping it snappy.
-            const delay = index * 15;
-            
-            el.style.animationDelay = `${delay}ms`;
-            el.classList.add('newly-rendered');
-            
-            el.addEventListener('animationend', () => {
-                el.classList.remove('newly-rendered');
-                el.style.animationDelay = '';
-            }, { once: true });
-        }
+      el.dataset.recyclingType = neededType;
     }
   });
+
+  // 8. Trim excess DOM nodes
+  while (gridEl.children.length > visibleItems.length) {
+    gridEl.lastChild.remove();
+  }
 
   // --- NEW: Disable animation for future scrolls ---
   if (virtualizerState.initialRender) {
@@ -6520,9 +6563,47 @@ function updateVirtualGrid() {
       virtualizerState.initialRender = false;
   }
 
-  // *Important*: Re-initialize drag-and-drop ONLY for visible items
-  // Note: D&D across large virtual lists is buggy. We usually disable it or limit it.
-  setupGridSortable(gridEl); 
+  // *Important*: Re-initialize drag-and-drop ONLY for visible items (debounced)
+  if (sortableTimeout) clearTimeout(sortableTimeout);
+  sortableTimeout = setTimeout(() => {
+      setupGridSortable(gridEl);
+      sortableTimeout = null;
+  }, 150);
+}
+
+function createNodeForVirtualizer(node) {
+  if (node.isBackButton) return createBackButton(node.parentId);
+  if (node.children) return renderBookmarkFolder(node);
+  return renderBookmark(node);
+}
+
+function updateElementData(el, node) {
+  const recyclingType = node.isBackButton ? 'back' : (node.children ? 'folder' : 'bookmark');
+  el.dataset.recyclingType = recyclingType;
+  el.dataset.bookmarkId = node.id || '';
+
+  if (node.isBackButton) {
+    el.dataset.backTargetId = node.parentId || '';
+    delete el.dataset.isFolder;
+  } else {
+    el.dataset.isFolder = node.children ? 'true' : 'false';
+  }
+
+  const span = el.querySelector('span');
+  if (span) {
+    span.textContent = node.title || 'Back';
+  }
+
+  const iconWrapper = el.querySelector('.bookmark-icon-wrapper');
+  if (iconWrapper) {
+    if (node.isBackButton) return;
+
+    const tempEl = node.children ? renderBookmarkFolder(node) : renderBookmark(node);
+    const newIcon = tempEl.querySelector('.bookmark-icon-wrapper');
+    if (newIcon) {
+      iconWrapper.replaceWith(newIcon);
+    }
+  }
 }
 
 /**
@@ -6601,6 +6682,11 @@ function initVirtualizer(allItems) {
 function disableVirtualizer() {
 
   virtualizerState.isEnabled = false;
+
+  if (sortableTimeout) {
+    clearTimeout(sortableTimeout);
+    sortableTimeout = null;
+  }
 
   if (!virtualizerState.mainContentEl || !virtualizerState.gridEl) {
 
@@ -7173,34 +7259,6 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
 
 
-    tabButton.addEventListener('click', () => {
-
-      // Update active styles
-
-      bookmarkFolderTabsContainer.querySelectorAll('.bookmark-folder-tab').forEach(btn => {
-
-        btn.classList.remove('active');
-
-      });
-
-      tabButton.classList.add('active');
-
-
-
-      // Always use the *latest* node from the current bookmarkTree
-
-      const freshNode = findBookmarkNodeById(bookmarkTree[0], folderNode.id) || folderNode;
-
-
-
-      renderBookmarkGrid(freshNode);
-
-      activeHomebaseFolderId = folderNode.id;
-
-    });
-
-
-
     tabButton.addEventListener('contextmenu', (e) => {
 
       e.preventDefault();
@@ -7260,6 +7318,29 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
     bookmarkFolderTabsContainer.appendChild(tabButton);
 
   });
+
+  if (bookmarkFolderTabsContainer._tabClickHandler) {
+    bookmarkFolderTabsContainer.removeEventListener('click', bookmarkFolderTabsContainer._tabClickHandler);
+  }
+
+  const tabClickHandler = (e) => {
+    const tabButton = e.target.closest('.bookmark-folder-tab');
+    if (!tabButton) return;
+
+    document.querySelectorAll('.bookmark-folder-tab').forEach(btn => btn.classList.remove('active'));
+    tabButton.classList.add('active');
+
+    const folderId = tabButton.dataset.folderId;
+    const freshNode = findBookmarkNodeById(bookmarkTree[0], folderId);
+    
+    if (freshNode) {
+      renderBookmarkGrid(freshNode);
+      activeHomebaseFolderId = freshNode.id;
+    }
+  };
+
+  bookmarkFolderTabsContainer.addEventListener('click', tabClickHandler);
+  bookmarkFolderTabsContainer._tabClickHandler = tabClickHandler;
 
 
 
@@ -7564,6 +7645,9 @@ async function loadBookmarks(activeFolderId = null) {
     const tree = await getBookmarkTree(true);
 
     processBookmarks(tree, activeFolderId);
+
+    // Warm favicon cache in the background so images are instant when rendered
+    runWhenIdle(() => warmFaviconCache(tree));
 
   } catch (err) {
 
@@ -15823,7 +15907,14 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
       if (isGridDragging || item.classList.contains('sortable-chosen')) return;
 
-      if (item.classList.contains('back-button')) return;
+      if (item.classList.contains('back-button')) {
+        e.preventDefault();
+        const parentId = item.dataset.backTargetId;
+        if (!bookmarkTree || !bookmarkTree[0]) return;
+        const parentNode = findBookmarkNodeById(bookmarkTree[0], parentId);
+        if (parentNode) renderBookmarkGrid(parentNode);
+        return;
+      }
 
       e.preventDefault();
 

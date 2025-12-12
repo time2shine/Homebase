@@ -1936,6 +1936,78 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
 
   const APP_CONTAINER_NEW_TAB_KEY = 'appContainerNewTab';
 
+  const APP_GRID_ANIMATION_KEY = 'appGridAnimationPref';
+  const APP_GRID_ANIMATION_SPEED_KEY = 'appGridAnimationSpeed';
+  const APP_GRID_ANIMATION_ENABLED_KEY = 'appGridAnimationEnabled';
+
+// Animation Dictionary (Name -> CSS Keyframes)
+const GRID_ANIMATIONS = {
+  'default': { 
+    name: 'Default (Drop In)', 
+    css: '0% { opacity: 0; transform: scale(0.98) translateY(-25px); } 100% { opacity: 1; transform: scale(1) translateY(0); }' 
+  },
+  'pop': { 
+    name: 'Pop (Bouncy)', 
+    css: '0% { opacity: 0; transform: scale(0.5); } 60% { opacity: 1; transform: scale(1.05); } 100% { opacity: 1; transform: scale(1); }' 
+  },
+  'glide-up': { 
+    name: 'Glide Up', 
+    css: 'from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); }' 
+  },
+  'glide-down': { 
+    name: 'Glide Down', 
+    css: '0% { transform: translateY(-100px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; }' 
+  },
+  'slide-right': { 
+    name: 'Slide Right', 
+    css: '0% { transform: translateX(-50px); opacity: 0; } 100% { transform: translateX(0); opacity: 1; }' 
+  },
+  'slide-left': { 
+    name: 'Slide Left', 
+    css: '0% { transform: translateX(50px); opacity: 0; } 100% { transform: translateX(0); opacity: 1; }' 
+  },
+  'scale-in-center': { 
+    name: 'Scale In', 
+    css: '0% { transform: scale(0); opacity: 1; } 100% { transform: scale(1); opacity: 1; }' 
+  },
+  'swirl-in': { 
+    name: 'Swirl In', 
+    css: '0% { transform: rotate(-540deg) scale(0); opacity: 0; } 100% { transform: rotate(0) scale(1); opacity: 1; }' 
+  },
+  'flip-hor': { 
+    name: 'Flip Horizontal', 
+    css: '0% { transform: rotateX(80deg); opacity: 0; } 100% { transform: rotateX(0); opacity: 1; }' 
+  },
+  'flip-ver': { 
+    name: 'Flip Vertical', 
+    css: '0% { transform: rotateY(-80deg); opacity: 0; } 100% { transform: rotateY(0); opacity: 1; }' 
+  },
+  'swing-in': { 
+    name: 'Swing In', 
+    css: '0% { transform: rotateX(-100deg); transform-origin: top; opacity: 0; } 100% { transform: rotateX(0deg); transform-origin: top; opacity: 1; }' 
+  },
+  'puff-in': { 
+    name: 'Puff In', 
+    css: '0% { transform: scale(2); filter: blur(4px); opacity: 0; } 100% { transform: scale(1); filter: blur(0px); opacity: 1; }' 
+  },
+  'blur-fade': { 
+    name: 'Blur Fade', 
+    css: '0% { opacity: 0; filter: blur(10px); transform: scale(0.95); } 100% { opacity: 1; filter: blur(0); transform: scale(1); }' 
+  },
+  'elastic': { 
+    name: 'Elastic Snap', 
+    css: '0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.1); opacity: 1; } 70% { transform: scale(0.9); } 100% { transform: scale(1); opacity: 1; }' 
+  },
+  'roll-in': { 
+    name: 'Roll In', 
+    css: '0% { transform: translateX(-100px) rotate(-540deg); opacity: 0; } 100% { transform: translateX(0) rotate(0deg); opacity: 1; }' 
+  },
+  'tilt-in': { 
+    name: 'Tilt In', 
+    css: '0% { transform: rotateY(30deg) translateY(-100px) skewY(-30deg); opacity: 0; } 100% { transform: rotateY(0deg) translateY(0) skewY(0deg); opacity: 1; }' 
+  }
+};
+
 // Map to store per-folder customization (id -> { color, icon })
 
 const FOLDER_META_KEY = 'folderCustomMetadata';
@@ -2003,6 +2075,10 @@ let appBookmarkTextBgBlurPreference = 4;
 let appBookmarkFallbackColorPreference = '#00b8d4';
 
 let appBookmarkFolderColorPreference = '#FFFFFF';
+
+let appGridAnimationPreference = 'default';
+let appGridAnimationSpeedPreference = 0.3;
+let appGridAnimationEnabledPreference = false;
 
 let appPerformanceModePreference = false;
 
@@ -6421,8 +6497,12 @@ function updateVirtualGrid() {
         gridEl.appendChild(el);
 
         // --- NEW: Apply Entrance Animation (First Render Only) ---
-        if (virtualizerState.initialRender && !appPerformanceModePreference) {
-            const delay = Math.min(index * 25, 500);
+        if (virtualizerState.initialRender && !appPerformanceModePreference && appGridAnimationEnabledPreference) {
+            
+            // OPTIMIZED: No cap, but faster speed (15ms).
+            // This prevents the "wall of icons" effect while keeping it snappy.
+            const delay = index * 15;
+            
             el.style.animationDelay = `${delay}ms`;
             el.classList.add('newly-rendered');
             
@@ -7969,6 +8049,77 @@ function applyPerformanceMode(enabled) {
 
 
 
+/**
+ * Injects the chosen animation keyframes into the page style.
+ * This overrides the default @keyframes item-fade-in in new-tab.css
+ */
+function applyGridAnimation(animationKey) {
+  appGridAnimationPreference = animationKey || 'default';
+  const animData = GRID_ANIMATIONS[appGridAnimationPreference] || GRID_ANIMATIONS['default'];
+  
+  let styleEl = document.getElementById('dynamic-grid-animation');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'dynamic-grid-animation';
+    document.head.appendChild(styleEl);
+  }
+
+  styleEl.innerHTML = `
+    @keyframes item-fade-in {
+      ${animData.css}
+    }
+  `;
+}
+
+async function loadGridAnimationPref() {
+  try {
+    const stored = await browser.storage.local.get(APP_GRID_ANIMATION_KEY);
+    const pref = stored[APP_GRID_ANIMATION_KEY];
+    applyGridAnimation(pref);
+  } catch (e) {
+    applyGridAnimation('default');
+  }
+}
+
+function applyGridAnimationEnabled(enabled) {
+  appGridAnimationEnabledPreference = enabled;
+  document.body.classList.toggle('grid-animation-enabled', enabled);
+  updateGridAnimationSettingsUI();
+}
+
+function applyGridAnimationSpeed(seconds) {
+  // Ensure it's a valid number
+  const validSeconds = parseFloat(seconds) || 0.3;
+  appGridAnimationSpeedPreference = validSeconds;
+  
+  // Update CSS Variable globally
+  document.documentElement.style.setProperty('--grid-animation-duration', `${validSeconds}s`);
+  
+  // Update Settings UI text if visible
+  const label = document.getElementById('app-grid-animation-speed-value');
+  const slider = document.getElementById('app-grid-animation-speed-slider');
+  
+  if (label) label.textContent = `${validSeconds}s`;
+  if (slider) slider.value = validSeconds;
+}
+
+function updateGridAnimationSettingsUI() {
+  const container = document.getElementById('grid-animation-sub-settings');
+  const toggle = document.getElementById('app-grid-animation-toggle');
+  
+  if (toggle) {
+    toggle.checked = appGridAnimationEnabledPreference;
+  }
+  
+  if (container) {
+    if (appGridAnimationEnabledPreference) {
+      container.classList.add('expanded');
+    } else {
+      container.classList.remove('expanded');
+    }
+  }
+}
+
 function applyBookmarkTextBg(enabled) {
 
   appBookmarkTextBgPreference = enabled;
@@ -8171,9 +8322,16 @@ async function loadAppSettingsFromStorage() {
 
       APP_CONTAINER_MODE_KEY,
 
-      APP_CONTAINER_NEW_TAB_KEY
+      APP_CONTAINER_NEW_TAB_KEY,
+
+      APP_GRID_ANIMATION_ENABLED_KEY,
+
+      APP_GRID_ANIMATION_SPEED_KEY
 
     ]);
+
+    // Load animation pref
+    await loadGridAnimationPref(); 
 
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
 
@@ -8224,6 +8382,14 @@ async function loadAppSettingsFromStorage() {
     appBookmarkFallbackColorPreference = stored[APP_BOOKMARK_FALLBACK_COLOR_KEY] || '#00b8d4';
 
     appBookmarkFolderColorPreference = stored[APP_BOOKMARK_FOLDER_COLOR_KEY] || '#FFFFFF';
+
+    // Load Animation enabled toggle (default false)
+    const animEnabled = stored[APP_GRID_ANIMATION_ENABLED_KEY] === true;
+    applyGridAnimationEnabled(animEnabled);
+
+    // Load Animation Speed
+    const savedSpeed = stored[APP_GRID_ANIMATION_SPEED_KEY];
+    applyGridAnimationSpeed(savedSpeed !== undefined ? savedSpeed : 0.3);
 
     appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
 
@@ -8786,11 +8952,28 @@ function syncAppSettingsForm() {
 
   }
 
+  // Sync Animation Speed slider/label
+  const speedSlider = document.getElementById('app-grid-animation-speed-slider');
+  const speedLabel = document.getElementById('app-grid-animation-speed-value');
+  if (speedSlider) {
+    speedSlider.value = appGridAnimationSpeedPreference;
+  }
+  if (speedLabel) {
+    speedLabel.textContent = `${appGridAnimationSpeedPreference}s`;
+  }
+
+  // Sync Animation Toggle/Sub-settings UI
+  updateGridAnimationSettingsUI();
+
   const perfToggle = document.getElementById('app-performance-mode-toggle');
 
   if (perfToggle) {
 
     perfToggle.checked = appPerformanceModePreference;
+
+    // Toggle visibility of animation settings based on performance mode
+    // (CSS also handles this via body.performance-mode selector)
+    perfToggle.addEventListener('change', () => {});
 
   }
 
@@ -9056,6 +9239,22 @@ function setupAppSettingsModal() {
 
   }
 
+  // NEW: Grid Animation Toggle Listener
+  const animToggle = document.getElementById('app-grid-animation-toggle');
+  if (animToggle) {
+    animToggle.addEventListener('change', (e) => {
+      applyGridAnimationEnabled(e.target.checked);
+    });
+  }
+
+  // NEW: Animation Speed Slider Listener
+  const speedSlider = document.getElementById('app-grid-animation-speed-slider');
+  if (speedSlider) {
+    speedSlider.addEventListener('input', (e) => {
+      applyGridAnimationSpeed(e.target.value);
+    });
+  }
+
   if (appSettingsSaveBtn) {
 
     appSettingsSaveBtn.addEventListener('click', async () => {
@@ -9091,6 +9290,10 @@ function setupAppSettingsModal() {
       const nextOpacity = parseFloat(document.getElementById('app-bookmark-text-opacity-slider')?.value || 0.65);
 
       const nextBlur = parseInt(document.getElementById('app-bookmark-text-blur-slider')?.value || 4, 10);
+
+      const nextGridAnimEnabled = document.getElementById('app-grid-animation-toggle')?.checked || false;
+
+      const nextSpeed = parseFloat(document.getElementById('app-grid-animation-speed-slider')?.value || 0.3);
 
       const colorTrigger = document.getElementById('app-bookmark-fallback-color-trigger');
 
@@ -9158,6 +9361,8 @@ function setupAppSettingsModal() {
 
       applyBookmarkTextBgColor(nextTextBgColor);
 
+      applyGridAnimationSpeed(nextSpeed);
+
       appBookmarkFallbackColorPreference = nextFallbackColor;
 
       appBookmarkFolderColorPreference = nextFolderColor;
@@ -9173,6 +9378,8 @@ function setupAppSettingsModal() {
       applyBookmarkFolderColor(nextFolderColor);
 
       applyPerformanceMode(nextPerformanceMode);
+
+      applyGridAnimationEnabled(nextGridAnimEnabled);
 
       updateTime();
 
@@ -9213,6 +9420,10 @@ function setupAppSettingsModal() {
           [APP_BOOKMARK_FALLBACK_COLOR_KEY]: nextFallbackColor,
 
           [APP_BOOKMARK_FOLDER_COLOR_KEY]: nextFolderColor,
+
+          [APP_GRID_ANIMATION_ENABLED_KEY]: nextGridAnimEnabled,
+
+          [APP_GRID_ANIMATION_SPEED_KEY]: nextSpeed,
 
           [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
 
@@ -9276,6 +9487,111 @@ function setupAppSettingsModal() {
 
   });
 
+}
+
+
+
+/**
+ * Setup Animation Modal Logic (Updated for Hover Previews)
+ */
+function setupAnimationSettings() {
+  const modal = document.getElementById('animation-settings-modal');
+  const openBtn = document.getElementById('app-configure-animation-btn');
+  const closeBtn = document.getElementById('animation-settings-close-btn');
+  const cancelBtn = document.getElementById('animation-settings-cancel-btn');
+  const saveBtn = document.getElementById('animation-settings-save-btn');
+  const list = document.getElementById('animation-list');
+  const previewItems = document.querySelectorAll('.animation-preview-item');
+
+  // Track the actual "saved" or "clicked" selection
+  let selectedKey = appGridAnimationPreference;
+
+  const closeModal = () => {
+    closeModalWithAnimation('animation-settings-modal', '.dialog-content', () => {
+      // Restore the real selection if the user hovered over others but didn't save
+      if (appGridAnimationPreference !== selectedKey) {
+        applyGridAnimation(appGridAnimationPreference);
+      }
+    });
+  };
+
+  const playPreview = () => {
+    previewItems.forEach((item, index) => {
+      // Reset animation to force a replay
+      item.style.animation = 'none';
+      item.offsetHeight; /* trigger reflow */
+      
+      // Apply new animation
+      const delay = index * 100;
+      item.style.animation = `item-fade-in 0.6s cubic-bezier(0.25, 0.8, 0.4, 1) ${delay}ms forwards`;
+    });
+  };
+
+  if (openBtn) {
+    openBtn.addEventListener('click', () => {
+      selectedKey = appGridAnimationPreference;
+      
+      // Build List
+      list.innerHTML = '';
+      Object.entries(GRID_ANIMATIONS).forEach(([key, data]) => {
+        const btn = document.createElement('div');
+        btn.className = 'animation-option';
+        btn.textContent = data.name;
+        if (key === selectedKey) btn.classList.add('selected');
+        
+        // 1. Hover: Preview immediately without selecting
+        btn.addEventListener('mouseenter', () => {
+          applyGridAnimation(key); // Temporarily swap global CSS
+          playPreview();           // Run the visual test
+        });
+
+        // 2. Hover Out: Revert to the actually selected item
+        // This ensures if you mouse away, the page doesn't stay stuck on the previewed one
+        btn.addEventListener('mouseleave', () => {
+          applyGridAnimation(selectedKey);
+        });
+
+        // 3. Click: Confirm Selection (Highlight Blue)
+        btn.addEventListener('click', () => {
+          list.querySelectorAll('.animation-option').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          selectedKey = key;
+          
+          // Re-apply to lock it in as the "restore point" for mouseleave
+          applyGridAnimation(selectedKey);
+          playPreview(); 
+        });
+        
+        list.appendChild(btn);
+      });
+
+      openModalWithAnimation('animation-settings-modal', 'app-configure-animation-btn', '.dialog-content');
+      playPreview();
+    });
+  }
+
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      appGridAnimationPreference = selectedKey;
+      await browser.storage.local.set({ [APP_GRID_ANIMATION_KEY]: selectedKey });
+      
+      // Update actual grid immediately if visible
+      if (currentGridFolderNode) {
+        const node = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+        if (node) renderBookmarkGrid(node);
+      }
+      
+      closeModalWithAnimation('animation-settings-modal', '.dialog-content');
+    });
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', () => {
+    // Revert visually to the original preference stored in settings
+    loadGridAnimationPref(); 
+    closeModal();
+  });
+  if (modal) modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
 }
 
 
@@ -15370,6 +15686,8 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
   setupDockNavigation();
 
   setupAppSettingsModal();
+
+  setupAnimationSettings();
 
   setupMaterialColorPicker();
 

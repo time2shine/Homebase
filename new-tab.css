@@ -854,14 +854,25 @@ body.sidebar-collapsed .collapsed-clock-slot {
   }
 }
 
-/* This class will be added by JS in renderBookmarkGrid 
-  to animate items as they load.
-*/
-.bookmark-item.newly-rendered {
-  /* Start items as transparent before animation */
+/* --- Grid Animation Logic --- */
+
+/* 1. ENABLED: Use the variable duration (defaulting to 0.3s) */
+body.grid-animation-enabled .bookmark-item.newly-rendered {
   opacity: 0; 
-  /* Apply the animation */
-  animation: item-fade-in 0.6s cubic-bezier(0.25, 0.8, 0.4, 1) forwards;
+  animation: item-fade-in var(--grid-animation-duration, 0.3s) cubic-bezier(0.25, 0.8, 0.4, 1) forwards;
+}
+
+/* 2. DISABLED: Force instant appearance (no animation) */
+body:not(.grid-animation-enabled) .bookmark-item.newly-rendered {
+  opacity: 1 !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Hide animations entirely in Performance Mode (Redundant but safe) */
+body.performance-mode .bookmark-item.newly-rendered {
+  animation: none !important;
+  opacity: 1 !important;
 }
 
 /* ======================================= */
@@ -3991,6 +4002,11 @@ input:checked + .slider:before {
   opacity: 0;
 }
 
+/* Fix: Ensure Animation Modal sits ABOVE the main settings modal */
+#animation-settings-modal {
+  z-index: 2100 !important;
+}
+
 /* Opening Animation (fade in overlay/blur) */
 .modal-overlay:not(.hidden):not(.closing) {
   animation: overlayFadeIn 0.3s ease-out forwards;
@@ -4733,10 +4749,10 @@ body.performance-mode.bookmark-text-bg-enabled .bookmark-item span {
   border: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 
-/* Ensure animating items are visible if animations are disabled */
-body.performance-mode .bookmark-item.newly-rendered {
-  opacity: 1 !important;
-  animation: none !important;
+/* Hide Animation settings in Performance Mode */
+body.performance-mode #app-grid-animation-toggle-row,
+body.performance-mode #grid-animation-sub-settings {
+  display: none !important;
 }
 
 body.performance-mode .dock {
@@ -5518,6 +5534,98 @@ body.performance-mode .context-submenu {
 }
 .gooey-slider-container {
   height: 45px !important; /* Reduced from 50px */
+}
+
+/* Animation Preview Box */
+.animation-preview-container {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+
+.animation-preview-item {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+/* Animation List Items */
+.animation-option {
+  padding: 10px 12px;
+  border-radius: 8px;
+  
+  /* NEW: Default background for visibility */
+  background: rgba(255, 255, 255, 0.08); 
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.95em;
+  font-weight: 500;
+}
+
+.animation-option:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.animation-option.selected {
+  background: #2ca5ff !important; /* Force Blue */
+  border-color: #2ca5ff !important;
+  color: white !important;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(44, 165, 255, 0.3);
+}
+
+/* === WHITE THEME OVERRIDES (Performance Mode / Light Dialogs) === */
+#animation-settings-dialog .animation-option {
+  background: #f8fafc; /* Light Gray */
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+#animation-settings-dialog .animation-option:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+#animation-settings-dialog .animation-option.selected {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+}
+
+/* White Theme Support for Animation Modal */
+#animation-settings-dialog {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#animation-settings-dialog .animation-preview-container {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+#animation-settings-dialog .animation-option:hover {
+  background: #f1f5f9;
+}
+
+#animation-settings-dialog .animation-option.selected {
+  background: #3b82f6; /* Blue */
+  color: white;
 }
 
 /* Fix for invisible modals in Performance Mode */

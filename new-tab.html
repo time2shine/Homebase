@@ -857,7 +857,7 @@
 
           <section class="app-settings-section active" data-section="general">
 
-            <div class="app-setting-row">
+            <div class="app-setting-row" id="app-grid-animation-toggle-row">
 
               <div class="app-setting-label">
 
@@ -894,6 +894,40 @@
                 <span class="app-switch-track"></span>
 
               </label>
+
+            </div>
+
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Enable Grid Animation</div>
+                <div class="hint">Animate bookmarks when they load.</div>
+              </div>
+              <label class="app-switch">
+                <input type="checkbox" id="app-grid-animation-toggle">
+                <span class="app-switch-track"></span>
+              </label>
+            </div>
+
+            <div id="grid-animation-sub-settings" class="sub-settings-container">
+              
+              <div class="app-setting-row setting-sub-row visible">
+                <div class="app-setting-label">
+                  <div class="title">Animation Style</div>
+                  <div class="hint">Choose how bookmarks appear.</div>
+                </div>
+                <button id="app-configure-animation-btn" class="gallery-secondary-btn">Configure</button>
+              </div>
+
+              <div class="app-setting-row setting-sub-row visible">
+                <div class="app-setting-label">
+                  <div class="title">Animation Speed</div>
+                  <div class="hint">Adjust how fast items appear.</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <input type="range" id="app-grid-animation-speed-slider" min="0.1" max="1.5" step="0.1" style="width: 100px;">
+                  <span id="app-grid-animation-speed-value" style="font-size: 0.9em; font-weight: 600; width: 35px;">0.3s</span>
+                </div>
+              </div>
 
             </div>
 
@@ -2375,6 +2409,27 @@
 
   </div>
 
+  <div id="animation-settings-modal" class="modal-overlay hidden">
+    <div id="animation-settings-dialog" class="dialog-content glass-box" style="width: 550px; max-height: 85vh; display: flex; flex-direction: column;">
+      <button id="animation-settings-close-btn" class="dialog-close-btn">×</button>
+      <h3>Grid Animations</h3>
+      
+      <div class="animation-preview-container">
+        <div class="animation-preview-item" style="background-color: #f87171;"></div>
+        <div class="animation-preview-item" style="background-color: #60a5fa;"></div>
+        <div class="animation-preview-item" style="background-color: #34d399;"></div>
+      </div>
+
+      <div id="animation-list" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; align-content: start;">
+        </div>
+
+      <div class="dialog-buttons" style="margin-top: 15px;">
+        <button id="animation-settings-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="animation-settings-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="weather-settings-modal" class="modal-overlay hidden">
     <div id="weather-settings-dialog" class="dialog-content glass-box">
       <button id="weather-settings-close-btn" class="dialog-close-btn">&times;</button>
@@ -2523,13 +2578,6 @@
 </body>
 
 </html>
-
-
-
-
-
-
-
 
 
 

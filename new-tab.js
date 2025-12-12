@@ -3565,13 +3565,11 @@ function updateEditPreview(iconOverride) {
 
     if (existingBase.dataset.lastAppliedColor !== customColor) {
 
-      const svgPaths = existingBase.querySelectorAll('path, rect');
+      const svg = existingBase.querySelector('svg');
 
-      for (let i = 0; i < svgPaths.length; i++) {
+      if (svg) {
 
-        svgPaths[i].style.fill = customColor;
-
-        svgPaths[i].style.setProperty('fill', customColor, 'important');
+        tintSvgElement(svg, customColor);
 
       }
 
@@ -3589,15 +3587,7 @@ function updateEditPreview(iconOverride) {
 
         if (svg) {
 
-          svg.style.fill = contrastFill;
-
-          const innerPaths = svg.querySelectorAll('path');
-
-          for (let k = 0; k < innerPaths.length; k++) {
-
-            innerPaths[k].style.fill = contrastFill;
-
-          }
+          tintSvgElement(svg, contrastFill);
 
         }
 
@@ -3615,19 +3605,13 @@ function updateEditPreview(iconOverride) {
 
     baseWrapper.className = 'edit-folder-base-wrapper';
 
-    baseWrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
+    baseWrapper.innerHTML = useSvgIcon('bookmarkFolderLarge');
 
-    
 
-    const svgPaths = baseWrapper.querySelectorAll('path, rect');
 
-    for (let i = 0; i < svgPaths.length; i++) {
+    const baseSvg = baseWrapper.querySelector('svg');
 
-      svgPaths[i].style.fill = customColor;
-
-      svgPaths[i].style.setProperty('fill', customColor, 'important');
-
-    }
+    tintSvgElement(baseSvg, customColor);
 
     baseWrapper.dataset.lastAppliedColor = customColor;
 
@@ -3705,7 +3689,7 @@ function updateEditPreview(iconOverride) {
 
     const key = effectiveIcon.slice('builtin:'.length);
 
-    const svgString = ICONS.FOLDER_GLYPHS && ICONS.FOLDER_GLYPHS[key];
+    const svgString = useSvgIcon(key);
 
     if (!svgString) return;
 
@@ -3723,15 +3707,7 @@ function updateEditPreview(iconOverride) {
 
     if (svg) {
 
-      svg.style.fill = contrastFill;
-
-      const innerPaths = svg.querySelectorAll('path');
-
-      for (let k = 0; k < innerPaths.length; k++) {
-
-        innerPaths[k].style.fill = contrastFill;
-
-      }
+      tintSvgElement(svg, contrastFill);
 
     }
 
@@ -4101,7 +4077,7 @@ function setupBuiltInIconPicker() {
 
       iconKeys.forEach(key => {
 
-        const svgString = ICONS.FOLDER_GLYPHS ? ICONS.FOLDER_GLYPHS[key] : null;
+        const svgString = useSvgIcon(key);
 
         if (!svgString) return;
 
@@ -6157,7 +6133,7 @@ function renderBookmarkFolder(folderNode) {
 
   // 1. ALWAYS render the Base Folder SVG
 
-  wrapper.innerHTML = ICONS.bookmarkFolderLarge || '';
+  wrapper.innerHTML = useSvgIcon('bookmarkFolderLarge');
 
   
 
@@ -6165,15 +6141,9 @@ function renderBookmarkFolder(folderNode) {
 
   const appliedColor = customColor || appBookmarkFolderColorPreference;
 
-  const svgPaths = wrapper.querySelectorAll('path, rect');
+  const baseSvg = wrapper.querySelector('svg');
 
-  svgPaths.forEach((p) => {
-
-    p.style.fill = appliedColor;
-
-    p.style.setProperty('fill', appliedColor, 'important');
-
-  });
+  tintSvgElement(baseSvg, appliedColor);
 
 
 
@@ -6201,7 +6171,7 @@ function renderBookmarkFolder(folderNode) {
 
       const key = customIcon.replace('builtin:', '');
 
-      const svgString = ICONS.FOLDER_GLYPHS ? ICONS.FOLDER_GLYPHS[key] : null;
+      const svgString = useSvgIcon(key);
 
 
 
@@ -6223,9 +6193,7 @@ function renderBookmarkFolder(folderNode) {
 
         if (svg) {
 
-          svg.style.fill = iconFillColor;
-
-          svg.querySelectorAll('path').forEach(p => p.style.fill = iconFillColor);
+          tintSvgElement(svg, iconFillColor);
 
         }
 
@@ -7021,7 +6989,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
   addButton.title = 'Create New Folder';
 
-  addButton.innerHTML = ICONS.bookmarkTabsPlus || '';
+  addButton.innerHTML = useSvgIcon('bookmarkTabsPlus');
 
   
 
@@ -9212,7 +9180,7 @@ function setupSearchEnginesModal() {
 
           <span class="engine-drag-handle">â˜°</span>
 
-          <span class="engine-toggle-icon" aria-hidden="true">${engine.icon}</span>
+          <span class="engine-toggle-icon" aria-hidden="true">${engine.symbolId ? useSvgIcon(engine.symbolId) : `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`}</span>
 
           <span class="engine-toggle-name">${engine.name}</span>
 
@@ -9456,9 +9424,45 @@ const SEARCH_ENGINES_PREF_KEY = 'searchEnginesConfig';
 
 
 
-// Icons are defined in icons.js and exposed globally.
+const ICON_SYMBOL_CLASSES = {
+  bookmarkFolderSmall: 'bookmark-folder-icon',
+  bookmarkFolderLarge: 'bookmark-folder-icon',
+  bookmarkTabsPlus: 'bookmark-tabs__plus-icon',
+  historyClock: 'suggestion-icon',
+  search: 'suggestion-icon',
+  heartOutline: 'outline',
+  heartFilled: 'filled',
+  heartCelebrate: 'celebrate',
+  binTop: 'bin-top',
+  binBottom: 'bin-bottom',
+  binGarbage: 'garbage',
+};
 
-const ICONS = window.ICONS || {};
+/**
+ * Creates an inline SVG <use> reference for the sprite sheet.
+ * Falls back to an empty string when a name is missing.
+ */
+function useSvgIcon(name, className = '') {
+  if (!name) return '';
+  const classList = className || ICON_SYMBOL_CLASSES[name] || '';
+  const classAttr = classList ? ` class="${classList}"` : '';
+  return `<svg${classAttr} aria-hidden="true" focusable="false"><use href="#icon-${name}"></use></svg>`;
+}
+
+function tintSvgElement(svg, color) {
+  if (!svg || !color) return;
+  svg.style.fill = color;
+  svg.style.setProperty('fill', color, 'important');
+  const useNode = svg.querySelector('use');
+  if (useNode) {
+    useNode.style.fill = color;
+    useNode.style.setProperty('fill', color, 'important');
+  }
+  svg.querySelectorAll('path, rect').forEach((node) => {
+    node.style.fill = color;
+    node.style.setProperty('fill', color, 'important');
+  });
+}
 
 const ICON_CATEGORIES = {
 
@@ -9510,7 +9514,7 @@ let searchEngines = [
 
     suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=',
 
-    icon: ICONS.google
+    symbolId: 'google'
 
   },
 
@@ -9528,7 +9532,7 @@ let searchEngines = [
 
     suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=',
 
-    icon: ICONS.youtube
+    symbolId: 'youtube'
 
   },
 
@@ -9546,7 +9550,7 @@ let searchEngines = [
 
     suggestionUrl: 'https://duckduckgo.com/ac/?type=json&q=',
 
-    icon: ICONS.duckduckgo
+    symbolId: 'duckduckgo'
 
   },
 
@@ -9564,7 +9568,7 @@ let searchEngines = [
 
     suggestionUrl: 'https://api.bing.com/osjson.aspx?query=',
 
-    icon: ICONS.bing
+    symbolId: 'bing'
 
   },
 
@@ -9582,7 +9586,7 @@ let searchEngines = [
 
     suggestionUrl: 'https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=',
 
-    icon: ICONS.wikipedia
+    symbolId: 'wikipedia'
 
   },
 
@@ -9600,7 +9604,7 @@ let searchEngines = [
 
     suggestionUrl: '',
 
-    icon: ICONS.reddit 
+    symbolId: 'reddit' 
 
   },
 
@@ -9618,7 +9622,7 @@ let searchEngines = [
 
     suggestionUrl: '',
 
-    icon: ICONS.github
+    symbolId: 'github'
 
   },
 
@@ -9636,17 +9640,17 @@ let searchEngines = [
 
     suggestionUrl: '',
 
-    icon: ICONS.stackoverflow 
+    symbolId: 'stackoverflow' 
 
   },
 
-  { id: 'amazon', name: 'Amazon', color: '#FF9900', enabled: false, url: 'https://www.amazon.com/s?k=', suggestionUrl: 'https://completion.amazon.com/search/complete?search-alias=aps&client=amazon-search-ui&mkt=1&q=', icon: ICONS.amazon },
+  { id: 'amazon', name: 'Amazon', color: '#FF9900', enabled: false, url: 'https://www.amazon.com/s?k=', suggestionUrl: 'https://completion.amazon.com/search/complete?search-alias=aps&client=amazon-search-ui&mkt=1&q=', symbolId: 'amazon' },
 
-  { id: 'maps', name: 'Maps', color: '#34A853', enabled: false, url: 'https://www.google.com/maps/search/', suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=', icon: ICONS.maps },
+  { id: 'maps', name: 'Maps', color: '#34A853', enabled: false, url: 'https://www.google.com/maps/search/', suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=', symbolId: 'maps' },
 
-  { id: 'yahoo', name: 'Yahoo', color: '#6001D2', enabled: false, url: 'https://search.yahoo.com/search?p=', suggestionUrl: 'https://ff.search.yahoo.com/gossip?output=json&command=', icon: ICONS.yahoo },
+  { id: 'yahoo', name: 'Yahoo', color: '#6001D2', enabled: false, url: 'https://search.yahoo.com/search?p=', suggestionUrl: 'https://ff.search.yahoo.com/gossip?output=json&command=', symbolId: 'yahoo' },
 
-  { id: 'yandex', name: 'Yandex', color: '#FC3F1D', enabled: false, url: 'https://yandex.com/search/?text=', suggestionUrl: 'https://suggest.yandex.com/suggest-ff.cgi?part=', icon: ICONS.yandex }
+  { id: 'yandex', name: 'Yandex', color: '#FC3F1D', enabled: false, url: 'https://yandex.com/search/?text=', suggestionUrl: 'https://suggest.yandex.com/suggest-ff.cgi?part=', symbolId: 'yandex' }
 
 ];
 
@@ -10058,7 +10062,7 @@ function ensureEngineIconExists(engine) {
 
 
 
-  const iconHtml = engine.icon || `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
+  const iconHtml = engine.symbolId ? useSvgIcon(engine.symbolId) : `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
 
   btn.innerHTML = `<span class="tooltip-popup tooltip-top">${engine.name}</span>${iconHtml}`;
 
@@ -10234,7 +10238,7 @@ function renderSearchEngineSelector() {
 
     // Insert Tooltip HTML + Icon
 
-    const iconHtml = engine.icon || `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
+    const iconHtml = engine.symbolId ? useSvgIcon(engine.symbolId) : `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
 
     btn.innerHTML = `<span class="tooltip-popup tooltip-top">${engine.name}</span>${iconHtml}`;
 
@@ -12594,7 +12598,7 @@ async function handleSearchInput() {
 
             <span class="bang-badge">${bangCode}</span>
 
-            ${item.engine.icon || ''}
+            ${item.engine.symbolId ? useSvgIcon(item.engine.symbolId) : ''}
 
             <div class="result-item-info">
 
@@ -12694,9 +12698,9 @@ async function handleSearchInput() {
 
   let bottomHtml = '';
 
-  const searchIcon = ICONS.search || '';
+  const searchIcon = useSvgIcon('search');
 
-  const clockIcon = ICONS.historyClock || '';
+  const clockIcon = useSvgIcon('historyClock');
 
 
 
@@ -13232,7 +13236,7 @@ function showDeleteConfirm(message, options = {}) {
 
         <div class="bookmark-icon-wrapper">
 
-          ${ICONS.bookmarkFolderLarge || ''}
+          ${useSvgIcon('bookmarkFolderLarge')}
 
         </div>
 
@@ -15935,11 +15939,11 @@ function buildGalleryCard(item, index = 0) {
 
     .join('');
 
-  const likeOutlineIcon = ICONS.heartOutline || '';
+  const likeOutlineIcon = useSvgIcon('heartOutline');
 
-  const likeFilledIcon = ICONS.heartFilled || '';
+  const likeFilledIcon = useSvgIcon('heartFilled');
 
-  const likeCelebrateIcon = ICONS.heartCelebrate || '';
+  const likeCelebrateIcon = useSvgIcon('heartCelebrate');
 
 
 
@@ -16695,11 +16699,11 @@ function renderMyWallpapers() {
 
     const isGif = isVideo && (item.mimeType === 'image/gif' || (item.title || '').toLowerCase().endsWith('.gif'));
 
-    const binTopIcon = ICONS.binTop || '';
+    const binTopIcon = useSvgIcon('binTop');
 
-    const binBottomIcon = ICONS.binBottom || '';
+    const binBottomIcon = useSvgIcon('binBottom');
 
-    const binGarbageIcon = ICONS.binGarbage || '';
+    const binGarbageIcon = useSvgIcon('binGarbage');
 
     card.innerHTML = `
 

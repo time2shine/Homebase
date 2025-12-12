@@ -82,60 +82,6 @@
 
     </div>
 
-
-
-    <div id="settings-panel" class="glass-box hidden"> 
-
-      <div class="settings-content">
-
-        <div class="settings-header">
-
-          <h2>Settings</h2>
-
-          <button id="close-settings-btn" class="icon-btn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-
-        </div>
-
-        <div class="setting-item">
-
-          <label>Temperature unit:</label>
-
-          <div class="toggle-switch">
-
-            <input type="checkbox" id="temp-unit-toggle">
-
-            <label for="temp-unit-toggle" class="toggle-label">
-
-              <span class="toggle-label-text" data-on="�F" data-off="�C"></span>
-
-            </label>
-
-          </div>
-
-        </div>
-
-        <div class="setting-item">
-
-          <label for="location-search-input">Location:</label>
-
-          <div class="location-search-wrapper">
-
-            <input type="text" id="location-search-input" placeholder="Search for a city...">
-
-            <div id="location-results" class="hidden"></div>
-
-          </div>
-
-        </div>
-
-        <button id="save-settings-btn">Save</button>
-
-      </div>
-
-    </div>
-
-    
-
     <div class="widget-quote glass-box widget-hidden">
 
       <button id="quote-settings-btn" class="icon-btn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
@@ -145,35 +91,6 @@
       <span id="quote-author"></span>
 
     </div>
-
-    
-
-    <div id="quote-settings-panel" class="glass-box hidden"> 
-
-      <div class="settings-content">
-
-        <div class="settings-header">
-
-          <h2>Quote Settings</h2>
-
-          <button id="close-quote-settings-btn" class="icon-btn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-
-        </div>
-
-        <div class="setting-item-column">
-
-          <label>Select categories:</label>
-
-          <div id="quote-categories-list"></div>
-
-        </div>
-
-        <button id="save-quote-settings-btn">Save</button>
-
-      </div>
-
-    </div>
-
 
   </aside>
 
@@ -532,6 +449,18 @@
 
           </button>
 
+          <button class="app-settings-nav-item" data-section="widgets">
+
+            <span class="nav-icon">
+
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+
+            </span>
+
+            <span class="nav-label">Widgets</span>
+
+          </button>
+
           <button class="app-settings-nav-item" data-section="bookmarks">
 
             <span class="nav-icon">
@@ -593,26 +522,6 @@
                 <option value="24-hour">24-Hour</option>
 
               </select>
-
-            </div>
-
-            <div class="app-setting-row">
-
-              <div class="app-setting-label">
-
-                <div class="title">Show widget sidebar</div>
-
-                <div class="hint">Toggle the left widgets column on or off.</div>
-
-              </div>
-
-              <label class="app-switch">
-
-                <input type="checkbox" id="app-show-sidebar-toggle" checked>
-
-                <span class="app-switch-track"></span>
-
-              </label>
 
             </div>
 
@@ -909,6 +818,102 @@
             </div>
 
 
+
+          </section>
+
+          <section class="app-settings-section" data-section="widgets">
+
+            <div class="app-setting-row">
+
+              <div class="app-setting-label">
+
+                <div class="title">Show widget sidebar</div>
+
+                <div class="hint">Toggle the left widgets column on or off.</div>
+
+              </div>
+
+              <label class="app-switch">
+
+                <input type="checkbox" id="app-show-sidebar-toggle" checked>
+
+                <span class="app-switch-track"></span>
+
+              </label>
+
+            </div>
+
+            <div id="widget-sub-settings" class="sub-settings-container">
+
+              <div class="app-setting-row">
+
+                <div class="app-setting-label">
+
+                  <div class="title">Weather</div>
+
+                  <div class="hint">Show weather widget.</div>
+
+                </div>
+
+                <label class="app-switch">
+
+                  <input type="checkbox" id="app-show-weather-toggle" checked>
+
+                  <span class="app-switch-track"></span>
+
+                </label>
+
+              </div>
+
+              <div class="app-setting-row setting-sub-row" id="app-weather-config-row">
+
+                <div class="app-setting-label">
+
+                  <div class="title">Weather Settings</div>
+
+                  <div class="hint">Location and units.</div>
+
+                </div>
+
+                <button id="app-configure-weather-btn" class="gallery-secondary-btn">Configure</button>
+
+              </div>
+
+              <div class="app-setting-row">
+
+                <div class="app-setting-label">
+
+                  <div class="title">Daily Quote</div>
+
+                  <div class="hint">Show daily quote widget.</div>
+
+                </div>
+
+                <label class="app-switch">
+
+                  <input type="checkbox" id="app-show-quote-toggle" checked>
+
+                  <span class="app-switch-track"></span>
+
+                </label>
+
+              </div>
+
+              <div class="app-setting-row setting-sub-row" id="app-quote-config-row">
+
+                <div class="app-setting-label">
+
+                  <div class="title">Quote Settings</div>
+
+                  <div class="hint">Select categories.</div>
+
+                </div>
+
+                <button id="app-configure-quote-btn" class="gallery-secondary-btn">Configure</button>
+
+              </div>
+
+            </div>
 
           </section>
 
@@ -2016,6 +2021,64 @@
 
   </div>
 
+  <div id="weather-settings-modal" class="modal-overlay hidden">
+    <div id="weather-settings-dialog" class="dialog-content glass-box">
+      <button id="weather-settings-close-btn" class="dialog-close-btn">&times;</button>
+      <h3>Weather Settings</h3>
+
+      <div class="form-group">
+        <label>Temperature Unit</label>
+        <div class="toggle-switch">
+          <input type="checkbox" id="modal-temp-unit-toggle">
+          <label for="modal-temp-unit-toggle" class="toggle-label">
+            <span class="toggle-label-text" data-on="&#176;F" data-off="&#176;C"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="modal-location-input">Location</label>
+        <div class="location-search-wrapper" style="width: 100%; position: relative;">
+          <input type="text" id="modal-location-input" class="dialog-input" placeholder="Search City...">
+          <div id="modal-location-results" class="hidden" style="background: white; color: black; position: absolute; width: 100%; z-index: 10;"></div>
+        </div>
+        <button id="modal-set-location-auto-btn" class="gallery-secondary-btn" style="margin-top: 8px; width: 100%;">Use Current Location</button>
+      </div>
+
+      <div class="dialog-buttons">
+        <button id="weather-settings-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="weather-settings-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="quote-settings-modal" class="modal-overlay hidden">
+    <div id="quote-settings-dialog" class="dialog-content glass-box">
+      <button id="quote-settings-close-btn" class="dialog-close-btn">&times;</button>
+      <h3>Quote Settings</h3>
+
+      <div class="form-group">
+        <label for="quote-frequency-select">Update Frequency</label>
+        <select id="quote-frequency-select" class="dialog-input" style="background: rgba(255,255,255,0.2); color: inherit;">
+          <option value="always">Every New Tab</option>
+          <option value="hourly">Every Hour</option>
+          <option value="daily">Daily</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Categories</label>
+        <div id="modal-quote-categories-list" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow-y: auto; padding: 4px;">
+          </div>
+      </div>
+
+      <div class="dialog-buttons">
+        <button id="quote-settings-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="quote-settings-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
 
 
   <div id="search-engines-modal" class="modal-overlay hidden">
@@ -2107,11 +2170,6 @@
 </body>
 
 </html>
-
-
-
-
-
 
 
 

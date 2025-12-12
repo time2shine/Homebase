@@ -1837,6 +1837,10 @@ const appTimeFormatSelect = document.getElementById('app-time-format');
 
 const appSidebarToggle = document.getElementById('app-show-sidebar-toggle');
 
+const appWeatherToggle = document.getElementById('app-show-weather-toggle');
+
+const appQuoteToggle = document.getElementById('app-show-quote-toggle');
+
 const appMaxTabsSelect = document.getElementById('app-max-tabs-select');
 
 const appAutoCloseSelect = document.getElementById('app-autoclose-select');
@@ -1872,6 +1876,10 @@ const MY_WALLPAPERS_KEY = 'myWallpapers';
 const APP_TIME_FORMAT_KEY = 'appTimeFormatPreference';
 
 const APP_SHOW_SIDEBAR_KEY = 'appShowSidebar';
+
+const APP_SHOW_WEATHER_KEY = 'appShowWeather';
+
+const APP_SHOW_QUOTE_KEY = 'appShowQuote';
 
 const APP_MAX_TABS_KEY = 'appMaxTabsCount';
 
@@ -1940,6 +1948,10 @@ let myWallpaperMediaObserver = null;
 let timeFormatPreference = '12-hour';
 
 let appShowSidebarPreference = true;
+
+let appShowWeatherPreference = true;
+
+let appShowQuotePreference = true;
 
 let appMaxTabsPreference = 0; // 0 means unlimited
 
@@ -7355,13 +7367,17 @@ const quoteWidget = document.querySelector('.widget-quote');
 
 const quoteSettingsBtn = document.getElementById('quote-settings-btn');
 
-const quoteSettingsPanel = document.getElementById('quote-settings-panel');
+const quoteSettingsModal = document.getElementById('quote-settings-modal');
 
-const closeQuoteSettingsBtn = document.getElementById('close-quote-settings-btn');
+const quoteSettingsCloseBtn = document.getElementById('quote-settings-close-btn');
 
-const quoteCategoriesList = document.getElementById('quote-categories-list');
+const quoteSettingsCancelBtn = document.getElementById('quote-settings-cancel-btn');
 
-const saveQuoteSettingsBtn = document.getElementById('save-quote-settings-btn');
+const quoteSettingsSaveBtn = document.getElementById('quote-settings-save-btn');
+
+const quoteCategoriesList = document.getElementById('modal-quote-categories-list');
+
+const quoteFrequencySelect = document.getElementById('quote-frequency-select');
 
 const quoteText = document.getElementById('quote-text');
 
@@ -7369,6 +7385,32 @@ const quoteAuthor = document.getElementById('quote-author');
 
 const DEFAULT_QUOTE_TAG = 'inspirational';
 
+const QUOTE_FREQUENCY_KEY = 'quoteUpdateFrequency';
+
+const QUOTE_LAST_FETCH_KEY = 'quoteLastFetched';
+
+const QUOTE_CATEGORIES_CACHE_KEY = 'quoteCategoriesCache';
+
+const QUOTE_CATEGORIES_FETCHED_AT_KEY = 'quoteCategoriesFetchedAt';
+
+const CATEGORIES_TTL = 24 * 60 * 60 * 1000; // 24 Hours
+
+async function fetchAndCacheQuoteCategories() {
+  try {
+    const res = await fetch('https://api.quotable.io/tags');
+    if (!res.ok) throw new Error('Could not fetch tags');
+    const allTags = await res.json();
+    allTags.sort((a, b) => a.name.localeCompare(b.name));
+    await browser.storage.local.set({
+      [QUOTE_CATEGORIES_CACHE_KEY]: allTags,
+      [QUOTE_CATEGORIES_FETCHED_AT_KEY]: Date.now()
+    });
+    return allTags;
+  } catch (err) {
+    console.warn('Failed to fetch quote categories in background', err);
+    return null;
+  }
+}
 
 
 async function loadCachedQuote() {
@@ -7401,11 +7443,35 @@ async function fetchQuote() {
 
   try {
 
-    const data = await browser.storage.local.get('quoteTags');
+    const data = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY, QUOTE_LAST_FETCH_KEY, 'cachedQuote', 'cachedAuthor']);
 
     let tagsToFetch = data.quoteTags;
 
     if (!tagsToFetch || tagsToFetch.length === 0) tagsToFetch = [DEFAULT_QUOTE_TAG];
+
+    const freq = data[QUOTE_FREQUENCY_KEY] || 'always';
+
+    const lastFetch = data[QUOTE_LAST_FETCH_KEY] || 0;
+
+    const now = Date.now();
+
+    let shouldFetch = true;
+
+    if (freq === 'hourly' && (now - lastFetch < 3600 * 1000)) shouldFetch = false;
+
+    if (freq === 'daily' && (now - lastFetch < 86400 * 1000)) shouldFetch = false;
+
+    if (!shouldFetch && data.cachedQuote) {
+
+      quoteText.textContent = `\"${data.cachedQuote}\"`;
+
+      quoteAuthor.textContent = data.cachedAuthor ? `- ${data.cachedAuthor}` : '';
+
+      revealWidget('.widget-quote');
+
+      return;
+
+    }
 
     const tagsQuery = tagsToFetch.join('|');
 
@@ -7451,7 +7517,9 @@ async function fetchQuote() {
 
       cachedQuote: q.content,
 
-      cachedAuthor: q.author || ''
+      cachedAuthor: q.author || '',
+
+      [QUOTE_LAST_FETCH_KEY]: now
 
     });
 
@@ -7493,23 +7561,23 @@ async function fetchQuote() {
 
 async function populateQuoteCategories() {
 
+  if (!quoteCategoriesList) return;
+
   quoteCategoriesList.innerHTML = '';
 
-  try {
+  const stored = await browser.storage.local.get([QUOTE_CATEGORIES_CACHE_KEY, QUOTE_CATEGORIES_FETCHED_AT_KEY, 'quoteTags']);
 
-    const res = await fetch('https://api.quotable.io/tags');
+  let categories = stored[QUOTE_CATEGORIES_CACHE_KEY] || [];
 
-    if (!res.ok) throw new Error('Could not fetch tags');
+  const lastFetched = stored[QUOTE_CATEGORIES_FETCHED_AT_KEY] || 0;
 
-    const allTags = await res.json();
+  const savedTags = new Set(stored.quoteTags || []);
 
-    const data = await browser.storage.local.get('quoteTags');
+  const render = (tags) => {
 
-    const savedTags = new Set(data.quoteTags || []);
+    quoteCategoriesList.innerHTML = '';
 
-    allTags.sort((a, b) => a.name.localeCompare(b.name));
-
-    allTags.forEach(tag => {
+    tags.forEach((tag) => {
 
       const pill = document.createElement('button');
 
@@ -7535,53 +7603,102 @@ async function populateQuoteCategories() {
 
     });
 
-  } catch (error) {
+  };
 
-    console.error('Failed to populate quote categories:', error);
+  if (categories.length > 0) {
 
-    quoteCategoriesList.innerHTML = 'Error loading categories.';
+    render(categories);
+
+  } else {
+
+    quoteCategoriesList.innerHTML = '<span style="color:#666; padding:10px;">Loading categories...</span>';
+
+  }
+
+  const now = Date.now();
+
+  if (categories.length === 0 || (now - lastFetched > CATEGORIES_TTL)) {
+
+    fetchAndCacheQuoteCategories().then((newCategories) => {
+
+      if (newCategories && newCategories.length > 0) {
+
+        render(newCategories);
+
+      }
+
+    });
 
   }
 
 }
 
+function closeQuoteSettingsModal() {
+  closeModalWithAnimation('quote-settings-modal', '.dialog-content');
+}
 
+async function openQuoteSettingsModal(triggerSource) {
+  populateQuoteCategories();
+  const data = await browser.storage.local.get(QUOTE_FREQUENCY_KEY);
+  if (quoteFrequencySelect) {
+    quoteFrequencySelect.value = data[QUOTE_FREQUENCY_KEY] || 'always';
+  }
+  openModalWithAnimation('quote-settings-modal', triggerSource || null, '.dialog-content');
+}
 
 function setupQuoteWidget() {
 
-  quoteSettingsBtn.addEventListener('click', () => {
+  if (quoteSettingsBtn) {
 
-    quoteSettingsPanel.classList.remove('hidden');
+    quoteSettingsBtn.addEventListener('click', () => openQuoteSettingsModal(quoteSettingsBtn));
 
-    quoteWidget.classList.add('hidden');
+  }
 
-    populateQuoteCategories();
+  if (quoteSettingsCloseBtn) {
 
-  });
+    quoteSettingsCloseBtn.addEventListener('click', closeQuoteSettingsModal);
 
-  closeQuoteSettingsBtn.addEventListener('click', () => {
+  }
 
-    quoteSettingsPanel.classList.add('hidden');
+  if (quoteSettingsCancelBtn) {
 
-    quoteWidget.classList.remove('hidden');
+    quoteSettingsCancelBtn.addEventListener('click', closeQuoteSettingsModal);
 
-  });
+  }
 
-  saveQuoteSettingsBtn.addEventListener('click', async () => {
+  if (quoteSettingsModal) {
 
-    const selectedPills = quoteCategoriesList.querySelectorAll('.quote-category-pill.selected');
+    quoteSettingsModal.addEventListener('click', (e) => {
 
-    const selectedTags = Array.from(selectedPills).map(pill => pill.dataset.value);
+      if (e.target === quoteSettingsModal) {
 
-    await browser.storage.local.set({ quoteTags: selectedTags });
+        closeQuoteSettingsModal();
 
-    quoteSettingsPanel.classList.add('hidden');
+      }
 
-    quoteWidget.classList.remove('hidden');
+    });
 
-    fetchQuote();
+  }
 
-  });
+  if (quoteSettingsSaveBtn) {
+
+    quoteSettingsSaveBtn.addEventListener('click', async () => {
+
+      const selectedPills = quoteCategoriesList ? quoteCategoriesList.querySelectorAll('.quote-category-pill.selected') : [];
+
+      const selectedTags = Array.from(selectedPills).map((pill) => pill.dataset.value);
+
+      const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : 'always';
+
+      await browser.storage.local.set({ quoteTags: selectedTags, [QUOTE_FREQUENCY_KEY]: frequency, [QUOTE_LAST_FETCH_KEY]: 0 });
+
+      closeQuoteSettingsModal();
+
+      fetchQuote();
+
+    });
+
+  }
 
 }
 
@@ -7635,8 +7752,37 @@ function applySidebarVisibility(showSidebar = true) {
 
   updateSidebarCollapseState();
 
+  updateWidgetSettingsUI();
+
+  applyWidgetVisibility();
+
 }
 
+
+
+function applyWidgetVisibility() {
+
+  const weatherWidget = document.querySelector('.widget-weather');
+
+  const quoteWidget = document.querySelector('.widget-quote');
+
+  const shouldShowWeather = appShowSidebarPreference && appShowWeatherPreference;
+
+  const shouldShowQuote = appShowSidebarPreference && appShowQuotePreference;
+
+  if (weatherWidget) {
+
+    weatherWidget.classList.toggle('force-hidden', !shouldShowWeather);
+
+  }
+
+  if (quoteWidget) {
+
+    quoteWidget.classList.toggle('force-hidden', !shouldShowQuote);
+
+  }
+
+}
 
 
 function applyPerformanceMode(enabled) {
@@ -7811,6 +7957,10 @@ async function loadAppSettingsFromStorage() {
 
       APP_SHOW_SIDEBAR_KEY,
 
+      APP_SHOW_WEATHER_KEY,
+
+      APP_SHOW_QUOTE_KEY,
+
       APP_MAX_TABS_KEY,
 
       APP_AUTOCLOSE_KEY,
@@ -7854,6 +8004,10 @@ async function loadAppSettingsFromStorage() {
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
 
     applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
+
+    appShowWeatherPreference = stored.hasOwnProperty(APP_SHOW_WEATHER_KEY) ? stored[APP_SHOW_WEATHER_KEY] !== false : true;
+
+    appShowQuotePreference = stored.hasOwnProperty(APP_SHOW_QUOTE_KEY) ? stored[APP_SHOW_QUOTE_KEY] !== false : true;
 
     appMaxTabsPreference = parseInt(stored[APP_MAX_TABS_KEY] || 0, 10);
 
@@ -7910,6 +8064,10 @@ async function loadAppSettingsFromStorage() {
     applyBookmarkFolderColor(appBookmarkFolderColorPreference);
 
     applyPerformanceMode(appPerformanceModePreference);
+
+    applyWidgetVisibility();
+
+    updateWidgetSettingsUI();
 
 
 
@@ -8199,6 +8357,63 @@ function updateColorTrigger(triggerEl, color) {
 
 
 
+function updateWidgetSettingsUI() {
+
+  const subSettings = document.getElementById('widget-sub-settings');
+
+  const weatherConfigRow = document.getElementById('app-weather-config-row');
+
+  const quoteConfigRow = document.getElementById('app-quote-config-row');
+
+  const weatherToggleEl = document.getElementById('app-show-weather-toggle');
+
+  const quoteToggleEl = document.getElementById('app-show-quote-toggle');
+
+  if (weatherToggleEl) {
+
+    weatherToggleEl.checked = appShowWeatherPreference;
+
+  }
+
+  if (quoteToggleEl) {
+
+    quoteToggleEl.checked = appShowQuotePreference;
+
+  }
+
+  if (!appShowSidebarPreference) {
+
+    if (subSettings) subSettings.classList.remove('expanded');
+
+    if (weatherConfigRow) weatherConfigRow.classList.remove('visible');
+
+    if (quoteConfigRow) quoteConfigRow.classList.remove('visible');
+
+    return;
+
+  }
+
+  if (subSettings) {
+
+    subSettings.classList.add('expanded');
+
+  }
+
+  if (weatherConfigRow) {
+
+    weatherConfigRow.classList.toggle('visible', appShowWeatherPreference);
+
+  }
+
+  if (quoteConfigRow) {
+
+    quoteConfigRow.classList.toggle('visible', appShowQuotePreference);
+
+  }
+
+}
+
+
 function syncAppSettingsForm() {
 
   if (appTimeFormatSelect) {
@@ -8210,6 +8425,18 @@ function syncAppSettingsForm() {
   if (appSidebarToggle) {
 
     appSidebarToggle.checked = appShowSidebarPreference;
+
+  }
+
+  if (appWeatherToggle) {
+
+    appWeatherToggle.checked = appShowWeatherPreference;
+
+  }
+
+  if (appQuoteToggle) {
+
+    appQuoteToggle.checked = appShowQuotePreference;
 
   }
 
@@ -8413,6 +8640,8 @@ function syncAppSettingsForm() {
 
   }
 
+  updateWidgetSettingsUI();
+
   updateDefaultEngineVisibilityControl();
 
   const singletonToggle = document.getElementById('app-singleton-mode-toggle');
@@ -8541,6 +8770,68 @@ function setupAppSettingsModal() {
 
   }
 
+  if (appSidebarToggle) {
+
+    appSidebarToggle.addEventListener('change', (e) => {
+
+      applySidebarVisibility(e.target.checked);
+
+    });
+
+  }
+
+  if (appWeatherToggle) {
+
+    appWeatherToggle.addEventListener('change', (e) => {
+
+      appShowWeatherPreference = e.target.checked;
+
+      applyWidgetVisibility();
+
+      updateWidgetSettingsUI();
+
+    });
+
+  }
+
+  if (appQuoteToggle) {
+
+    appQuoteToggle.addEventListener('change', (e) => {
+
+      appShowQuotePreference = e.target.checked;
+
+      applyWidgetVisibility();
+
+      updateWidgetSettingsUI();
+
+    });
+
+  }
+
+  const appConfigureWeatherBtn = document.getElementById('app-configure-weather-btn');
+
+  if (appConfigureWeatherBtn) {
+
+    appConfigureWeatherBtn.addEventListener('click', () => {
+
+      openWeatherSettingsModal(appConfigureWeatherBtn);
+
+    });
+
+  }
+
+  const appConfigureQuoteBtn = document.getElementById('app-configure-quote-btn');
+
+  if (appConfigureQuoteBtn) {
+
+    appConfigureQuoteBtn.addEventListener('click', () => {
+
+      openQuoteSettingsModal(appConfigureQuoteBtn);
+
+    });
+
+  }
+
   const textBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
 
   const textBgRow = document.getElementById('app-bookmark-text-bg-color-row');
@@ -8609,6 +8900,10 @@ function setupAppSettingsModal() {
 
       const nextBookmarkTextBg = document.getElementById('app-bookmark-text-bg-toggle')?.checked || false;
 
+      const nextShowWeather = appWeatherToggle ? appWeatherToggle.checked : true;
+
+      const nextShowQuote = appQuoteToggle ? appQuoteToggle.checked : true;
+
       const nextContainerMode = document.getElementById('app-container-mode-toggle')?.checked ?? true;
 
       const radioKeepBehavior = document.querySelector('input[name="container-behavior"][value="keep"]');
@@ -8654,6 +8949,10 @@ function setupAppSettingsModal() {
 
 
       applyTimeFormatPreference(nextFormat);
+
+      appShowWeatherPreference = nextShowWeather;
+
+      appShowQuotePreference = nextShowQuote;
 
       applySidebarVisibility(nextSidebarVisible);
 
@@ -8712,6 +9011,10 @@ function setupAppSettingsModal() {
           [APP_TIME_FORMAT_KEY]: nextFormat,
 
           [APP_SHOW_SIDEBAR_KEY]: nextSidebarVisible,
+
+          [APP_SHOW_WEATHER_KEY]: nextShowWeather,
+
+          [APP_SHOW_QUOTE_KEY]: nextShowQuote,
 
           [APP_MAX_TABS_KEY]: nextMaxTabs,
 
@@ -12485,17 +12788,21 @@ const settingsBtn = document.getElementById('settings-btn');
 
 const setLocationBtn = document.getElementById('set-location-btn');
 
-const settingsPanel = document.getElementById('settings-panel');
+const weatherSettingsModal = document.getElementById('weather-settings-modal');
 
-const closeSettingsBtn = document.getElementById('close-settings-btn');
+const weatherSettingsCloseBtn = document.getElementById('weather-settings-close-btn');
 
-const tempUnitToggle = document.getElementById('temp-unit-toggle');
+const weatherSettingsCancelBtn = document.getElementById('weather-settings-cancel-btn');
 
-const locationSearchInput = document.getElementById('location-search-input');
+const weatherSettingsSaveBtn = document.getElementById('weather-settings-save-btn');
 
-const locationResults = document.getElementById('location-results');
+const weatherTempUnitToggle = document.getElementById('modal-temp-unit-toggle');
 
-const saveSettingsBtn = document.getElementById('save-settings-btn');
+const weatherLocationInput = document.getElementById('modal-location-input');
+
+const weatherLocationResults = document.getElementById('modal-location-results');
+
+const weatherUseCurrentBtn = document.getElementById('modal-set-location-auto-btn');
 
 let selectedLocation = null;
 
@@ -13007,13 +13314,15 @@ function startGeolocation() {
 
 async function searchForLocation() {
 
-  const query = locationSearchInput.value;
+  if (!weatherLocationInput || !weatherLocationResults) return;
+
+  const query = weatherLocationInput.value;
 
   if (query.length < 3) {
 
-    locationResults.innerHTML = '';
+    weatherLocationResults.innerHTML = '';
 
-    locationResults.classList.add('hidden');
+    weatherLocationResults.classList.add('hidden');
 
     return;
 
@@ -13027,7 +13336,7 @@ async function searchForLocation() {
 
     const geoData = await geoResponse.json();
 
-    locationResults.innerHTML = '';
+    weatherLocationResults.innerHTML = '';
 
     if (geoData.results && geoData.results.length > 0) {
 
@@ -13043,23 +13352,23 @@ async function searchForLocation() {
 
           selectedLocation = result;
 
-          locationSearchInput.value = `${result.name}, ${result.country}`;
+          weatherLocationInput.value = `${result.name}, ${result.country}`;
 
-          locationResults.classList.add('hidden');
+          weatherLocationResults.classList.add('hidden');
 
-          locationResults.innerHTML = '';
+          weatherLocationResults.innerHTML = '';
 
         });
 
-        locationResults.appendChild(item);
+        weatherLocationResults.appendChild(item);
 
       });
 
-      locationResults.classList.remove('hidden');
+      weatherLocationResults.classList.remove('hidden');
 
     } else {
 
-      locationResults.classList.add('hidden');
+      weatherLocationResults.classList.add('hidden');
 
     }
 
@@ -13072,86 +13381,100 @@ async function searchForLocation() {
 }
 
 
+function closeWeatherSettingsModal() {
+  closeModalWithAnimation('weather-settings-modal', '.dialog-content');
+}
 
+async function openWeatherSettingsModal(triggerSource) {
+  if (!weatherSettingsModal) return;
+  const data = await browser.storage.local.get(['weatherCityName', 'weatherUnits']);
+  if (weatherTempUnitToggle) {
+    weatherTempUnitToggle.checked = data.weatherUnits === 'fahrenheit';
+  }
+  if (weatherLocationInput) {
+    weatherLocationInput.value = (data.weatherCityName === 'Current Location') ? '' : (data.weatherCityName || '');
+  }
+  selectedLocation = null;
+  if (weatherLocationResults) {
+    weatherLocationResults.classList.add('hidden');
+    weatherLocationResults.innerHTML = '';
+  }
+  openModalWithAnimation('weather-settings-modal', triggerSource || null, '.dialog-content');
+}
 async function setupWeather() {
 
-  settingsBtn.addEventListener('click', async () => {
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      openWeatherSettingsModal(settingsBtn);
+    });
+  }
 
-    const data = await browser.storage.local.get(['weatherCityName', 'weatherUnits']);
-
-    tempUnitToggle.checked = (data.weatherUnits === 'fahrenheit');
-
-    locationSearchInput.value = (data.weatherCityName === 'Current Location') ? '' : (data.weatherCityName || '');
-
-    selectedLocation = null;
-
-    locationResults.classList.add('hidden');
-
-    settingsPanel.classList.remove('hidden');
-
-    weatherWidget.classList.add('hidden');
-
-  });
-
-  closeSettingsBtn.addEventListener('click', () => {
-
-    settingsPanel.classList.add('hidden');
-
-    weatherWidget.classList.remove('hidden');
-
-  });
-
-  setLocationBtn.addEventListener('click', async () => {
-
-    await browser.storage.local.remove(['weatherLat', 'weatherLon', 'weatherCityName']);
-
-    startGeolocation();
-
-  });
-
-  locationSearchInput.addEventListener('input', () => {
-
-    clearTimeout(searchTimeout);
-
-    searchTimeout = setTimeout(searchForLocation, 300);
-
-  });
-
-  saveSettingsBtn.addEventListener('click', async () => {
-
-    const newUnit = tempUnitToggle.checked ? 'fahrenheit' : 'celsius';
-
-    let settingsToSave = { weatherUnits: newUnit };
-
-    if (selectedLocation) {
-
-      settingsToSave.weatherLat = selectedLocation.latitude;
-
-      settingsToSave.weatherLon = selectedLocation.longitude;
-
-      settingsToSave.weatherCityName = selectedLocation.name;
-
-    }
-
-    await browser.storage.local.set(settingsToSave);
-
-    settingsPanel.classList.add('hidden');
-
-    weatherWidget.classList.remove('hidden');
-
-    const data = await browser.storage.local.get(['weatherLat', 'weatherLon', 'weatherCityName', 'weatherUnits']);
-
-    if (data.weatherLat) {
-
-      fetchWeather(data.weatherLat, data.weatherLon, data.weatherUnits, data.weatherCityName);
-
-    } else {
-
+  if (setLocationBtn) {
+    setLocationBtn.addEventListener('click', async () => {
+      await browser.storage.local.remove(['weatherLat', 'weatherLon', 'weatherCityName']);
       startGeolocation();
+    });
+  }
 
-    }
+  if (weatherUseCurrentBtn) {
+    weatherUseCurrentBtn.addEventListener('click', async () => {
+      await browser.storage.local.remove(['weatherLat', 'weatherLon', 'weatherCityName']);
+      startGeolocation();
+      closeWeatherSettingsModal();
+    });
+  }
 
-  });
+  if (weatherLocationInput) {
+    weatherLocationInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(searchForLocation, 300);
+    });
+  }
+
+  if (weatherSettingsCloseBtn) {
+    weatherSettingsCloseBtn.addEventListener('click', closeWeatherSettingsModal);
+  }
+
+  if (weatherSettingsCancelBtn) {
+    weatherSettingsCancelBtn.addEventListener('click', closeWeatherSettingsModal);
+  }
+
+  if (weatherSettingsModal) {
+    weatherSettingsModal.addEventListener('click', (e) => {
+      if (e.target === weatherSettingsModal) {
+        closeWeatherSettingsModal();
+      }
+    });
+  }
+
+  if (weatherSettingsSaveBtn) {
+    weatherSettingsSaveBtn.addEventListener('click', async () => {
+      const newUnit = weatherTempUnitToggle?.checked ? 'fahrenheit' : 'celsius';
+      const existingLocation = await browser.storage.local.get(['weatherLat', 'weatherLon', 'weatherCityName']);
+      const settingsToSave = { weatherUnits: newUnit };
+
+      if (selectedLocation) {
+        settingsToSave.weatherLat = selectedLocation.latitude;
+        settingsToSave.weatherLon = selectedLocation.longitude;
+        settingsToSave.weatherCityName = selectedLocation.name;
+      } else if (existingLocation.weatherLat && existingLocation.weatherLon && existingLocation.weatherCityName) {
+        settingsToSave.weatherLat = existingLocation.weatherLat;
+        settingsToSave.weatherLon = existingLocation.weatherLon;
+        settingsToSave.weatherCityName = existingLocation.weatherCityName;
+      }
+
+      await browser.storage.local.set(settingsToSave);
+
+      const data = await browser.storage.local.get(['weatherLat', 'weatherLon', 'weatherCityName', 'weatherUnits']);
+      if (data.weatherLat) {
+        fetchWeather(data.weatherLat, data.weatherLon, data.weatherUnits, data.weatherCityName);
+      } else {
+        startGeolocation();
+      }
+
+      closeWeatherSettingsModal();
+    });
+  }
 
 
 
@@ -14879,6 +15202,16 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
     await loadCachedQuote();
 
     await loadCachedWeather();
+
+    const storedCats = await browser.storage.local.get([QUOTE_CATEGORIES_FETCHED_AT_KEY]);
+
+    const lastCatFetch = storedCats[QUOTE_CATEGORIES_FETCHED_AT_KEY] || 0;
+
+    if ((Date.now() - lastCatFetch) > CATEGORIES_TTL) {
+
+      fetchAndCacheQuoteCategories();
+
+    }
 
     setupQuoteWidget();
 

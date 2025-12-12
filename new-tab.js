@@ -5900,144 +5900,79 @@ function flattenBookmarks(nodes) {
 
 
 /**
-
- * === MODIFIED ===
-
- * Renders a single bookmark item (MODIFIED for Sortable.js)
-
- * All manual D&D listeners have been removed.
-
+ * === FINAL OPTIMIZED RENDERER ===
+ * Features:
+ * 1. Checks cache first for instant load.
+ * 2. Adds a short grace period on the fallback to eliminate flash for fast loads.
  */
-
 function renderBookmark(bookmarkNode) {
-
-  // --- CHANGED from <a> to <div> ---
-
   const item = document.createElement('div');
-
-  item.className = 'bookmark-item back-button';
-
-
-
-  // --- D&D attributes ---
+  item.className = 'bookmark-item';
+  if (bookmarkNode.isBackButton) item.classList.add('back-button');
 
   item.dataset.bookmarkId = bookmarkNode.id;
-
   item.dataset.isFolder = 'false';
 
-
-
   const title = bookmarkNode.title || ' ';
-
   const firstLetter = title.charAt(0).toLowerCase();
 
-
-
   const iconWrapper = document.createElement('div');
-
   iconWrapper.className = 'bookmark-icon-wrapper';
 
-
-
-  // 1. Create Fallback (Default View)
-
+  // 1. Prepare Fallback (Letter) with Grace Period
   const fallbackIcon = document.createElement('div');
-
   fallbackIcon.className = 'bookmark-fallback-icon';
-
   fallbackIcon.textContent = firstLetter;
-
-  iconWrapper.appendChild(fallbackIcon);
-
-
-
-  // 2. Prepare Loading Spinner (Defined early so we can use it immediately)
-
-  const loader = document.createElement('div');
-
-  loader.className = 'bookmark-loading-spinner';
-
-
-
-  // 3. Create and Load Image
-
+  fallbackIcon.style.opacity = '0';
+  fallbackIcon.style.transition = 'opacity 0.2s ease 0.1s';
+  requestAnimationFrame(() => {
+    fallbackIcon.style.opacity = '1';
+  });
+  
+  // 2. Prepare Image
   const imgIcon = document.createElement('img');
-  imgIcon.decoding = 'async';
-
+  
   let domain = '';
-
   try {
-
     domain = new URL(bookmarkNode.url).hostname;
-
-  } catch (e) {
-
-    // Invalid URL: leave domain empty, fallback will stay
-
-  }
-
-
-
-  // Common function to swap fallback -> image
-
-  const showImage = () => {
-
-    if (imgIcon.naturalWidth > 16) {
-
-      iconWrapper.innerHTML = '';     // Remove fallback
-
-      iconWrapper.appendChild(imgIcon); // Show image
-
-      iconWrapper.appendChild(loader);  // Keep loader structure (hidden by CSS usually)
-
-    }
-
-  };
-
-
+  } catch (e) {}
 
   if (domain.includes('.')) {
+    imgIcon.src = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
 
-    const faviconUrl = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
+    // 3. DECISION MOMENT
+    if (imgIcon.complete && imgIcon.naturalWidth > 16) {
+      // CASE A: Cached & Valid -> Show Image Immediately.
+      iconWrapper.appendChild(imgIcon);
+    } else {
+      // CASE B: Not Cached yet -> Append Invisible Fallback
+      iconWrapper.appendChild(fallbackIcon);
 
-
-
-    imgIcon.addEventListener('load', showImage);
-
-    imgIcon.addEventListener('error', () => { /* Keep fallback */ });
-
-
-
-    imgIcon.src = faviconUrl;
-
-
-
-    // --- FIX: Check immediately if cached ---
-
-    if (imgIcon.complete && imgIcon.naturalWidth > 0) {
-
-      showImage();
-
+      imgIcon.onload = () => {
+        if (imgIcon.naturalWidth > 16) {
+          // If image loads, swap it in.
+          if (iconWrapper.isConnected) {
+            iconWrapper.innerHTML = ''; 
+            iconWrapper.appendChild(imgIcon);
+          } else {
+            iconWrapper.textContent = '';
+            iconWrapper.appendChild(imgIcon);
+          }
+        }
+      };
     }
-
+  } else {
+    // CASE C: No Domain -> Show Fallback (will fade in)
+    iconWrapper.appendChild(fallbackIcon);
   }
 
-
-
   const titleSpan = document.createElement('span');
-
   titleSpan.textContent = bookmarkNode.title;
 
-
-
   item.appendChild(iconWrapper);
-
   item.appendChild(titleSpan);
 
-
-
   return item;
-
 }
 
 

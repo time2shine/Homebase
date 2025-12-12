@@ -1803,6 +1803,8 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
   font-style: italic;
   text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
   justify-content: center;
+  position: relative;
+  padding-bottom: 40px;
 }
 
 /* --- Weather Styles --- */
@@ -1844,6 +1846,49 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
 }
+/* Container for quote actions */
+.quote-actions {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  z-index: 5;
+}
+.widget-quote:hover .quote-actions {
+  opacity: 1;
+}
+.quote-action-btn {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  padding: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: transform 0.1s ease, background-color 0.2s ease;
+}
+.quote-action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+  opacity: 1 !important;
+}
+.quote-action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+/* Reset old copy button positioning */
+#quote-copy-btn {
+  position: relative !important;
+  opacity: 1 !important;
+  transform: none;
+}
 #quote-text {
   margin: 0 0 10px;
   max-height: 250px;
@@ -1859,12 +1904,16 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
 
 /* --- Button Styles --- */
 .icon-btn {
+  position: relative;
   background: none;
   border: none;
   color: white;
   font-size: 1.5em;
   cursor: pointer;
   opacity: 0.7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .icon-btn:hover { opacity: 1; }
 .widget-weather:hover #settings-btn { opacity: 1; }

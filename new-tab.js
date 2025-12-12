@@ -7383,6 +7383,10 @@ const quoteText = document.getElementById('quote-text');
 
 const quoteAuthor = document.getElementById('quote-author');
 
+const quoteCopyBtn = document.getElementById('quote-copy-btn');
+
+const quoteNextBtn = document.getElementById('quote-next-btn');
+
 const DEFAULT_QUOTE_TAG = 'inspirational';
 
 const QUOTE_FREQUENCY_KEY = 'quoteUpdateFrequency';
@@ -7392,6 +7396,10 @@ const QUOTE_LAST_FETCH_KEY = 'quoteLastFetched';
 const QUOTE_CATEGORIES_CACHE_KEY = 'quoteCategoriesCache';
 
 const QUOTE_CATEGORIES_FETCHED_AT_KEY = 'quoteCategoriesFetchedAt';
+
+const QUOTE_BUFFER_KEY = 'quoteBufferCache';
+
+const QUOTE_BUFFER_SIZE = 5;
 
 const CATEGORIES_TTL = 24 * 60 * 60 * 1000; // 24 Hours
 
@@ -7439,120 +7447,104 @@ async function loadCachedQuote() {
 
 
 
+// Buffer quotes in advance so they can render instantly even if offline
+async function refillQuoteBuffer(tags = []) {
+  try {
+    const stored = await browser.storage.local.get(QUOTE_BUFFER_KEY);
+    let buffer = stored[QUOTE_BUFFER_KEY] || [];
+
+    if (buffer.length >= QUOTE_BUFFER_SIZE) return;
+
+    const needed = QUOTE_BUFFER_SIZE - buffer.length;
+    const tagsQuery = tags.length > 0 ? tags.join('|') : DEFAULT_QUOTE_TAG;
+    const res = await fetch(`https://api.quotable.io/quotes/random?limit=${needed}&tags=${encodeURIComponent(tagsQuery)}`);
+    if (!res.ok) return;
+
+    const newQuotes = await res.json();
+    const list = Array.isArray(newQuotes) ? newQuotes : [newQuotes];
+    const existingIds = new Set(buffer.map((q) => q._id));
+
+    list.forEach((q) => {
+      if (!existingIds.has(q._id)) {
+        buffer.push({ content: q.content, author: q.author, _id: q._id });
+      }
+    });
+
+    await browser.storage.local.set({ [QUOTE_BUFFER_KEY]: buffer });
+  } catch (e) {
+    console.warn('Background quote buffering failed', e);
+  }
+}
+
+
+
 async function fetchQuote() {
 
   try {
 
-    const data = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY, QUOTE_LAST_FETCH_KEY, 'cachedQuote', 'cachedAuthor']);
-
-    let tagsToFetch = data.quoteTags;
-
-    if (!tagsToFetch || tagsToFetch.length === 0) tagsToFetch = [DEFAULT_QUOTE_TAG];
-
-    const freq = data[QUOTE_FREQUENCY_KEY] || 'always';
-
+    const data = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY, QUOTE_LAST_FETCH_KEY, 'cachedQuote', 'cachedAuthor', QUOTE_BUFFER_KEY]);
+    const freq = data[QUOTE_FREQUENCY_KEY] || 'hourly';
     const lastFetch = data[QUOTE_LAST_FETCH_KEY] || 0;
-
     const now = Date.now();
+    let tags = data.quoteTags || [DEFAULT_QUOTE_TAG];
 
-    let shouldFetch = true;
+    let shouldUpdate = false;
+    if (freq === 'always') shouldUpdate = true;
+    else if (freq === 'hourly' && (now - lastFetch > 3600 * 1000)) shouldUpdate = true;
+    else if (freq === 'daily' && (now - lastFetch > 86400 * 1000)) shouldUpdate = true;
 
-    if (freq === 'hourly' && (now - lastFetch < 3600 * 1000)) shouldFetch = false;
-
-    if (freq === 'daily' && (now - lastFetch < 86400 * 1000)) shouldFetch = false;
-
-    if (!shouldFetch && data.cachedQuote) {
-
+    if (!shouldUpdate && data.cachedQuote) {
       quoteText.textContent = `\"${data.cachedQuote}\"`;
-
       quoteAuthor.textContent = data.cachedAuthor ? `- ${data.cachedAuthor}` : '';
+      revealWidget('.widget-quote');
+      runWhenIdle(() => refillQuoteBuffer(tags));
+      return;
+    }
 
+    let buffer = data[QUOTE_BUFFER_KEY] || [];
+    let nextQuote = null;
+
+    if (buffer.length > 0) {
+      nextQuote = buffer.shift();
+      await browser.storage.local.set({
+        [QUOTE_BUFFER_KEY]: buffer,
+        cachedQuote: nextQuote.content,
+        cachedAuthor: nextQuote.author,
+        [QUOTE_LAST_FETCH_KEY]: now
+      });
+
+      quoteText.textContent = `\"${nextQuote.content}\"`;
+      quoteAuthor.textContent = nextQuote.author ? `- ${nextQuote.author}` : '';
+      revealWidget('.widget-quote');
+      runWhenIdle(() => refillQuoteBuffer(tags));
+    } else {
+      console.log('Quote buffer empty, fetching live...');
+      const tagsQuery = tags.join('|');
+      const res = await fetch(`https://api.quotable.io/quotes/random?limit=1&tags=${encodeURIComponent(tagsQuery)}`);
+      if (!res.ok) throw new Error('API Fail');
+      const arr = await res.json();
+      nextQuote = Array.isArray(arr) ? arr[0] : arr;
+
+      quoteText.textContent = `\"${nextQuote.content}\"`;
+      quoteAuthor.textContent = nextQuote.author ? `- ${nextQuote.author}` : '';
       revealWidget('.widget-quote');
 
-      return;
+      await browser.storage.local.set({
+        cachedQuote: nextQuote.content,
+        cachedAuthor: nextQuote.author,
+        [QUOTE_LAST_FETCH_KEY]: now
+      });
 
-    }
-
-    const tagsQuery = tagsToFetch.join('|');
-
-    const res = await fetch(`https://api.quotable.io/quotes/random?limit=1&tags=${encodeURIComponent(tagsQuery)}`, {
-
-      cache: 'no-store'
-
-    });
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const arr = await res.json();
-
-    const q = Array.isArray(arr) ? arr[0] : arr;
-
-    
-
-    if (!q || !q.content) {
-
-      if (tagsQuery !== DEFAULT_QUOTE_TAG) {
-
-        console.warn(`No quotes found for tags: ${tagsQuery}. Falling back to default.`);
-
-        await browser.storage.local.remove('quoteTags');
-
-        fetchQuote();
-
-        return;
-
-      } else {
-
-        throw new Error('Malformed response or no default quote found');
-
-      }
-
-    }
-
-    quoteText.textContent = `\"${q.content}\"`;
-
-    quoteAuthor.textContent = q.author ? `- ${q.author}` : '';
-
-    browser.storage.local.set({
-
-      cachedQuote: q.content,
-
-      cachedAuthor: q.author || '',
-
-      [QUOTE_LAST_FETCH_KEY]: now
-
-    });
-
-
-
-    revealWidget('.widget-quote');
-
-    // Mirror quote to localStorage for instant paint on next load
-    try {
-      localStorage.setItem('fast-quote', JSON.stringify({
-        text: q.content,
-        author: q.author
-      }));
-    } catch (e) {
-      // If localStorage is unavailable, fail silently.
+      runWhenIdle(() => refillQuoteBuffer(tags));
     }
 
   } catch (err) {
-
-    console.error('Quote Error:', err);
-
-    if (!quoteText.textContent.includes('"')) {
-
-      quoteText.textContent = '"The best way to predict the future is to create it."';
-
-      quoteAuthor.textContent = '- Peter Drucker';
-
+    console.warn('Quote failed, using fallback', err);
+    if (!quoteText.textContent) {
+      quoteText.textContent = '"The only way to do great work is to love what you do."';
+      quoteAuthor.textContent = '- Steve Jobs';
     }
-
-
-
     revealWidget('.widget-quote');
-
   }
 
 }
@@ -7641,7 +7633,7 @@ async function openQuoteSettingsModal(triggerSource) {
   populateQuoteCategories();
   const data = await browser.storage.local.get(QUOTE_FREQUENCY_KEY);
   if (quoteFrequencySelect) {
-    quoteFrequencySelect.value = data[QUOTE_FREQUENCY_KEY] || 'always';
+    quoteFrequencySelect.value = data[QUOTE_FREQUENCY_KEY] || 'hourly';
   }
   openModalWithAnimation('quote-settings-modal', triggerSource || null, '.dialog-content');
 }
@@ -7663,6 +7655,64 @@ function setupQuoteWidget() {
   if (quoteSettingsCancelBtn) {
 
     quoteSettingsCancelBtn.addEventListener('click', closeQuoteSettingsModal);
+
+  }
+
+  if (quoteCopyBtn) {
+
+    quoteCopyBtn.addEventListener('click', () => {
+
+      const text = quoteText.textContent;
+
+      const author = quoteAuthor.textContent;
+
+      const fullQuote = `${text} ${author}`.trim();
+
+      navigator.clipboard.writeText(fullQuote).then(() => {
+
+        const originalIcon = quoteCopyBtn.innerHTML;
+
+        quoteCopyBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+        setTimeout(() => {
+
+          quoteCopyBtn.innerHTML = originalIcon;
+
+        }, 1500);
+
+      });
+
+    });
+
+  }
+
+  if (quoteNextBtn) {
+
+    quoteNextBtn.addEventListener('click', async () => {
+
+      const icon = quoteNextBtn.querySelector('svg');
+
+      if (icon) {
+
+        icon.style.transition = 'transform 0.4s ease';
+
+        icon.style.transform = 'rotate(360deg)';
+
+        setTimeout(() => {
+
+          icon.style.transition = 'none';
+
+          icon.style.transform = 'none';
+
+        }, 400);
+
+      }
+
+      await browser.storage.local.set({ [QUOTE_LAST_FETCH_KEY]: 0 });
+
+      fetchQuote();
+
+    });
 
   }
 
@@ -7688,7 +7738,9 @@ function setupQuoteWidget() {
 
       const selectedTags = Array.from(selectedPills).map((pill) => pill.dataset.value);
 
-      const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : 'always';
+      const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : 'hourly';
+
+      await browser.storage.local.remove(QUOTE_BUFFER_KEY);
 
       await browser.storage.local.set({ quoteTags: selectedTags, [QUOTE_FREQUENCY_KEY]: frequency, [QUOTE_LAST_FETCH_KEY]: 0 });
 

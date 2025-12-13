@@ -1,12 +1,19 @@
 (function() {
   try {
-    // --- 1. Instant Clock (Keep existing logic) ---
+    // --- 1. Instant Clock ---
     const nowTime = new Date();
     const timeEl = document.getElementById('current-time');
     const dateEl = document.getElementById('current-date');
     const timeWidget = document.querySelector('.widget-time');
 
-    if (timeEl) timeEl.textContent = nowTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    // FIX: Check localStorage for 24-hour preference
+    let use12Hour = true; 
+    try {
+      const storedFmt = localStorage.getItem('fast-time-format');
+      if (storedFmt === '24-hour') use12Hour = false;
+    } catch (e) {}
+
+    if (timeEl) timeEl.textContent = nowTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: use12Hour });
     if (dateEl) dateEl.textContent = nowTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
     if (timeWidget) {
@@ -14,23 +21,38 @@
       timeWidget.classList.add('widget-visible');
     }
 
-    // --- 2. Instant Weather (Keep existing logic) ---
+    // --- 2. Instant Weather (FIXED KEY MAPPING) ---
     const wData = localStorage.getItem('fast-weather');
     if (wData) {
       const w = JSON.parse(wData);
       // Valid for 1 hour
       if (w.__timestamp && (Date.now() - w.__timestamp < 3600000)) {
-        const ids = ['weather-city','weather-temp','weather-desc','weather-icon',
-                     'weather-pressure','weather-humidity','weather-cloudcover',
-                     'weather-precip-prob','weather-sunrise','weather-sunset'];
         
-        ids.forEach(id => {
+        // Map DOM IDs to the exact JSON keys saved in new-tab.js
+        const fieldMap = {
+          'weather-city': 'city',
+          'weather-temp': 'temp',
+          'weather-desc': 'desc',
+          'weather-icon': 'icon',
+          'weather-pressure': 'pressure',
+          'weather-humidity': 'humidity',
+          'weather-cloudcover': 'cloudcover',
+          'weather-precip-prob': 'precipProb', // <--- Fixed this key
+          'weather-sunrise': 'sunrise',
+          'weather-sunset': 'sunset'
+        };
+
+        Object.keys(fieldMap).forEach(id => {
+          const key = fieldMap[id];
+          const val = w[key];
           const el = document.getElementById(id);
-          const key = id.replace('weather-', '');
-          // Map specific keys if needed, or assume direct match
-          let val = w[key === 'city' ? 'city' : key]; 
+
           if (id === 'weather-icon') {
-             if (el) { el.textContent = w.icon; el.style.fontSize = '3.5em'; el.style.lineHeight = '1'; }
+             if (el && val) { 
+               el.textContent = val; 
+               el.style.fontSize = '3.5em'; 
+               el.style.lineHeight = '1'; 
+             }
           } else if (el && val) {
              el.textContent = val;
           }
@@ -44,7 +66,7 @@
       }
     }
 
-    // --- 3. Instant Search (Keep existing logic) ---
+    // --- 3. Instant Search ---
     const sData = localStorage.getItem('fast-search');
     if (sData) {
       const s = JSON.parse(sData);
@@ -65,10 +87,8 @@
       }
     }
 
-    // --- 4. Instant Quote (REBUILT: Promote Strategy) ---
-    // Architecture: { current: {text, author}, next: {text, author}, config: {freq, lastShown} }
+    // --- 4. Instant Quote ---
     const qRaw = localStorage.getItem('fast-quote-state');
-    
     if (qRaw) {
       let state = JSON.parse(qRaw);
       const now = Date.now();
@@ -80,17 +100,13 @@
       else if (freq === 'hourly' && (now - lastShown > 3600 * 1000)) shouldRotate = true;
       else if (freq === 'daily' && (now - lastShown > 86400 * 1000)) shouldRotate = true;
 
-      // PROMOTE: If valid next quote exists and time is up, swap it NOW.
       if (shouldRotate && state.next && state.next.text) {
         state.current = state.next;
-        state.next = null; // Clear next so new-tab.js knows to refill
+        state.next = null; 
         state.config.lastShown = now;
-        
-        // Save synchronously so new-tab.js sees the update
         localStorage.setItem('fast-quote-state', JSON.stringify(state));
       }
 
-      // RENDER: Always render 'current'. It is now guaranteed to be the correct one.
       if (state.current && state.current.text) {
         const qText = document.getElementById('quote-text');
         const qAuthor = document.getElementById('quote-author');

@@ -7901,6 +7901,13 @@ function applyTimeFormatPreference(format = '12-hour') {
 
   timeFormatPreference = format === '12-hour' ? '12-hour' : '24-hour';
 
+  // FIX: Sync to localStorage so instant_load.js knows the preference immediately
+  try {
+    localStorage.setItem('fast-time-format', timeFormatPreference);
+  } catch (e) {
+    // Ignore if cookies/storage are disabled
+  }
+
 }
 
 

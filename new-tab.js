@@ -6281,6 +6281,8 @@ function createBackButton(parentId) {
  */
 
 function updateVirtualGrid() {
+  // === FIX: Stop updates while dragging to prevent DOM recycling errors ===
+  if (isGridDragging) return;
 
   if (!virtualizerState.isEnabled || !virtualizerState.items.length) return;
 
@@ -17382,177 +17384,74 @@ async function applyMyWallpaper(item) {
 
 
 async function handleMyWallpaperUpload(files = [], mode = 'static') {
-
   const isLive = mode === 'live';
-
   
-
-  // Find the correct file based on mode
-
+  // 1. Find the correct file
   const file = files.find((f) => {
-
     if (!f) return false;
-
     const name = (f.name || '').toLowerCase();
-
     const type = (f.type || '').toLowerCase();
-
     
-
     if (isLive) {
-
       return type.includes('video') || type.includes('gif') || name.endsWith('.mp4') || name.endsWith('.gif');
-
     }
-
     return type.startsWith('image/');
-
   });
 
-
-
   if (!file) {
-
     alert(isLive ? 'Please select a live wallpaper file (.mp4 or .gif).' : 'Please select an image file (.png, .jpg, .jpeg, .webp).');
-
     return;
-
   }
-
-
 
   const title = (file.name || 'My wallpaper').replace(/\.[^/.]+$/, '');
-
   const id = `mywallpaper-${Date.now()}`;
+  
+  // 2. Generate a Unique Cache Key
+  // We use this key to retrieve the file from the Cache API later
+  const cacheKey = normalizeWallpaperCacheKey(`user-upload-${id}-${file.name}`);
 
-
-
-  if (isLive) {
-
-    const cacheKey = normalizeWallpaperCacheKey(`mywallpaper-cache-${id}`);
-
-    
-
-    // --- FIX START: Force correct MIME type for MP4s ---
-
-    let mimeType = file.type;
-
-    const nameLower = (file.name || '').toLowerCase();
-
-    
-
-    // If browser didn't detect type, or defaulted to generic, force video/mp4
-
-    if (!mimeType || mimeType === 'application/octet-stream') {
-
-      if (nameLower.endsWith('.mp4')) {
-
-        mimeType = 'video/mp4';
-
-      } else if (nameLower.endsWith('.gif')) {
-
-        mimeType = 'image/gif';
-
-      }
-
-    }
-
-    // --- FIX END ---
-
-
-
-    // Save to cache with the CORRECT mime type
-
-    await cacheUserWallpaperFile(cacheKey, file, mimeType);
-
-
-
-    let posterUrl = '';
-
-    if (mimeType === 'image/gif') {
-
-      posterUrl = await readFileAsDataUrl(file);
-
-    } else {
-
-      posterUrl = await buildVideoPosterFromFile(file);
-
-    }
-
-
-
-    if (!posterUrl) {
-
-      posterUrl = 'assets/fallback.webp';
-
-    }
-
-
-
-    const item = {
-
-      id,
-
-      cacheKey,
-
-      mimeType: mimeType || 'video/mp4', // Store it explicitly
-
-      title,
-
-      type: 'video',
-
-      posterUrl
-
-    };
-
-
-
-    myWallpapers.unshift(item);
-
-    await persistMyWallpapers();
-
-    renderMyWallpapers();
-
-    return;
-
+  // 3. OPTIMIZATION: Save file to Cache API immediately
+  // This stores the raw binary data in browser cache, avoiding the 5MB storage limit.
+  // We force the MIME type to ensure playback works.
+  let mimeType = file.type;
+  const nameLower = (file.name || '').toLowerCase();
+  
+  if (!mimeType || mimeType === 'application/octet-stream') {
+    if (nameLower.endsWith('.mp4')) mimeType = 'video/mp4';
+    else if (nameLower.endsWith('.gif')) mimeType = 'image/gif';
+    else if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) mimeType = 'image/jpeg';
+    else if (nameLower.endsWith('.png')) mimeType = 'image/png';
+    else if (nameLower.endsWith('.webp')) mimeType = 'image/webp';
   }
 
+  await cacheUserWallpaperFile(cacheKey, file, mimeType);
 
-
-  // Static image handling...
-
-  const dataUrl = await readFileAsDataUrl(file);
-
-  if (!dataUrl) {
-
-    alert('Unable to load that image. Please try another file.');
-
-    return;
-
-  }
-
-  const item = {
-
+  // 4. Create the Metadata Object
+  // notice we DO NOT store 'url' (Base64). We only store 'cacheKey'.
+  let item = {
     id,
-
-    url: dataUrl,
-
-    posterUrl: dataUrl,
-
     title,
-
-    type: 'image',
-
-    mimeType: file.type || ''
-
+    cacheKey,     // <--- The reference to the data
+    mimeType,
+    type: isLive ? 'video' : 'image',
+    posterUrl: '' // Will be generated below
   };
 
+  // 5. Generate Thumbnails (Posters)
+  if (isLive && !item.mimeType.includes('gif')) {
+    // For Video: Generate a poster frame
+    const posterDataUrl = await buildVideoPosterFromFile(file);
+    item.posterUrl = posterDataUrl || 'assets/fallback.webp';
+  } else {
+    // For Images/GIFs: Use the file itself as the poster
+    // We create a temporary blob URL for immediate rendering
+    item.posterUrl = URL.createObjectURL(file);
+  }
+
+  // 6. Save & Render
   myWallpapers.unshift(item);
-
-  await persistMyWallpapers();
-
+  await persistMyWallpapers(); // Saves only metadata to storage.local
   renderMyWallpapers();
-
 }
 
 

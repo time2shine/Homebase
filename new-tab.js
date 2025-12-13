@@ -2088,6 +2088,22 @@ let galleryActiveTag = null;
 
 let gallerySection = 'gallery'; // gallery | favorites | my-wallpapers | settings (future)
 
+const GALLERY_BATCH_SIZE = 24;
+
+let galleryRenderQueue = [];
+
+let galleryRenderIndex = 0;
+
+let galleryLoadMoreObserver = null;
+
+let myWallpapersRenderQueue = [];
+
+let myWallpapersRenderIndex = 0;
+
+let myWallpapersLoadMoreObserver = null;
+
+const MY_WALLPAPERS_BATCH_SIZE = 24;
+
 let galleryFavorites = new Set();
 
 let currentWallpaperSelection = null;
@@ -16598,20 +16614,16 @@ function buildGalleryCard(item, index = 0) {
 
   card.className = 'gallery-card';
 
+  card.dataset.id = item.id;
+
   
 
   const escapeHtml = (str = '') => String(str).replace(/[&<>"']/g, (char) => ({
-
     '&': '&amp;',
-
     '<': '&lt;',
-
     '>': '&gt;',
-
     '"': '&quot;',
-
     "'": '&#39;'
-
   }[char] || char));
 
 
@@ -16675,77 +16687,6 @@ function buildGalleryCard(item, index = 0) {
     ${tagsHtml ? `<div class="gallery-card-tags">${tagsHtml}</div>` : ''}
 
   `;
-
-
-
-  const tagButtons = card.querySelectorAll('.gallery-card-tag');
-
-  tagButtons.forEach((tagEl) => {
-
-    tagEl.addEventListener('click', (e) => {
-
-      e.stopPropagation();
-
-      const tagValue = (tagEl.dataset.tag || tagEl.textContent || '').trim();
-
-      if (tagValue) {
-
-        setGalleryTagFilter(tagValue);
-
-      }
-
-    });
-
-  });
-
-
-
-  const applyBtn = card.querySelector('.gallery-card-apply');
-
-  applyBtn.addEventListener('click', async (e) => {
-
-    e.stopPropagation();
-
-    await applyGalleryWallpaper(item);
-
-  });
-
-
-
-  const favBtn = card.querySelector('.gallery-fav-btn');
-
-  favBtn.addEventListener('click', async (e) => {
-
-    e.stopPropagation(); // Stop the card click
-
-    
-
-    // Toggle class immediately for animation
-
-    const isNowActive = !favBtn.classList.contains('is-active');
-
-    favBtn.classList.toggle('is-active', isNowActive);
-
-
-
-    // Determine if we need to re-render (only if viewing Favorites tab)
-
-    const shouldSkipRender = gallerySection !== 'favorites';
-
-    
-
-    await toggleFavorite(item.id, shouldSkipRender);
-
-  });
-
-
-
-  card.addEventListener('click', async () => {
-
-    await applyGalleryWallpaper(item);
-
-  });
-
 
 
   return card;
@@ -16868,15 +16809,110 @@ function renderGallery(manifest = []) {
 
   if (!galleryGrid) return;
 
+  const observer = getGalleryLoadMoreObserver();
+  if (observer) {
+    observer.disconnect();
+  }
+
   galleryGrid.innerHTML = '';
+  galleryRenderQueue = Array.isArray(manifest) ? manifest : [];
+  galleryRenderIndex = 0;
 
-  manifest.forEach((item, idx) => {
+  if (!galleryRenderQueue.length) {
+    return;
+  }
 
-    const card = buildGalleryCard(item, idx);
+  renderNextGalleryBatch();
 
-    galleryGrid.appendChild(card);
+  const sentinel = document.createElement('div');
+  sentinel.id = 'gallery-sentinel';
+  sentinel.style.height = '20px';
+  sentinel.style.width = '100%';
+  galleryGrid.appendChild(sentinel);
+
+  if (observer) {
+    observer.observe(sentinel);
+  }
+
+}
+
+
+
+function getGalleryLoadMoreObserver() {
+
+  if (!galleryGrid) return null;
+
+  if (!galleryLoadMoreObserver) {
+
+    galleryLoadMoreObserver = new IntersectionObserver((entries) => {
+
+      const entry = entries[0];
+
+      if (entry && entry.isIntersecting) {
+
+        renderNextGalleryBatch();
+
+      }
+
+    }, { root: galleryGrid, rootMargin: '400px' });
+
+  }
+
+  return galleryLoadMoreObserver;
+
+}
+
+
+
+function renderNextGalleryBatch() {
+
+  if (!galleryGrid) return;
+
+  if (galleryRenderIndex >= galleryRenderQueue.length) {
+
+    if (galleryLoadMoreObserver) {
+
+      galleryLoadMoreObserver.disconnect();
+
+    }
+
+    return;
+
+  }
+
+  const batch = galleryRenderQueue.slice(galleryRenderIndex, galleryRenderIndex + GALLERY_BATCH_SIZE);
+
+  const fragment = document.createDocumentFragment();
+
+  batch.forEach((item, idx) => {
+
+    const card = buildGalleryCard(item, galleryRenderIndex + idx);
+
+    card.dataset.id = item.id;
+
+    fragment.appendChild(card);
 
   });
+
+  const sentinel = document.getElementById('gallery-sentinel');
+
+  if (sentinel) {
+
+    galleryGrid.insertBefore(fragment, sentinel);
+
+  } else {
+
+    galleryGrid.appendChild(fragment);
+
+  }
+
+  galleryRenderIndex += batch.length;
+
+  if (galleryRenderIndex >= galleryRenderQueue.length && galleryLoadMoreObserver) {
+
+    galleryLoadMoreObserver.disconnect();
+
+  }
 
 }
 
@@ -16943,6 +16979,313 @@ function renderCurrentGallery() {
     myWallpapersGrid.classList.toggle('hidden', !isMyWallpapers || !hasItems);
 
   }
+
+}
+
+
+
+if (galleryGrid) {
+
+  // Single delegated listener to avoid per-card handlers
+  galleryGrid.addEventListener('click', async (e) => {
+
+    const target = e.target;
+
+    if (!target) return;
+
+
+    const tagEl = target.closest('.gallery-card-tag');
+
+    if (tagEl) {
+
+      e.stopPropagation();
+
+      const tag = (tagEl.dataset.tag || tagEl.textContent || '').trim();
+
+      if (tag) {
+
+        setGalleryTagFilter(tag);
+
+      }
+
+      return;
+
+    }
+
+
+    const favBtn = target.closest('.gallery-fav-btn');
+
+    if (favBtn) {
+
+      e.stopPropagation();
+
+      const card = favBtn.closest('.gallery-card');
+
+      const id = card?.dataset.id;
+
+      favBtn.classList.toggle('is-active');
+
+      if (id) {
+
+        await toggleFavorite(id, gallerySection !== 'favorites');
+
+      }
+
+      return;
+
+    }
+
+
+    const applyBtn = target.closest('.gallery-card-apply');
+
+    if (applyBtn) {
+
+      e.stopPropagation();
+
+      const card = applyBtn.closest('.gallery-card');
+
+      const id = card?.dataset.id;
+
+      if (id) {
+
+        const item = galleryManifest.find((i) => String(i.id) === id);
+
+        if (item) {
+
+          await applyGalleryWallpaper(item);
+
+        }
+
+      }
+
+      return;
+
+    }
+
+
+    const card = target.closest('.gallery-card');
+
+    if (card) {
+
+      const id = card.dataset.id;
+
+      const item = galleryManifest.find((i) => String(i.id) === id);
+
+      if (item) {
+
+        await applyGalleryWallpaper(item);
+
+      }
+
+    }
+
+  });
+
+}
+
+
+
+function getMyWallpapersLoadMoreObserver() {
+
+  if (!myWallpapersGrid) return null;
+
+  if (!myWallpapersLoadMoreObserver) {
+
+    myWallpapersLoadMoreObserver = new IntersectionObserver((entries) => {
+
+      const entry = entries[0];
+
+      if (entry && entry.isIntersecting) {
+
+        renderNextMyWallpaperBatch();
+
+      }
+
+    }, { root: myWallpapersGrid, rootMargin: '400px' });
+
+  }
+
+  return myWallpapersLoadMoreObserver;
+
+}
+
+
+
+function renderNextMyWallpaperBatch() {
+
+  if (!myWallpapersGrid) return;
+
+  if (myWallpapersRenderIndex >= myWallpapersRenderQueue.length) {
+
+    if (myWallpapersLoadMoreObserver) {
+
+      myWallpapersLoadMoreObserver.disconnect();
+
+    }
+
+    return;
+
+  }
+
+  const batch = myWallpapersRenderQueue.slice(myWallpapersRenderIndex, myWallpapersRenderIndex + MY_WALLPAPERS_BATCH_SIZE);
+
+  const fragment = document.createDocumentFragment();
+
+  const mediaObserver = getMyWallpaperMediaObserver();
+
+  batch.forEach((item) => {
+
+    const card = document.createElement('div');
+
+    card.className = 'gallery-card mw-card';
+
+    card.dataset.id = item.id;
+
+    const titleText = item.title || 'Wallpaper';
+
+    const needsMarquee = titleText.length > 20;
+
+    const marqueeDuration = 6; // uniform speed for all marquee titles
+
+    const isVideo = item.type === 'video';
+
+    const isGif = isVideo && (item.mimeType === 'image/gif' || (item.title || '').toLowerCase().endsWith('.gif'));
+
+    const binTopIcon = useSvgIcon('binTop');
+
+    const binBottomIcon = useSvgIcon('binBottom');
+
+    const binGarbageIcon = useSvgIcon('binGarbage');
+
+    card.innerHTML = `
+
+      <button type="button" class="mw-card-remove bin-button" aria-label="Delete">
+
+        ${binTopIcon}
+
+        ${binBottomIcon}
+
+        ${binGarbageIcon}
+
+      </button>
+
+      <div class="mw-card-media gallery-card-image"></div>
+
+      <div class="mw-card-body gallery-card-meta">
+
+        <div class="mw-card-text">
+
+          <p class="mw-card-title gallery-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
+
+          <p class="mw-card-meta">${isVideo ? 'Live upload' : 'Static upload'}</p>
+
+        </div>
+
+        <button type="button" class="mw-card-btn apply-button gallery-card-apply" data-id="${item.id}">
+
+          Apply
+
+        </button>
+
+      </div>
+
+    `;
+
+    const media = card.querySelector('.mw-card-media');
+
+    if (media) {
+
+      media.dataset.mediaLoaded = 'false';
+
+      if (isVideo && !isGif) {
+
+        media.dataset.wallpaperId = item.id;
+
+        media.style.backgroundImage = `url("${item.posterUrl || 'assets/fallback.webp'}")`;
+
+        mediaObserver.observe(media);
+
+      } else {
+
+        delete media.dataset.wallpaperId;
+
+        renderMyWallpaperMedia(media, item);
+
+      }
+
+    }
+
+    fragment.appendChild(card);
+
+  });
+
+  const sentinel = document.getElementById('mw-sentinel');
+
+  if (sentinel) {
+
+    myWallpapersGrid.insertBefore(fragment, sentinel);
+
+  } else {
+
+    myWallpapersGrid.appendChild(fragment);
+
+  }
+
+  myWallpapersRenderIndex += batch.length;
+
+  if (myWallpapersRenderIndex >= myWallpapersRenderQueue.length && myWallpapersLoadMoreObserver) {
+
+    myWallpapersLoadMoreObserver.disconnect();
+
+  }
+
+}
+
+
+
+if (myWallpapersGrid) {
+
+  myWallpapersGrid.addEventListener('click', (e) => {
+
+    const target = e.target;
+
+    if (!target) return;
+
+    const card = target.closest('.mw-card');
+
+    if (!card) return;
+
+    const id = card.dataset.id;
+
+    const item = (myWallpapers || []).find((mw) => String(mw.id) === id);
+
+    if (!item) return;
+
+    if (target.closest('.mw-card-remove')) {
+
+      e.stopPropagation();
+
+      removeMyWallpaper(id);
+
+      return;
+
+    }
+
+    if (target.closest('.mw-card-btn')) {
+
+      e.stopPropagation();
+
+      applyMyWallpaper(item);
+
+      return;
+
+    }
+
+    e.stopPropagation();
+
+    applyMyWallpaper(item);
+
+  });
 
 }
 
@@ -17324,129 +17667,51 @@ function renderMyWallpapers() {
 
   if (!myWallpapersGrid) return;
 
-  const observer = getMyWallpaperMediaObserver();
+  const mediaObserver = getMyWallpaperMediaObserver();
 
-  observer.disconnect();
+  mediaObserver.disconnect();
+
+  const loadMoreObserver = getMyWallpapersLoadMoreObserver();
+
+  if (loadMoreObserver) {
+
+    loadMoreObserver.disconnect();
+
+  }
 
   myWallpapersGrid.innerHTML = '';
 
-  const items = Array.isArray(myWallpapers) ? myWallpapers : [];
+  myWallpapersRenderQueue = Array.isArray(myWallpapers) ? myWallpapers : [];
 
-  items.forEach((item) => {
+  myWallpapersRenderIndex = 0;
 
-    const card = document.createElement('div');
-
-    card.className = 'gallery-card mw-card';
-
-    const titleText = item.title || 'Wallpaper';
-
-    const needsMarquee = titleText.length > 20;
-
-    const marqueeDuration = 6; // uniform speed for all marquee titles
-
-    const isVideo = item.type === 'video';
-
-    const isGif = isVideo && (item.mimeType === 'image/gif' || (item.title || '').toLowerCase().endsWith('.gif'));
-
-    const binTopIcon = useSvgIcon('binTop');
-
-    const binBottomIcon = useSvgIcon('binBottom');
-
-    const binGarbageIcon = useSvgIcon('binGarbage');
-
-    card.innerHTML = `
-
-      <button type="button" class="mw-card-remove bin-button" aria-label="Delete">
-
-        ${binTopIcon}
-
-        ${binBottomIcon}
-
-        ${binGarbageIcon}
-
-      </button>
-
-      <div class="mw-card-media gallery-card-image"></div>
-
-      <div class="mw-card-body gallery-card-meta">
-
-        <div class="mw-card-text">
-
-          <p class="mw-card-title gallery-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
-
-          <p class="mw-card-meta">${isVideo ? 'Live upload' : 'Static upload'}</p>
-
-        </div>
-
-        <button type="button" class="mw-card-btn apply-button gallery-card-apply" data-id="${item.id}">
-
-          Apply
-
-        </button>
-
-      </div>
-
-    `;
-
-    const media = card.querySelector('.mw-card-media');
-
-    if (media) {
-
-      media.dataset.mediaLoaded = 'false';
-
-      if (isVideo && !isGif) {
-
-        media.dataset.wallpaperId = item.id;
-
-        media.style.backgroundImage = `url("${item.posterUrl || 'assets/fallback.webp'}")`;
-
-        observer.observe(media);
-
-      } else {
-
-        delete media.dataset.wallpaperId;
-
-        renderMyWallpaperMedia(media, item);
-
-      }
-
-    }
-
-    const applyBtn = card.querySelector('.mw-card-btn');
-
-    applyBtn.addEventListener('click', (e) => {
-
-      e.stopPropagation();
-
-      applyMyWallpaper(item);
-
-    });
-
-    const deleteBtn = card.querySelector('.mw-card-remove');
-
-    deleteBtn.addEventListener('click', (e) => {
-
-      e.stopPropagation();
-
-      removeMyWallpaper(item.id);
-
-    });
-
-    card.addEventListener('click', () => applyMyWallpaper(item));
-
-    myWallpapersGrid.appendChild(card);
-
-  });
-
-
-
-  const hasItems = items.length > 0;
+  const hasItems = myWallpapersRenderQueue.length > 0;
 
   myWallpapersGrid.classList.toggle('hidden', !hasItems);
 
   if (myWallpapersEmptyCard) {
 
     myWallpapersEmptyCard.classList.toggle('hidden', hasItems);
+
+  }
+
+  if (!hasItems) return;
+
+  renderNextMyWallpaperBatch();
+
+  const sentinel = document.createElement('div');
+
+  sentinel.id = 'mw-sentinel';
+
+  sentinel.style.height = '20px';
+
+  sentinel.style.width = '100%';
+
+  myWallpapersGrid.appendChild(sentinel);
+
+  if (loadMoreObserver) {
+
+    loadMoreObserver.observe(sentinel);
 
   }
 

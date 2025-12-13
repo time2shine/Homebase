@@ -932,6 +932,14 @@
             </div>
 
             <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Glassmorphism Style</div>
+                <div class="hint">Choose the visual style of the interface.</div>
+              </div>
+              <button id="app-configure-glass-btn" class="gallery-secondary-btn">Configure</button>
+            </div>
+
+            <div class="app-setting-row">
 
               <div class="app-setting-label">
 
@@ -1483,7 +1491,7 @@
 
   <div id="gallery-modal" class="modal-overlay hidden">
 
-    <div class="gallery-dialog glass-box">
+   <div class="gallery-dialog">
 
       <div class="gallery-header">
 
@@ -2450,6 +2458,27 @@
     </div>
   </div>
 
+  <div id="glass-settings-modal" class="modal-overlay hidden">
+    <div id="glass-settings-dialog" class="dialog-content glass-box" style="width: 550px; max-height: 85vh; display: flex; flex-direction: column;">
+      <button id="glass-settings-close-btn" class="dialog-close-btn">×</button>
+      <h3>Glass Style</h3>
+      
+      <div class="glass-preview-container">
+        <div class="glass-preview-item glass-box">
+          <span>Aa</span>
+        </div>
+      </div>
+
+      <div id="glass-style-list" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; align-content: start;">
+        </div>
+
+      <div class="dialog-buttons" style="margin-top: 15px;">
+        <button id="glass-settings-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="glass-settings-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="weather-settings-modal" class="modal-overlay hidden">
     <div id="weather-settings-dialog" class="dialog-content glass-box">
       <button id="weather-settings-close-btn" class="dialog-close-btn">&times;</button>
@@ -2598,6 +2627,3 @@
 </body>
 
 </html>
-
-
-

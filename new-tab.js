@@ -1943,6 +1943,7 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
   const APP_GRID_ANIMATION_KEY = 'appGridAnimationPref';
   const APP_GRID_ANIMATION_SPEED_KEY = 'appGridAnimationSpeed';
   const APP_GRID_ANIMATION_ENABLED_KEY = 'appGridAnimationEnabled';
+  const APP_GLASS_STYLE_KEY = 'appGlassStylePref';
 
 // Animation Dictionary (Name -> CSS Keyframes)
 const GRID_ANIMATIONS = {
@@ -2011,6 +2012,65 @@ const GRID_ANIMATIONS = {
     css: '0% { transform: rotateY(30deg) translateY(-100px) skewY(-30deg); opacity: 0; } 100% { transform: rotateY(0deg) translateY(0) skewY(0deg); opacity: 1; }' 
   }
 };
+
+const GLASS_STYLES = [
+  {
+    id: 'original',
+    name: '✨ Original (Default)',
+    css: 'background: rgba(255, 255, 255, 0.14); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: none;'
+  },
+  {
+    id: 'deep-frost',
+    name: 'Deep Frost',
+    css: 'background: rgba(18, 18, 24, 0.65); backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);'
+  },
+  {
+    id: 'classic',
+    name: 'Classic Frost',
+    css: 'background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);'
+  },
+  {
+    id: 'icy-white',
+    name: 'Icy White (Opaque)',
+    css: 'background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.4); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);'
+  },
+  {
+    id: 'holographic',
+    name: 'Holographic',
+    css: 'background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0)); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);'
+  },
+  {
+    id: 'soft-mist',
+    name: 'Soft Mist (Minimal)',
+    css: 'background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: none;'
+  },
+  {
+    id: 'obsidian',
+    name: 'Obsidian (Dark Mode)',
+    css: 'background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);'
+  },
+  {
+    id: 'neon',
+    name: 'Neon Glass',
+    css: 'background: rgba(40, 40, 40, 0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(44, 165, 255, 0.5); box-shadow: 0 0 15px rgba(44, 165, 255, 0.2);'
+  },
+  {
+    id: 'grainy',
+    name: 'Grainy (High Blur)',
+    css: 'background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);'
+  },
+  {
+    id: 'ceramic',
+    name: 'Ceramic (Matte)',
+    css: 'background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(25px) brightness(1.2); -webkit-backdrop-filter: blur(25px) brightness(1.2); border: 1px solid rgba(255, 255, 255, 0.3); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);'
+  },
+  {
+    id: 'liquid',
+    name: 'Liquid Water',
+    css: 'background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-top: 1px solid rgba(255, 255, 255, 0.5); border-left: 1px solid rgba(255, 255, 255, 0.5); border-radius: 24px; box-shadow: 10px 10px 10px rgba(0, 0, 0, 0.1);'
+  }
+];
+
 
 // Map to store per-folder customization (id -> { color, icon })
 
@@ -2083,6 +2143,7 @@ let appBookmarkFolderColorPreference = '#FFFFFF';
 let appGridAnimationPreference = 'default';
 let appGridAnimationSpeedPreference = 0.3;
 let appGridAnimationEnabledPreference = false;
+let appGlassStylePreference = 'original';
 
 let appPerformanceModePreference = false;
 
@@ -8027,6 +8088,39 @@ function applyPerformanceMode(enabled) {
 
 
 
+// --- Function to inject CSS ---
+function applyGlassStyle(styleId) {
+  appGlassStylePreference = styleId || 'original';
+  const styleData = GLASS_STYLES.find(s => s.id === appGlassStylePreference) || GLASS_STYLES[0];
+  
+  let styleEl = document.getElementById('dynamic-glass-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'dynamic-glass-style';
+    document.head.appendChild(styleEl);
+  }
+
+  // We override the .glass-box class directly
+  styleEl.innerHTML = `
+    .glass-box {
+      ${styleData.css}
+      transition: all 0.3s ease, transform 0.2s ease, opacity 0.2s ease !important;
+    }
+  `;
+}
+
+// --- Function to Load Preference ---
+async function loadGlassStylePref() {
+  try {
+    const stored = await browser.storage.local.get(APP_GLASS_STYLE_KEY);
+    const pref = stored[APP_GLASS_STYLE_KEY];
+    applyGlassStyle(pref || 'original');
+  } catch (e) {
+    applyGlassStyle('original');
+  }
+}
+
+
 /**
  * Injects the chosen animation keyframes into the page style.
  * This overrides the default @keyframes item-fade-in in new-tab.css
@@ -8311,6 +8405,7 @@ async function loadAppSettingsFromStorage() {
 
     // Load animation pref
     await loadGridAnimationPref(); 
+    await loadGlassStylePref(); 
 
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
 
@@ -9585,6 +9680,85 @@ function setupAnimationSettings() {
   if (modal) modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
 }
 
+
+
+function setupGlassSettings() {
+  const modal = document.getElementById('glass-settings-modal');
+  const openBtn = document.getElementById('app-configure-glass-btn');
+  const closeBtn = document.getElementById('glass-settings-close-btn');
+  const cancelBtn = document.getElementById('glass-settings-cancel-btn');
+  const saveBtn = document.getElementById('glass-settings-save-btn');
+  const list = document.getElementById('glass-style-list');
+
+  // Track selection state
+  let selectedId = appGlassStylePreference;
+
+  const closeModal = () => {
+    closeModalWithAnimation('glass-settings-modal', '.dialog-content', () => {
+      // Revert if cancelled/closed without saving
+      if (appGlassStylePreference !== selectedId) {
+        applyGlassStyle(appGlassStylePreference);
+      }
+    });
+  };
+
+  if (openBtn) {
+    openBtn.addEventListener('click', () => {
+      selectedId = appGlassStylePreference; // Reset to current actual setting
+      
+      list.innerHTML = '';
+      
+      GLASS_STYLES.forEach((style) => {
+        const btn = document.createElement('div');
+        // Reuse animation-option class for consistent look, or use generic option styling
+        btn.className = 'animation-option'; 
+        btn.textContent = style.name;
+        
+        if (style.id === selectedId) btn.classList.add('selected');
+        
+        // 1. Hover: Preview Live
+        btn.addEventListener('mouseenter', () => {
+          applyGlassStyle(style.id);
+        });
+
+        // 2. Leave: Revert to "selected" state
+        btn.addEventListener('mouseleave', () => {
+          applyGlassStyle(selectedId);
+        });
+
+        // 3. Click: Select
+        btn.addEventListener('click', () => {
+          list.querySelectorAll('.animation-option').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          selectedId = style.id;
+          applyGlassStyle(selectedId); // Lock in visual
+        });
+        
+        list.appendChild(btn);
+      });
+
+      // Ensure modal sits above settings
+      modal.style.zIndex = '2100';
+      openModalWithAnimation('glass-settings-modal', 'app-configure-glass-btn', '.dialog-content');
+    });
+  }
+
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      appGlassStylePreference = selectedId;
+      await browser.storage.local.set({ [APP_GLASS_STYLE_KEY]: selectedId });
+      closeModalWithAnimation('glass-settings-modal', '.dialog-content');
+    });
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', () => {
+    // Re-apply original
+    loadGlassStylePref();
+    closeModal();
+  });
+  if (modal) modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
+}
 
 
 function setupSearchEnginesModal() {
@@ -15743,6 +15917,7 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
   setupAppSettingsModal();
 
   setupAnimationSettings();
+  setupGlassSettings();
 
   setupMaterialColorPicker();
 

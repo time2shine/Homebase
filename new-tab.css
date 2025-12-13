@@ -2041,13 +2041,13 @@ body.sidebar-collapsed .bookmark-bar-wrapper {
 /* Fix Buttons (Primary - Save) */
 #weather-settings-dialog .dialog-btn.primary-btn,
 #quote-settings-dialog .dialog-btn.primary-btn {
-  background-color: #3b82f6 !important;
-  color: #ffffff !important;
-  border: 1px solid #3b82f6 !important;
+  background-color: #2ca5ff !important;
+  color: #0b1b2e !important;
+  border: none !important;
 }
 #weather-settings-dialog .dialog-btn.primary-btn:hover,
 #quote-settings-dialog .dialog-btn.primary-btn:hover {
-  background-color: #2563eb !important;
+  background-color: #59baff !important;
 }
 
 /* Quote Category Pills in White Mode */
@@ -2336,6 +2336,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   color: #0f172a;
   border: 1px solid rgba(0, 0, 0, 0.06);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  border-radius: 20px;
 }
 
 .app-settings-dialog {
@@ -2596,14 +2597,14 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 
 /* 4. Style the Primary (Save) button */
 #search-engines-dialog .dialog-btn.primary-btn {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
+  background-color: #2ca5ff;
+  border: none;
+  color: #0b1b2e;
 }
 
 #search-engines-dialog .dialog-btn.primary-btn:hover {
-  background-color: #1d4ed8;
-  border-color: #1d4ed8;
+  background-color: #59baff;
+  border-color: transparent;
 }
 
 /* 5. Tweak the list container inside the modal */
@@ -3838,14 +3839,14 @@ input:checked + .slider:before {
 }
 
 #edit-folder-dialog .dialog-btn.primary-btn {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
+  background-color: #2ca5ff;
+  border: none;
+  color: #0b1b2e;
 }
 
 #edit-folder-dialog .dialog-btn.primary-btn:hover {
-  background-color: #1d4ed8;
-  border-color: #1d4ed8;
+  background-color: #59baff;
+  border-color: transparent;
 }
 
 
@@ -3970,16 +3971,16 @@ input:checked + .slider:before {
 #move-bookmark-dialog .dialog-btn.primary-btn,
 #add-bookmark-dialog .dialog-btn.primary-btn,
 #add-folder-dialog .dialog-btn.primary-btn {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
+  background-color: #2ca5ff;
+  border: none;
+  color: #0b1b2e;
 }
 
 #move-bookmark-dialog .dialog-btn.primary-btn:hover,
 #add-bookmark-dialog .dialog-btn.primary-btn:hover,
 #add-folder-dialog .dialog-btn.primary-btn:hover {
-  background-color: #1d4ed8;
-  border-color: #1d4ed8;
+  background-color: #59baff;
+  border-color: transparent;
 }
 
 
@@ -4141,14 +4142,24 @@ input:checked + .slider:before {
 
 /* A primary button style for 'Save' */
 .dialog-btn.primary-btn {
-  background-color: #3b82f6;   /* normal state */
-  border-color: #3b82f6;
-  color: #ffffff;
+  /* Match Settings "Save" Button Style */
+  background: #2ca5ff;
+  color: #0b1b2e;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+  
+  /* Ensure it overrides previous specific styles */
+  min-width: 80px; 
 }
 
 .dialog-btn.primary-btn:hover {
-  background-color: #1d4ed8;   /* hover state */
-  border-color: #1d4ed8;
+  background: #59baff;
+  transform: translateY(-1px);
+  border-color: transparent; /* Reset any legacy borders */
 }
 
 /* ========================================= */
@@ -4303,16 +4314,16 @@ input:checked + .slider:before {
 
 /* 3. Style the OK button to match Settings 'Save' button */
 #custom-alert-dialog .dialog-btn.primary-btn {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
+  background-color: #2ca5ff;
+  border: none;
+  color: #0b1b2e;
   min-width: 80px;
   font-weight: 600;
 }
 
 #custom-alert-dialog .dialog-btn.primary-btn:hover {
-  background-color: #1d4ed8;
-  border-color: #1d4ed8;
+  background-color: #59baff;
+  border-color: transparent;
 }
 
 /* 4. Restore the accessibility media query (Optional, keeps existing logic for other elements) */
@@ -5637,6 +5648,74 @@ body.performance-mode .context-submenu {
   color: white;
 }
 
+/* --- Glass Settings Preview --- */
+.glass-preview-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  width: 100%;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  /* Colorful gradient to demonstrate blur/transparency */
+  background: linear-gradient(135deg, #FF9A9E 0%, #FECFEF 50%, #999999 100%),
+              url('assets/fallback.webp'); /* Fallback texture */
+  background-blend-mode: overlay;
+  background-size: cover;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.glass-preview-item {
+  width: 90px;
+  height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2em;
+  font-weight: bold;
+  color: white;
+  border-radius: 20px; /* Ensure default radius matches */
+  
+  /* Reset margin/transforms that might come from other .glass-box contexts */
+  margin: 0 !important; 
+  transform: none !important; 
+}
+
+/* Ensure the Glass Settings Modal stays clean (White Theme) */
+#glass-settings-dialog {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Style the list options inside the white modal */
+#glass-style-list .animation-option {
+  background: #f8fafc; 
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+#glass-style-list .animation-option:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+#glass-style-list .animation-option.selected {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+}
+
 /* Fix for invisible modals in Performance Mode */
 body.performance-mode .modal-overlay:not(.hidden) {
   opacity: 1 !important;
@@ -5696,14 +5775,14 @@ body.performance-mode .gallery-secondary-btn:hover {
 /* Fix Primary Buttons (Save, OK) - Keep Blue */
 body.performance-mode .dialog-btn.primary-btn,
 body.performance-mode .gallery-primary-btn {
-  background-color: #3b82f6 !important;
-  color: #ffffff !important;
-  border: 1px solid #3b82f6 !important;
+  background-color: #2ca5ff !important;
+  color: #0b1b2e !important;
+  border: none !important;
 }
 
 body.performance-mode .dialog-btn.primary-btn:hover,
 body.performance-mode .gallery-primary-btn:hover {
-  background-color: #2563eb !important;
+  background-color: #59baff !important;
 }
 
 /* Fix Close 'X' Buttons */

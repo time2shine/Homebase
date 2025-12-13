@@ -14026,6 +14026,8 @@ function setupBackgroundVideoCrossfade() {
     v.muted = true;
     v.playsInline = true;
     v.preload = idx === 0 ? 'auto' : 'metadata';
+    // Ensure no leftover transition classes from previous runs
+    v.classList.remove('with-transition');
   });
 
   const fadeMs = 1400;
@@ -14034,8 +14036,18 @@ function setupBackgroundVideoCrossfade() {
   const fadeSec = fadeMs / 1000;
   const bufferSec = bufferMs / 1000;
 
-  const playAndFadeIn = async (videoEl, onReady) => {
+  // Added enableTransition flag so we can skip the first poster -> video transition
+  const playAndFadeIn = async (videoEl, enableTransition, onReady) => {
     try {
+      // Conditionally apply the CSS transition class
+      if (enableTransition) {
+        videoEl.classList.add('with-transition');
+        // Force reflow so the browser acknowledges the transition before opacity changes
+        void videoEl.offsetWidth;
+      } else {
+        videoEl.classList.remove('with-transition');
+      }
+
       // 1. Start decoding
       await videoEl.play();
 
@@ -14084,18 +14096,37 @@ function setupBackgroundVideoCrossfade() {
       }
     };
 
-    const doFade = () => {
+    const doFade = async () => {
       if (fading) return;
       fading = true;
       primeNext();
       next.currentTime = 0;
-      playAndFadeIn(next, () => {
+
+      // OPTIMIZATION: Skip heavy crossfade when in performance/battery saver modes
+      let shouldAnimate = true;
+      if (appPerformanceModePreference) {
+        shouldAnimate = false;
+      } else if (appBatteryOptimizationPreference) {
+        if ('getBattery' in navigator) {
+          try {
+            const battery = await navigator.getBattery();
+            if (!battery.charging) shouldAnimate = false;
+          } catch (e) {
+            // Ignore battery API errors; keep current shouldAnimate value
+          }
+        }
+      }
+
+      // Use transition only when allowed; otherwise do an instant swap
+      playAndFadeIn(next, shouldAnimate, () => {
+        const holdTime = shouldAnimate ? fadeMs + 50 : 50;
         setTimeout(() => {
           current.classList.remove('is-active');
+          current.classList.remove('with-transition'); // Cleanup
           current.pause();
           current.currentTime = 0;
           startCycle(next, current);
-        }, fadeMs + 50);
+        }, holdTime);
       });
     };
 
@@ -14118,11 +14149,12 @@ function setupBackgroundVideoCrossfade() {
   };
 
   const [first, second] = videos;
+  // DISABLE transition for the very first video (Instant appearance)
   if (first.readyState >= 1) {
-    playAndFadeIn(first, () => startCycle(first, second));
+    playAndFadeIn(first, false, () => startCycle(first, second));
   } else {
     first.addEventListener('loadedmetadata', () => {
-      playAndFadeIn(first, () => startCycle(first, second));
+      playAndFadeIn(first, false, () => startCycle(first, second));
     }, { once: true, signal });
   }
 }

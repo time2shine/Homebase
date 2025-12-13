@@ -66,6 +66,11 @@ body::before {
   /* Keep transform/filter transitions if you use effects like blur on search */
   transition: filter 0.4s ease, transform 0.4s ease;
 }
+
+/* Add this only when we want the crossfade */
+.background-video.with-transition {
+  transition: opacity 1.4s ease, filter 0.4s ease, transform 0.4s ease;
+}
 .background-video.is-active {
   opacity: 1;
 }

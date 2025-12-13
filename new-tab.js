@@ -2660,13 +2660,18 @@ async function handleBookmarkModalSave() {
 
 
 
+  // Determine correct parent: prefer the currently open grid folder
+  const targetParentId = currentGridFolderNode ? currentGridFolderNode.id : activeHomebaseFolderId;
+
+
+
   // 4. Create the bookmark
 
   try {
 
     await browser.bookmarks.create({
 
-      parentId: activeHomebaseFolderId,
+      parentId: targetParentId,
 
       title: name,
 
@@ -2686,7 +2691,7 @@ async function handleBookmarkModalSave() {
 
     // 6. Re-find the active folder node from the NEW tree
 
-    const activeFolderNode = findBookmarkNodeById(bookmarkTree[0], activeHomebaseFolderId);
+    const activeFolderNode = findBookmarkNodeById(bookmarkTree[0], targetParentId);
 
     
 
@@ -2695,6 +2700,10 @@ async function handleBookmarkModalSave() {
     if (activeFolderNode) {
 
       renderBookmarkGrid(activeFolderNode);
+
+    } else {
+
+      loadBookmarks(activeHomebaseFolderId);
 
     }
 
@@ -2916,13 +2925,18 @@ async function saveNewFolder() {
 
 
 
+  // Determine correct parent: Use the currently open grid folder
+  const targetParentId = currentGridFolderNode ? currentGridFolderNode.id : activeHomebaseFolderId;
+
+
+
   // 3. Create the folder
 
   try {
 
     await browser.bookmarks.create({
 
-      parentId: activeHomebaseFolderId, // <-- Creates in the active tab
+      parentId: targetParentId,
 
       title: name
 
@@ -2938,7 +2952,7 @@ async function saveNewFolder() {
 
     // 5. Re-find the active folder node from the NEW tree
 
-    const activeFolderNode = findBookmarkNodeById(bookmarkTree[0], activeHomebaseFolderId);
+    const activeFolderNode = findBookmarkNodeById(bookmarkTree[0], targetParentId);
 
     
 
@@ -5519,7 +5533,7 @@ async function handleGridDrop(evt) {
     : null;
 
   // ============================================================
-  // CASE A: MOVING INTO A FOLDER (Requires Removal)
+  // CASE A: MOVING INTO A FOLDER (Requires Removal & Transfer)
   // ============================================================
   if ((folderTarget && folderTarget.dataset.bookmarkId !== draggedItemId) || tabTarget || backButtonTarget) {
     let targetFolderId = null;
@@ -5528,14 +5542,58 @@ async function handleGridDrop(evt) {
     else if (backButtonTarget) targetFolderId = backButtonTarget.dataset.backTargetId;
     else targetFolderId = folderTarget.dataset.bookmarkId;
 
+    // 1. Visual: Remove immediately
     draggedItem.remove();
 
-    const parentNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
-    if (parentNode && parentNode.children) {
-      parentNode.children = parentNode.children.filter(c => c.id !== draggedItemId);
+    // 2. Data Model Update (Optimistic)
+    // We must move the data node from Source -> Target in memory immediately.
+    
+    // Ensure we have a valid tree before traversing
+    if (bookmarkTree && bookmarkTree[0]) {
+      // Find the folder we are currently looking at (Source Parent)
+      const currentFolderId = currentGridFolderNode ? currentGridFolderNode.id : activeHomebaseFolderId;
+      const sourceParentNode = findBookmarkNodeById(bookmarkTree[0], currentFolderId);
+      
+      let movedNode = null;
+
+      if (sourceParentNode && sourceParentNode.children) {
+        // Find and remove from source array
+        const idx = sourceParentNode.children.findIndex(c => c.id === draggedItemId);
+        if (idx !== -1) {
+          movedNode = sourceParentNode.children[idx]; // Capture the object
+          sourceParentNode.children.splice(idx, 1);   // Remove from source
+        }
+      }
+
+      // Find Target Parent and Inject
+      if (movedNode) {
+        const targetFolderNode = findBookmarkNodeById(bookmarkTree[0], targetFolderId);
+        if (targetFolderNode) {
+          // Ensure children array exists
+          if (!targetFolderNode.children) targetFolderNode.children = [];
+          
+          // Update metadata and push to target
+          movedNode.parentId = targetFolderId; 
+          targetFolderNode.children.push(movedNode);
+        }
+      }
     }
 
-    await browser.bookmarks.move(draggedItemId, { parentId: targetFolderId });
+    // 3. API: Sync in background
+    try {
+        await browser.bookmarks.move(draggedItemId, { parentId: targetFolderId });
+        
+        // 4. Refresh tree silently to ensure index consistency for future operations
+        // We do this *without* awaiting so the UI doesn't freeze
+        getBookmarkTree(true).catch(e => console.warn(e));
+        
+    } catch (e) {
+        console.warn("Move failed", e);
+        // Reload grid if move failed to restore item
+        if (currentGridFolderNode) {
+           loadBookmarks(currentGridFolderNode.id);
+        }
+    }
     return;
   }
 
@@ -5543,7 +5601,7 @@ async function handleGridDrop(evt) {
   // CASE B: RE-ORDERING (Optimistic - NO RENDER)
   // ============================================================
   if (evt.from === evt.to && evt.oldIndex !== evt.newIndex) {
-    const parentId = currentGridFolderNode.id;
+    const parentId = currentGridFolderNode ? currentGridFolderNode.id : activeHomebaseFolderId;
 
     const hasBackButton = grid.firstElementChild.classList.contains('back-button');
     let dataOldIndex = evt.oldIndex;
@@ -5556,8 +5614,10 @@ async function handleGridDrop(evt) {
 
     if (dataOldIndex < 0 || dataNewIndex < 0) return;
 
+    // Update local array order instantly
     moveItemInLocalTree(parentId, dataOldIndex, dataNewIndex);
 
+    // Sync to browser
     browser.bookmarks.move(draggedItemId, { index: dataNewIndex })
       .catch(err => {
         console.error("Move failed, reverting...", err);

@@ -5235,82 +5235,52 @@ function setupGridSortable(gridElement) {
 
   }
 
-  
-
   gridSortable = Sortable.create(gridElement, {
+    animation: 250, // Optimal speed for smoothness
+    group: 'bookmarks',
+    draggable: '.bookmark-item:not(.back-button)',
+    filter: '.grid-item-rename-input',
+    preventOnFilter: false,
 
-    animation: 300,
+    // Explicitly tell Sortable which attribute holds the ID
+    dataIdAttr: 'data-bookmark-id',
 
-    group: 'bookmarks', // Group name
+    // Performance Settings
+    delay: 0,
+    touchStartThreshold: 3,
 
-    draggable: '.bookmark-item:not(.back-button)', // prevent Back from moving
+    ghostClass: 'bookmark-placeholder',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
 
-    
-
-    // Add .grid-item-rename-input to the filter so inline renames stay clickable
-
-    filter: '.grid-item-rename-input', 
-
-    
-
-    ghostClass: 'bookmark-placeholder', // Use our existing placeholder style
-
-    chosenClass: 'sortable-chosen',     // Class for the item in its original spot
-
-    dragClass: 'sortable-drag',         // Class for the item being dragged
-
-    forceFallback: true,                // Use Sortable's custom ghost instead of native DnD
-
+    forceFallback: true,
     fallbackClass: 'bookmark-fallback-ghost',
-
     fallbackOnBody: true,
 
-    fallbackTolerance: 4,
-
-    
-
-    // The onStart javascript hack is no longer needed 
-
-    // because the CSS Grid layout is stable.
-
-
-
-    onClone: (evt) => {
-
-      const clone = evt.clone;
-
-      if (clone) {
-
-        clone.style.backgroundColor = 'transparent';
-
-        clone.style.boxShadow = 'none';
-
-      }
-
-    },
-
     onStart: () => {
-
       isGridDragging = true;
+      document.body.classList.add('is-dragging-active');
 
+      // Immediately strip the "drop-in" animation class so Sortable can animate positions.
+      const animatingItems = gridElement.querySelectorAll('.newly-rendered');
+      animatingItems.forEach(el => {
+        el.classList.remove('newly-rendered');
+        el.style.animationDelay = '';
+        el.style.opacity = '1';
+        el.style.animation = 'none';
+      });
     },
 
     onEnd: (evt) => {
-
-      handleGridDrop(evt);
-
+      document.body.classList.remove('is-dragging-active');
+      // Delay clearing the drag flag so the subsequent click event is ignored.
       setTimeout(() => {
-
         isGridDragging = false;
-
-      }, 0);
-
+      }, 50);
+      handleGridDrop(evt);
     },
 
-    onMove: handleGridMove,           // Function to call when hovering
-
-    preventOnFilter: true             // Prevent 'Back' button drag
-
+    onMove: handleGridMove
   });
 
 }
@@ -5502,189 +5472,98 @@ function clearTabDropHighlight() {
 
 
 /**
-
- * NEW: Unified handler for grid drop (re-ordering or moving into a folder).
-
- * This is a Sortable.js `onEnd` callback.
-
+ * OPTIMISTIC HELPER: Updates the local JS array to match the visual drop.
+ * This prevents us from needing to re-fetch/re-render the whole grid.
  */
+function moveItemInLocalTree(parentId, oldIndex, newIndex) {
+  const parentNode = findBookmarkNodeById(bookmarkTree[0], parentId);
+  if (!parentNode || !parentNode.children) return;
 
+  if (oldIndex < 0 || oldIndex >= parentNode.children.length) return;
+  if (newIndex < 0 || newIndex >= parentNode.children.length) return;
+
+  const [movedItem] = parentNode.children.splice(oldIndex, 1);
+  parentNode.children.splice(newIndex, 0, movedItem);
+
+  parentNode.children.forEach((child, idx) => (child.index = idx));
+}
+
+/**
+ * NEW: Unified handler for grid drop (re-ordering or moving into a folder).
+ * This is a Sortable.js `onEnd` callback.
+ */
 async function handleGridDrop(evt) {
-
   clearTabDropHighlight();
-
-  const grid = evt.from; // Get the grid container
-
-  
-
-  // Clear all hover effects
+  const grid = evt.from;
 
   grid.querySelectorAll('.bookmark-item.drag-over').forEach(item => {
-
     item.classList.remove('drag-over');
-
   });
 
-
-
   const draggedItem = evt.item;
-
   const draggedItemId = draggedItem.dataset.bookmarkId;
 
-  
-
-  // Use the event's clientX/Y to find the *actual* drop target
-
   const dropTargetElement = document.elementFromPoint(
-
     evt.originalEvent.clientX,
-
     evt.originalEvent.clientY
-
   );
 
-
-
-  // 1) Folder *inside* the grid
-
   const folderTarget = dropTargetElement
-
     ? dropTargetElement.closest('.bookmark-item[data-is-folder="true"]')
-
     : null;
-
-
-
-  // 2) NEW: Folder *tab* at the top
-
   const tabTarget = dropTargetElement
-
     ? dropTargetElement.closest('.bookmark-folder-tab')
-
     : null;
-
-
-
-  // 3) NEW: Back button for moving up a level
-
   const backButtonTarget = dropTargetElement
-
     ? dropTargetElement.closest('.back-button')
-
     : null;
 
+  // ============================================================
+  // CASE A: MOVING INTO A FOLDER (Requires Removal)
+  // ============================================================
+  if ((folderTarget && folderTarget.dataset.bookmarkId !== draggedItemId) || tabTarget || backButtonTarget) {
+    let targetFolderId = null;
 
-
-  // --- Case 1: Dropped ONTO a folder INSIDE the grid ---
-
-  if (folderTarget && folderTarget.dataset.bookmarkId !== draggedItemId) {
-
-    const targetFolderId = folderTarget.dataset.bookmarkId;
-
-
-
-    // Undo Sortable's DOM change; moveBookmark will re-render
+    if (tabTarget) targetFolderId = tabTarget.dataset.folderId;
+    else if (backButtonTarget) targetFolderId = backButtonTarget.dataset.backTargetId;
+    else targetFolderId = folderTarget.dataset.bookmarkId;
 
     draggedItem.remove();
 
+    const parentNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+    if (parentNode && parentNode.children) {
+      parentNode.children = parentNode.children.filter(c => c.id !== draggedItemId);
+    }
 
-
-    // Move the bookmark *into* that folder
-
-    await moveBookmark(draggedItemId, { parentId: targetFolderId });
-
+    await browser.bookmarks.move(draggedItemId, { parentId: targetFolderId });
+    return;
   }
 
-  // --- Case 2: NEW - Dropped ONTO a folder TAB ---
-
-  else if (tabTarget) {
-
-    const targetFolderId = tabTarget.dataset.folderId;
-
-
-
-    // Again, undo Sortable's DOM change
-
-    draggedItem.remove();
-
-
-
-    // Move the bookmark into the folder represented by that tab
-
-    await moveBookmark(draggedItemId, { parentId: targetFolderId });
-
-  }
-
-  // --- Case 3: NEW - Dropped ONTO the Back button ---
-
-  else if (backButtonTarget && backButtonTarget.dataset.backTargetId) {
-
-    const targetFolderId = backButtonTarget.dataset.backTargetId;
-
-
-
-    draggedItem.remove();
-
-    await moveBookmark(draggedItemId, { parentId: targetFolderId });
-
-  }
-
-
-
-  // --- Case 4: Re-ordered within the same grid ---
-
-  else if (evt.from === evt.to && evt.oldIndex !== evt.newIndex) {
-
+  // ============================================================
+  // CASE B: RE-ORDERING (Optimistic - NO RENDER)
+  // ============================================================
+  if (evt.from === evt.to && evt.oldIndex !== evt.newIndex) {
     const parentId = currentGridFolderNode.id;
 
-
-
-    // Start from Sortable's new index
-
-    let targetIndex = evt.newIndex;
-
-
-
-    // If this grid has a Back button as the first child,
-
-    // subtract 1 so we get the correct bookmark index.
-
-    const hasBackButton = !![...grid.children].find(child =>
-
-      child.classList.contains('back-button')
-
-    );
+    const hasBackButton = grid.firstElementChild.classList.contains('back-button');
+    let dataOldIndex = evt.oldIndex;
+    let dataNewIndex = evt.newIndex;
 
     if (hasBackButton) {
-
-      targetIndex--; // Account for the 'Back' button
-
+      dataOldIndex--;
+      dataNewIndex--;
     }
 
+    if (dataOldIndex < 0 || dataNewIndex < 0) return;
 
+    moveItemInLocalTree(parentId, dataOldIndex, dataNewIndex);
 
-    const draggedNode = findBookmarkNodeById(bookmarkTree[0], draggedItemId);
-
-    if (!draggedNode) return;
-
-
-
-    // If the index didn't actually change in the bookmark tree, do nothing
-
-    if (draggedNode.parentId === parentId && draggedNode.index === targetIndex) {
-
-      return;
-
-    }
-
-
-
-    // Move the bookmark *within* the folder to the final index
-
-    await moveBookmark(draggedItemId, { parentId: parentId, index: targetIndex });
-
+    browser.bookmarks.move(draggedItemId, { index: dataNewIndex })
+      .catch(err => {
+        console.error("Move failed, reverting...", err);
+        loadBookmarks(parentId);
+      });
   }
-
 }
 
 
@@ -6733,7 +6612,14 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
 
     });
 
-    setupGridSortable(grid);
+    // FIX: Use the global 'sortableTimeout' so it can be cancelled if the user switches folders quickly.
+    // Increased delay to 200ms to ensure layout/animations are stable first.
+    if (sortableTimeout) clearTimeout(sortableTimeout);
+
+    sortableTimeout = setTimeout(() => {
+      setupGridSortable(grid);
+      sortableTimeout = null;
+    }, 200);
 
     // Apply Animations (Standard Mode Only)
     const domItems = grid.querySelectorAll('.bookmark-item');

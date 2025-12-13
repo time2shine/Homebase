@@ -16646,33 +16646,15 @@ function buildGalleryCard(item, index = 0) {
 
     .join('');
 
-  const likeOutlineIcon = useSvgIcon('heartOutline');
-
-  const likeFilledIcon = useSvgIcon('heartFilled');
-
-  const likeCelebrateIcon = useSvgIcon('heartCelebrate');
-
-
-
   card.innerHTML = `
 
     <img class="gallery-card-image" src="${posterSrc}" alt="${item.title || 'Wallpaper'}" loading="${loadingAttr}" referrerpolicy="no-referrer" />
 
     
 
-    <div class="gallery-fav-btn con-like ${isFavorite ? 'is-active' : ''}" aria-label="Favorite this wallpaper">
+    <div class="gallery-fav-btn ${isFavorite ? 'is-active' : ''}" aria-label="Favorite this wallpaper">
 
-      <input class="like" type="checkbox" title="like" ${isFavorite ? 'checked' : ''}>
-
-      <div class="checkmark">
-
-        ${likeOutlineIcon}
-
-        ${likeFilledIcon}
-
-        ${likeCelebrateIcon}
-
-      </div>
+      <div class="heart"></div>
 
     </div>
 
@@ -16730,63 +16712,23 @@ function buildGalleryCard(item, index = 0) {
 
 
 
-  // === UPDATED CLICK HANDLER FOR FAVORITES ===
-
   const favBtn = card.querySelector('.gallery-fav-btn');
 
   favBtn.addEventListener('click', async (e) => {
 
-    e.stopPropagation(); // Stop the card click (which applies wallpaper)
+    e.stopPropagation(); // Stop the card click
 
     
 
-    const checkbox = favBtn.querySelector('.like');
+    // Toggle class immediately for animation
 
-    
+    const isNowActive = !favBtn.classList.contains('is-active');
 
-    // If the user clicked the div but not the input directly (rare, but possible), toggle manually
-
-    if (e.target !== checkbox) {
-
-      checkbox.checked = !checkbox.checked;
-
-    }
-
-    
-
-    const isNowChecked = checkbox.checked; 
+    favBtn.classList.toggle('is-active', isNowActive);
 
 
 
-    // 1. Handle visual classes locally so we see immediate feedback/animation
-
-    if (isNowChecked) {
-
-      favBtn.classList.add('is-active');
-
-      favBtn.classList.add('animating'); // Triggers the confetti via CSS
-
-      
-
-      // Remove animation class after 700ms so it can be re-triggered later
-
-      setTimeout(() => favBtn.classList.remove('animating'), 700);
-
-    } else {
-
-      favBtn.classList.remove('is-active');
-
-      favBtn.classList.remove('animating');
-
-    }
-
-
-
-    // 2. Determine if we should refresh the entire grid
-
-    // If we are in the 'Favorites' tab, we MUST re-render to remove the un-liked item.
-
-    // If we are in 'Gallery' or 'All', we SKIP re-render to keep the animation playing.
+    // Determine if we need to re-render (only if viewing Favorites tab)
 
     const shouldSkipRender = gallerySection !== 'favorites';
 

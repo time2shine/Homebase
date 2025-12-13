@@ -185,7 +185,17 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
 
   const poster = posterUrl || 'assets/fallback.webp';
 
-  document.documentElement.style.setProperty('--initial-wallpaper', `url("${poster}")`);
+  // FIX: Check dataset to see if preload.js already painted this exact URL.
+  // If it matches, we skip the style update to prevent the black flash.
+  const current = document.documentElement.dataset.initialWallpaper;
+
+  if (current !== poster) {
+
+    document.documentElement.style.setProperty('--initial-wallpaper', `url("${poster}")`);
+
+    document.documentElement.dataset.initialWallpaper = poster;
+
+  }
 
   runWhenIdle(() => {
 
@@ -1397,21 +1407,23 @@ function setBackgroundVideoSources(videoUrl, posterUrl = '') {
 
 function applyWallpaperBackground(posterUrl) {
 
+  // FIX: Check dataset for instant string comparison.
+  // This prevents the browser from discarding the layer if the URL hasn't changed.
+  const current = document.documentElement.dataset.initialWallpaper;
+  
+  if (current === posterUrl) return;
+
   const next = posterUrl ? `url("${posterUrl}")` : '';
-
-  const current = document.documentElement.style.getPropertyValue('--initial-wallpaper');
-
-  if (current === next) return;
-
-
-
+  
   if (posterUrl) {
 
     document.documentElement.style.setProperty('--initial-wallpaper', next);
+    document.documentElement.dataset.initialWallpaper = posterUrl;
 
   } else {
 
     document.documentElement.style.removeProperty('--initial-wallpaper');
+    delete document.documentElement.dataset.initialWallpaper;
 
   }
 

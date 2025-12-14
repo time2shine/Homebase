@@ -6746,7 +6746,7 @@ async function createNewBookmarkFolder(name) {
 
 
 /**
- * Derives a friendly name from the clipboard URL.
+ * Helper: Extracts "Github" from "https://github.com/repo"
  */
 function getSmartNameFromUrl(url) {
   try {
@@ -6766,21 +6766,24 @@ function getSmartNameFromUrl(url) {
  */
 async function handlePasteBookmark() {
   try {
-    const clipboardText = await navigator.clipboard.readText();
-    const text = clipboardText ? clipboardText.trim() : '';
+    window.focus();
 
-    if (!text) {
+    const text = await navigator.clipboard.readText();
+
+    if (!text || !text.trim()) {
       showCustomAlert("Clipboard is empty.");
       return;
     }
 
-    if (!isLikelyUrl(text)) {
+    const isUrl = text.includes("://") || text.includes("www.") || text.includes(".");
+
+    if (!isUrl) {
       showCustomAlert("Clipboard text doesn't look like a URL.");
       return;
     }
 
-    let finalUrl = text;
-    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+    let finalUrl = text.trim();
+    if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://")) {
       finalUrl = `https://${finalUrl}`;
     }
 
@@ -6793,13 +6796,16 @@ async function handlePasteBookmark() {
       url: finalUrl
     });
 
-    const newTree = await getBookmarkTree(true);
-    const activeNode = findBookmarkNodeById(newTree[0], targetParentId);
+    await getBookmarkTree(true);
+    const activeNode = findBookmarkNodeById(bookmarkTree[0], targetParentId);
     if (activeNode) {
       renderBookmarkGrid(activeNode);
+    } else {
+      loadBookmarks(activeHomebaseFolderId);
     }
   } catch (err) {
     console.error("Paste failed:", err);
+    showCustomAlert("Please allow clipboard permissions in the extension settings.");
   }
 }
 

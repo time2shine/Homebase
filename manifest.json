@@ -18,7 +18,8 @@
     "newtab": "new-tab.html"
   },
 
-  "permissions": [
+"permissions": [
+    "clipboardRead",
     "https://api.open-meteo.com/*",
     "https://geocoding-api.open-meteo.com/*",
     "https://api.quotable.io/*",

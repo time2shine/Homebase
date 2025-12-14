@@ -1718,6 +1718,10 @@ const gridMenuCreateFolderBtn = document.getElementById('grid-menu-create-folder
 
 const gridMenuManageBtn = document.getElementById('grid-menu-manage');
 
+const gridMenuPasteBtn = document.getElementById('grid-menu-paste');
+
+const gridMenuSortNameBtn = document.getElementById('grid-menu-sort-name');
+
 
 
 // NEW: simple state so you know what was right-clicked
@@ -6742,9 +6746,94 @@ async function createNewBookmarkFolder(name) {
 
 
 /**
+ * Derives a friendly name from the clipboard URL.
+ */
+function getSmartNameFromUrl(url) {
+  try {
+    const hostname = new URL(url).hostname;
+    let name = hostname.replace(/^www\./i, '').split('.')[0];
+    if (!name) {
+      return 'New Bookmark';
+    }
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  } catch (err) {
+    return 'New Bookmark';
+  }
+}
+
+/**
+ * Pastes the clipboard URL into the current folder.
+ */
+async function handlePasteBookmark() {
+  try {
+    const clipboardText = await navigator.clipboard.readText();
+    const text = clipboardText ? clipboardText.trim() : '';
+
+    if (!text) {
+      showCustomAlert("Clipboard is empty.");
+      return;
+    }
+
+    if (!isLikelyUrl(text)) {
+      showCustomAlert("Clipboard text doesn't look like a URL.");
+      return;
+    }
+
+    let finalUrl = text;
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    const smartTitle = getSmartNameFromUrl(finalUrl);
+    const targetParentId = currentGridFolderNode ? currentGridFolderNode.id : activeHomebaseFolderId;
+
+    await browser.bookmarks.create({
+      parentId: targetParentId,
+      title: smartTitle,
+      url: finalUrl
+    });
+
+    const newTree = await getBookmarkTree(true);
+    const activeNode = findBookmarkNodeById(newTree[0], targetParentId);
+    if (activeNode) {
+      renderBookmarkGrid(activeNode);
+    }
+  } catch (err) {
+    console.error("Paste failed:", err);
+  }
+}
+
+/**
+ * Sorts the current folder alphabetically and refreshes the grid.
+ */
+async function sortCurrentFolderByName() {
+  const folderId = currentGridFolderNode ? currentGridFolderNode.id : activeHomebaseFolderId;
+  if (!folderId) return;
+
+  const tree = await getBookmarkTree(true);
+  const folderNode = findBookmarkNodeById(tree[0], folderId);
+  if (!folderNode || !folderNode.children) return;
+
+  const children = [...folderNode.children];
+  children.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    if (child.index !== i) {
+      await browser.bookmarks.move(child.id, { index: i });
+    }
+  }
+
+  const newTree = await getBookmarkTree(true);
+  const activeNode = findBookmarkNodeById(newTree[0], folderId);
+  if (activeNode) {
+    renderBookmarkGrid(activeNode);
+  }
+}
+
+/**
 
  * Deletes a bookmark folder and reloads the tabs.
-
  */
 
 async function deleteBookmarkFolder(folderId) {
@@ -16080,14 +16169,21 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
     }
 
-  if (bookmarksGrid && gridBlankMenu) {
+  if (gridBlankMenu) {
 
-    bookmarksGrid.addEventListener('contextmenu', (e) => {
+    // Change: Attach the listener to the whole document but skip interactive elements.
+    document.addEventListener('contextmenu', (e) => {
 
-      if (e.target.closest('.bookmark-item')) {
-
-        return; // regular item menus handle this
-
+      if (
+        e.target.closest('.bookmark-item') ||
+        e.target.closest('.sidebar') ||
+        e.target.closest('.dock') ||
+        e.target.closest('.widget-search') ||
+        e.target.closest('.search-toolbar-buttons') ||
+        e.target.closest('.modal-overlay:not(.hidden)') ||
+        ['INPUT', 'TEXTAREA', 'BUTTON', 'A'].includes(e.target.tagName)
+      ) {
+        return;
       }
 
       e.preventDefault();
@@ -16146,9 +16242,41 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
     }
 
+    if (gridMenuPasteBtn) {
+
+      gridMenuPasteBtn.addEventListener('click', () => {
+
+        hideAllContextMenus();
+
+        handlePasteBookmark();
+
+      });
+
+    }
+
+    if (gridMenuSortNameBtn) {
+
+      gridMenuSortNameBtn.addEventListener('click', () => {
+
+        hideAllContextMenus();
+
+        sortCurrentFolderByName();
+
+      });
+
+    }
+
   }
 
+  document.addEventListener('paste', (e) => {
+    if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) {
+      return;
+    }
 
+    e.preventDefault();
+
+    handlePasteBookmark();
+  });
 
   // === Handle clicks inside the GRID FOLDER context menu ===
 

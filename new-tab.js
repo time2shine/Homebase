@@ -239,18 +239,6 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
 
       applyWallpaperBackground(poster);
 
-      lastAppliedWallpaper = {
-
-        id: hydrated.id || 'stored',
-
-        poster,
-
-        video: hydrated.videoUrl || '',
-
-        type: hydrated.videoUrl ? 'video' : 'static'
-
-      };
-
       return;
 
     }
@@ -264,18 +252,6 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
     setWallpaperFallbackPoster(fallbackSelection.posterUrl, fallbackSelection.posterCacheKey || fallbackSelection.posterUrl || '');
 
     applyWallpaperBackground(fallbackSelection.posterUrl);
-
-    lastAppliedWallpaper = {
-
-      id: fallbackSelection.id,
-
-      poster: fallbackSelection.posterUrl,
-
-      video: '',
-
-      type: 'static'
-
-    };
 
 
 
@@ -1068,99 +1044,35 @@ async function resolvePosterBlob(posterUrl, posterCacheKey = '') {
 
 
 async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
-
   try {
-
     if (!posterUrl) {
-
       await browser.storage.local.remove(CACHED_APPLIED_POSTER_URL_KEY);
-
       await deleteCachedObject(CACHED_APPLIED_POSTER_CACHE_KEY);
-
       try {
-
         if (window.localStorage) {
-
           localStorage.removeItem('cachedAppliedPosterUrl');
-
         }
-
       } catch (e) {}
-
       return;
-
     }
 
+    // FIX: Do NOT convert to Base64. Store the URL string and cache the asset separately.
+    const storedUrl = posterUrl;
 
-
-    const blob = await resolvePosterBlob(posterUrl, posterCacheKey);
-
-    let storedUrl = posterUrl;
-
-
-
-    if (blob) {
-
-      const dataUrl = await blobToDataUrl(blob);
-
-      if (dataUrl) {
-
-        storedUrl = dataUrl;
-
-      }
-
-
-
-      try {
-
-        const cache = await caches.open(WALLPAPER_CACHE_NAME);
-
-        await cache.put(
-
-          normalizeWallpaperCacheKey(CACHED_APPLIED_POSTER_CACHE_KEY),
-
-          new Response(blob, {
-
-            headers: {
-
-              'content-type': blob.type || 'image/webp'
-
-            }
-
-          })
-
-        );
-
-      } catch (err) {
-
-        console.warn('Failed to cache applied poster blob', err);
-
-      }
-
+    if (posterUrl && !posterUrl.startsWith('blob:')) {
+       cacheAsset(posterUrl).catch(() => {});
     }
-
-
 
     await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: storedUrl });
 
-
-
     try {
-
       if (window.localStorage) {
-
         localStorage.setItem('cachedAppliedPosterUrl', storedUrl);
-
       }
-
     } catch (e) {}
-
   } catch (err) {
-
     console.warn('Failed to cache applied wallpaper poster', err);
-
   }
-
 }
 
 
@@ -15879,7 +15791,8 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
     const type = await getWallpaperTypePreference();
 
-    await waitForWallpaperReady(currentWallpaperSelection, type);
+    // allow the video to buffer without blocking UI setup
+    waitForWallpaperReady(currentWallpaperSelection, type);
 
     await loadAppSettingsFromStorage();
 

@@ -3707,9 +3707,9 @@ function updateEditPreview(iconOverride) {
 
   }
 
-  
 
-  // --- FIX: Ensure we have the controls container reference ---
+
+  // --- Ensure controls container reference ---
 
   if (!cachedControlsContainer) {
 
@@ -3717,7 +3717,7 @@ function updateEditPreview(iconOverride) {
 
   }
 
-  
+
 
   const previewContainer = cachedPreviewContainer;
 
@@ -3735,57 +3735,109 @@ function updateEditPreview(iconOverride) {
 
   const rotation = meta.rotation ?? 0;
 
+  const transformValue = `translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.9}) rotate(${rotation}deg)`;
 
-
-  // 2. Optimization: Calculate Transform String first (Cheap)
-
-  const transformValue = `translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.85}) rotate(${rotation}deg)`;
-
-
-
-  // 3. Optimization: Select children only once
-
-  const existingBase = previewContainer.children[0];
-
-  const existingIcon = previewContainer.children[1];
-
-
+  const effectiveIcon = iconOverride !== undefined ? iconOverride : (meta.icon || null);
 
   if (cachedControlsContainer) {
 
-    cachedControlsContainer.classList.toggle('visible', !!(meta.icon || iconOverride));
+    cachedControlsContainer.classList.toggle('visible', !!effectiveIcon);
 
   }
 
 
 
-  // --- BASE ICON & COLOR UPDATE ---
+  let baseWrapper = previewContainer.querySelector('.edit-folder-base-wrapper');
 
-  // Optimization: Only run heavy color math if the color actually CHANGED
+  if (!baseWrapper) {
 
-  if (existingBase && existingBase.classList && existingBase.classList.contains('edit-folder-base-wrapper')) {
+    previewContainer.innerHTML = '';
 
-    if (existingBase.dataset.lastAppliedColor !== customColor) {
+    baseWrapper = document.createElement('div');
 
-      const svg = existingBase.querySelector('svg');
+    baseWrapper.className = 'edit-folder-base-wrapper';
+
+    baseWrapper.innerHTML = useSvgIcon('bookmarkFolderLarge');
+
+    previewContainer.appendChild(baseWrapper);
+
+  }
+
+
+
+  const contrastFill = getComplementaryColor(customColor);
+
+
+
+  const baseSvg = baseWrapper.querySelector('svg');
+
+  if (baseWrapper.dataset.lastAppliedColor !== customColor) {
+
+    if (baseSvg) {
+
+      tintSvgElement(baseSvg, customColor);
+
+    }
+
+    baseWrapper.dataset.lastAppliedColor = customColor;
+
+
+
+    const iconInWrapper = baseWrapper.querySelector('.edit-folder-custom-icon-preview');
+
+    if (iconInWrapper && iconInWrapper.tagName === 'DIV') {
+
+      const svg = iconInWrapper.querySelector('svg');
 
       if (svg) {
 
-        tintSvgElement(svg, customColor);
+        tintSvgElement(svg, contrastFill);
 
       }
 
-      existingBase.dataset.lastAppliedColor = customColor;
+    }
+
+  }
 
 
 
-      // Update contrast fill for existing BUILT-IN icon immediately
+  if (!effectiveIcon) {
 
-      if (existingIcon && existingIcon.tagName === 'DIV') {
+    const existingIcon = baseWrapper.querySelector('.edit-folder-custom-icon-preview');
 
-        const contrastFill = getComplementaryColor(customColor);
+    if (existingIcon) existingIcon.remove();
 
-        const svg = existingIcon.querySelector('svg');
+    return;
+
+  }
+
+
+
+  let iconEl = baseWrapper.querySelector('.edit-folder-custom-icon-preview');
+
+  const isBuiltinIcon =
+
+    typeof effectiveIcon === 'string' && effectiveIcon.startsWith('builtin:');
+
+
+
+  if (iconEl) {
+
+    const match =
+
+      (isBuiltinIcon && iconEl.dataset.iconKey === effectiveIcon) ||
+
+      (!isBuiltinIcon && iconEl.dataset.src === effectiveIcon);
+
+
+
+    if (match) {
+
+      iconEl.style.transform = transformValue;
+
+      if (isBuiltinIcon) {
+
+        const svg = iconEl.querySelector('svg');
 
         if (svg) {
 
@@ -3795,105 +3847,29 @@ function updateEditPreview(iconOverride) {
 
       }
 
+      return;
+
     }
 
-  } else {
-
-    // Initial Render (slow path, runs once)
-
-    previewContainer.innerHTML = '';
-
-    const baseWrapper = document.createElement('div');
-
-    baseWrapper.className = 'edit-folder-base-wrapper';
-
-    baseWrapper.innerHTML = useSvgIcon('bookmarkFolderLarge');
 
 
+    iconEl.remove();
 
-    const baseSvg = baseWrapper.querySelector('svg');
-
-    tintSvgElement(baseSvg, customColor);
-
-    baseWrapper.dataset.lastAppliedColor = customColor;
-
-    previewContainer.appendChild(baseWrapper);
+    iconEl = null;
 
   }
 
 
 
-  // --- CUSTOM ICON UPDATE ---
-
-  const effectiveIcon = iconOverride !== undefined ? iconOverride : (meta.icon || null);
-
-
-
-  if (!effectiveIcon) {
-
-    // If we have an icon but shouldn't, remove it
-
-    if (existingIcon && (existingIcon.classList && existingIcon.classList.contains('edit-folder-custom-icon-preview'))) {
-
-      existingIcon.remove();
-
-    }
-
-    return;
-
-  }
-
-
-
-  // Check if we can reuse the existing icon DOM element
-
-  if (existingIcon && existingIcon.classList && existingIcon.classList.contains('edit-folder-custom-icon-preview')) {
-
-    const currentSrc = existingIcon.dataset.src || existingIcon.dataset.iconKey;
-
-    const isMatch = (effectiveIcon.startsWith('builtin:') && existingIcon.dataset.iconKey === effectiveIcon) ||
-
-                    (!effectiveIcon.startsWith('builtin:') && existingIcon.src === effectiveIcon);
-
-
-
-    if (isMatch) {
-
-      // SUPER FAST PATH: Just update transform. 
-
-      // Browser handles this on the compositor thread (GPU).
-
-      existingIcon.style.transform = transformValue;
-
-      return; 
-
-    }
-
-    // Icon source changed, remove old one
-
-    existingIcon.remove();
-
-  }
-
-
-
-  // Slow Path: Create new icon element
-
-  let iconEl;
-
-  // (We need contrast fill here for new built-ins)
-
-  const contrastFill = getComplementaryColor(customColor); 
-
-
-
-  if (typeof effectiveIcon === 'string' && effectiveIcon.startsWith('builtin:')) {
+  if (isBuiltinIcon) {
 
     const key = effectiveIcon.slice('builtin:'.length);
 
     const svgString = useSvgIcon(key);
 
     if (!svgString) return;
+
+
 
     iconEl = document.createElement('div');
 
@@ -3925,11 +3901,13 @@ function updateEditPreview(iconOverride) {
 
   }
 
-  
+
 
   iconEl.style.transform = transformValue;
 
-  previewContainer.appendChild(iconEl);
+
+
+  baseWrapper.appendChild(iconEl);
 
 }
 
@@ -6234,6 +6212,7 @@ function renderBookmarkFolder(folderNode) {
   const scale = meta.scale ?? 1;
 
   const offsetY = meta.offsetY ?? 0;
+  const rotation = meta.rotation ?? 0;
 
 
 
@@ -6275,7 +6254,7 @@ function renderBookmarkFolder(folderNode) {
 
     // We override it here.
 
-    const transformStyle = `transform: translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.9});`;
+    const transformStyle = `transform: translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.9}) rotate(${rotation}deg);`;
 
 
 

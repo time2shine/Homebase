@@ -4892,7 +4892,7 @@ body.performance-mode .context-submenu {
   border: 1px solid #999;
 }
 
-/* === EDIT FOLDER PREVIEW – REBUILT === */
+/* === EDIT FOLDER PREVIEW - REBUILT === */
 
 .edit-folder-preview-container {
   display: flex;
@@ -4903,7 +4903,9 @@ body.performance-mode .context-submenu {
   height: 100px;
 }
 
-/* Gray circle that everything sits inside */
+/* === EDIT FOLDER PREVIEW - STRUCTURAL FIX === */
+
+/* The outer gray circle (96x96) */
 #edit-folder-icon-preview {
   width: 96px;
   height: 96px;
@@ -4913,14 +4915,18 @@ body.performance-mode .context-submenu {
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;   /* important: makes overlay positioning easy */
+  position: relative;
   z-index: 2;
 }
 
-/* Folder SVG wrapper inside the circle */
+/* CRITICAL FIX: Match the Grid's Folder Wrapper Dimensions (84x58).
+   Set position: relative so the icon inside positions itself against THIS box,
+   not the outer circle.
+*/
 .edit-folder-base-wrapper {
-  width: 88px;
-  height: 88px;
+  width: 84px;
+  height: 58px;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4932,12 +4938,12 @@ body.performance-mode .context-submenu {
   display: block;
 }
 
-/* The glyph / icon that sits in the middle */
+/* The glyph / icon inside the folder */
 .edit-folder-custom-icon-preview {
   position: absolute;
-  top: 58%;              /* centered over folder body */
+  top: 60%;
   left: 50%;
-  transform: translate(-50%, -50%) scale(0.85);
+  /* Transform is handled by JS */
   width: 32px;
   height: 32px;
   object-fit: contain;

@@ -5585,9 +5585,6 @@ async function handleGridDrop(evt) {
     item.classList.remove('drag-over');
   });
 
-  const draggedItem = evt.item;
-  const draggedItemId = draggedItem.dataset.bookmarkId;
-
   const dropTargetElement = document.elementFromPoint(
     evt.originalEvent.clientX,
     evt.originalEvent.clientY
@@ -5603,6 +5600,18 @@ async function handleGridDrop(evt) {
     ? dropTargetElement.closest('.back-button')
     : null;
 
+  const draggedItem = evt.item;
+  const draggedItemId = draggedItem.dataset.bookmarkId;
+
+  const syncVirtualizerMove = (id, newParentId = null) => {
+    if (!virtualizerState.isEnabled) return;
+
+    if (newParentId) {
+      const idx = virtualizerState.items.findIndex(x => x.id === id);
+      if (idx !== -1) virtualizerState.items.splice(idx, 1);
+    }
+  };
+
   // ============================================================
   // CASE A: MOVING INTO A FOLDER (Requires Removal & Transfer)
   // ============================================================
@@ -5616,35 +5625,29 @@ async function handleGridDrop(evt) {
     // 1. Visual: Remove immediately
     draggedItem.remove();
 
+    // FIX 1: Update Virtualizer internal state immediately
+    syncVirtualizerMove(draggedItemId, targetFolderId);
+
     // 2. Data Model Update (Optimistic)
-    // We must move the data node from Source -> Target in memory immediately.
-    
-    // Ensure we have a valid tree before traversing
     if (bookmarkTree && bookmarkTree[0]) {
-      // Find the folder we are currently looking at (Source Parent)
       const currentFolderId = currentGridFolderNode ? currentGridFolderNode.id : activeHomebaseFolderId;
       const sourceParentNode = findBookmarkNodeById(bookmarkTree[0], currentFolderId);
       
       let movedNode = null;
 
       if (sourceParentNode && sourceParentNode.children) {
-        // Find and remove from source array
         const idx = sourceParentNode.children.findIndex(c => c.id === draggedItemId);
         if (idx !== -1) {
-          movedNode = sourceParentNode.children[idx]; // Capture the object
-          sourceParentNode.children.splice(idx, 1);   // Remove from source
+          movedNode = sourceParentNode.children[idx];
+          sourceParentNode.children.splice(idx, 1);
         }
       }
 
-      // Find Target Parent and Inject
       if (movedNode) {
         const targetFolderNode = findBookmarkNodeById(bookmarkTree[0], targetFolderId);
         if (targetFolderNode) {
-          // Ensure children array exists
           if (!targetFolderNode.children) targetFolderNode.children = [];
-          
-          // Update metadata and push to target
-          movedNode.parentId = targetFolderId; 
+          movedNode.parentId = targetFolderId;
           targetFolderNode.children.push(movedNode);
         }
       }
@@ -5652,18 +5655,11 @@ async function handleGridDrop(evt) {
 
     // 3. API: Sync in background
     try {
-        await browser.bookmarks.move(draggedItemId, { parentId: targetFolderId });
-        
-        // 4. Refresh tree silently to ensure index consistency for future operations
-        // We do this *without* awaiting so the UI doesn't freeze
-        getBookmarkTree(true).catch(e => console.warn(e));
-        
+      await browser.bookmarks.move(draggedItemId, { parentId: targetFolderId });
+      getBookmarkTree(true).catch(e => console.warn(e));
     } catch (e) {
-        console.warn("Move failed", e);
-        // Reload grid if move failed to restore item
-        if (currentGridFolderNode) {
-           loadBookmarks(currentGridFolderNode.id);
-        }
+      console.warn('Move failed', e);
+      if (currentGridFolderNode) loadBookmarks(currentGridFolderNode.id);
     }
     return;
   }
@@ -5685,13 +5681,21 @@ async function handleGridDrop(evt) {
 
     if (dataOldIndex < 0 || dataNewIndex < 0) return;
 
-    // Update local array order instantly
     moveItemInLocalTree(parentId, dataOldIndex, dataNewIndex);
 
-    // Sync to browser
+    if (virtualizerState.isEnabled) {
+      if (
+        virtualizerState.items[evt.oldIndex]
+        && virtualizerState.items[evt.newIndex] !== undefined
+      ) {
+        const [movedItem] = virtualizerState.items.splice(evt.oldIndex, 1);
+        virtualizerState.items.splice(evt.newIndex, 0, movedItem);
+      }
+    }
+
     browser.bookmarks.move(draggedItemId, { index: dataNewIndex })
       .catch(err => {
-        console.error("Move failed, reverting...", err);
+        console.error('Move failed, reverting...', err);
         loadBookmarks(parentId);
       });
   }
@@ -5909,12 +5913,6 @@ function flattenBookmarks(nodes) {
 
 
 
-/**
- * === FINAL OPTIMIZED RENDERER ===
- * Features:
- * 1. Checks cache first for instant load.
- * 2. Adds a short grace period on the fallback to eliminate flash for fast loads.
- */
 function renderBookmark(bookmarkNode) {
   const item = document.createElement('div');
   item.className = 'bookmark-item';
@@ -5929,19 +5927,14 @@ function renderBookmark(bookmarkNode) {
   const iconWrapper = document.createElement('div');
   iconWrapper.className = 'bookmark-icon-wrapper';
 
-  // 1. Prepare Fallback (Letter) with Grace Period
+  // 1. Prepare Fallback (Letter) - instant visibility
   const fallbackIcon = document.createElement('div');
   fallbackIcon.className = 'bookmark-fallback-icon';
   fallbackIcon.textContent = firstLetter;
-  fallbackIcon.style.opacity = '0';
-  fallbackIcon.style.transition = 'opacity 0.2s ease 0.1s';
-  requestAnimationFrame(() => {
-    fallbackIcon.style.opacity = '1';
-  });
-  
+
   // 2. Prepare Image
   const imgIcon = document.createElement('img');
-  
+
   let domain = '';
   try {
     domain = new URL(bookmarkNode.url).hostname;
@@ -5950,29 +5943,19 @@ function renderBookmark(bookmarkNode) {
   if (domain.includes('.')) {
     imgIcon.src = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
 
-    // 3. DECISION MOMENT
     if (imgIcon.complete && imgIcon.naturalWidth > 16) {
-      // CASE A: Cached & Valid -> Show Image Immediately.
       iconWrapper.appendChild(imgIcon);
     } else {
-      // CASE B: Not Cached yet -> Append Invisible Fallback
       iconWrapper.appendChild(fallbackIcon);
 
       imgIcon.onload = () => {
-        if (imgIcon.naturalWidth > 16) {
-          // If image loads, swap it in.
-          if (iconWrapper.isConnected) {
-            iconWrapper.innerHTML = ''; 
-            iconWrapper.appendChild(imgIcon);
-          } else {
-            iconWrapper.textContent = '';
-            iconWrapper.appendChild(imgIcon);
-          }
+        if (imgIcon.naturalWidth > 16 && iconWrapper.isConnected) {
+          iconWrapper.innerHTML = '';
+          iconWrapper.appendChild(imgIcon);
         }
       };
     }
   } else {
-    // CASE C: No Domain -> Show Fallback (will fade in)
     iconWrapper.appendChild(fallbackIcon);
   }
 

@@ -10094,16 +10094,9 @@ function useSvgIcon(name, className = '') {
 function tintSvgElement(svg, color) {
   if (!svg || !color) return;
   svg.style.fill = color;
+  svg.style.color = color;
   svg.style.setProperty('fill', color, 'important');
-  const useNode = svg.querySelector('use');
-  if (useNode) {
-    useNode.style.fill = color;
-    useNode.style.setProperty('fill', color, 'important');
-  }
-  svg.querySelectorAll('path, rect').forEach((node) => {
-    node.style.fill = color;
-    node.style.setProperty('fill', color, 'important');
-  });
+  // Note: <use> references live in the sprite <symbol> and rely on currentColor inheritance.
 }
 
 const ICON_CATEGORIES = {

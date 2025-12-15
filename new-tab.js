@@ -5843,13 +5843,14 @@ function renderBookmark(bookmarkNode) {
   const iconWrapper = document.createElement('div');
   iconWrapper.className = 'bookmark-icon-wrapper';
 
-  // 1. Prepare Fallback (Letter) - instant visibility
+  // 1. Prepare fallback letter icon but don't append immediately.
   const fallbackIcon = document.createElement('div');
   fallbackIcon.className = 'bookmark-fallback-icon';
   fallbackIcon.textContent = firstLetter;
 
-  // 2. Prepare Image
+  // 2. Prepare image icon.
   const imgIcon = document.createElement('img');
+  imgIcon.loading = 'eager'; // Prioritize visible icons.
 
   let domain = '';
   try {
@@ -5859,15 +5860,31 @@ function renderBookmark(bookmarkNode) {
   if (domain.includes('.')) {
     imgIcon.src = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
 
-    if (imgIcon.complete && imgIcon.naturalWidth > 16) {
+    if (imgIcon.complete && imgIcon.naturalWidth > 0) {
       iconWrapper.appendChild(imgIcon);
     } else {
-      iconWrapper.appendChild(fallbackIcon);
+      const flashBuffer = setTimeout(() => {
+        if (iconWrapper.isConnected && iconWrapper.children.length === 0) {
+          iconWrapper.appendChild(fallbackIcon);
+        }
+      }, 50);
 
       imgIcon.onload = () => {
+        clearTimeout(flashBuffer);
+        // Google returns a 16px globe on failure, ignore those.
         if (imgIcon.naturalWidth > 16 && iconWrapper.isConnected) {
           iconWrapper.innerHTML = '';
           iconWrapper.appendChild(imgIcon);
+        } else if (iconWrapper.isConnected && iconWrapper.children.length === 0) {
+          iconWrapper.appendChild(fallbackIcon);
+        }
+      };
+
+      imgIcon.onerror = () => {
+        clearTimeout(flashBuffer);
+        if (iconWrapper.isConnected) {
+          iconWrapper.innerHTML = '';
+          iconWrapper.appendChild(fallbackIcon);
         }
       };
     }

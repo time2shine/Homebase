@@ -35,7 +35,7 @@ body {
   */
   z-index: -4;
 
-  background-color: #000000;
+  background-color: #2B2A33;
   background-image: var(--initial-wallpaper, url("assets/fallback.webp"));
   background-size: cover;
   background-position: center;

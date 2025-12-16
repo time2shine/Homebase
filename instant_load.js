@@ -37,7 +37,7 @@
           'weather-pressure': 'pressure',
           'weather-humidity': 'humidity',
           'weather-cloudcover': 'cloudcover',
-          'weather-precip-prob': 'precipProb', // <--- Fixed this key
+          'weather-precip-prob': 'precipProb',
           'weather-sunrise': 'sunrise',
           'weather-sunset': 'sunset'
         };

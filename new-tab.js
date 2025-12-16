@@ -127,19 +127,41 @@ function cleanupBackgroundPlayback() {
 
 
 function debounce(func, wait) {
+  let timeout = null;
+  let lastArgs;
+  let lastThis;
 
-  let timeout;
+  function debounced(...args) {
+    lastArgs = args;
+    lastThis = this;
 
-  return function(...args) {
+    if (timeout) clearTimeout(timeout);
 
-    const context = this;
+    timeout = setTimeout(() => {
+      timeout = null;
+      func.apply(lastThis, lastArgs);
+    }, wait);
+  }
 
-    clearTimeout(timeout);
-
-    timeout = setTimeout(() => func.apply(context, args), wait);
-
+  debounced.cancel = () => {
+    if (timeout) clearTimeout(timeout);
+    timeout = null;
+    lastArgs = null;
+    lastThis = null;
   };
 
+  debounced.flush = () => {
+    if (!timeout) return;
+    clearTimeout(timeout);
+    const args = lastArgs;
+    const ctx = lastThis;
+    timeout = null;
+    lastArgs = null;
+    lastThis = null;
+    func.apply(ctx, args);
+  };
+
+  return debounced;
 }
 
 
@@ -1587,6 +1609,9 @@ const debouncedResize = debounce(() => {
 
 
 window.addEventListener('resize', debouncedResize);
+window.addEventListener('beforeunload', () => {
+  debouncedResize.cancel?.();
+});
 
 updateSidebarCollapseState();
 
@@ -11324,6 +11349,9 @@ async function setupSearch() {
 
 
   const debouncedSearch = debounce(handleSearchInput, 120);
+  window.addEventListener('beforeunload', () => {
+    debouncedSearch.cancel?.();
+  });
 
   searchForm.addEventListener('submit', handleSearch);
 

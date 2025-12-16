@@ -4528,7 +4528,7 @@ function warmFaviconCache(nodes) {
     while (index < domains.length && (deadline.timeRemaining() > 0 || deadline.didTimeout)) {
       const domain = domains[index++];
       const img = new Image();
-      img.src = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
+      img.src = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=64`;
     }
 
     if (index < domains.length) {
@@ -5888,19 +5888,23 @@ function renderBookmark(bookmarkNode) {
   item.dataset.isFolder = 'false';
 
   const title = bookmarkNode.title || ' ';
-  const firstLetter = title.charAt(0).toLowerCase();
+  const fallbackLetter = (title.trim().charAt(0) || '?').toUpperCase();
 
   const iconWrapper = document.createElement('div');
   iconWrapper.className = 'bookmark-icon-wrapper';
 
-  // 1. Prepare fallback letter icon but don't append immediately.
+  // 1. Prepare fallback letter icon and render it immediately so it shows first.
   const fallbackIcon = document.createElement('div');
   fallbackIcon.className = 'bookmark-fallback-icon';
-  fallbackIcon.textContent = firstLetter;
+  fallbackIcon.textContent = fallbackLetter;
+  iconWrapper.appendChild(fallbackIcon);
 
-  // 2. Prepare image icon.
+  // 2. Prepare image icon (stacked above fallback).
   const imgIcon = document.createElement('img');
-  imgIcon.loading = 'eager'; // Prioritize visible icons.
+  imgIcon.className = 'bookmark-img';
+  imgIcon.loading = 'lazy';
+  imgIcon.decoding = 'async';
+  imgIcon.alt = '';
 
   let domain = '';
   try {
@@ -5908,38 +5912,38 @@ function renderBookmark(bookmarkNode) {
   } catch (e) {}
 
   if (domain.includes('.')) {
-    imgIcon.src = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
+    const showFallback = () => fallbackIcon.classList.add('show-fallback');
+
+    imgIcon.onload = () => {
+      if (imgIcon.naturalWidth > 16) {
+        imgIcon.classList.add('loaded');
+        iconWrapper.style.backgroundColor = 'transparent';
+      } else {
+        imgIcon.remove();
+        showFallback();
+      }
+    };
+
+    imgIcon.onerror = () => {
+      imgIcon.remove();
+      showFallback();
+    };
+
+    imgIcon.src = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
 
     if (imgIcon.complete && imgIcon.naturalWidth > 0) {
-      iconWrapper.appendChild(imgIcon);
-    } else {
-      const flashBuffer = setTimeout(() => {
-        if (iconWrapper.isConnected && iconWrapper.children.length === 0) {
-          iconWrapper.appendChild(fallbackIcon);
-        }
-      }, 50);
-
-      imgIcon.onload = () => {
-        clearTimeout(flashBuffer);
-        // Google returns a 16px globe on failure, ignore those.
-        if (imgIcon.naturalWidth > 16 && iconWrapper.isConnected) {
-          iconWrapper.innerHTML = '';
-          iconWrapper.appendChild(imgIcon);
-        } else if (iconWrapper.isConnected && iconWrapper.children.length === 0) {
-          iconWrapper.appendChild(fallbackIcon);
-        }
-      };
-
-      imgIcon.onerror = () => {
-        clearTimeout(flashBuffer);
-        if (iconWrapper.isConnected) {
-          iconWrapper.innerHTML = '';
-          iconWrapper.appendChild(fallbackIcon);
-        }
-      };
+      if (imgIcon.naturalWidth > 16) {
+        imgIcon.classList.add('loaded');
+        iconWrapper.style.backgroundColor = 'transparent';
+      } else {
+        imgIcon.remove();
+        showFallback();
+      }
     }
+
+    iconWrapper.appendChild(imgIcon);
   } else {
-    iconWrapper.appendChild(fallbackIcon);
+    fallbackIcon.classList.add('show-fallback');
   }
 
   const titleSpan = document.createElement('span');
@@ -6007,7 +6011,7 @@ async function deleteBookmarkOrFolder(id, isFolder) {
 
       const domain = urlObj.hostname || node.url;
 
-      faviconUrl = `https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64`;
+      faviconUrl = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=64`;
 
     } catch (e) {
 
@@ -13239,7 +13243,7 @@ async function handleSearchInput() {
 
           <button type="button" class="result-item" data-url="${safeUrl}">
 
-            <img src="https://s2.googleusercontent.com/s2/favicons?domain=${domain}&sz=64" alt="">
+            <img src="https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=64" alt="">
 
             <div class="result-item-info">
 

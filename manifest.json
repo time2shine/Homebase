@@ -23,6 +23,7 @@
     "https://api.open-meteo.com/*",
     "https://geocoding-api.open-meteo.com/*",
     "https://api.quotable.io/*",
+    "https://t2.gstatic.com/*",
     "https://s2.googleusercontent.com/*",
     "tabs",
     "storage",

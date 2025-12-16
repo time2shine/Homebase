@@ -3749,6 +3749,7 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 1;                    /* always visible in dialogs */
 }
 
 #edit-folder-dialog .dialog-input {
@@ -4144,23 +4145,13 @@ input:checked + .slider:before {
 /* --- BOOKMARK FALLBACK ICON (MODIFIED) --- */
 /* ======================================= */
 
-/* Add rounding and new size to the real favicons */
-.bookmark-item img {
-  width: 50px; /* Changed from 40px */
-  height: 50px; /* Changed from 40px */
-  border-radius: 10px; 
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-}
-
-/* This wrapper holds both the real icon and the fallback */
+/* Wrapper stacks fallback + favicon in one cell */
 .bookmark-icon-wrapper {
-  width: 50px;
-  /* Match folder height for aligned labels */
-  height: 58px;
+  width: 48px;
+  height: 48px;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
 
   position: relative;          /* so ::after can sit on top */
   overflow: visible;           /* allow shadows to render fully */
@@ -4168,13 +4159,40 @@ input:checked + .slider:before {
   transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;
 }
 
+.bookmark-item[data-is-folder="false"]:not(.back-button) .bookmark-icon-wrapper {
+  background-color: rgba(128, 128, 128, 0.15); /* subtle loader */
+  border-radius: 12px;
+}
 
+.bookmark-icon-wrapper .bookmark-fallback-icon,
+.bookmark-icon-wrapper .bookmark-img {
+  grid-area: 1 / 1;
+}
+
+/* Real favicons */
+.bookmark-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  z-index: 2;
+}
+
+.bookmark-img.loaded {
+  opacity: 1;
+}
 
 /* This is the fallback "F" icon */
 .bookmark-fallback-icon {
-  width: 50px; 
-  height: 50px; 
-  border-radius: 10px; 
+  width: 48px; 
+  height: 48px; 
+  border-radius: 12px; 
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
 
   /* 1. Base Color (Set by JS from the Color Picker) */
   background-color: var(--bookmark-fallback-color, #00b8d4); 
@@ -4194,13 +4212,18 @@ input:checked + .slider:before {
   align-items: center;
   justify-content: center;
 
-  font-size: 30px;
+  font-size: 20px;
   font-weight: 400;
   font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
   
 /* Ensure the background doesn't bleed outside the radius */
   overflow: hidden; 
+}
+
+.bookmark-fallback-icon.show-fallback,
+.bookmark-fallback-ghost .bookmark-fallback-icon {
+  opacity: 1;
 }
 
 

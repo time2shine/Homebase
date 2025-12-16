@@ -63,6 +63,7 @@ const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
 const CACHED_APPLIED_VIDEO_URL_KEY = 'cachedAppliedVideoUrl';
 
 const CACHED_APPLIED_POSTER_URL_KEY = 'cachedAppliedPosterUrl';
+const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
 
 const CACHED_APPLIED_POSTER_CACHE_KEY = 'cachedAppliedPoster';
 
@@ -185,16 +186,14 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
 
   const poster = posterUrl || 'assets/fallback.webp';
 
-  // FIX: Check dataset to see if preload.js already painted this exact URL.
-  // If it matches, we skip the style update to prevent the black flash.
-  const current = document.documentElement.dataset.initialWallpaper;
+  // Avoid repainting when preload already drew a stable data URL and we'd swap to blob/http.
+  const current = document.documentElement.dataset.initialWallpaper || '';
+  const currentIsData = current.startsWith('data:');
+  const nextIsBlobOrHttp = poster.startsWith('blob:') || poster.startsWith('http');
 
-  if (current !== poster) {
-
+  if (!(currentIsData && nextIsBlobOrHttp) && current !== poster) {
     document.documentElement.style.setProperty('--initial-wallpaper', `url("${poster}")`);
-
     document.documentElement.dataset.initialWallpaper = poster;
-
   }
 
   runWhenIdle(() => {
@@ -1047,29 +1046,59 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
   try {
     if (!posterUrl) {
       await browser.storage.local.remove(CACHED_APPLIED_POSTER_URL_KEY);
+      await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
       await deleteCachedObject(CACHED_APPLIED_POSTER_CACHE_KEY);
       try {
         if (window.localStorage) {
           localStorage.removeItem('cachedAppliedPosterUrl');
+          localStorage.removeItem('cachedAppliedPosterDataUrl');
         }
       } catch (e) {}
       return;
     }
 
-    // FIX: Do NOT convert to Base64. Store the URL string and cache the asset separately.
-    const storedUrl = posterUrl;
-
-    if (posterUrl && !posterUrl.startsWith('blob:')) {
-       cacheAsset(posterUrl).catch(() => {});
+    // Prefer a persistent URL (not a blob) for fast-load storage.
+    let urlToStore = posterUrl;
+    if (posterUrl.startsWith('blob:')) {
+      if (posterCacheKey && !posterCacheKey.startsWith('blob:')) {
+        urlToStore = posterCacheKey;
+      } else {
+        // Without a persistent key, we cannot store a stable URL for preload.
+        return;
+      }
     }
 
-    await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: storedUrl });
+    if (urlToStore && !urlToStore.startsWith('data:') && !urlToStore.startsWith('blob:')) {
+      cacheAsset(urlToStore).catch(() => {});
+    }
 
+    await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore });
     try {
       if (window.localStorage) {
-        localStorage.setItem('cachedAppliedPosterUrl', storedUrl);
+        localStorage.setItem('cachedAppliedPosterUrl', urlToStore);
       }
     } catch (e) {}
+
+    // Optionally store a small data URL for instant paint if size is reasonable
+    try {
+      const blob = await resolvePosterBlob(urlToStore, posterCacheKey || posterUrl);
+      if (blob && blob.size > 0 && blob.size < 250 * 1024) {
+        const dataUrl = await blobToDataUrl(blob);
+        if (dataUrl) {
+          await browser.storage.local.set({ [CACHED_APPLIED_POSTER_DATA_URL_KEY]: dataUrl });
+          if (window.localStorage) {
+            localStorage.setItem('cachedAppliedPosterDataUrl', dataUrl);
+          }
+        }
+      } else {
+        await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+        if (window.localStorage) {
+          localStorage.removeItem('cachedAppliedPosterDataUrl');
+        }
+      }
+    } catch (e) {
+      // If snapshot fails, skip storing data URL
+    }
   } catch (err) {
     console.warn('Failed to cache applied wallpaper poster', err);
   }
@@ -1246,23 +1275,21 @@ async function hydrateWallpaperSelection(selection) {
 
 
   if (hydrated.videoCacheKey) {
-
     const cachedVideo = await getCachedObjectUrl(hydrated.videoCacheKey);
-
     if (cachedVideo) {
-
       hydrated.videoUrl = cachedVideo;
-
     }
-
   }
 
-
+  if (hydrated.posterCacheKey) {
+    const cachedPoster = await getCachedObjectUrl(hydrated.posterCacheKey);
+    if (cachedPoster) {
+      hydrated.posterUrl = cachedPoster;
+    }
+  }
 
   if (!hydrated.posterUrl) {
-
     hydrated.posterUrl = 'assets/fallback.webp';
-
   }
 
 
@@ -1318,27 +1345,22 @@ function setBackgroundVideoSources(videoUrl, posterUrl = '') {
 
 
 function applyWallpaperBackground(posterUrl) {
+  const current = document.documentElement.dataset.initialWallpaper || '';
+  const currentIsData = current.startsWith('data:');
+  const nextIsBlobOrHttp = (posterUrl || '').startsWith('blob:') || (posterUrl || '').startsWith('http');
 
-  // FIX: Check dataset for instant string comparison.
-  // This prevents the browser from discarding the layer if the URL hasn't changed.
-  const current = document.documentElement.dataset.initialWallpaper;
-  
-  if (current === posterUrl) return;
+  // Keep existing data URL if we would downgrade to blob/http, or if unchanged.
+  if ((currentIsData && nextIsBlobOrHttp) || current === posterUrl) return;
 
   const next = posterUrl ? `url("${posterUrl}")` : '';
-  
-  if (posterUrl) {
 
+  if (posterUrl) {
     document.documentElement.style.setProperty('--initial-wallpaper', next);
     document.documentElement.dataset.initialWallpaper = posterUrl;
-
   } else {
-
     document.documentElement.style.removeProperty('--initial-wallpaper');
     delete document.documentElement.dataset.initialWallpaper;
-
   }
-
 }
 
 
@@ -1479,6 +1501,8 @@ async function ensureDailyWallpaper(forceNext = false) {
 
     const type = await getWallpaperTypePreference();
 
+    await ensurePlayableSelection(current);
+
     applyWallpaperByType(current, type);
 
     return;
@@ -1512,6 +1536,7 @@ async function ensureDailyWallpaper(forceNext = false) {
   if (current) {
 
     const hydratedSelection = await hydrateWallpaperSelection(current);
+    await ensurePlayableSelection(hydratedSelection);
 
     currentWallpaperSelection = hydratedSelection;
 
@@ -16725,47 +16750,143 @@ function buildGalleryCard(item, index = 0) {
 }
 
 
+function extractFrameFromVideoBlob(blob) {
+  return new Promise((resolve, reject) => {
+    if (!blob) {
+      return reject(new Error('No video blob provided for snapshot extraction.'));
+    }
+
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+
+    const objectUrl = URL.createObjectURL(blob);
+    video.src = objectUrl;
+
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        video.removeAttribute('src');
+        video.load();
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    const handleError = (err) => {
+      cleanup();
+      reject(err || new Error('Failed to capture video frame.'));
+    };
+
+    video.addEventListener('loadedmetadata', () => {
+      const targetTime = Math.min(1, video.duration || 1);
+      video.currentTime = Math.max(0, targetTime);
+    }, { once: true });
+
+    video.addEventListener('seeked', () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1;
+      canvas.height = video.videoHeight || 1;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        handleError(new Error('Unable to create drawing context.'));
+        return;
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob((snapshotBlob) => {
+        cleanup();
+        if (!snapshotBlob) {
+          reject(new Error('Snapshot blob empty.'));
+          return;
+        }
+        resolve(snapshotBlob);
+      }, 'image/jpeg', 0.85);
+    }, { once: true });
+
+    video.addEventListener('error', () => handleError(new Error('Video failed to load for snapshot.')), { once: true });
+  });
+}
+
 
 async function applyGalleryWallpaper(item) {
+  const card = document.querySelector(`.gallery-card[data-id="${item.id}"]`);
+  const applyBtn = card ? card.querySelector('.apply-button') : null;
+  const originalText = applyBtn ? applyBtn.textContent : 'Apply';
 
-  const selection = {
+  if (applyBtn) {
+    applyBtn.textContent = 'Downloading...';
+    applyBtn.disabled = true;
+    applyBtn.style.cursor = 'wait';
+  }
 
-    id: item.id,
+  try {
+    const videoUrl = item.url;
 
-    videoUrl: item.url,
+    const cache = await caches.open(WALLPAPER_CACHE_NAME);
+    let cachedResponse = await cache.match(videoUrl);
 
-    posterUrl: item.posterUrl || item.poster || '',
+    if (!cachedResponse) {
+      if (videoUrl && isRemoteVideoUrl(videoUrl)) {
+        await cacheAsset(videoUrl);
+        cachedResponse = await cache.match(videoUrl);
+        if (!cachedResponse) {
+          throw new Error('Download failed. Please check your internet connection.');
+        }
+      }
+    }
 
-    posterCacheKey: item.poster || item.posterUrl || '',
+    const videoBlob = cachedResponse ? await cachedResponse.blob() : null;
+    if (!videoBlob) {
+      throw new Error('Failed to read cached video for snapshot generation.');
+    }
 
-    videoCacheKey: item.url || '',
+    if (applyBtn) {
+      applyBtn.textContent = 'Generating snapshot...';
+    }
 
-    title: item.title || '',
+    const snapshotBlob = await extractFrameFromVideoBlob(videoBlob);
+    const generatedPosterKey = normalizeWallpaperCacheKey(`gallery-snapshot-${item.id}`);
+    const snapshotResponse = new Response(snapshotBlob, {
+      headers: { 'content-type': 'image/jpeg' }
+    });
 
-    selectedAt: Date.now()
+    await cache.put(generatedPosterKey, snapshotResponse);
 
-  };
+    const selection = {
+      id: item.id,
+      videoUrl,
+      posterUrl: generatedPosterKey,
+      posterCacheKey: generatedPosterKey,
+      videoCacheKey: videoUrl,
+      title: item.title || '',
+      selectedAt: Date.now()
+    };
 
+    const hydrated = await hydrateWallpaperSelection(selection);
+    await ensurePlayableSelection(hydrated);
 
+    await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: hydrated });
+    currentWallpaperSelection = hydrated;
 
-  const hydrated = await hydrateWallpaperSelection(selection);
+    const type = await getWallpaperTypePreference();
+    applyWallpaperByType(hydrated, type);
 
+    runWhenIdle(() => cacheAppliedWallpaperVideo(hydrated));
 
+    closeGalleryModal();
 
-  await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: hydrated });
-
-  currentWallpaperSelection = hydrated;
-
-  const type = await getWallpaperTypePreference();
-
-  applyWallpaperByType(hydrated, type);
-
-  runWhenIdle(() => cacheAppliedWallpaperVideo(hydrated));
-
-  // Close modal after applying
-
-  closeGalleryModal();
-
+  } catch (err) {
+    console.error('Apply Wallpaper Failed:', err);
+    alert('Could not download wallpaper. Please check your internet connection.');
+  } finally {
+    if (applyBtn) {
+      applyBtn.textContent = originalText;
+      applyBtn.disabled = false;
+      applyBtn.style.cursor = '';
+    }
+  }
 }
 
 
@@ -17887,6 +18008,7 @@ async function applyMyWallpaper(item) {
 
 
   const hydratedSelection = await hydrateWallpaperSelection(selection);
+  await ensurePlayableSelection(hydratedSelection);
 
 
 
@@ -18500,6 +18622,7 @@ async function setWallpaperTypePreference(type) {
     if (selection) {
 
       const hydrated = await hydrateWallpaperSelection(selection);
+      await ensurePlayableSelection(hydrated);
 
       currentWallpaperSelection = hydrated;
 
@@ -19057,4 +19180,23 @@ function updateSettingsPreview(selection, type = 'video') {
 
   }
 
+}
+
+
+/**
+ * Ensures interactive selections resolve cache keys into playable URLs
+ * before the player is asked to start playback.
+ */
+async function ensurePlayableSelection(selection) {
+  if (!selection) return selection;
+
+  const cacheKey = selection.videoCacheKey || selection.videoUrl || '';
+  if (cacheKey) {
+    const cachedVideo = await getCachedObjectUrl(cacheKey);
+    if (cachedVideo) {
+      selection.videoUrl = cachedVideo;
+    }
+  }
+
+  return selection;
 }

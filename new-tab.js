@@ -1699,8 +1699,13 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
 
 // Animation Dictionary (Name -> CSS Keyframes)
 // Map to store per-folder customization (id -> { color, icon })
+// Map to store per-bookmark customization (id -> { icon })
 
+const BOOKMARK_META_KEY = 'bookmarkCustomMetadata';
 const FOLDER_META_KEY = 'folderCustomMetadata';
+
+let bookmarkMetadata = {};
+let pendingBookmarkMeta = {};
 
 let folderMetadata = {};
 
@@ -1931,6 +1936,16 @@ let bookmarkCancelBtn;
 
 let bookmarkCloseBtn;
 
+let bookmarkIconPreview;
+
+let bookmarkUploadBtn;
+
+let bookmarkGetBtn;
+
+let bookmarkClearBtn;
+
+let bookmarkFileInput;
+
 let bookmarkModalTitle;
 
 let bookmarkModalMode = 'add';
@@ -2133,6 +2148,10 @@ async function showAddBookmarkModal() {
 
   resetBookmarkModalState();
 
+  pendingBookmarkMeta = {};
+
+  updateBookmarkModalPreview();
+
   
 
   // 1. Clear inputs
@@ -2201,7 +2220,11 @@ function resetBookmarkModalState() {
 
   bookmarkModalEditingId = null;
 
+  pendingBookmarkMeta = {};
+
   setBookmarkModalMode('add');
+
+  updateBookmarkModalPreview();
 
 }
 
@@ -2242,6 +2265,10 @@ function showEditBookmarkModal(bookmarkId) {
   bookmarkNameInput.value = bookmarkNode.title || '';
 
   bookmarkUrlInput.value = bookmarkNode.url || '';
+
+  pendingBookmarkMeta = { ...(bookmarkMetadata[bookmarkId] || {}) };
+
+  updateBookmarkModalPreview();
 
 
 
@@ -2304,6 +2331,18 @@ async function handleBookmarkModalSave() {
         url: url
 
       });
+
+      if (pendingBookmarkMeta.icon) {
+
+        bookmarkMetadata[bookmarkModalEditingId] = { ...pendingBookmarkMeta };
+
+      } else {
+
+        delete bookmarkMetadata[bookmarkModalEditingId];
+
+      }
+
+      await browser.storage.local.set({ [BOOKMARK_META_KEY]: bookmarkMetadata });
 
 
 
@@ -2376,19 +2415,27 @@ async function handleBookmarkModalSave() {
 
   try {
 
-    await browser.bookmarks.create({
+      const created = await browser.bookmarks.create({
 
-      parentId: targetParentId,
+        parentId: targetParentId,
 
-      title: name,
+        title: name,
 
-      url: url
+        url: url
 
-    });
+      });
+
+      if (pendingBookmarkMeta.icon && created && created.id) {
+
+        bookmarkMetadata[created.id] = { ...pendingBookmarkMeta };
+
+        await browser.storage.local.set({ [BOOKMARK_META_KEY]: bookmarkMetadata });
+
+      }
 
 
 
-    // 5. === THIS IS THE FIX ===
+      // 5. === THIS IS THE FIX ===
 
     // Re-fetch the entire bookmark tree to get the update
 
@@ -2456,6 +2503,16 @@ function setupBookmarkModal() {
 
   bookmarkCloseBtn = document.getElementById('bookmark-close-btn');
 
+  bookmarkIconPreview = document.getElementById('bookmark-icon-preview');
+
+  bookmarkUploadBtn = document.getElementById('bookmark-upload-btn');
+
+  bookmarkGetBtn = document.getElementById('bookmark-get-btn');
+
+  bookmarkClearBtn = document.getElementById('bookmark-clear-btn');
+
+  bookmarkFileInput = document.getElementById('bookmark-file-input');
+
   bookmarkModalTitle = addBookmarkDialog.querySelector('h3');
 
   resetBookmarkModalState();
@@ -2471,6 +2528,38 @@ function setupBookmarkModal() {
   if (bookmarkCloseBtn) {
 
     bookmarkCloseBtn.addEventListener('click', hideAddBookmarkModal);
+
+  }
+
+  if (bookmarkUploadBtn && bookmarkFileInput) {
+
+    bookmarkUploadBtn.addEventListener('click', () => bookmarkFileInput.click());
+
+  }
+
+  if (bookmarkClearBtn) {
+
+    bookmarkClearBtn.addEventListener('click', handleBookmarkClearIcon);
+
+  }
+
+  if (bookmarkGetBtn) {
+
+    bookmarkGetBtn.addEventListener('click', handleBookmarkGetIcon);
+
+  }
+
+  if (bookmarkFileInput) {
+
+    bookmarkFileInput.addEventListener('change', (e) => {
+
+      const file = e.target.files && e.target.files[0];
+
+      if (file) handleBookmarkIconUpload(file);
+
+      bookmarkFileInput.value = '';
+
+    });
 
   }
 
@@ -2522,7 +2611,23 @@ function setupBookmarkModal() {
 
   });
 
-  
+
+
+  if (bookmarkUrlInput) {
+
+    bookmarkUrlInput.addEventListener('input', () => {
+
+      if (!pendingBookmarkMeta.icon) {
+
+        updateBookmarkModalPreview();
+
+      }
+
+    });
+
+  }
+
+
 
   // 5. Listen for "Escape" key globally when modal is open
 
@@ -2535,6 +2640,205 @@ function setupBookmarkModal() {
     }
 
   });
+
+
+
+  updateBookmarkModalPreview();
+
+}
+
+
+
+function updateBookmarkModalPreview() {
+
+  if (!bookmarkIconPreview) return;
+
+  bookmarkIconPreview.innerHTML = '';
+  bookmarkIconPreview.textContent = '';
+  bookmarkIconPreview.style.color = '';
+  bookmarkIconPreview.style.fontSize = '';
+
+  if (pendingBookmarkMeta.icon) {
+
+    const img = document.createElement('img');
+
+    img.src = pendingBookmarkMeta.icon;
+
+    bookmarkIconPreview.appendChild(img);
+
+    return;
+
+  }
+
+  const urlVal = (bookmarkUrlInput && bookmarkUrlInput.value || '').trim();
+
+  if (urlVal) {
+
+    let domain = '';
+
+    try {
+
+      const preparedUrl = urlVal.startsWith('http') ? urlVal : `https://${urlVal}`;
+
+      domain = new URL(preparedUrl).hostname;
+
+    } catch (e) {}
+
+
+
+    if (domain) {
+
+      const img = document.createElement('img');
+
+      img.src = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
+
+      bookmarkIconPreview.appendChild(img);
+
+      return;
+
+    }
+
+  }
+
+  bookmarkIconPreview.textContent = '?';
+
+  bookmarkIconPreview.style.color = '#ccc';
+
+  bookmarkIconPreview.style.fontSize = '24px';
+
+}
+
+
+
+function handleBookmarkIconUpload(file) {
+
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+
+    const img = new Image();
+
+    img.onload = () => {
+
+      const canvas = document.createElement('canvas');
+
+      const MAX_SIZE = 128;
+
+      let w = img.width;
+
+      let h = img.height;
+
+      if (w > h) {
+
+        if (w > MAX_SIZE) {
+
+          h *= MAX_SIZE / w;
+
+          w = MAX_SIZE;
+
+        }
+
+      } else {
+
+        if (h > MAX_SIZE) {
+
+          w *= MAX_SIZE / h;
+
+          h = MAX_SIZE;
+
+        }
+
+      }
+
+      canvas.width = w;
+
+      canvas.height = h;
+
+      const ctx = canvas.getContext('2d');
+
+      ctx.drawImage(img, 0, 0, w, h);
+
+      pendingBookmarkMeta.icon = canvas.toDataURL('image/webp', 0.85);
+
+      updateBookmarkModalPreview();
+
+    };
+
+    img.src = e.target.result;
+
+  };
+
+  reader.readAsDataURL(file);
+
+}
+
+
+
+function handleBookmarkClearIcon() {
+
+  delete pendingBookmarkMeta.icon;
+
+  updateBookmarkModalPreview();
+
+}
+
+
+
+async function handleBookmarkGetIcon() {
+
+  const urlVal = (bookmarkUrlInput && bookmarkUrlInput.value || '').trim();
+
+  if (!urlVal) return;
+
+
+
+  let domain = '';
+
+  try {
+
+    const preparedUrl = urlVal.startsWith('http') ? urlVal : `https://${urlVal}`;
+
+    domain = new URL(preparedUrl).hostname;
+
+  } catch (e) {
+
+    return;
+
+  }
+
+
+
+  const googleApiUrl = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
+
+
+
+  try {
+
+    const resp = await fetch(googleApiUrl);
+
+    if (!resp.ok) throw new Error('Icon fetch failed');
+
+    const blob = await resp.blob();
+
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+
+      pendingBookmarkMeta.icon = reader.result;
+
+      updateBookmarkModalPreview();
+
+    };
+
+    reader.readAsDataURL(blob);
+
+  } catch (err) {
+
+    console.warn("Failed to fetch icon", err);
+
+    alert("Could not fetch icon from site.");
+
+  }
 
 }
 
@@ -5541,57 +5845,76 @@ function renderBookmark(bookmarkNode) {
   const iconWrapper = document.createElement('div');
   iconWrapper.className = 'bookmark-icon-wrapper';
 
-  // 1. Prepare fallback letter icon and render it immediately so it shows first.
-  const fallbackIcon = document.createElement('div');
-  fallbackIcon.className = 'bookmark-fallback-icon';
-  fallbackIcon.textContent = fallbackLetter;
-  iconWrapper.appendChild(fallbackIcon);
+  const customMeta = bookmarkMetadata[bookmarkNode.id];
 
-  // 2. Prepare image icon (stacked above fallback).
-  const imgIcon = document.createElement('img');
-  imgIcon.className = 'bookmark-img';
-  imgIcon.loading = 'lazy';
-  imgIcon.decoding = 'async';
-  imgIcon.alt = '';
-
-  let domain = '';
-  try {
-    domain = new URL(bookmarkNode.url).hostname;
-  } catch (e) {}
-
-  if (domain.includes('.')) {
-    const showFallback = () => fallbackIcon.classList.add('show-fallback');
-
-    imgIcon.onload = () => {
-      if (imgIcon.naturalWidth > 16) {
-        imgIcon.classList.add('loaded');
-        iconWrapper.style.backgroundColor = 'transparent';
-      } else {
-        imgIcon.remove();
-        showFallback();
-      }
+  // --- NEW: Check for Custom Icon ---
+  if (customMeta && customMeta.icon) {
+    const customImg = document.createElement('img');
+    customImg.className = 'bookmark-img loaded';
+    customImg.alt = '';
+    customImg.src = customMeta.icon;
+    customImg.onerror = () => {
+      customImg.remove();
+      const fallbackIcon = document.createElement('div');
+      fallbackIcon.className = 'bookmark-fallback-icon show-fallback';
+      fallbackIcon.textContent = fallbackLetter;
+      iconWrapper.appendChild(fallbackIcon);
     };
-
-    imgIcon.onerror = () => {
-      imgIcon.remove();
-      showFallback();
-    };
-
-    imgIcon.src = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
-
-    if (imgIcon.complete && imgIcon.naturalWidth > 0) {
-      if (imgIcon.naturalWidth > 16) {
-        imgIcon.classList.add('loaded');
-        iconWrapper.style.backgroundColor = 'transparent';
-      } else {
-        imgIcon.remove();
-        showFallback();
-      }
-    }
-
-    iconWrapper.appendChild(imgIcon);
+    iconWrapper.appendChild(customImg);
+    iconWrapper.style.backgroundColor = 'transparent';
   } else {
-    fallbackIcon.classList.add('show-fallback');
+    // 1. Prepare fallback letter icon and render it immediately so it shows first.
+    const fallbackIcon = document.createElement('div');
+    fallbackIcon.className = 'bookmark-fallback-icon';
+    fallbackIcon.textContent = fallbackLetter;
+    iconWrapper.appendChild(fallbackIcon);
+
+    // 2. Prepare image icon (stacked above fallback).
+    const imgIcon = document.createElement('img');
+    imgIcon.className = 'bookmark-img';
+    imgIcon.loading = 'lazy';
+    imgIcon.decoding = 'async';
+    imgIcon.alt = '';
+
+    let domain = '';
+    try {
+      domain = new URL(bookmarkNode.url).hostname;
+    } catch (e) {}
+
+    if (domain.includes('.')) {
+      const showFallback = () => fallbackIcon.classList.add('show-fallback');
+
+      imgIcon.onload = () => {
+        if (imgIcon.naturalWidth > 16) {
+          imgIcon.classList.add('loaded');
+          iconWrapper.style.backgroundColor = 'transparent';
+        } else {
+          imgIcon.remove();
+          showFallback();
+        }
+      };
+
+      imgIcon.onerror = () => {
+        imgIcon.remove();
+        showFallback();
+      };
+
+      imgIcon.src = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
+
+      if (imgIcon.complete && imgIcon.naturalWidth > 0) {
+        if (imgIcon.naturalWidth > 16) {
+          imgIcon.classList.add('loaded');
+          iconWrapper.style.backgroundColor = 'transparent';
+        } else {
+          imgIcon.remove();
+          showFallback();
+        }
+      }
+
+      iconWrapper.appendChild(imgIcon);
+    } else {
+      fallbackIcon.classList.add('show-fallback');
+    }
   }
 
   const titleSpan = document.createElement('span');
@@ -7239,6 +7562,26 @@ function processBookmarks(nodes, activeFolderId = null) {
       createFolderTabs(nodes[0], activeFolderId);
 
     }
+
+  }
+
+}
+
+
+
+async function loadBookmarkMetadata() {
+
+  try {
+
+    const stored = await browser.storage.local.get(BOOKMARK_META_KEY);
+
+    bookmarkMetadata = stored[BOOKMARK_META_KEY] || {};
+
+  } catch (e) {
+
+    console.warn('Failed to load bookmark metadata', e);
+
+    bookmarkMetadata = {};
 
   }
 
@@ -15276,6 +15619,8 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
     await loadAppSettingsFromStorage();
 
+    await loadBookmarkMetadata();
+
     await loadFolderMetadata();
 
     syncAppSettingsForm();
@@ -15891,25 +16236,41 @@ if (browser?.storage?.onChanged) {
 
 
 
-    if (changes[FOLDER_META_KEY]) {
+      if (changes[FOLDER_META_KEY]) {
 
-      folderMetadata = changes[FOLDER_META_KEY].newValue || {};
+        folderMetadata = changes[FOLDER_META_KEY].newValue || {};
 
 
 
-      // If currently viewing a folder that changed elsewhere, refresh that grid
+        // If currently viewing a folder that changed elsewhere, refresh that grid
 
-      if (currentGridFolderNode && folderMetadata[currentGridFolderNode.id]) {
+        if (currentGridFolderNode && folderMetadata[currentGridFolderNode.id]) {
 
-        const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+          const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
 
-        if (activeNode) renderBookmarkGrid(activeNode);
+          if (activeNode) renderBookmarkGrid(activeNode);
+
+        }
 
       }
 
-    }
 
-  });
+
+      if (changes[BOOKMARK_META_KEY]) {
+
+        bookmarkMetadata = changes[BOOKMARK_META_KEY].newValue || {};
+
+        if (currentGridFolderNode) {
+
+          const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+
+          if (activeNode) renderBookmarkGrid(activeNode);
+
+        }
+
+      }
+
+    });
 
 }
 

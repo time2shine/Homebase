@@ -5793,3 +5793,137 @@ body.cinema-mode .dock {
 body.cinema-mode #wallpaper-layer {
   opacity: 1;
 }
+
+/* --- Bookmark Modal Icon Editor --- */
+.bookmark-icon-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.bookmark-icon-preview-box {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.bookmark-icon-preview-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bookmark-icon-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.bookmark-icon-controls .icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #555; /* Darker for white theme visibility */
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.bookmark-icon-controls .icon-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* --- Centered Bookmark Icon Editor --- */
+.bookmark-icon-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.icon-preview-wrapper {
+  position: relative;
+}
+
+.icon-preview-box {
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.icon-preview-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.icon-preview-box .placeholder {
+  font-size: 32px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 600;
+}
+
+/* === Edit Bookmark: reuse Edit Folder action ring === */
+.bookmark-icon-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.bookmark-icon-row .edit-action-btn,
+#bookmark-get-btn.edit-action-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* === Edit Bookmark: reuse Edit Folder radial actions === */
+#add-bookmark-dialog .bookmark-preview-container{
+  margin: 40px 0 25px;
+  height: 110px;
+}
+
+#bookmark-get-btn{
+  transform: translateY(-82px);
+}
+#bookmark-get-btn:hover{
+  transform: translateY(-82px) scale(1.15);
+}
+
+#bookmark-upload-btn{
+  transform: translateX(-82px);
+}
+#bookmark-upload-btn:hover{
+  transform: translateX(-82px) scale(1.15);
+}
+
+#bookmark-clear-btn{
+  transform: translateX(82px);
+}
+#bookmark-clear-btn:hover{
+  transform: translateX(82px) scale(1.15);
+}

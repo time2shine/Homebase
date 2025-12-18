@@ -39,7 +39,8 @@
     "https://suggest.yandex.com/*",
      
     "https://en.wikipedia.org/*",
-    "https://completion.amazon.com/*"
+    "https://completion.amazon.com/*",
+    "https://pub-d330ac9daa80435c82f1d50b5e43ca72.r2.dev/*"
   ],
   "optional_permissions": [],
 

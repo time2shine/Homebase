@@ -65,6 +65,15 @@ const USER_WALLPAPER_CACHE_PREFIX = 'https://user-wallpapers.local/';
 
 const REMOTE_VIDEO_REGEX = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 
+const VIDEOS_JSON_URL = 'https://pub-d330ac9daa80435c82f1d50b5e43ca72.r2.dev/videos.json';
+const VIDEOS_JSON_CACHE_KEY = 'videosManifest';
+const VIDEOS_JSON_FETCHED_AT_KEY = 'videosManifestFetchedAt';
+const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const GALLERY_POSTERS_CACHE_KEY = 'cachedGalleryPosters';
+
+let videosManifestPromise = null;
+
 const isRemoteHttpUrl = (url = '') => typeof url === 'string' && /^https?:\/\//i.test(url);
 
 const isRemoteVideoUrl = (url = '') => isRemoteHttpUrl(url) && REMOTE_VIDEO_REGEX.test(url);
@@ -401,11 +410,85 @@ function scrollBookmarkTabs(direction) {
 // ===============================================
 
 async function fetchVideosManifestIfNeeded() {
-  return [];
+
+  if (videosManifestPromise) return videosManifestPromise;
+
+  videosManifestPromise = (async () => {
+
+    try {
+
+      const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
+
+      const lastFetchedAt = stored[VIDEOS_JSON_FETCHED_AT_KEY] || 0;
+
+      const now = Date.now();
+
+      const isFresh = now - lastFetchedAt < VIDEOS_JSON_TTL_MS;
+
+      const cached = stored[VIDEOS_JSON_CACHE_KEY];
+
+      if (cached && isFresh) return cached;
+
+      const res = await fetch(VIDEOS_JSON_URL, { cache: 'no-store' });
+
+      if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`);
+
+      const manifest = await res.json();
+
+      await browser.storage.local.set({
+
+        [VIDEOS_JSON_CACHE_KEY]: manifest,
+
+        [VIDEOS_JSON_FETCHED_AT_KEY]: now
+
+      });
+
+      return manifest;
+
+    } catch (err) {
+
+      console.error('fetchVideosManifestIfNeeded error:', err);
+
+      const fallback = await browser.storage.local.get(VIDEOS_JSON_CACHE_KEY);
+
+      return fallback[VIDEOS_JSON_CACHE_KEY] || [];
+
+    } finally {
+
+      videosManifestPromise = null;
+
+    }
+
+  })();
+
+  return videosManifestPromise;
+
 }
 
 async function getVideosManifest() {
-  return [];
+
+  const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
+
+  const manifest = stored[VIDEOS_JSON_CACHE_KEY];
+
+  const lastFetchedAt = stored[VIDEOS_JSON_FETCHED_AT_KEY] || 0;
+
+  const isFresh = manifest && Date.now() - lastFetchedAt < VIDEOS_JSON_TTL_MS;
+
+  if (manifest && isFresh) {
+
+    runWhenIdle(() => cacheGalleryPosters(manifest));
+
+    return manifest;
+
+  }
+
+  const fetched = await fetchVideosManifestIfNeeded();
+
+  runWhenIdle(() => cacheGalleryPosters(fetched));
+
+  return fetched;
+
 }
 
 function shuffleArray(arr) {
@@ -453,7 +536,76 @@ async function cacheAsset(url) {
 
 
 async function cacheGalleryPosters(manifest = []) {
-  return [];
+
+  const posters = Array.from(new Set(
+
+    manifest
+
+      .map(v => v.posterUrl || v.poster)
+
+      .filter(Boolean)
+
+  ));
+
+  if (!posters.length) return;
+
+  try {
+
+    const stored = await browser.storage.local.get(GALLERY_POSTERS_CACHE_KEY);
+
+    const existing = stored[GALLERY_POSTERS_CACHE_KEY] || {};
+
+    const missing = posters.filter(url => !existing[url]);
+
+    if (!missing.length) return;
+
+    const newlyCached = {};
+
+    for (const url of missing) {
+
+      try {
+
+        const res = await fetch(url, { cache: 'force-cache' });
+
+        const blob = await res.blob();
+
+        const dataUrl = await new Promise((resolve, reject) => {
+
+          const reader = new FileReader();
+
+          reader.onload = () => resolve(reader.result);
+
+          reader.onerror = reject;
+
+          reader.readAsDataURL(blob);
+
+        });
+
+        newlyCached[url] = dataUrl;
+
+      } catch (e) {
+
+        // Ignore individual poster failures
+      }
+
+    }
+
+    if (Object.keys(newlyCached).length) {
+
+      await browser.storage.local.set({
+
+        [GALLERY_POSTERS_CACHE_KEY]: { ...existing, ...newlyCached }
+
+      });
+
+    }
+
+  } catch (e) {
+
+    console.error('cacheGalleryPosters error:', e);
+
+  }
+
 }
 
 const wallpaperObjectUrlCache = new Map();

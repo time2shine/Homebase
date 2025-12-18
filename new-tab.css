@@ -4828,7 +4828,7 @@ body.performance-mode .result-header {
 }
 
 .menu-item.has-submenu::after {
-  content: 'â–¸';
+  content: '▸';
   font-size: 1.2em;
   margin-left: 8px;
   line-height: 1;
@@ -5926,4 +5926,202 @@ body.cinema-mode #wallpaper-layer {
 }
 #bookmark-clear-btn:hover{
   transform: translateX(82px) scale(1.15);
+}
+
+
+.field-error {
+  color: #ef9a9a;
+  font-size: 12px;
+  min-height: 16px;
+  margin-top: 4px;
+}
+
+.icon-preview-wrapper {
+  position: relative;
+}
+
+#add-bookmark-dialog {
+  position: relative;
+}
+
+.icon-suggestion-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15);
+}
+
+.icon-suggestion-chip.overlay {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+}
+
+.icon-suggestion-chip.banner {
+  position: relative;
+  margin: 0 0 10px;
+  align-self: center;
+}
+
+#bookmark-domain-icon-prompt {
+  position: fixed;
+  left: 50%;
+  top: auto;
+  transform: translate(-50%, -8px);
+  z-index: 2500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  max-width: min(520px, calc(100vw - 24px));
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15), 0 2px 8px rgba(15, 23, 42, 0.08);
+  line-height: 1.2;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  opacity: 0;
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+#bookmark-domain-icon-prompt.hidden {
+  display: none;
+  opacity: 0;
+}
+
+#bookmark-domain-icon-prompt.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 12px);
+}
+
+#bookmark-domain-icon-prompt button {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: rgba(15, 23, 42, 0.04);
+  color: #0f172a;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+#bookmark-domain-icon-ignore {
+  width: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+#bookmark-domain-icon-prompt button:hover {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+#bookmark-domain-icon-prompt button:focus-visible {
+  outline: 2px solid rgba(44, 165, 255, 0.65);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #bookmark-domain-icon-prompt {
+    transition: none;
+  }
+}
+
+.icon-suggestion-chip::before {
+  content: "ℹ";
+  font-size: 13px;
+  color: #4f46e5;
+}
+
+.icon-suggestion-chip span {
+  white-space: nowrap;
+}
+
+.icon-suggestion-chip button {
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid rgba(79, 70, 229, 0.35);
+  padding: 6px 12px;
+  font-weight: 700;
+  font-size: 12.5px;
+  background: transparent;
+  color: #1e293b;
+}
+
+#bookmark-domain-icon-use,
+#edit-folder-icon-use {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #f8fafc;
+  border-color: rgba(79, 70, 229, 0.8);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+}
+
+#bookmark-domain-icon-ignore,
+#edit-folder-icon-ignore {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  border-color: rgba(148, 163, 184, 0.6);
+  color: #334155;
+  background: transparent;
+}
+
+.icon-suggestion-chip button:hover {
+  filter: brightness(0.97);
+}
+
+.icon-suggestion-chip button:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, 0.7);
+  outline-offset: 2px;
+}
+
+#edit-folder-icon-prompt.icon-suggestion-chip {
+  margin: 10px 0 12px;
+  width: 100%;
+  justify-content: space-between;
+}
+
+#edit-folder-icon-prompt span {
+  flex: 1;
+}
+
+.edit-action-btn.loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.edit-action-btn.loading::after {
+  content: "Getting...";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 0.2px;
 }

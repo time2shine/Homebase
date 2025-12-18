@@ -1005,19 +1005,19 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
       return;
     }
 
-    // Prefer a persistent URL (not a blob) for fast-load storage.
     let urlToStore = posterUrl;
-    if (posterUrl.startsWith('blob:')) {
+    if (isRemoteHttpUrl(posterUrl)) {
+      await cacheAsset(posterUrl);
+    } else if (posterUrl.startsWith('blob:')) {
       if (posterCacheKey && !posterCacheKey.startsWith('blob:')) {
         urlToStore = posterCacheKey;
       } else {
-        // Without a persistent key, we cannot store a stable URL for preload.
         return;
       }
     }
 
-    if (urlToStore && !urlToStore.startsWith('data:') && !urlToStore.startsWith('blob:')) {
-      cacheAsset(urlToStore).catch(() => {});
+    if (isRemoteHttpUrl(urlToStore)) {
+      await cacheAsset(urlToStore);
     }
 
     await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore });
@@ -1027,25 +1027,31 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
       }
     } catch (e) {}
 
-    // Optionally store a small data URL for instant paint if size is reasonable
+    let dataUrlStored = false;
+
     try {
       const blob = await resolvePosterBlob(urlToStore, posterCacheKey || posterUrl);
-      if (blob && blob.size > 0 && blob.size < 250 * 1024) {
+      if (blob && blob.size > 0) {
         const dataUrl = await blobToDataUrl(blob);
         if (dataUrl) {
           await browser.storage.local.set({ [CACHED_APPLIED_POSTER_DATA_URL_KEY]: dataUrl });
           if (window.localStorage) {
             localStorage.setItem('cachedAppliedPosterDataUrl', dataUrl);
           }
-        }
-      } else {
-        await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
-        if (window.localStorage) {
-          localStorage.removeItem('cachedAppliedPosterDataUrl');
+          dataUrlStored = true;
         }
       }
     } catch (e) {
-      // If snapshot fails, skip storing data URL
+      console.warn('Failed to generate data URL for poster', e);
+    }
+
+    if (!dataUrlStored) {
+      await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+      try {
+        if (window.localStorage) {
+          localStorage.removeItem('cachedAppliedPosterDataUrl');
+        }
+      } catch (e) {}
     }
   } catch (err) {
     console.warn('Failed to cache applied wallpaper poster', err);
@@ -1220,6 +1226,12 @@ async function hydrateWallpaperSelection(selection) {
 
   }
 
+  if (!hydrated.posterCacheKey && hydrated.posterUrl && !hydrated.posterUrl.startsWith('data:') && !hydrated.posterUrl.startsWith('blob:')) {
+
+    hydrated.posterCacheKey = hydrated.posterUrl;
+
+  }
+
 
 
   if (hydrated.videoCacheKey) {
@@ -1229,8 +1241,10 @@ async function hydrateWallpaperSelection(selection) {
     }
   }
 
-  if (hydrated.posterCacheKey) {
-    const cachedPoster = await getCachedObjectUrl(hydrated.posterCacheKey);
+  const posterLookupKey = hydrated.posterCacheKey || '';
+
+  if (posterLookupKey) {
+    const cachedPoster = await getCachedObjectUrl(posterLookupKey);
     if (cachedPoster) {
       hydrated.posterUrl = cachedPoster;
     }
@@ -1337,7 +1351,12 @@ async function pickNextWallpaper(manifest) {
 
 
 
-  await cacheAsset(entry.poster);
+  const posterUrl = entry.poster || entry.posterUrl || '';
+  const posterCacheKey = entry.posterCacheKey || posterUrl || '';
+
+  if (posterUrl) {
+    await cacheAsset(posterUrl);
+  }
 
 
 
@@ -1349,9 +1368,9 @@ async function pickNextWallpaper(manifest) {
 
     videoCacheKey: entry.url || '',
 
-    posterUrl: entry.poster,
+    posterUrl,
 
-    posterCacheKey: entry.poster || '',
+    posterCacheKey,
 
     title: entry.title,
 
@@ -17283,6 +17302,7 @@ async function applyGalleryWallpaper(item) {
 
   try {
     const videoUrl = item.url;
+    const remotePosterUrl = item.posterUrl || item.poster || '';
 
     const cache = await caches.open(WALLPAPER_CACHE_NAME);
     let cachedResponse = await cache.match(videoUrl);
@@ -17297,28 +17317,46 @@ async function applyGalleryWallpaper(item) {
       }
     }
 
-    const videoBlob = cachedResponse ? await cachedResponse.blob() : null;
-    if (!videoBlob) {
-      throw new Error('Failed to read cached video for snapshot generation.');
+    let finalPosterUrl = '';
+    let finalPosterCacheKey = '';
+
+    if (remotePosterUrl) {
+      if (applyBtn) applyBtn.textContent = 'Caching poster...';
+      try {
+        await cacheAsset(remotePosterUrl);
+      } catch (err) {
+        console.warn('Failed caching remote poster', err);
+      }
+      finalPosterUrl = remotePosterUrl;
+      finalPosterCacheKey = remotePosterUrl;
     }
 
-    if (applyBtn) {
-      applyBtn.textContent = 'Generating snapshot...';
+    if (!finalPosterUrl) {
+      const videoBlob = cachedResponse ? await cachedResponse.blob() : null;
+      if (!videoBlob) {
+        throw new Error('Failed to read cached video for snapshot generation.');
+      }
+
+      if (applyBtn) {
+        applyBtn.textContent = 'Generating snapshot...';
+      }
+
+      const snapshotBlob = await extractFrameFromVideoBlob(videoBlob);
+      const generatedPosterKey = normalizeWallpaperCacheKey(`gallery-snapshot-${item.id}`);
+      const snapshotResponse = new Response(snapshotBlob, {
+        headers: { 'content-type': 'image/jpeg' }
+      });
+
+      await cache.put(generatedPosterKey, snapshotResponse);
+      finalPosterUrl = generatedPosterKey;
+      finalPosterCacheKey = generatedPosterKey;
     }
-
-    const snapshotBlob = await extractFrameFromVideoBlob(videoBlob);
-    const generatedPosterKey = normalizeWallpaperCacheKey(`gallery-snapshot-${item.id}`);
-    const snapshotResponse = new Response(snapshotBlob, {
-      headers: { 'content-type': 'image/jpeg' }
-    });
-
-    await cache.put(generatedPosterKey, snapshotResponse);
 
     const selection = {
       id: item.id,
       videoUrl,
-      posterUrl: generatedPosterKey,
-      posterCacheKey: generatedPosterKey,
+      posterUrl: finalPosterUrl,
+      posterCacheKey: finalPosterCacheKey || finalPosterUrl || '',
       videoCacheKey: videoUrl,
       title: item.title || '',
       selectedAt: Date.now()

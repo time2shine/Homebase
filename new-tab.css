@@ -3203,7 +3203,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   opacity: 0.65;
 }
 
-.mw-card-media {
+.gallery-mywallpapers .mw-card-media {
   width: 100%;
   padding: 10px 10px 0 10px;
   background: #f4f6fb;
@@ -3215,24 +3215,16 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   justify-content: center;
 }
 
-.mw-card-media img,
-.mw-card-media video {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.mw-media {
+.gallery-mywallpapers .mw-preview {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.25);
 }
 
-.mw-media-blur {
+.gallery-mywallpapers .mw-preview-blur {
   position: absolute;
   inset: 0;
   background-size: cover;
@@ -3241,30 +3233,27 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   transform: scale(1.08);
 }
 
-.mw-media-foreground,
-.mw-live-preview {
+.gallery-mywallpapers .mw-preview-media,
+.gallery-mywallpapers .mw-live-preview {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
-}
-
-.mw-media-foreground {
   display: block;
 }
 
-.mw-live-preview {
+.gallery-mywallpapers .mw-live-preview {
   opacity: 0;
   transition: opacity 180ms ease;
   background: transparent;
 }
 
-.mw-live-preview.is-playing {
+.gallery-mywallpapers .mw-live-preview.is-playing {
   opacity: 1;
 }
 
-body.performance-mode .mw-media-blur {
+body.performance-mode .gallery-mywallpapers .mw-preview-blur {
   filter: blur(12px) brightness(0.9);
 }
 

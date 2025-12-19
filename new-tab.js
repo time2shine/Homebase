@@ -18310,6 +18310,18 @@ const MyWallpapers = (() => {
     return new Blob([bytes], { type: mime });
   };
 
+  // Utility: convert a File/Blob to data URL so static applies can bypass data->blob guard
+  const fileToDataURL = (file) => new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result || '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    } catch (err) {
+      resolve('');
+    }
+  });
+
   const generateImagePoster = (file) => {
     return new Promise((resolve) => {
       try {
@@ -18443,8 +18455,8 @@ const MyWallpapers = (() => {
     if (!media) return;
     media.dataset.mediaLoaded = 'false';
     media.dataset.intersecting = 'false';
-    const blur = media.querySelector('.mw-media-blur');
-    const img = media.querySelector('.mw-media-foreground');
+    const blur = media.querySelector('.mw-preview-blur');
+    const img = media.querySelector('.mw-preview-media');
     const video = media.querySelector('.mw-live-preview');
     if (blur) blur.style.backgroundImage = `url("${PLACEHOLDER_POSTER}")`;
     if (img) img.removeAttribute('src');
@@ -18460,8 +18472,8 @@ const MyWallpapers = (() => {
   const hydrateCardMedia = async (media, item, version) => {
     if (!media || !item || version !== state.renderVersion) return;
     media.dataset.intersecting = 'true';
-    const blur = media.querySelector('.mw-media-blur');
-    const img = media.querySelector('.mw-media-foreground');
+    const blur = media.querySelector('.mw-preview-blur');
+    const img = media.querySelector('.mw-preview-media');
     const video = media.querySelector('.mw-live-preview');
     const isGif = (item.mimeType || '').toLowerCase().includes('gif');
     const isLive = item.type === 'video' || isGif;
@@ -18612,7 +18624,7 @@ const MyWallpapers = (() => {
     if (myWallpapersGrid) {
       const pendingVideos = myWallpapersGrid.querySelectorAll('.mw-live-preview[data-mw-pending="true"]');
       pendingVideos.forEach((video) => {
-        const media = video.closest('.mw-media');
+        const media = video.closest('.mw-preview');
         const itemId = media?.dataset?.wallpaperId || video.closest('.mw-card')?.dataset?.id;
         if (!itemId || !media || media.dataset.intersecting !== 'true') return;
         const item = state.list.find((mw) => mw.id === itemId);
@@ -18682,10 +18694,10 @@ const MyWallpapers = (() => {
         ${binGarbageIcon}
       </button>
       <div class="mw-card-media">
-        <div class="mw-media" data-wallpaper-id="${item.id}" data-kind="${isLive ? 'live' : 'static'}" data-media-loaded="false">
-          <div class="mw-media-blur" style="background-image:url('${PLACEHOLDER_POSTER}')"></div>
-          <img class="mw-media-foreground" alt="${titleText}" loading="lazy">
-          ${isLive ? '<video class="mw-live-preview" muted loop playsinline preload="metadata" data-mw-pending="false"></video>' : ''}
+        <div class="mw-preview" data-wallpaper-id="${item.id}" data-kind="${isLive ? 'live' : 'static'}" data-media-loaded="false">
+          <div class="mw-preview-blur" style="background-image:url('${PLACEHOLDER_POSTER}')"></div>
+          <img class="mw-preview-media" alt="${titleText}" loading="lazy">
+          ${isLive ? '<video class="mw-preview-media mw-live-preview" muted loop playsinline preload="metadata" data-mw-pending="false"></video>' : ''}
         </div>
       </div>
       <div class="mw-card-body">
@@ -18717,7 +18729,7 @@ const MyWallpapers = (() => {
 
     batch.forEach((item) => {
       const card = renderCard(item);
-      const media = card.querySelector('.mw-media');
+      const media = card.querySelector('.mw-preview');
       if (mediaObserver && media) {
         mediaObserver.observe(media);
       }
@@ -18825,10 +18837,87 @@ const MyWallpapers = (() => {
     return item;
   };
 
-  const applyItem = async (id) => {
+  const getAppliedPosterDataUrl = async () => {
+    try {
+      const v = localStorage.getItem('cachedAppliedPosterDataUrl');
+      if (v && typeof v === 'string' && v.startsWith('data:')) return v;
+    } catch (e) {
+      // ignore localStorage errors
+    }
+
+    try {
+      const stored = await browser.storage.local.get('cachedAppliedPosterDataUrl');
+      const v = stored.cachedAppliedPosterDataUrl;
+      if (v && typeof v === 'string' && v.startsWith('data:')) return v;
+    } catch (e) {
+      // ignore storage errors
+    }
+
+    return '';
+  };
+
+  const ensureMyWallpaperDataPoster = async (posterKey, posterUrl) => {
+    // STATIC UPLOAD: convert to data URL to avoid data->blob guard
+    const lookupKey = posterKey || posterUrl || '';
+    if (!lookupKey) return '';
+
+    try {
+      const stored = await browser.storage.local.get([CACHED_APPLIED_POSTER_URL_KEY, CACHED_APPLIED_POSTER_DATA_URL_KEY]);
+      const cachedUrl = stored[CACHED_APPLIED_POSTER_URL_KEY];
+      const cachedData = stored[CACHED_APPLIED_POSTER_DATA_URL_KEY];
+      if (cachedData && cachedUrl && cachedUrl === lookupKey && typeof cachedData === 'string' && cachedData.startsWith('data:')) {
+        return cachedData;
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
+
+    try {
+      const blob = await resolvePosterBlob(posterUrl || '', posterKey || posterUrl || '');
+      if (!blob) return '';
+      const dataUrl = await fileToDataURL(blob);
+      if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+        try {
+          await browser.storage.local.set({
+            [CACHED_APPLIED_POSTER_DATA_URL_KEY]: dataUrl,
+            [CACHED_APPLIED_POSTER_URL_KEY]: lookupKey
+          });
+          if (window.localStorage) {
+            localStorage.setItem('cachedAppliedPosterDataUrl', dataUrl);
+            localStorage.setItem('cachedAppliedPosterUrl', lookupKey);
+          }
+        } catch (e) {
+          // ignore storage errors
+        }
+        return dataUrl;
+      }
+    } catch (err) {
+      // ignore conversion errors
+    }
+
+    return '';
+  };
+
+  const applyItem = async (id, opts = {}) => {
+    const applyBtn = opts.button || null;
+    const resetButton = () => {
+      if (!applyBtn) return;
+      applyBtn.disabled = false;
+      applyBtn.textContent = applyBtn.dataset.originalLabel || 'Apply';
+      delete applyBtn.dataset.originalLabel;
+    };
+    if (applyBtn && !applyBtn.dataset.originalLabel) {
+      applyBtn.dataset.originalLabel = applyBtn.textContent || 'Apply';
+      applyBtn.textContent = 'Applying...';
+      applyBtn.disabled = true;
+    }
+
     await ensureInitialized();
     const item = state.list.find((mw) => mw.id === id);
-    if (!item) return;
+    if (!item) {
+      resetButton();
+      return;
+    }
 
     const isVideo = item.type === 'video';
     const isGif = item.mimeType === 'image/gif';
@@ -18844,8 +18933,34 @@ const MyWallpapers = (() => {
       mimeType: item.mimeType || ''
     };
 
+    const desiredType = (isVideo && !isGif) ? 'video' : 'static';
+    const posterKey = item.posterCacheKey || (!isVideo ? item.cacheKey : '') || '';
+    let quickPoster = '';
+    if (desiredType === 'static') {
+      quickPoster = await ensureMyWallpaperDataPoster(posterKey, selection.posterUrl);
+      if (!quickPoster) {
+        alert('Failed to load your wallpaper. Please try again.');
+        resetButton();
+        return;
+      }
+    }
+
+    if (desiredType === 'static') {
+      // Show the new wallpaper immediately using a cached/data poster and avoid touching gallery code paths.
+      // Ensure the guard inside applyWallpaperBackground doesn't block blob/http updates when the current bg is a data URL.
+      applyWallpaperBackground('');
+      setWallpaperFallbackPoster(quickPoster, posterKey);
+      applyWallpaperBackground(quickPoster);
+      clearBackgroundVideos();
+      if (wallpaperTypeToggle) wallpaperTypeToggle.checked = true;
+      resetButton();
+    }
+
     const hydratedSelection = await hydrateWallpaperSelection(selection);
     await ensurePlayableSelection(hydratedSelection);
+    if (desiredType === 'static' && quickPoster) {
+      hydratedSelection.posterUrl = quickPoster;
+    }
 
     await browser.storage.local.set({
       [WALLPAPER_SELECTION_KEY]: selection,
@@ -18855,11 +18970,59 @@ const MyWallpapers = (() => {
     currentWallpaperSelection = hydratedSelection;
     if (galleryDailyToggle) galleryDailyToggle.checked = false;
 
-    const desiredType = (isVideo && !isGif) ? 'video' : 'static';
     await setWallpaperTypePreference(desiredType);
     if (wallpaperTypeToggle) wallpaperTypeToggle.checked = desiredType === 'static';
-    applyWallpaperByType(hydratedSelection, desiredType);
-    runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
+
+    if (desiredType === 'static') {
+      applyWallpaperByType(hydratedSelection, 'static');
+      runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
+      runWhenIdle(async () => {
+        try {
+          // Defer poster data URL work so My Wallpapers stays snappy; gallery paths remain untouched.
+          const isDataPoster = (hydratedSelection.posterUrl || '').startsWith('data:');
+          const urlToStore = hydratedSelection.posterCacheKey || hydratedSelection.posterUrl || '';
+          if (isDataPoster) {
+            await browser.storage.local.set({
+              [CACHED_APPLIED_POSTER_DATA_URL_KEY]: hydratedSelection.posterUrl,
+              [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore
+            });
+            try {
+              if (window.localStorage) {
+                localStorage.setItem('cachedAppliedPosterDataUrl', hydratedSelection.posterUrl);
+                localStorage.setItem('cachedAppliedPosterUrl', urlToStore);
+              }
+            } catch (e) {
+              // ignore storage errors
+            }
+            return;
+          }
+          const blob = await resolvePosterBlob(hydratedSelection.posterUrl, hydratedSelection.posterCacheKey || hydratedSelection.posterUrl || '');
+          if (blob && blob.size > 2 * 1024 * 1024) {
+            if (urlToStore) {
+              await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore });
+              await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+              try {
+                if (window.localStorage) {
+                  localStorage.setItem('cachedAppliedPosterUrl', urlToStore);
+                  localStorage.removeItem('cachedAppliedPosterDataUrl');
+                }
+              } catch (e) {
+                // ignore storage errors
+              }
+            }
+            return; // Skip expensive data URL for huge posters.
+          }
+          await cacheAppliedWallpaperPoster(hydratedSelection.posterUrl, hydratedSelection.posterCacheKey || hydratedSelection.posterUrl || '');
+        } catch (err) {
+          // ignore poster caching errors
+        }
+      });
+      resetButton();
+    } else {
+      applyWallpaperByType(hydratedSelection, desiredType);
+      runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
+      resetButton();
+    }
 
     item.lastUsedAt = Date.now();
     await saveList(state.list);
@@ -18949,7 +19112,7 @@ if (myWallpapersGrid) {
 
     if (target.closest('.mw-card-btn')) {
       e.stopPropagation();
-      await MyWallpapers.applyItem(id);
+      await MyWallpapers.applyItem(id, { button: target.closest('.mw-card-btn') });
       return;
     }
 

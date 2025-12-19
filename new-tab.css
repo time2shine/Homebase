@@ -515,6 +515,18 @@ body.sidebar-collapsed .collapsed-clock-slot {
 }
 
 /* --- Icon Button Styles --- */
+/* Define the fade-in keyframes */
+@keyframes icon-load-fade {
+  0% { 
+    opacity: 0; 
+    transform: scale(0.8); /* Starts slightly smaller */
+  }
+  100% { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
 .engine-icon-btn {
   width: var(--icon-size);
   height: var(--icon-size);
@@ -536,6 +548,9 @@ body.sidebar-collapsed .collapsed-clock-slot {
   height: 20px;
   display: block;
   pointer-events: none;
+  
+  /* --- ADD THIS LINE: --- */
+  animation: icon-load-fade 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
 /* Hover State */

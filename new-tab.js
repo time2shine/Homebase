@@ -14564,55 +14564,40 @@ async function fetchWeather(lat, lon, units, cityName) {
 
 function showCustomAlert(message) {
 
-  const modal = document.getElementById('custom-alert-modal');
-
-  const msgElement = document.getElementById('custom-alert-message');
-
-  const okBtn = document.getElementById('custom-alert-ok-btn');
-
-
-
-  if (!modal || !msgElement || !okBtn) return;
-
-
-
-  msgElement.textContent = message;
-
-  openModalWithAnimation('custom-alert-modal', null, '.dialog-content');
-
-
-
-  const closeAlert = () => {
-
-    closeModalWithAnimation('custom-alert-modal', '.dialog-content', () => {
-      okBtn.removeEventListener('click', closeAlert);
-      modal.removeEventListener('click', onOverlayClick);
-    });
-
-  };
-
-
-
-  const onOverlayClick = (e) => {
-
-    if (e.target === modal) closeAlert();
-
-  };
-
-
-
-  okBtn.addEventListener('click', closeAlert);
-
-
-
-  modal.addEventListener('click', onOverlayClick);
-
-
-
-  okBtn.focus();
+  showCustomDialog('Notice', message);
 
 }
 
+
+
+function showCustomDialog(title, message) {
+  const modal = document.getElementById('custom-alert-modal');
+  const titleEl = document.getElementById('custom-alert-title');
+  const msgEl = document.getElementById('custom-alert-message');
+  const btn = document.getElementById('custom-alert-ok-btn');
+
+  if (!modal || !btn) return;
+
+  if (titleEl) titleEl.textContent = title;
+  if (msgEl) msgEl.innerText = message; // Use innerText to handle \n newlines
+
+  modal.style.display = 'flex';
+  modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+
+  const handleClose = () => {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+    if (document.querySelectorAll('.modal-overlay:not(.hidden)').length === 0) {
+      document.body.classList.remove('modal-open');
+    }
+  };
+
+  btn.onclick = handleClose;
+  modal.onclick = (event) => {
+    if (event.target === modal) handleClose();
+  };
+}
 
 
 // message is optional; options can contain { title, faviconUrl, isFolder }
@@ -18965,41 +18950,66 @@ const MyWallpapers = (() => {
   };
 
   const addUpload = async (file, expectedType = 'any') => {
+    // 1. Validate File Type
     const validation = await validateUpload(file, expectedType);
     if (!validation.ok) {
-      alert(validation.message);
+      showCustomDialog('Invalid File', validation.message);
       return null;
     }
 
     let { isVideo, isGif, mimeType, title } = validation;
 
-    // Strict 100MB limit for videos to keep My Wallpapers lightweight.
-    if (isVideo && file.size > 100 * 1024 * 1024) { // 100 MB in bytes
-      alert(
-        "⚠️ Upload Failed: File is too large (Over 100MB).\n\n" +
-        "Why? To keep your 'My Wallpaper' section fast and lightweight, we restrict massive video files.\n\n" +
-        "Please compress your video or trim it to a shorter loop before uploading."
+    // 2. Check Count Limits (10 Videos, 20 Images)
+    // Note: We filter existing items in state.list to count them
+    const currentVideos = state.list.filter(item => item.type === 'video').length;
+    const currentImages = state.list.filter(item => item.type === 'image').length;
+
+    if (isVideo && currentVideos >= 10) {
+      showCustomDialog(
+        'Video Limit Reached', 
+        `You have reached the limit of 10 videos.\n\nTo keep your browser fast, please delete some older videos before uploading a new one.`
       );
       return null;
     }
 
+    if ((!isVideo || isGif) && currentImages >= 20) {
+      showCustomDialog(
+        'Image Limit Reached', 
+        `You have reached the limit of 20 images.\n\nPlease delete some older wallpapers before uploading a new one.`
+      );
+      return null;
+    }
+
+    // 3. Check Size Limit (100MB for Videos)
+    if (isVideo && file.size > 100 * 1024 * 1024) {
+      showCustomDialog(
+        'File Too Large', 
+        `This video is ${(file.size / (1024 * 1024)).toFixed(1)}MB.\n\nThe limit is 100MB to ensure smooth performance. Please compress the video or trim it.`
+      );
+      return null;
+    }
+
+    // ... Proceed with optimization and saving (keep existing logic below) ...
     let fileToSave = file;
 
+    // [Existing Image Optimization Logic]
     if (!isVideo && !isGif) {
       try {
         fileToSave = await optimizeStaticUpload(file);
         mimeType = 'image/jpeg';
       } catch (e) {
-        console.warn('Optimization failed, using original', e);
+        console.warn('Optimization failed', e);
       }
     }
 
+    // [Existing Save Logic]
     const posterBlob = (isVideo && !isGif) ? await generateVideoPoster(fileToSave) : await generateImagePoster(fileToSave);
     const posterSize = posterBlob?.size || 0;
     const totalBytes = (fileToSave.size || 0) + posterSize;
+
     const hasRoom = await maybeEvictForSpace(totalBytes);
     if (!hasRoom) {
-      alert('Not enough space to store this wallpaper. Remove older items and try again.');
+      showCustomDialog('Storage Full', 'Not enough space to store this wallpaper. Please remove older items.');
       return null;
     }
 
@@ -19008,6 +19018,7 @@ const MyWallpapers = (() => {
     const posterCacheKey = posterBlob ? buildCacheKey(id, 'poster', posterBlob.type || 'image/webp') : '';
 
     const normalizedCacheKey = await cachePut(cacheKey, fileToSave, mimeType);
+    
     let normalizedPosterKey = '';
     if (posterBlob) {
       normalizedPosterKey = await cachePut(posterCacheKey, posterBlob, posterBlob.type || 'image/webp');
@@ -19027,7 +19038,7 @@ const MyWallpapers = (() => {
       originalName: file.name || ''
     };
 
-    state.list = [item, ...state.list].slice(0, MAX_ITEMS);
+    state.list = [item, ...state.list]; // Add to list
     await saveList(state.list);
     render();
     return item;

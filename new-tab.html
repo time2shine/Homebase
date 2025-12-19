@@ -2588,28 +2588,6 @@
 
 
 
-  <div id="custom-alert-modal" class="modal-overlay hidden">
-
-    <div id="custom-alert-dialog" class="dialog-content glass-box" style="width: 400px; text-align: center;">
-
-      <h3 style="margin-top: 10px;">Notice</h3>
-
-      <p id="custom-alert-message" style="margin: 20px 0; color: inherit;">
-
-        </p>
-
-      <div class="dialog-buttons" style="justify-content: center;">
-
-        <button id="custom-alert-ok-btn" class="dialog-btn primary-btn">OK</button>
-
-      </div>
-
-    </div>
-
-  </div>
-
-
-
   <div id="material-picker-modal" class="modal-overlay hidden">
 
     <div class="material-picker-dialog">
@@ -2640,6 +2618,18 @@
 
     </div>
 
+  </div>
+
+  <div id="custom-alert-modal" class="modal-overlay hidden">
+    <div class="custom-alert-content" style="background: #ffffff; color: #333; padding: 25px; border-radius: 16px; width: 400px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); transform: scale(1); transition: all 0.2s;">
+      <h3 id="custom-alert-title" style="margin: 0 0 15px 0; font-size: 1.2rem; font-weight: 700;">Notice</h3>
+      <p id="custom-alert-message" style="margin: 0 0 25px 0; font-size: 0.95rem; line-height: 1.5; color: #555;">
+        Message goes here...
+      </p>
+      <button id="custom-alert-ok-btn" style="background: #4f46e5; color: white; border: none; padding: 10px 24px; border-radius: 99px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
+        Got it
+      </button>
+    </div>
   </div>
 
   <script src="instant_load.js"></script>

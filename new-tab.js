@@ -18972,6 +18972,17 @@ const MyWallpapers = (() => {
     }
 
     let { isVideo, isGif, mimeType, title } = validation;
+
+    // Strict 100MB limit for videos to keep My Wallpapers lightweight.
+    if (isVideo && file.size > 100 * 1024 * 1024) { // 100 MB in bytes
+      alert(
+        "⚠️ Upload Failed: File is too large (Over 100MB).\n\n" +
+        "Why? To keep your 'My Wallpaper' section fast and lightweight, we restrict massive video files.\n\n" +
+        "Please compress your video or trim it to a shorter loop before uploading."
+      );
+      return null;
+    }
+
     let fileToSave = file;
 
     if (!isVideo && !isGif) {

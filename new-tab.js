@@ -18030,7 +18030,9 @@ const MyWallpapers = (() => {
     mediaObserver: null
   };
 
-  const posterObjectUrls = new Map(); // cacheKey -> object URL
+  const posterObjectUrls = new Map(); // cacheKey -> object URL (shared)
+  const cardObjectUrls = new Map(); // id -> { posterUrl, videoUrl }
+  const livePreviewVideos = new Set(); // Set<HTMLVideoElement> currently hydrated
 
   const formatBytes = (bytes) => `${Math.round(bytes / (1024 * 1024))}MB`;
 
@@ -18202,11 +18204,15 @@ const MyWallpapers = (() => {
   };
 
   const revokeObjectUrl = (key) => {
+    if (!key) return;
     const url = posterObjectUrls.get(key);
-    if (url) {
-      URL.revokeObjectURL(url);
-      posterObjectUrls.delete(key);
-    }
+    if (!url) return;
+    posterObjectUrls.forEach((cachedUrl, cachedKey) => {
+      if (cachedUrl === url || cachedKey === key) {
+        posterObjectUrls.delete(cachedKey);
+      }
+    });
+    URL.revokeObjectURL(url);
   };
 
   const cachePut = async (key, blob, mime = '') => {
@@ -18221,13 +18227,16 @@ const MyWallpapers = (() => {
     }
   };
 
-  const cacheGetObjectUrl = async (cacheKey) => {
+  const cacheGetObjectUrl = async (cacheKey, options = {}) => {
+    const { fresh = false } = options;
     const keys = cacheKeyVariants(cacheKey);
     if (!keys.length) return null;
 
-    for (const key of keys) {
-      if (posterObjectUrls.has(key)) {
-        return posterObjectUrls.get(key);
+    if (!fresh) {
+      for (const key of keys) {
+        if (posterObjectUrls.has(key)) {
+          return posterObjectUrls.get(key);
+        }
       }
     }
 
@@ -18238,7 +18247,7 @@ const MyWallpapers = (() => {
         if (!match) continue;
         const blob = await match.blob();
         const url = URL.createObjectURL(blob);
-        keys.forEach((k) => posterObjectUrls.set(k, url));
+        if (!fresh) keys.forEach((k) => posterObjectUrls.set(k, url));
         return url;
       }
     } catch (err) {
@@ -18252,7 +18261,7 @@ const MyWallpapers = (() => {
         if (!match) continue;
         const blob = await match.blob();
         const url = URL.createObjectURL(blob);
-        keys.forEach((k) => posterObjectUrls.set(k, url));
+        if (!fresh) keys.forEach((k) => posterObjectUrls.set(k, url));
         return url;
       }
     } catch (err) {
@@ -18382,19 +18391,240 @@ const MyWallpapers = (() => {
     return total + bytesNeeded <= limitBytes;
   };
 
-  const hydratePoster = (media, item, version) => {
+  const rememberCardUrls = (id, urls = {}) => {
+    if (!id) return;
+    const current = cardObjectUrls.get(id) || {};
+    cardObjectUrls.set(id, { ...current, ...urls });
+  };
+
+  const releaseCardUrls = (id) => {
+    if (!id) return;
+    const entry = cardObjectUrls.get(id);
+    if (entry) {
+      if (entry.posterUrl) {
+        try { URL.revokeObjectURL(entry.posterUrl); } catch (err) {}
+      }
+      if (entry.videoUrl) {
+        try { URL.revokeObjectURL(entry.videoUrl); } catch (err) {}
+      }
+    }
+    cardObjectUrls.delete(id);
+  };
+
+  const resetCardMediaState = () => {
+    livePreviewVideos.forEach((video) => {
+      pausePreviewVideo(video, { unload: true });
+    });
+    livePreviewVideos.clear();
+    cardObjectUrls.forEach((entry) => {
+      if (entry.posterUrl) {
+        try { URL.revokeObjectURL(entry.posterUrl); } catch (err) {}
+      }
+      if (entry.videoUrl) {
+        try { URL.revokeObjectURL(entry.videoUrl); } catch (err) {}
+      }
+    });
+    cardObjectUrls.clear();
+  };
+
+  const pausePreviewVideo = (video, opts = {}) => {
+    const { unload = false, keepVisible = false, keepTracked = false } = opts;
+    if (!video) return;
+    try { video.pause(); } catch (err) {}
+    if (!keepVisible) video.classList.remove('is-playing');
+    if (!keepTracked) livePreviewVideos.delete(video);
+    if (unload) {
+      video.removeAttribute('src');
+      video.load();
+    }
+  };
+
+  const teardownCardMedia = (media, itemId) => {
+    if (!media) return;
+    media.dataset.mediaLoaded = 'false';
+    media.dataset.intersecting = 'false';
+    const blur = media.querySelector('.mw-media-blur');
+    const img = media.querySelector('.mw-media-foreground');
+    const video = media.querySelector('.mw-live-preview');
+    if (blur) blur.style.backgroundImage = `url("${PLACEHOLDER_POSTER}")`;
+    if (img) img.removeAttribute('src');
+    if (video) {
+      video.dataset.mwPending = 'false';
+      video.dataset.intersecting = 'false';
+      video.poster = PLACEHOLDER_POSTER;
+      pausePreviewVideo(video, { unload: true });
+    }
+    releaseCardUrls(itemId);
+  };
+
+  const hydrateCardMedia = async (media, item, version) => {
     if (!media || !item || version !== state.renderVersion) return;
+    media.dataset.intersecting = 'true';
+    const blur = media.querySelector('.mw-media-blur');
+    const img = media.querySelector('.mw-media-foreground');
+    const video = media.querySelector('.mw-live-preview');
+    const isGif = (item.mimeType || '').toLowerCase().includes('gif');
+    const isLive = item.type === 'video' || isGif;
+    const existingRecord = cardObjectUrls.get(item.id) || {};
+
     const posterKey = item.posterCacheKey || item.cacheKey || '';
-    if (!posterKey) return;
-    cacheGetObjectUrl(posterKey).then((url) => {
-      if (!url || version !== state.renderVersion) {
-        if (url) revokeObjectUrl(posterKey);
+    let posterUrl = existingRecord.posterUrl || '';
+    const posterFromRecord = Boolean(posterUrl);
+    if (!posterUrl && posterKey) {
+      try {
+        posterUrl = await cacheGetObjectUrl(posterKey, { fresh: true });
+      } catch (err) {
+        posterUrl = '';
+      }
+    }
+
+    if (version !== state.renderVersion || !media.isConnected) {
+      if (!posterFromRecord && posterUrl) URL.revokeObjectURL(posterUrl);
+      return;
+    }
+
+    if (posterUrl) {
+      if (blur) blur.style.backgroundImage = `url("${posterUrl}")`;
+      if (img) img.src = posterUrl;
+    } else {
+      if (blur) blur.style.backgroundImage = `url("${PLACEHOLDER_POSTER}")`;
+      if (img) img.removeAttribute('src');
+    }
+    media.dataset.mediaLoaded = 'true';
+
+    const record = { ...existingRecord };
+    if (posterUrl) record.posterUrl = posterUrl;
+
+    if (isGif) {
+      if (video) {
+        video.dataset.mwPending = 'false';
+        video.dataset.intersecting = 'true';
+        pausePreviewVideo(video, { unload: true });
+      }
+      if (document.visibilityState === 'visible') {
+        const gifKey = item.cacheKey || '';
+        let gifUrl = record.videoUrl || '';
+        const gifFromRecord = Boolean(gifUrl);
+        if (!gifUrl && gifKey) {
+          try {
+            gifUrl = await cacheGetObjectUrl(gifKey, { fresh: true });
+          } catch (err) {
+            gifUrl = '';
+          }
+        }
+        if (version === state.renderVersion && media.isConnected) {
+          if (gifUrl && img) {
+            img.src = gifUrl;
+            record.videoUrl = gifUrl;
+          }
+        } else if (!gifFromRecord && gifUrl) {
+          URL.revokeObjectURL(gifUrl);
+        }
+      }
+      rememberCardUrls(item.id, record);
+      return;
+    }
+
+    if (!video) {
+      rememberCardUrls(item.id, record);
+      return;
+    }
+
+    video.dataset.intersecting = 'true';
+    video.poster = posterUrl || PLACEHOLDER_POSTER;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+
+    if (!isLive) {
+      video.dataset.mwPending = 'false';
+      pausePreviewVideo(video, { unload: true });
+      rememberCardUrls(item.id, record);
+      return;
+    }
+
+    if (document.visibilityState === 'hidden') {
+      video.dataset.mwPending = 'true';
+      rememberCardUrls(item.id, record);
+      return;
+    }
+
+    const videoKey = item.fileCacheKey || item.cacheKey || item.videoCacheKey || '';
+    let videoUrl = record.videoUrl || '';
+    const videoFromRecord = Boolean(videoUrl);
+    if (!videoUrl && videoKey) {
+      try {
+        videoUrl = await cacheGetObjectUrl(videoKey, { fresh: true });
+      } catch (err) {
+        videoUrl = '';
+      }
+    }
+
+    if (version !== state.renderVersion || !media.isConnected) {
+      if (!videoFromRecord && videoUrl) URL.revokeObjectURL(videoUrl);
+      return;
+    }
+
+    if (videoUrl) {
+      record.videoUrl = videoUrl;
+      if (!videoFromRecord || video.src !== videoUrl) {
+        video.src = videoUrl;
+      }
+      video.dataset.mwPending = 'false';
+      const markPlaying = () => {
+        video.classList.add('is-playing');
+      };
+      video.addEventListener('canplay', markPlaying, { once: true });
+      livePreviewVideos.add(video);
+      video.play().then(() => {
+        video.classList.add('is-playing');
+      }).catch(() => {});
+    } else {
+      video.dataset.mwPending = 'false';
+    }
+
+    rememberCardUrls(item.id, record);
+  };
+
+  const resumeVisiblePreviews = () => {
+    if (document.visibilityState !== 'visible') return;
+    const stale = [];
+    livePreviewVideos.forEach((video) => {
+      if (!video || !video.isConnected) {
+        stale.push(video);
         return;
       }
-      media.dataset.mediaLoaded = 'true';
-      media.style.backgroundImage = `url("${url}")`;
+      if (video.dataset.intersecting === 'true' && video.src) {
+        video.play().then(() => {
+          video.classList.add('is-playing');
+        }).catch(() => {});
+      }
     });
+    stale.forEach((video) => livePreviewVideos.delete(video));
   };
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      livePreviewVideos.forEach((video) => pausePreviewVideo(video, { keepVisible: true, keepTracked: true }));
+      return;
+    }
+    if (myWallpapersGrid) {
+      const pendingVideos = myWallpapersGrid.querySelectorAll('.mw-live-preview[data-mw-pending="true"]');
+      pendingVideos.forEach((video) => {
+        const media = video.closest('.mw-media');
+        const itemId = media?.dataset?.wallpaperId || video.closest('.mw-card')?.dataset?.id;
+        if (!itemId || !media || media.dataset.intersecting !== 'true') return;
+        const item = state.list.find((mw) => mw.id === itemId);
+        if (item) {
+          hydrateCardMedia(media, item, state.renderVersion);
+        }
+      });
+    }
+    resumeVisiblePreviews();
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 
   const getMediaObserver = () => {
     if (state.mediaObserver) return state.mediaObserver;
@@ -18402,16 +18632,14 @@ const MyWallpapers = (() => {
     state.mediaObserver = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         const media = entry.target;
-        const itemId = media?.dataset?.wallpaperId;
+        const itemId = media?.dataset?.wallpaperId || media?.closest('.mw-card')?.dataset?.id;
         if (!itemId) return;
         const item = state.list.find((mw) => mw.id === itemId);
         if (!item) return;
         if (entry.isIntersecting) {
-          hydratePoster(media, item, state.renderVersion);
+          hydrateCardMedia(media, item, state.renderVersion);
         } else {
-          media.dataset.mediaLoaded = 'false';
-          revokeObjectUrl(item.posterCacheKey || item.cacheKey || '');
-          media.style.backgroundImage = `url("${PLACEHOLDER_POSTER}")`;
+          teardownCardMedia(media, itemId);
         }
       });
     }, { root: myWallpapersGrid, rootMargin: '250px' });
@@ -18432,13 +18660,17 @@ const MyWallpapers = (() => {
 
   const renderCard = (item) => {
     const card = document.createElement('div');
-    card.className = 'gallery-card mw-card';
+    card.className = 'mw-card';
     card.dataset.id = item.id;
+    const isGif = (item.mimeType || '').toLowerCase().includes('gif');
+    const isVideo = item.type === 'video';
+    const isLive = isVideo || isGif;
+    card.dataset.kind = isLive ? 'live' : 'static';
+    card.dataset.type = item.type || '';
 
     const titleText = item.title || 'Wallpaper';
     const needsMarquee = titleText.length > 20;
     const marqueeDuration = 6;
-    const isVideo = item.type === 'video';
     const binTopIcon = useSvgIcon('binTop');
     const binBottomIcon = useSvgIcon('binBottom');
     const binGarbageIcon = useSvgIcon('binGarbage');
@@ -18449,13 +18681,19 @@ const MyWallpapers = (() => {
         ${binBottomIcon}
         ${binGarbageIcon}
       </button>
-      <div class="mw-card-media gallery-card-image" data-wallpaper-id="${item.id}" data-media-loaded="false" style="background-image:url('${PLACEHOLDER_POSTER}')"></div>
-      <div class="mw-card-body gallery-card-meta">
-        <div class="mw-card-text">
-          <p class="mw-card-title gallery-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
-          <p class="mw-card-meta">${isVideo ? 'Live upload' : 'Static upload'}</p>
+      <div class="mw-card-media">
+        <div class="mw-media" data-wallpaper-id="${item.id}" data-kind="${isLive ? 'live' : 'static'}" data-media-loaded="false">
+          <div class="mw-media-blur" style="background-image:url('${PLACEHOLDER_POSTER}')"></div>
+          <img class="mw-media-foreground" alt="${titleText}" loading="lazy">
+          ${isLive ? '<video class="mw-live-preview" muted loop playsinline preload="metadata" data-mw-pending="false"></video>' : ''}
         </div>
-        <button type="button" class="mw-card-btn apply-button gallery-card-apply" data-id="${item.id}">
+      </div>
+      <div class="mw-card-body">
+        <div class="mw-card-text">
+          <p class="mw-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
+          <p class="mw-card-meta">${isLive ? 'Live upload' : 'Static upload'}</p>
+        </div>
+        <button type="button" class="mw-card-btn apply-button" data-id="${item.id}">
           Apply
         </button>
       </div>
@@ -18479,7 +18717,7 @@ const MyWallpapers = (() => {
 
     batch.forEach((item) => {
       const card = renderCard(item);
-      const media = card.querySelector('.mw-card-media');
+      const media = card.querySelector('.mw-media');
       if (mediaObserver && media) {
         mediaObserver.observe(media);
       }
@@ -18512,6 +18750,7 @@ const MyWallpapers = (() => {
     if (state.mediaObserver) state.mediaObserver.disconnect();
     if (state.loadMoreObserver) state.loadMoreObserver.disconnect();
 
+    resetCardMediaState();
     posterObjectUrls.forEach((url) => URL.revokeObjectURL(url));
     posterObjectUrls.clear();
 

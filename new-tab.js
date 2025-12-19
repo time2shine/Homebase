@@ -17457,9 +17457,10 @@ async function applyGalleryWallpaper(item) {
       } catch (err) {
         console.warn('Gallery poster data URL conversion failed; falling back to existing poster', err);
       }
+      applyWallpaperByType(hydrated, 'static');
+    } else {
+      applyWallpaperByType(hydrated, type);
     }
-
-    applyWallpaperByType(hydrated, type);
 
     runWhenIdle(() => cacheAppliedWallpaperVideo(hydrated));
 
@@ -18966,6 +18967,7 @@ const MyWallpapers = (() => {
 
   const applyItem = async (id, opts = {}) => {
     const applyBtn = opts.button || null;
+    const preserveType = opts.preserveType !== false; // default true so My Wallpapers don't overwrite global type
     const resetButton = () => {
       if (!applyBtn) return;
       applyBtn.disabled = false;
@@ -19000,6 +19002,19 @@ const MyWallpapers = (() => {
     };
 
     const desiredType = (isVideo && !isGif) ? 'video' : 'static';
+
+    // Preserve existing global wallpaper type preference when requested
+    let originalTypePref = wallpaperTypePreference;
+    if (preserveType) {
+      try {
+        const storedType = await browser.storage.local.get(WALLPAPER_TYPE_KEY);
+        if (storedType && storedType[WALLPAPER_TYPE_KEY]) {
+          originalTypePref = storedType[WALLPAPER_TYPE_KEY];
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
     const posterKey = item.posterCacheKey || (!isVideo ? item.cacheKey : '') || '';
     let quickPoster = '';
     if (desiredType === 'static') {
@@ -19009,6 +19024,8 @@ const MyWallpapers = (() => {
         resetButton();
         return;
       }
+      selection.posterUrl = quickPoster;
+      selection.posterCacheKey = posterKey || quickPoster;
     }
 
     if (desiredType === 'static') {
@@ -19018,7 +19035,7 @@ const MyWallpapers = (() => {
       setWallpaperFallbackPoster(quickPoster, posterKey);
       applyWallpaperBackground(quickPoster);
       clearBackgroundVideos();
-      if (wallpaperTypeToggle) wallpaperTypeToggle.checked = true;
+      if (!preserveType && wallpaperTypeToggle) wallpaperTypeToggle.checked = true;
       resetButton();
     }
 
@@ -19036,8 +19053,10 @@ const MyWallpapers = (() => {
     currentWallpaperSelection = hydratedSelection;
     if (galleryDailyToggle) galleryDailyToggle.checked = false;
 
-    await setWallpaperTypePreference(desiredType);
-    if (wallpaperTypeToggle) wallpaperTypeToggle.checked = desiredType === 'static';
+    if (!preserveType) {
+      await setWallpaperTypePreference(desiredType);
+      if (wallpaperTypeToggle) wallpaperTypeToggle.checked = desiredType === 'static';
+    }
 
     if (desiredType === 'static') {
       applyWallpaperByType(hydratedSelection, 'static');
@@ -19083,6 +19102,19 @@ const MyWallpapers = (() => {
           // ignore poster caching errors
         }
       });
+      if (preserveType) {
+        // Regression guard: ensure we didn't mutate global type preference when applying My Wallpapers
+        try {
+          const storedType = await browser.storage.local.get(WALLPAPER_TYPE_KEY);
+          const currentType = storedType ? storedType[WALLPAPER_TYPE_KEY] : undefined;
+          if (originalTypePref !== undefined && currentType !== originalTypePref) {
+            await browser.storage.local.set({ [WALLPAPER_TYPE_KEY]: originalTypePref });
+            wallpaperTypePreference = originalTypePref;
+          }
+        } catch (err) {
+          // best-effort only
+        }
+      }
       resetButton();
     } else {
       applyWallpaperByType(hydratedSelection, desiredType);
@@ -19178,12 +19210,12 @@ if (myWallpapersGrid) {
 
     if (target.closest('.mw-card-btn')) {
       e.stopPropagation();
-      await MyWallpapers.applyItem(id, { button: target.closest('.mw-card-btn') });
+      await MyWallpapers.applyItem(id, { button: target.closest('.mw-card-btn'), preserveType: true });
       return;
     }
 
     e.stopPropagation();
-    await MyWallpapers.applyItem(id);
+    await MyWallpapers.applyItem(id, { preserveType: true });
   });
 }
 

@@ -17313,6 +17313,59 @@ function extractFrameFromVideoBlob(blob) {
 }
 
 
+const galleryPosterDataCache = async () => {
+  try {
+    const stored = await browser.storage.local.get(GALLERY_POSTERS_CACHE_KEY);
+    const map = stored[GALLERY_POSTERS_CACHE_KEY] || {};
+    return typeof map === 'object' && map !== null ? map : {};
+  } catch (err) {
+    return {};
+  }
+};
+
+const persistGalleryPosterDataCache = async (map) => {
+  try {
+    await browser.storage.local.set({ [GALLERY_POSTERS_CACHE_KEY]: map });
+  } catch (err) {
+    // ignore persistence errors
+  }
+};
+
+const ensurePosterDataURL = async (posterUrl) => {
+  if (!posterUrl) return '';
+  if (posterUrl.startsWith('data:')) return posterUrl;
+  try {
+    const res = await fetch(posterUrl);
+    if (!res.ok) return '';
+    const blob = await res.blob();
+    return await blobToDataUrl(blob);
+  } catch (err) {
+    console.warn('Failed to convert poster to data URL', err);
+    return '';
+  }
+};
+
+const getOrCreateGalleryPosterDataURL = async (selection) => {
+  if (!selection) return '';
+  const posterKey = selection.posterCacheKey || selection.posterUrl || '';
+  if (!posterKey) return '';
+
+  const cacheMap = await galleryPosterDataCache();
+  const cached = cacheMap[posterKey];
+  if (cached && typeof cached === 'string' && cached.startsWith('data:')) {
+    return cached;
+  }
+
+  const dataUrl = await ensurePosterDataURL(posterKey);
+  if (dataUrl && dataUrl.startsWith('data:')) {
+    cacheMap[posterKey] = dataUrl;
+    persistGalleryPosterDataCache(cacheMap);
+    return dataUrl;
+  }
+
+  return '';
+};
+
 async function applyGalleryWallpaper(item) {
   const card = document.querySelector(`.gallery-card[data-id="${item.id}"]`);
   const applyBtn = card ? card.querySelector('.apply-button') : null;
@@ -17393,6 +17446,19 @@ async function applyGalleryWallpaper(item) {
     currentWallpaperSelection = hydrated;
 
     const type = await getWallpaperTypePreference();
+    if (type === 'static') {
+      // Gallery STATIC apply: convert/cache poster to data URL to avoid data->blob/http guard and force same-tab update
+      try {
+        const dataPoster = await getOrCreateGalleryPosterDataURL(hydrated);
+        if (dataPoster) {
+          hydrated.posterUrl = dataPoster;
+          hydrated.posterCacheKey = hydrated.posterCacheKey || hydrated.posterUrl || '';
+        }
+      } catch (err) {
+        console.warn('Gallery poster data URL conversion failed; falling back to existing poster', err);
+      }
+    }
+
     applyWallpaperByType(hydrated, type);
 
     runWhenIdle(() => cacheAppliedWallpaperVideo(hydrated));

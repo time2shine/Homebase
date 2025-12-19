@@ -830,8 +830,13 @@ async function pruneCachedVideos(keepUrl = '') {
 
         const url = req.url;
 
+        // 1. Only target video files
         if (!isRemoteVideoUrl(url)) return null;
 
+        // 2. SAFETY CHECK: Do NOT delete user uploads
+        if (url.startsWith(USER_WALLPAPER_CACHE_PREFIX)) return null;
+
+        // 3. Keep the currently active wallpaper
         if (keepUrl && url === keepUrl) return null;
 
         return cache.delete(req).catch(() => {});
@@ -871,6 +876,11 @@ async function cacheAppliedWallpaperVideo(selection) {
     ? videoCacheKey
 
     : (isRemoteVideoUrl(videoUrl) ? videoUrl : '');
+
+  if (targetUrl && targetUrl.startsWith(USER_WALLPAPER_CACHE_PREFIX)) {
+    await browser.storage.local.remove(CACHED_APPLIED_VIDEO_URL_KEY);
+    return;
+  }
 
 
 
@@ -960,6 +970,24 @@ async function resolvePosterBlob(posterUrl, posterCacheKey = '') {
 
   }
 
+  if (typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.getCacheName === 'function') {
+    try {
+      const myCache = await caches.open(MyWallpapers.getCacheName());
+      for (const key of cacheKeys) {
+        try {
+          const match = await myCache.match(key);
+          if (match) {
+            return await match.blob();
+          }
+        } catch (err) {
+          // ignore and continue
+        }
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+
 
 
   if (posterUrl) {
@@ -1011,15 +1039,15 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
     } else if (posterUrl.startsWith('blob:')) {
       if (posterCacheKey && !posterCacheKey.startsWith('blob:')) {
         urlToStore = posterCacheKey;
-      } else {
-        return;
       }
+      // Continue so blob posters can be converted to a Data URL and persisted
     }
 
     if (isRemoteHttpUrl(urlToStore)) {
       await cacheAsset(urlToStore);
     }
 
+    // Store the URL (blob or otherwise) as a placeholder for preload
     await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore });
     try {
       if (window.localStorage) {
@@ -1030,6 +1058,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
     let dataUrlStored = false;
 
     try {
+      // Resolve the poster and persist it as a Data URL for reliable reloads
       const blob = await resolvePosterBlob(urlToStore, posterCacheKey || posterUrl);
       if (blob && blob.size > 0) {
         const dataUrl = await blobToDataUrl(blob);
@@ -1045,6 +1074,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
       console.warn('Failed to generate data URL for poster', e);
     }
 
+    // Cleanup if Data URL generation failed
     if (!dataUrlStored) {
       await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
       try {
@@ -1235,7 +1265,10 @@ async function hydrateWallpaperSelection(selection) {
 
 
   if (hydrated.videoCacheKey) {
-    const cachedVideo = await getCachedObjectUrl(hydrated.videoCacheKey);
+    let cachedVideo = await getCachedObjectUrl(hydrated.videoCacheKey);
+    if (!cachedVideo && typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.getObjectUrl === 'function') {
+      cachedVideo = await MyWallpapers.getObjectUrl(hydrated.videoCacheKey);
+    }
     if (cachedVideo) {
       hydrated.videoUrl = cachedVideo;
     }
@@ -1244,7 +1277,10 @@ async function hydrateWallpaperSelection(selection) {
   const posterLookupKey = hydrated.posterCacheKey || '';
 
   if (posterLookupKey) {
-    const cachedPoster = await getCachedObjectUrl(posterLookupKey);
+    let cachedPoster = await getCachedObjectUrl(posterLookupKey);
+    if (!cachedPoster && typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.getObjectUrl === 'function') {
+      cachedPoster = await MyWallpapers.getObjectUrl(posterLookupKey);
+    }
     if (cachedPoster) {
       hydrated.posterUrl = cachedPoster;
     }
@@ -1813,8 +1849,6 @@ const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
 
 const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
 
-const MY_WALLPAPERS_KEY = 'myWallpapers';
-
 const APP_TIME_FORMAT_KEY = 'appTimeFormatPreference';
 
 const APP_SHOW_SIDEBAR_KEY = 'appShowSidebar';
@@ -1901,12 +1935,6 @@ let galleryRenderIndex = 0;
 
 let galleryLoadMoreObserver = null;
 
-let myWallpapersRenderQueue = [];
-
-let myWallpapersRenderIndex = 0;
-
-let myWallpapersLoadMoreObserver = null;
-
 const MY_WALLPAPERS_BATCH_SIZE = 24;
 
 let galleryFavorites = new Set();
@@ -1914,10 +1942,6 @@ let galleryFavorites = new Set();
 let currentWallpaperSelection = null;
 
 let wallpaperTypePreference = null; // 'video' | 'static'
-
-let myWallpapers = [];
-
-let myWallpaperMediaObserver = null;
 
 let timeFormatPreference = '12-hour';
 
@@ -17417,7 +17441,7 @@ async function openGalleryModal() {
 
     await loadCurrentWallpaperSelection();
 
-    await loadMyWallpapers();
+    await MyWallpapers.init();
 
     updateSettingsPreview(currentWallpaperSelection, wallpaperTypePreference || 'video');
 
@@ -17580,7 +17604,7 @@ function renderCurrentGallery() {
 
   if (isMyWallpapers) {
 
-    renderMyWallpapers();
+    MyWallpapers.render();
 
   } else {
 
@@ -17616,7 +17640,7 @@ function renderCurrentGallery() {
 
   if (myWallpapersEmptyCard) {
 
-    const hasItems = myWallpapers && myWallpapers.length > 0;
+    const hasItems = MyWallpapers.hasItems();
 
     myWallpapersEmptyCard.classList.toggle('hidden', hasItems || !isMyWallpapers);
 
@@ -17624,7 +17648,7 @@ function renderCurrentGallery() {
 
   if (myWallpapersGrid) {
 
-    const hasItems = myWallpapers && myWallpapers.length > 0;
+    const hasItems = MyWallpapers.hasItems();
 
     myWallpapersGrid.classList.toggle('hidden', !isMyWallpapers || !hasItems);
 
@@ -17728,212 +17752,6 @@ if (galleryGrid) {
       }
 
     }
-
-  });
-
-}
-
-
-
-function getMyWallpapersLoadMoreObserver() {
-
-  if (!myWallpapersGrid) return null;
-
-  if (!myWallpapersLoadMoreObserver) {
-
-    myWallpapersLoadMoreObserver = new IntersectionObserver((entries) => {
-
-      const entry = entries[0];
-
-      if (entry && entry.isIntersecting) {
-
-        renderNextMyWallpaperBatch();
-
-      }
-
-    }, { root: myWallpapersGrid, rootMargin: '400px' });
-
-  }
-
-  return myWallpapersLoadMoreObserver;
-
-}
-
-
-
-function renderNextMyWallpaperBatch() {
-
-  if (!myWallpapersGrid) return;
-
-  if (myWallpapersRenderIndex >= myWallpapersRenderQueue.length) {
-
-    if (myWallpapersLoadMoreObserver) {
-
-      myWallpapersLoadMoreObserver.disconnect();
-
-    }
-
-    return;
-
-  }
-
-  const batch = myWallpapersRenderQueue.slice(myWallpapersRenderIndex, myWallpapersRenderIndex + MY_WALLPAPERS_BATCH_SIZE);
-
-  const fragment = document.createDocumentFragment();
-
-  const mediaObserver = getMyWallpaperMediaObserver();
-
-  batch.forEach((item) => {
-
-    const card = document.createElement('div');
-
-    card.className = 'gallery-card mw-card';
-
-    card.dataset.id = item.id;
-
-    const titleText = item.title || 'Wallpaper';
-
-    const needsMarquee = titleText.length > 20;
-
-    const marqueeDuration = 6; // uniform speed for all marquee titles
-
-    const isVideo = item.type === 'video';
-
-    const isGif = isVideo && (item.mimeType === 'image/gif' || (item.title || '').toLowerCase().endsWith('.gif'));
-
-    const binTopIcon = useSvgIcon('binTop');
-
-    const binBottomIcon = useSvgIcon('binBottom');
-
-    const binGarbageIcon = useSvgIcon('binGarbage');
-
-    card.innerHTML = `
-
-      <button type="button" class="mw-card-remove bin-button" aria-label="Delete">
-
-        ${binTopIcon}
-
-        ${binBottomIcon}
-
-        ${binGarbageIcon}
-
-      </button>
-
-      <div class="mw-card-media gallery-card-image"></div>
-
-      <div class="mw-card-body gallery-card-meta">
-
-        <div class="mw-card-text">
-
-          <p class="mw-card-title gallery-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
-
-          <p class="mw-card-meta">${isVideo ? 'Live upload' : 'Static upload'}</p>
-
-        </div>
-
-        <button type="button" class="mw-card-btn apply-button gallery-card-apply" data-id="${item.id}">
-
-          Apply
-
-        </button>
-
-      </div>
-
-    `;
-
-    const media = card.querySelector('.mw-card-media');
-
-    if (media) {
-
-      media.dataset.mediaLoaded = 'false';
-
-      if (isVideo && !isGif) {
-
-        media.dataset.wallpaperId = item.id;
-
-        media.style.backgroundImage = `url("${item.posterUrl || 'assets/fallback.webp'}")`;
-
-        mediaObserver.observe(media);
-
-      } else {
-
-        delete media.dataset.wallpaperId;
-
-        renderMyWallpaperMedia(media, item);
-
-      }
-
-    }
-
-    fragment.appendChild(card);
-
-  });
-
-  const sentinel = document.getElementById('mw-sentinel');
-
-  if (sentinel) {
-
-    myWallpapersGrid.insertBefore(fragment, sentinel);
-
-  } else {
-
-    myWallpapersGrid.appendChild(fragment);
-
-  }
-
-  myWallpapersRenderIndex += batch.length;
-
-  if (myWallpapersRenderIndex >= myWallpapersRenderQueue.length && myWallpapersLoadMoreObserver) {
-
-    myWallpapersLoadMoreObserver.disconnect();
-
-  }
-
-}
-
-
-
-if (myWallpapersGrid) {
-
-  myWallpapersGrid.addEventListener('click', (e) => {
-
-    const target = e.target;
-
-    if (!target) return;
-
-    const card = target.closest('.mw-card');
-
-    if (!card) return;
-
-    const id = card.dataset.id;
-
-    const item = (myWallpapers || []).find((mw) => String(mw.id) === id);
-
-    if (!item) return;
-
-    if (target.closest('.mw-card-remove')) {
-
-      e.stopPropagation();
-
-      removeMyWallpaper(id);
-
-      return;
-
-    }
-
-    if (target.closest('.mw-card-btn')) {
-
-      e.stopPropagation();
-
-      applyMyWallpaper(item);
-
-      return;
-
-    }
-
-    e.stopPropagation();
-
-    applyMyWallpaper(item);
 
   });
 
@@ -18113,262 +17931,6 @@ function updateGalleryActiveFilterLabel() {
 
 
 
-function normalizeMyWallpaperItems(items = []) {
-
-  return items
-
-    .filter(Boolean)
-
-    .map((item) => {
-
-      const next = { ...item };
-
-      next.type = next.type || (next.videoCacheKey ? 'video' : 'image');
-
-      if (!next.posterUrl && next.url) {
-
-        next.posterUrl = next.url;
-
-      }
-
-      if (!next.title) {
-
-        next.title = 'My wallpaper';
-
-      }
-
-      if (next.cacheKey) {
-
-        next.cacheKey = normalizeWallpaperCacheKey(next.cacheKey);
-
-      }
-
-      if (next.videoCacheKey) {
-
-        next.videoCacheKey = normalizeWallpaperCacheKey(next.videoCacheKey);
-
-      }
-
-      if (next.posterCacheKey) {
-
-        next.posterCacheKey = normalizeWallpaperCacheKey(next.posterCacheKey);
-
-      }
-
-      return next;
-
-    });
-
-}
-
-
-
-async function persistMyWallpapers() {
-
-  const serializable = (myWallpapers || []).map((item) => {
-
-    if (!item) return null;
-
-    const { runtimeUrl, previewUrl, ...rest } = item;
-
-    return rest;
-
-  }).filter(Boolean);
-
-  await browser.storage.local.set({ [MY_WALLPAPERS_KEY]: serializable });
-
-}
-
-
-
-async function resolveMyWallpaperSource(item) {
-
-  if (!item) return '';
-
-  if (item.cacheKey) {
-
-    const cached = await getCachedObjectUrl(item.cacheKey);
-
-    if (cached) return cached;
-
-  }
-
-  return item.url || item.posterUrl || '';
-
-}
-
-
-
-function getMyWallpaperMediaObserver() {
-
-  if (myWallpaperMediaObserver) return myWallpaperMediaObserver;
-
-  myWallpaperMediaObserver = new IntersectionObserver((entries, observer) => {
-
-    entries.forEach((entry) => {
-
-      if (!entry.isIntersecting) return;
-
-      const media = entry.target;
-
-      const itemId = media.dataset.wallpaperId;
-
-      const item = (myWallpapers || []).find((mw) => mw.id === itemId);
-
-      if (item) {
-
-        renderMyWallpaperMedia(media, item);
-
-      }
-
-      observer.unobserve(media);
-
-    });
-
-  }, { rootMargin: '0px 0px 200px 0px' });
-
-  return myWallpaperMediaObserver;
-
-}
-
-
-
-function renderMyWallpaperMedia(media, item) {
-
-  if (!media || !item || media.dataset.mediaLoaded === 'true') return;
-
-  media.dataset.mediaLoaded = 'true';
-
-  media.innerHTML = '';
-
-  media.style.backgroundImage = '';
-
-
-
-  const isVideo = item.type === 'video';
-
-  const isGif = isVideo && (item.mimeType === 'image/gif' || (item.title || '').toLowerCase().endsWith('.gif'));
-
-
-
-  if (isVideo && !isGif) {
-
-    const video = document.createElement('video');
-
-    video.className = 'mw-card-video';
-
-    video.muted = true;
-
-    video.loop = true;
-
-    video.playsInline = true;
-
-    video.poster = item.posterUrl || 'assets/fallback.webp';
-
-    media.appendChild(video);
-
-    resolveMyWallpaperSource(item).then((src) => {
-
-      if (src && media.contains(video)) {
-
-        video.src = src;
-
-        video.load();
-
-        video.play().catch(() => {});
-
-      }
-
-    });
-
-  } else {
-
-    const img = document.createElement('img');
-
-    img.loading = 'lazy';
-
-    img.alt = item.title || 'My wallpaper';
-
-    img.src = (!isVideo || isGif) ? (item.posterUrl || item.url || 'assets/fallback.webp') : (item.posterUrl || 'assets/fallback.webp');
-
-    media.appendChild(img);
-
-    if (isVideo) {
-
-      resolveMyWallpaperSource(item).then((src) => {
-
-        if (src && media.contains(img)) {
-
-          img.src = src;
-
-        }
-
-      });
-
-    }
-
-  }
-
-}
-
-
-
-function renderMyWallpapers() {
-
-  if (!myWallpapersGrid) return;
-
-  const mediaObserver = getMyWallpaperMediaObserver();
-
-  mediaObserver.disconnect();
-
-  const loadMoreObserver = getMyWallpapersLoadMoreObserver();
-
-  if (loadMoreObserver) {
-
-    loadMoreObserver.disconnect();
-
-  }
-
-  myWallpapersGrid.innerHTML = '';
-
-  myWallpapersRenderQueue = Array.isArray(myWallpapers) ? myWallpapers : [];
-
-  myWallpapersRenderIndex = 0;
-
-  const hasItems = myWallpapersRenderQueue.length > 0;
-
-  myWallpapersGrid.classList.toggle('hidden', !hasItems);
-
-  if (myWallpapersEmptyCard) {
-
-    myWallpapersEmptyCard.classList.toggle('hidden', hasItems);
-
-  }
-
-  if (!hasItems) return;
-
-  renderNextMyWallpaperBatch();
-
-  const sentinel = document.createElement('div');
-
-  sentinel.id = 'mw-sentinel';
-
-  sentinel.style.height = '20px';
-
-  sentinel.style.width = '100%';
-
-  myWallpapersGrid.appendChild(sentinel);
-
-  if (loadMoreObserver) {
-
-    loadMoreObserver.observe(sentinel);
-
-  }
-
-}
-
-
-
 if (galleryCloseBtn) {
 
   galleryCloseBtn.addEventListener('click', closeGalleryModal);
@@ -18443,312 +18005,718 @@ if (galleryFooterButtons && galleryFooterButtons.length) {
 
 
 
-async function applyMyWallpaper(item) {
+// ===============================================
+// My Wallpapers (new subsystem)
+// ===============================================
 
-  if (!item) return;
+const MyWallpapers = (() => {
+  const MY_WALLPAPERS_KEY = 'myWallpapers';
+  const MY_WALLPAPER_CACHE = 'user-wallpapers-v1';
+  const MAX_ITEMS = 75;
+  const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+  const MAX_GIF_BYTES = 25 * 1024 * 1024;
+  const MAX_VIDEO_BYTES = 150 * 1024 * 1024;
+  const MAX_TOTAL_BYTES = 500 * 1024 * 1024;
+  const BATCH_SIZE = MY_WALLPAPERS_BATCH_SIZE || 24;
+  const PLACEHOLDER_POSTER = 'assets/fallback.webp';
 
-
-
-  const isVideo = item.type === 'video';
-
-  const isGif = item.mimeType === 'image/gif';
-
-  const cacheKey = item.cacheKey ? normalizeWallpaperCacheKey(item.cacheKey) : '';
-
-  
-
-  let posterUrl = item.posterUrl || item.url || 'assets/fallback.webp';
-
-  let videoUrl = '';
-
-
-
-  // Resolve video URL if it's a video (and not a GIF)
-
-  if (isVideo && !isGif) {
-
-    if (cacheKey) {
-
-      videoUrl = await getCachedObjectUrl(cacheKey);
-
-    }
-
-  } else if (isGif && cacheKey) {
-
-    const gifUrl = await getCachedObjectUrl(cacheKey);
-
-    if (gifUrl) posterUrl = gifUrl;
-
-  }
-
-
-
-  const selection = {
-
-    id: item.id,
-
-    videoUrl: videoUrl,
-
-    posterUrl: posterUrl,
-
-    title: item.title || 'My Wallpaper',
-
-    selectedAt: Date.now(),
-
-    videoCacheKey: (isVideo && !isGif) ? (cacheKey || '') : '',
-
-    posterCacheKey: (!isVideo || isGif) ? (cacheKey || '') : '',
-
-    mimeType: item.mimeType || ''
-
+  const state = {
+    list: [],
+    renderQueue: [],
+    renderIndex: 0,
+    renderVersion: 0,
+    initialized: false,
+    loadMoreObserver: null,
+    mediaObserver: null
   };
 
+  const posterObjectUrls = new Map(); // cacheKey -> object URL
 
+  const formatBytes = (bytes) => `${Math.round(bytes / (1024 * 1024))}MB`;
 
-  const hydratedSelection = await hydrateWallpaperSelection(selection);
-  await ensurePlayableSelection(hydratedSelection);
+  const normalizeCacheKey = (key = '') => normalizeWallpaperCacheKey(key);
 
+  const cacheKeyVariants = (key) => getCacheKeyVariants(key);
 
+  const getList = () => (Array.isArray(state.list) ? state.list.slice() : []);
 
-  await browser.storage.local.set({
+  const hasItems = () => (state.list || []).length > 0;
 
-    [WALLPAPER_SELECTION_KEY]: hydratedSelection,
+  const getCacheName = () => MY_WALLPAPER_CACHE;
 
-    [DAILY_ROTATION_KEY]: false
+  const makeId = () => `mywallpaper-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  });
-
-
-
-  currentWallpaperSelection = hydratedSelection;
-
-  if (galleryDailyToggle) galleryDailyToggle.checked = false;
-
-
-
-  // Force switch to video mode if it's a video
-
-  if (isVideo && !isGif) {
-
-    await setWallpaperTypePreference('video');
-
-    if (wallpaperTypeToggle) wallpaperTypeToggle.checked = false; 
-
-    applyWallpaperByType(hydratedSelection, 'video');
-
-  } else {
-
-    await setWallpaperTypePreference('static');
-
-    if (wallpaperTypeToggle) wallpaperTypeToggle.checked = true; 
-
-    applyWallpaperByType(hydratedSelection, 'static');
-
-  }
-
-
-
-  runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
-
-  
-
-  closeGalleryModal();
-
-}
-
-
-
-
-
-
-
-
-
-async function handleMyWallpaperUpload(files = [], mode = 'static') {
-  const isLive = mode === 'live';
-  
-  // 1. Find the correct file
-  const file = files.find((f) => {
-    if (!f) return false;
-    const name = (f.name || '').toLowerCase();
-    const type = (f.type || '').toLowerCase();
-    
-    if (isLive) {
-      return type.includes('video') || type.includes('gif') || name.endsWith('.mp4') || name.endsWith('.gif');
-    }
-    return type.startsWith('image/');
-  });
-
-  if (!file) {
-    alert(isLive ? 'Please select a live wallpaper file (.mp4 or .gif).' : 'Please select an image file (.png, .jpg, .jpeg, .webp).');
-    return;
-  }
-
-  const title = (file.name || 'My wallpaper').replace(/\.[^/.]+$/, '');
-  const id = `mywallpaper-${Date.now()}`;
-  
-  // 2. Generate a Unique Cache Key
-  // We use this key to retrieve the file from the Cache API later
-  const cacheKey = normalizeWallpaperCacheKey(`user-upload-${id}-${file.name}`);
-
-  // 3. OPTIMIZATION: Save file to Cache API immediately
-  // This stores the raw binary data in browser cache, avoiding the 5MB storage limit.
-  // We force the MIME type to ensure playback works.
-  let mimeType = file.type;
-  const nameLower = (file.name || '').toLowerCase();
-  
-  if (!mimeType || mimeType === 'application/octet-stream') {
-    if (nameLower.endsWith('.mp4')) mimeType = 'video/mp4';
-    else if (nameLower.endsWith('.gif')) mimeType = 'image/gif';
-    else if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) mimeType = 'image/jpeg';
-    else if (nameLower.endsWith('.png')) mimeType = 'image/png';
-    else if (nameLower.endsWith('.webp')) mimeType = 'image/webp';
-  }
-
-  await cacheUserWallpaperFile(cacheKey, file, mimeType);
-
-  // 4. Create the Metadata Object
-  // notice we DO NOT store 'url' (Base64). We only store 'cacheKey'.
-  let item = {
-    id,
-    title,
-    cacheKey,     // <--- The reference to the data
-    mimeType,
-    type: isLive ? 'video' : 'image',
-    posterUrl: '' // Will be generated below
+  const currentUsage = (list = state.list) => {
+    return (list || []).reduce((sum, item) => {
+      return sum + (Number(item.size) || 0) + (Number(item.posterSize) || 0);
+    }, 0);
   };
 
-  // 5. Generate Thumbnails (Posters)
-  if (isLive && !item.mimeType.includes('gif')) {
-    // For Video: Generate a poster frame
-    const posterDataUrl = await buildVideoPosterFromFile(file);
-    item.posterUrl = posterDataUrl || 'assets/fallback.webp';
-  } else {
-    // For Images/GIFs: Use the file itself as the poster
-    // We create a temporary blob URL for immediate rendering
-    item.posterUrl = URL.createObjectURL(file);
-  }
+  const estimateQuota = async () => {
+    const fallbackLimit = MAX_TOTAL_BYTES;
+    let usage = 0;
+    let quota = 0;
+    try {
+      if (navigator?.storage?.estimate) {
+        const estimate = await navigator.storage.estimate();
+        usage = Number(estimate?.usage) || 0;
+        quota = Number(estimate?.quota) || 0;
+      }
+    } catch (err) {
+      usage = 0;
+      quota = 0;
+    }
+    const quotaCap = quota ? quota * 0.2 : fallbackLimit;
+    const limitBytes = Math.min(fallbackLimit, quotaCap || fallbackLimit);
+    return { usage, quota, limitBytes };
+  };
 
-  // 6. Save & Render
-  myWallpapers.unshift(item);
-  await persistMyWallpapers(); // Saves only metadata to storage.local
-  renderMyWallpapers();
-}
+  const normalizeList = (items = []) => {
+    const seen = new Set();
+    return (Array.isArray(items) ? items : [])
+      .map((item) => {
+        if (!item || !item.id || seen.has(item.id)) return null;
+        seen.add(item.id);
+        const type = item.type === 'video' ? 'video' : 'image';
+        const cacheKey = normalizeCacheKey(item.cacheKey || item.videoCacheKey || item.imageCacheKey || '');
+        const posterCacheKey = normalizeCacheKey(item.posterCacheKey || '');
+        return {
+          id: item.id,
+          title: item.title || 'My Wallpaper',
+          type,
+          mimeType: item.mimeType || '',
+          cacheKey,
+          posterCacheKey,
+          size: Number(item.size) || 0,
+          posterSize: Number(item.posterSize) || 0,
+          createdAt: item.createdAt || item.selectedAt || Date.now(),
+          lastUsedAt: item.lastUsedAt || item.createdAt || 0,
+          originalName: item.originalName || ''
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  };
 
+  const loadList = async () => {
+    try {
+      const stored = await browser.storage.local.get(MY_WALLPAPERS_KEY);
+      const storedItems = Array.isArray(stored[MY_WALLPAPERS_KEY]) ? stored[MY_WALLPAPERS_KEY] : [];
+      return normalizeList(storedItems);
+    } catch (err) {
+      return [];
+    }
+  };
 
+  const saveList = async (list) => {
+    try {
+      await browser.storage.local.set({ [MY_WALLPAPERS_KEY]: list });
+    } catch (err) {
+      console.warn('Failed to save My Wallpapers', err);
+    }
+  };
 
-async function loadMyWallpapers() {
+  const ensureInitialized = async () => {
+    if (state.initialized) return state.list;
+    state.list = await loadList();
+    state.initialized = true;
+    return state.list;
+  };
 
-  try {
+  const mimeFromFile = (file) => {
+    if (!file) return '';
+    if (file.type && file.type !== 'application/octet-stream') return file.type;
+    const name = (file.name || '').toLowerCase();
+    if (name.endsWith('.mp4')) return 'video/mp4';
+    if (name.endsWith('.webm')) return 'video/webm';
+    if (name.endsWith('.mov')) return 'video/quicktime';
+    if (name.endsWith('.m4v')) return 'video/mp4';
+    if (name.endsWith('.gif')) return 'image/gif';
+    if (name.endsWith('.png')) return 'image/png';
+    if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+    if (name.endsWith('.webp')) return 'image/webp';
+    return 'application/octet-stream';
+  };
 
-    const stored = await browser.storage.local.get(MY_WALLPAPERS_KEY);
+  const detectType = (file) => {
+    const mimeType = (mimeFromFile(file) || '').toLowerCase();
+    const name = (file?.name || '').toLowerCase();
+    const isGif = mimeType === 'image/gif' || name.endsWith('.gif');
+    const isVideo = (!isGif && mimeType.startsWith('video/')) || /\.(mp4|webm|mov|m4v)$/i.test(name);
+    const isImage = !isVideo && (mimeType.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(name));
+    const title = (file?.name || 'My wallpaper').replace(/\.[^/.]+$/, '');
+    return { mimeType: mimeType || 'application/octet-stream', isVideo, isGif, isImage, title };
+  };
 
-    const storedItems = Array.isArray(stored[MY_WALLPAPERS_KEY]) ? stored[MY_WALLPAPERS_KEY] : [];
+  const validateUpload = async (file, expectedType = 'any') => {
+    await ensureInitialized();
+    if (!file) {
+      return { ok: false, message: 'Please select a file to upload.' };
+    }
 
-    myWallpapers = normalizeMyWallpaperItems(storedItems);
+    const meta = detectType(file);
+    if (!meta.isVideo && !meta.isImage) {
+      return { ok: false, message: 'Unsupported file type. Please upload an image or video.' };
+    }
 
-  } catch (err) {
+    if (expectedType === 'video' && !meta.isVideo && !meta.isGif) {
+      return { ok: false, message: 'Please select a live wallpaper file (.mp4 or .gif).' };
+    }
 
-    myWallpapers = [];
+    if (expectedType === 'image' && meta.isVideo && !meta.isGif) {
+      return { ok: false, message: 'Please select an image file (.png, .jpg, .jpeg, .webp).' };
+    }
 
-  }
+    const perLimit = meta.isVideo && !meta.isGif ? MAX_VIDEO_BYTES : (meta.isGif ? MAX_GIF_BYTES : MAX_IMAGE_BYTES);
+    if ((file.size || 0) > perLimit) {
+      return { ok: false, message: `File is too large. Limit is ${formatBytes(perLimit)}.` };
+    }
 
-  renderMyWallpapers();
+    if (state.list.length >= MAX_ITEMS) {
+      return { ok: false, message: `You can keep up to ${MAX_ITEMS} wallpapers. Remove one to add another.` };
+    }
 
-}
+    const { limitBytes } = await estimateQuota();
+    if (limitBytes && currentUsage() + (file.size || 0) > limitBytes) {
+      return { ok: false, message: 'Not enough space to store this wallpaper. Remove older items and try again.' };
+    }
 
+    return { ok: true, ...meta, mimeType: meta.mimeType };
+  };
 
+  const mimeToExtension = (mime = '') => {
+    if (mime.includes('mp4')) return 'mp4';
+    if (mime.includes('webm')) return 'webm';
+    if (mime.includes('quicktime')) return 'mov';
+    if (mime.includes('gif')) return 'gif';
+    if (mime.includes('png')) return 'png';
+    if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+    if (mime.includes('webp')) return 'webp';
+    return '';
+  };
 
-async function removeMyWallpaper(id) {
+  const buildCacheKey = (id, part, mimeType = '', name = '') => {
+    const ext = mimeToExtension(mimeType) || (name.includes('.') ? name.split('.').pop() : '');
+    const suffix = ext ? `.${ext}` : '';
+    return normalizeCacheKey(`my/${encodeURIComponent(id)}/${part}${suffix}`);
+  };
 
-  if (!id) return;
+  const revokeObjectUrl = (key) => {
+    const url = posterObjectUrls.get(key);
+    if (url) {
+      URL.revokeObjectURL(url);
+      posterObjectUrls.delete(key);
+    }
+  };
 
-  const target = myWallpapers.find((item) => item.id === id);
+  const cachePut = async (key, blob, mime = '') => {
+    const normalized = normalizeCacheKey(key);
+    try {
+      const cache = await caches.open(MY_WALLPAPER_CACHE);
+      await cache.put(normalized, new Response(blob, { headers: { 'content-type': mime || blob?.type || 'application/octet-stream' } }));
+      return normalized;
+    } catch (err) {
+      console.warn('Failed to cache My Wallpaper asset', key, err);
+      return normalized;
+    }
+  };
 
-  myWallpapers = myWallpapers.filter((item) => item.id !== id);
+  const cacheGetObjectUrl = async (cacheKey) => {
+    const keys = cacheKeyVariants(cacheKey);
+    if (!keys.length) return null;
 
-  await persistMyWallpapers();
+    for (const key of keys) {
+      if (posterObjectUrls.has(key)) {
+        return posterObjectUrls.get(key);
+      }
+    }
 
-  if (target && target.cacheKey) {
+    try {
+      const cache = await caches.open(MY_WALLPAPER_CACHE);
+      for (const key of keys) {
+        const match = await cache.match(key);
+        if (!match) continue;
+        const blob = await match.blob();
+        const url = URL.createObjectURL(blob);
+        keys.forEach((k) => posterObjectUrls.set(k, url));
+        return url;
+      }
+    } catch (err) {
+      console.warn('Failed to read My Wallpaper cache', cacheKey, err);
+    }
 
-    await deleteCachedObject(target.cacheKey);
+    try {
+      const legacyCache = await caches.open(WALLPAPER_CACHE_NAME);
+      for (const key of keys) {
+        const match = await legacyCache.match(key);
+        if (!match) continue;
+        const blob = await match.blob();
+        const url = URL.createObjectURL(blob);
+        keys.forEach((k) => posterObjectUrls.set(k, url));
+        return url;
+      }
+    } catch (err) {
+      // ignore legacy cache read failures
+    }
 
-  }
+    return null;
+  };
 
+  const cacheDelete = async (cacheKey) => {
+    const keys = cacheKeyVariants(cacheKey);
+    if (!keys.length) return;
+    let cache = null;
+    let legacyCache = null;
+    try {
+      cache = await caches.open(MY_WALLPAPER_CACHE);
+    } catch (err) {
+      cache = null;
+    }
+    try {
+      legacyCache = await caches.open(WALLPAPER_CACHE_NAME);
+    } catch (err) {
+      legacyCache = null;
+    }
+    keys.forEach((key) => {
+      if (cache) cache.delete(key).catch(() => {});
+      if (legacyCache && key.startsWith(USER_WALLPAPER_CACHE_PREFIX)) {
+        legacyCache.delete(key).catch(() => {});
+      }
+      revokeObjectUrl(key);
+    });
+  };
 
+  const dataUrlToBlob = (dataUrl = '') => {
+    if (!dataUrl) return null;
+    const parts = dataUrl.split(',');
+    if (parts.length < 2) return null;
+    const mimeMatch = parts[0].match(/data:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const binary = atob(parts[1]);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mime });
+  };
 
-  // If the deleted wallpaper is currently applied, fall back to the default live wallpaper
+  const generateImagePoster = (file) => {
+    return new Promise((resolve) => {
+      try {
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 512;
+          const ratio = Math.min(maxDim / (img.width || 1), maxDim / (img.height || 1), 1);
+          const width = Math.max(1, Math.round((img.width || 1) * ratio));
+          const height = Math.max(1, Math.round((img.height || 1) * ratio));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            URL.revokeObjectURL(objectUrl);
+            resolve(null);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(blob || null);
+          }, 'image/webp', 0.9);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(null);
+        };
+        img.src = objectUrl;
+      } catch (err) {
+        console.warn('Failed to generate image poster', err);
+        resolve(null);
+      }
+    });
+  };
 
-  try {
+  const generateVideoPoster = async (file) => {
+    try {
+      const dataUrl = await buildVideoPosterFromFile(file);
+      if (!dataUrl) return null;
+      return dataUrlToBlob(dataUrl);
+    } catch (err) {
+      console.warn('Failed to generate video poster', err);
+      return null;
+    }
+  };
 
-    const stored = await browser.storage.local.get(WALLPAPER_SELECTION_KEY);
+  const maybeEvictForSpace = async (bytesNeeded) => {
+    const { limitBytes } = await estimateQuota();
+    let total = currentUsage();
+    if (!limitBytes || total + bytesNeeded <= limitBytes) return true;
 
-    const activeSelection = currentWallpaperSelection || stored[WALLPAPER_SELECTION_KEY] || null;
+    let activeId = null;
+    try {
+      const stored = await browser.storage.local.get(WALLPAPER_SELECTION_KEY);
+      activeId = (currentWallpaperSelection || stored[WALLPAPER_SELECTION_KEY] || {}).id || null;
+    } catch (err) {
+      activeId = null;
+    }
 
-    const activeId = activeSelection && activeSelection.id;
+    const sorted = getList().sort((a, b) => (a.lastUsedAt || a.createdAt || 0) - (b.lastUsedAt || b.createdAt || 0));
+    let changed = false;
+    for (const item of sorted) {
+      if (item.id === activeId) continue;
+      await cacheDelete(item.cacheKey);
+      if (item.posterCacheKey) await cacheDelete(item.posterCacheKey);
+      state.list = state.list.filter((mw) => mw.id !== item.id);
+      total = currentUsage();
+      changed = true;
+      if (total + bytesNeeded <= limitBytes) break;
+    }
 
-    const selectionKeys = new Set(
+    if (changed) {
+      await saveList(state.list);
+      render();
+    }
 
-      [activeSelection && activeSelection.cacheKey, activeSelection && activeSelection.posterCacheKey, activeSelection && activeSelection.videoCacheKey]
+    return total + bytesNeeded <= limitBytes;
+  };
 
-        .filter(Boolean)
+  const hydratePoster = (media, item, version) => {
+    if (!media || !item || version !== state.renderVersion) return;
+    const posterKey = item.posterCacheKey || item.cacheKey || '';
+    if (!posterKey) return;
+    cacheGetObjectUrl(posterKey).then((url) => {
+      if (!url || version !== state.renderVersion) {
+        if (url) revokeObjectUrl(posterKey);
+        return;
+      }
+      media.dataset.mediaLoaded = 'true';
+      media.style.backgroundImage = `url("${url}")`;
+    });
+  };
 
-        .map(normalizeWallpaperCacheKey)
-
-    );
-
-    const targetKeys = new Set(
-
-      [target && target.cacheKey, target && target.posterCacheKey, target && target.videoCacheKey]
-
-        .filter(Boolean)
-
-        .map(normalizeWallpaperCacheKey)
-
-    );
-
-    const matchesActive = (activeId && activeId === id) || Array.from(targetKeys).some((key) => selectionKeys.has(key));
-
-
-
-    if (matchesActive) {
-
-      const now = Date.now();
-
-      const fallbackSelection = buildFallbackSelection(now);
-
-      currentWallpaperSelection = fallbackSelection;
-
-      wallpaperTypePreference = 'video';
-
-      if (wallpaperTypeToggle) wallpaperTypeToggle.checked = false;
-
-      await browser.storage.local.set({
-
-        [WALLPAPER_SELECTION_KEY]: fallbackSelection,
-
-        [WALLPAPER_FALLBACK_USED_KEY]: now,
-
-        [WALLPAPER_TYPE_KEY]: 'video'
-
+  const getMediaObserver = () => {
+    if (state.mediaObserver) return state.mediaObserver;
+    if (!myWallpapersGrid) return null;
+    state.mediaObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const media = entry.target;
+        const itemId = media?.dataset?.wallpaperId;
+        if (!itemId) return;
+        const item = state.list.find((mw) => mw.id === itemId);
+        if (!item) return;
+        if (entry.isIntersecting) {
+          hydratePoster(media, item, state.renderVersion);
+        } else {
+          media.dataset.mediaLoaded = 'false';
+          revokeObjectUrl(item.posterCacheKey || item.cacheKey || '');
+          media.style.backgroundImage = `url("${PLACEHOLDER_POSTER}")`;
+        }
       });
+    }, { root: myWallpapersGrid, rootMargin: '250px' });
+    return state.mediaObserver;
+  };
 
-      applyWallpaperByType(fallbackSelection, 'video');
+  const getLoadMoreObserver = () => {
+    if (state.loadMoreObserver) return state.loadMoreObserver;
+    if (!myWallpapersGrid) return null;
+    state.loadMoreObserver = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (entry && entry.isIntersecting) {
+        renderNextBatch();
+      }
+    }, { root: myWallpapersGrid, rootMargin: '400px' });
+    return state.loadMoreObserver;
+  };
 
-      runWhenIdle(() => cacheAppliedWallpaperVideo(fallbackSelection));
+  const renderCard = (item) => {
+    const card = document.createElement('div');
+    card.className = 'gallery-card mw-card';
+    card.dataset.id = item.id;
 
+    const titleText = item.title || 'Wallpaper';
+    const needsMarquee = titleText.length > 20;
+    const marqueeDuration = 6;
+    const isVideo = item.type === 'video';
+    const binTopIcon = useSvgIcon('binTop');
+    const binBottomIcon = useSvgIcon('binBottom');
+    const binGarbageIcon = useSvgIcon('binGarbage');
+
+    card.innerHTML = `
+      <button type="button" class="mw-card-remove bin-button" aria-label="Delete">
+        ${binTopIcon}
+        ${binBottomIcon}
+        ${binGarbageIcon}
+      </button>
+      <div class="mw-card-media gallery-card-image" data-wallpaper-id="${item.id}" data-media-loaded="false" style="background-image:url('${PLACEHOLDER_POSTER}')"></div>
+      <div class="mw-card-body gallery-card-meta">
+        <div class="mw-card-text">
+          <p class="mw-card-title gallery-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
+          <p class="mw-card-meta">${isVideo ? 'Live upload' : 'Static upload'}</p>
+        </div>
+        <button type="button" class="mw-card-btn apply-button gallery-card-apply" data-id="${item.id}">
+          Apply
+        </button>
+      </div>
+    `;
+
+    return card;
+  };
+
+  const renderNextBatch = () => {
+    if (!myWallpapersGrid) return;
+    if (state.renderIndex >= state.renderQueue.length) {
+      if (state.loadMoreObserver) {
+        state.loadMoreObserver.disconnect();
+      }
+      return;
     }
 
-  } catch (err) {
+    const batch = state.renderQueue.slice(state.renderIndex, state.renderIndex + BATCH_SIZE);
+    const fragment = document.createDocumentFragment();
+    const mediaObserver = getMediaObserver();
 
-    console.warn('Failed to reset wallpaper after deletion', err);
+    batch.forEach((item) => {
+      const card = renderCard(item);
+      const media = card.querySelector('.mw-card-media');
+      if (mediaObserver && media) {
+        mediaObserver.observe(media);
+      }
+      fragment.appendChild(card);
+    });
 
-  }
+    const sentinel = document.getElementById('mw-sentinel');
+    if (sentinel) {
+      myWallpapersGrid.insertBefore(fragment, sentinel);
+    } else {
+      myWallpapersGrid.appendChild(fragment);
+    }
 
+    state.renderIndex += batch.length;
 
+    if (state.renderIndex >= state.renderQueue.length && state.loadMoreObserver) {
+      state.loadMoreObserver.disconnect();
+    }
+  };
 
-  renderMyWallpapers();
+  const render = () => {
+    if (!myWallpapersGrid) return;
 
+    if (!state.initialized) {
+      ensureInitialized().then(render).catch(() => {});
+      return;
+    }
+
+    state.renderVersion += 1;
+    if (state.mediaObserver) state.mediaObserver.disconnect();
+    if (state.loadMoreObserver) state.loadMoreObserver.disconnect();
+
+    posterObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+    posterObjectUrls.clear();
+
+    myWallpapersGrid.innerHTML = '';
+    state.renderQueue = getList();
+    state.renderIndex = 0;
+
+    const hasListItems = state.renderQueue.length > 0;
+    myWallpapersGrid.classList.toggle('hidden', !hasListItems);
+    if (myWallpapersEmptyCard) {
+      myWallpapersEmptyCard.classList.toggle('hidden', hasListItems);
+    }
+
+    if (!hasListItems) return;
+
+    renderNextBatch();
+
+    const sentinel = document.createElement('div');
+    sentinel.id = 'mw-sentinel';
+    sentinel.style.height = '1px';
+    sentinel.style.width = '100%';
+    myWallpapersGrid.appendChild(sentinel);
+
+    const loadObserver = getLoadMoreObserver();
+    if (loadObserver) loadObserver.observe(sentinel);
+  };
+
+  const addUpload = async (file, expectedType = 'any') => {
+    const validation = await validateUpload(file, expectedType);
+    if (!validation.ok) {
+      alert(validation.message);
+      return null;
+    }
+
+    const { isVideo, isGif, mimeType, title } = validation;
+    const posterBlob = (isVideo && !isGif) ? await generateVideoPoster(file) : await generateImagePoster(file);
+    const posterSize = posterBlob?.size || 0;
+    const totalBytes = (file.size || 0) + posterSize;
+    const hasRoom = await maybeEvictForSpace(totalBytes);
+    if (!hasRoom) {
+      alert('Not enough space to store this wallpaper. Remove older items and try again.');
+      return null;
+    }
+
+    const id = makeId();
+    const cacheKey = buildCacheKey(id, 'original', mimeType, file.name || '');
+    const posterCacheKey = posterBlob ? buildCacheKey(id, 'poster', posterBlob.type || 'image/webp') : '';
+
+    const normalizedCacheKey = await cachePut(cacheKey, file, mimeType);
+    let normalizedPosterKey = '';
+    if (posterBlob) {
+      normalizedPosterKey = await cachePut(posterCacheKey, posterBlob, posterBlob.type || 'image/webp');
+    }
+
+    const item = {
+      id,
+      title,
+      type: isVideo ? 'video' : 'image',
+      mimeType,
+      cacheKey: normalizedCacheKey,
+      posterCacheKey: normalizedPosterKey,
+      size: file.size || 0,
+      posterSize,
+      createdAt: Date.now(),
+      lastUsedAt: Date.now(),
+      originalName: file.name || ''
+    };
+
+    state.list = [item, ...state.list].slice(0, MAX_ITEMS);
+    await saveList(state.list);
+    render();
+    return item;
+  };
+
+  const applyItem = async (id) => {
+    await ensureInitialized();
+    const item = state.list.find((mw) => mw.id === id);
+    if (!item) return;
+
+    const isVideo = item.type === 'video';
+    const isGif = item.mimeType === 'image/gif';
+    const selection = {
+      id: item.id,
+      title: item.title || 'My Wallpaper',
+      selectedAt: Date.now(),
+      videoCacheKey: isVideo ? (item.cacheKey || '') : '',
+      videoUrl: '',
+      posterCacheKey: item.posterCacheKey || (!isVideo ? item.cacheKey : ''),
+      posterUrl: item.posterCacheKey || (!isVideo ? item.cacheKey : ''),
+      imageCacheKey: !isVideo ? (item.cacheKey || '') : '',
+      mimeType: item.mimeType || ''
+    };
+
+    const hydratedSelection = await hydrateWallpaperSelection(selection);
+    await ensurePlayableSelection(hydratedSelection);
+
+    await browser.storage.local.set({
+      [WALLPAPER_SELECTION_KEY]: selection,
+      [DAILY_ROTATION_KEY]: false
+    });
+
+    currentWallpaperSelection = hydratedSelection;
+    if (galleryDailyToggle) galleryDailyToggle.checked = false;
+
+    const desiredType = (isVideo && !isGif) ? 'video' : 'static';
+    await setWallpaperTypePreference(desiredType);
+    if (wallpaperTypeToggle) wallpaperTypeToggle.checked = desiredType === 'static';
+    applyWallpaperByType(hydratedSelection, desiredType);
+    runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
+
+    item.lastUsedAt = Date.now();
+    await saveList(state.list);
+    closeGalleryModal();
+  };
+
+  const removeItem = async (id) => {
+    if (!id) return;
+    await ensureInitialized();
+    const target = state.list.find((item) => item.id === id);
+    state.list = state.list.filter((item) => item.id !== id);
+    await saveList(state.list);
+
+    if (target?.cacheKey) await cacheDelete(target.cacheKey);
+    if (target?.posterCacheKey) await cacheDelete(target.posterCacheKey);
+
+    try {
+      const stored = await browser.storage.local.get(WALLPAPER_SELECTION_KEY);
+      const activeSelection = currentWallpaperSelection || stored[WALLPAPER_SELECTION_KEY] || null;
+      const activeId = activeSelection && activeSelection.id;
+      const selectionKeys = new Set(
+        [activeSelection?.cacheKey, activeSelection?.posterCacheKey, activeSelection?.videoCacheKey, activeSelection?.imageCacheKey]
+          .filter(Boolean)
+          .map(normalizeCacheKey)
+      );
+      const targetKeys = new Set(
+        [target?.cacheKey, target?.posterCacheKey, target?.videoCacheKey, target?.imageCacheKey]
+          .filter(Boolean)
+          .map(normalizeCacheKey)
+      );
+      const matchesActive = (activeId && activeId === id) || Array.from(targetKeys).some((key) => selectionKeys.has(key));
+      if (matchesActive) {
+        const now = Date.now();
+        const fallbackSelection = buildFallbackSelection(now);
+        currentWallpaperSelection = fallbackSelection;
+        wallpaperTypePreference = 'video';
+        if (wallpaperTypeToggle) wallpaperTypeToggle.checked = false;
+        await browser.storage.local.set({
+          [WALLPAPER_SELECTION_KEY]: fallbackSelection,
+          [WALLPAPER_FALLBACK_USED_KEY]: now,
+          [WALLPAPER_TYPE_KEY]: 'video'
+        });
+        applyWallpaperByType(fallbackSelection, 'video');
+        runWhenIdle(() => cacheAppliedWallpaperVideo(fallbackSelection));
+      }
+    } catch (err) {
+      console.warn('Failed to reset wallpaper after deletion', err);
+    }
+
+    render();
+  };
+
+  const init = ensureInitialized;
+
+  return {
+    init,
+    render,
+    addUpload,
+    removeItem,
+    applyItem,
+    loadList,
+    saveList,
+    hasItems,
+    getList,
+    getObjectUrl: cacheGetObjectUrl,
+    getCacheName,
+    validateUpload,
+    maybeEvictForSpace
+  };
+})();
+
+if (myWallpapersGrid) {
+  myWallpapersGrid.addEventListener('click', async (e) => {
+    const target = e.target;
+    if (!target) return;
+
+    const card = target.closest('.mw-card');
+    if (!card) return;
+
+    const id = card.dataset.id;
+
+    if (target.closest('.mw-card-remove')) {
+      e.stopPropagation();
+      await MyWallpapers.removeItem(id);
+      return;
+    }
+
+    if (target.closest('.mw-card-btn')) {
+      e.stopPropagation();
+      await MyWallpapers.applyItem(id);
+      return;
+    }
+
+    e.stopPropagation();
+    await MyWallpapers.applyItem(id);
+  });
 }
 
 
@@ -18959,7 +18927,10 @@ if (myWallpapersUploadBtn && myWallpapersUploadInput) {
 
     if (!files.length) return;
 
-    await handleMyWallpaperUpload(files);
+    const file = files[0];
+    if (file) {
+      await MyWallpapers.addUpload(file, 'image');
+    }
 
     myWallpapersUploadInput.value = '';
 
@@ -18987,7 +18958,10 @@ if (myWallpapersUploadLiveBtn && myWallpapersUploadLiveInput) {
 
     if (!files.length) return;
 
-    await handleMyWallpaperUpload(files, 'live');
+    const file = files[0];
+    if (file) {
+      await MyWallpapers.addUpload(file, 'video');
+    }
 
     myWallpapersUploadLiveInput.value = '';
 
@@ -19684,7 +19658,10 @@ async function ensurePlayableSelection(selection) {
 
   const cacheKey = selection.videoCacheKey || selection.videoUrl || '';
   if (cacheKey) {
-    const cachedVideo = await getCachedObjectUrl(cacheKey);
+    let cachedVideo = await getCachedObjectUrl(cacheKey);
+    if (!cachedVideo && typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.getObjectUrl === 'function') {
+      cachedVideo = await MyWallpapers.getObjectUrl(cacheKey);
+    }
     if (cachedVideo) {
       selection.videoUrl = cachedVideo;
     }

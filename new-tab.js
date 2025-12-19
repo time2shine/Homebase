@@ -1040,14 +1040,13 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
       if (posterCacheKey && !posterCacheKey.startsWith('blob:')) {
         urlToStore = posterCacheKey;
       }
-      // Continue so blob posters can be converted to a Data URL and persisted
     }
 
     if (isRemoteHttpUrl(urlToStore)) {
       await cacheAsset(urlToStore);
     }
 
-    // Store the URL (blob or otherwise) as a placeholder for preload
+    // Store the URL placeholder
     await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore });
     try {
       if (window.localStorage) {
@@ -1058,10 +1057,19 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
     let dataUrlStored = false;
 
     try {
-      // Resolve the poster and persist it as a Data URL for reliable reloads
+      // Resolve the poster
       const blob = await resolvePosterBlob(urlToStore, posterCacheKey || posterUrl);
       if (blob && blob.size > 0) {
-        const dataUrl = await blobToDataUrl(blob);
+
+        // [FIX]: Check if blob is too big for localStorage (>2MB).
+        // If so, compress it for the "Instant Cache" only.
+        let dataUrl = '';
+        if (blob.size > 2 * 1024 * 1024) {
+          dataUrl = await createOptimizedPosterDataUrl(blob);
+        } else {
+          dataUrl = await blobToDataUrl(blob);
+        }
+
         if (dataUrl) {
           await browser.storage.local.set({ [CACHED_APPLIED_POSTER_DATA_URL_KEY]: dataUrl });
           if (window.localStorage) {
@@ -1086,6 +1094,45 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
   } catch (err) {
     console.warn('Failed to cache applied wallpaper poster', err);
   }
+}
+
+/**
+ * Creates a resized/compressed Data URL specifically for instant startup cache.
+ * Keeps the file within localStorage limits (~5MB) without affecting the actual high-res wallpaper.
+ */
+function createOptimizedPosterDataUrl(blob) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+
+      // Resize to safe instant-load dimensions (e.g., 1920px or 2560px max)
+      const MAX_DIM = 2000;
+      let w = img.width;
+      let h = img.height;
+
+      if (w > MAX_DIM || h > MAX_DIM) {
+        const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+
+      // Compress to JPEG 80% to ensure it fits in localStorage
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve('');
+    };
+    img.src = url;
+  });
 }
 
 
@@ -18072,6 +18119,66 @@ if (galleryFooterButtons && galleryFooterButtons.length) {
 
 
 
+/**
+ * Automatically resizes and compresses user uploads to the "Sweet Spot".
+ * Target: Max 2560px, JPEG 85% Quality.
+ */
+function optimizeStaticUpload(file) {
+  return new Promise((resolve) => {
+    // If it's not an image (or is a gif), return original
+    if (!file.type.startsWith('image/') || file.type === 'image/gif') {
+      return resolve(file);
+    }
+
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+
+      // SWEET SPOT: 2560px is great for 2K/4K screens but keeps file size low
+      const MAX_DIM = 2560;
+      let w = img.width;
+      let h = img.height;
+
+      // Only resize if the image is actually huge
+      if (w > MAX_DIM || h > MAX_DIM) {
+        const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+
+      // Compress to JPEG at 85% quality (Visuals look same, size drops 90%)
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const optimizedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+            type: 'image/jpeg',
+            lastModified: Date.now()
+          });
+          resolve(optimizedFile);
+        } else {
+          resolve(file);
+        }
+      }, 'image/jpeg', 0.85);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+
+    img.src = url;
+  });
+}
+
+
+
 // ===============================================
 // My Wallpapers (new subsystem)
 // ===============================================
@@ -18864,10 +18971,21 @@ const MyWallpapers = (() => {
       return null;
     }
 
-    const { isVideo, isGif, mimeType, title } = validation;
-    const posterBlob = (isVideo && !isGif) ? await generateVideoPoster(file) : await generateImagePoster(file);
+    let { isVideo, isGif, mimeType, title } = validation;
+    let fileToSave = file;
+
+    if (!isVideo && !isGif) {
+      try {
+        fileToSave = await optimizeStaticUpload(file);
+        mimeType = 'image/jpeg';
+      } catch (e) {
+        console.warn('Optimization failed, using original', e);
+      }
+    }
+
+    const posterBlob = (isVideo && !isGif) ? await generateVideoPoster(fileToSave) : await generateImagePoster(fileToSave);
     const posterSize = posterBlob?.size || 0;
-    const totalBytes = (file.size || 0) + posterSize;
+    const totalBytes = (fileToSave.size || 0) + posterSize;
     const hasRoom = await maybeEvictForSpace(totalBytes);
     if (!hasRoom) {
       alert('Not enough space to store this wallpaper. Remove older items and try again.');
@@ -18878,7 +18996,7 @@ const MyWallpapers = (() => {
     const cacheKey = buildCacheKey(id, 'original', mimeType, file.name || '');
     const posterCacheKey = posterBlob ? buildCacheKey(id, 'poster', posterBlob.type || 'image/webp') : '';
 
-    const normalizedCacheKey = await cachePut(cacheKey, file, mimeType);
+    const normalizedCacheKey = await cachePut(cacheKey, fileToSave, mimeType);
     let normalizedPosterKey = '';
     if (posterBlob) {
       normalizedPosterKey = await cachePut(posterCacheKey, posterBlob, posterBlob.type || 'image/webp');
@@ -18891,7 +19009,7 @@ const MyWallpapers = (() => {
       mimeType,
       cacheKey: normalizedCacheKey,
       posterCacheKey: normalizedPosterKey,
-      size: file.size || 0,
+      size: fileToSave.size || 0,
       posterSize,
       createdAt: Date.now(),
       lastUsedAt: Date.now(),
@@ -19015,7 +19133,10 @@ const MyWallpapers = (() => {
         // ignore
       }
     }
-    const posterKey = item.posterCacheKey || (!isVideo ? item.cacheKey : '') || '';
+    // [FIX]: For static images, use the original high-res file (cacheKey).
+    // Only use the poster (thumbnail) if it's a video.
+    const posterKey = (!isVideo ? item.cacheKey : item.posterCacheKey) || '';
+
     let quickPoster = '';
     if (desiredType === 'static') {
       quickPoster = await ensureMyWallpaperDataPoster(posterKey, selection.posterUrl);

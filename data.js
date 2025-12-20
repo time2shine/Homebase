@@ -122,6 +122,27 @@ const GLASS_STYLES = [
     id: 'liquid',
     name: 'Liquid Water',
     css: 'background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-top: 1px solid rgba(255, 255, 255, 0.5); border-left: 1px solid rgba(255, 255, 255, 0.5); border-radius: 24px; box-shadow: 10px 10px 10px rgba(0, 0, 0, 0.1);'
+  },
+  /* --- NEW STYLES ADDED BELOW --- */
+  {
+    id: 'modern-glass',
+    name: 'Modern Glass (Standard)',
+    css: 'background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.3); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);'
+  },
+  {
+    id: 'prism-light',
+    name: 'Prism (Reflective)',
+    css: 'background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0)); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);'
+  },
+  {
+    id: 'glacier-blue',
+    name: 'Glacier (Blue Tint)',
+    css: 'background: rgba(200, 225, 255, 0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);'
+  },
+  {
+    id: 'stealth-dark',
+    name: 'Stealth (Matte Dark)',
+    css: 'background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5); color: #e2e8f0;'
   }
 ];
 

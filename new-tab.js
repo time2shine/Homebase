@@ -1990,10 +1990,10 @@ let wallpaperQualityPreference = 'low';
 
 let galleryVirtualState = {
   items: [],
-  itemHeight: 320,
-  itemWidth: 240,
-  gap: 16,
-  renderBuffer: 2,
+  itemHeight: 235,
+  itemWidth: 195,
+  gap: 10,
+  renderBuffer: 4,
   itemsPerRow: 1
 };
 let galleryVirtualScrollHandler = null;
@@ -17781,6 +17781,7 @@ function renderNextGalleryBatch() {
 function renderGalleryVirtual(items = []) {
   galleryVirtualState.items = Array.isArray(items) ? items : [];
   galleryGrid.innerHTML = '';
+  galleryGrid.style.display = 'block';
   galleryGrid.style.position = 'relative';
   attachGalleryVirtualListeners();
   updateGalleryVirtualGrid();

@@ -17789,8 +17789,12 @@ function renderGalleryVirtual(items = []) {
 
 function attachGalleryVirtualListeners() {
   if (!galleryGrid) return;
-  const scrollParent = galleryGrid.parentElement;
-  if (!scrollParent) return;
+
+  const scrollParent = document.getElementById('gallery-virtual-scroll-view');
+  if (!scrollParent) {
+    console.warn('Virtual Scroll Wrapper not found! Check new-tab.html');
+    return;
+  }
 
   if (galleryVirtualScrollHandler) {
     scrollParent.removeEventListener('scroll', galleryVirtualScrollHandler);
@@ -17800,25 +17804,27 @@ function attachGalleryVirtualListeners() {
     window.requestAnimationFrame(() => updateGalleryVirtualGrid());
   };
 
-  scrollParent.addEventListener('scroll', galleryVirtualScrollHandler);
+  scrollParent.addEventListener('scroll', galleryVirtualScrollHandler, { passive: true });
 
   if (!galleryVirtualResizeAttached) {
     galleryVirtualResizeAttached = true;
-    window.addEventListener('resize', debounce(() => updateGalleryVirtualGrid(), 150));
+    window.addEventListener('resize', debounce(() => updateGalleryVirtualGrid(), 100));
   }
 }
 
 function updateGalleryVirtualGrid() {
   if (!galleryGrid) return;
-  const scrollParent = galleryGrid.parentElement;
+
+  const scrollParent = document.getElementById('gallery-virtual-scroll-view');
   if (!scrollParent) return;
 
   const state = galleryVirtualState;
   const items = state.items || [];
-  const containerWidth = galleryGrid.clientWidth || scrollParent.clientWidth || 1;
   const gap = state.gap;
   const itemWidth = state.itemWidth;
   const itemHeight = state.itemHeight;
+
+  const containerWidth = galleryGrid.clientWidth || scrollParent.clientWidth || 300;
 
   const itemsPerRow = Math.max(1, Math.floor((containerWidth + gap) / (itemWidth + gap)));
   state.itemsPerRow = itemsPerRow;

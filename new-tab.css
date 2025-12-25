@@ -2652,6 +2652,20 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   color: #0f172a;
 }
 
+#gallery-grid {
+  overflow: visible;
+  display: block;
+}
+
+.gallery-scroll-container {
+  height: 70vh;
+  max-height: 800px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  will-change: scroll-position;
+}
+
 .gallery-filters {
   display: flex;
   gap: 10px;

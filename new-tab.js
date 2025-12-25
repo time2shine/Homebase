@@ -60,6 +60,7 @@ const WALLPAPER_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
 
 const WALLPAPER_CACHE_NAME = 'wallpaper-assets';
+const GALLERY_POSTERS_CACHE_NAME = 'gallery-posters';
 
 const USER_WALLPAPER_CACHE_PREFIX = 'https://user-wallpapers.local/';
 
@@ -539,72 +540,27 @@ async function cacheAsset(url) {
 async function cacheGalleryPosters(manifest = []) {
 
   const posters = Array.from(new Set(
-
     manifest
-
-      .map(v => getWallpaperUrls(v.id).posterUrl || v.posterUrl || v.poster)
-
+      .map((v) => getWallpaperUrls(v.id).posterUrl || v.posterUrl || v.poster)
       .filter(Boolean)
-
   ));
 
   if (!posters.length) return;
 
   try {
-
-    const stored = await browser.storage.local.get(GALLERY_POSTERS_CACHE_KEY);
-
-    const existing = stored[GALLERY_POSTERS_CACHE_KEY] || {};
-
-    const missing = posters.filter(url => !existing[url]);
-
-    if (!missing.length) return;
-
-    const newlyCached = {};
-
-    for (const url of missing) {
-
+    const cache = await caches.open(GALLERY_POSTERS_CACHE_NAME);
+    const tasks = posters.map(async (url) => {
       try {
-
-        const res = await fetch(url, { cache: 'force-cache' });
-
-        const blob = await res.blob();
-
-        const dataUrl = await new Promise((resolve, reject) => {
-
-          const reader = new FileReader();
-
-          reader.onload = () => resolve(reader.result);
-
-          reader.onerror = reject;
-
-          reader.readAsDataURL(blob);
-
-        });
-
-        newlyCached[url] = dataUrl;
-
+        const existing = await cache.match(url);
+        if (existing) return;
+        await cache.add(url);
       } catch (e) {
-
-        // Ignore individual poster failures
+        console.warn('Failed to cache poster', url, e);
       }
-
-    }
-
-    if (Object.keys(newlyCached).length) {
-
-      await browser.storage.local.set({
-
-        [GALLERY_POSTERS_CACHE_KEY]: { ...existing, ...newlyCached }
-
-      });
-
-    }
-
+    });
+    await Promise.allSettled(tasks);
   } catch (e) {
-
     console.error('cacheGalleryPosters error:', e);
-
   }
 
 }
@@ -1606,6 +1562,20 @@ async function ensureDailyWallpaper(forceNext = false) {
 
   }
 
+
+
+  // Refresh URLs based on current quality preference even when reusing a fresh selection
+  if (current && current.id && current.id !== 'fallback') {
+    const freshUrls = getWallpaperUrls(current.id);
+    current = {
+      ...current,
+      videoUrl: freshUrls.videoUrl,
+      posterUrl: freshUrls.posterUrl,
+      videoCacheKey: freshUrls.videoUrl,
+      posterCacheKey: freshUrls.posterUrl
+    };
+    await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: current });
+  }
 
 
   if (current) {
@@ -10620,6 +10590,23 @@ function setupGalleryListeners() {
       wallpaperQualityPreference = newQuality;
       await browser.storage.local.set({ [WALLPAPER_QUALITY_KEY]: newQuality });
       console.log('Wallpaper quality set to:', newQuality);
+
+      // Rebuild current wallpaper URLs immediately to avoid reloads
+      if (currentWallpaperSelection && currentWallpaperSelection.id) {
+        const urls = getWallpaperUrls(currentWallpaperSelection.id);
+        currentWallpaperSelection = {
+          ...currentWallpaperSelection,
+          videoUrl: urls.videoUrl,
+          posterUrl: urls.posterUrl,
+          videoCacheKey: urls.videoUrl,
+          posterCacheKey: urls.posterUrl
+        };
+
+        // Persist updated selection so future loads use the new quality
+        await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: currentWallpaperSelection });
+
+        await applyWallpaperByType(currentWallpaperSelection, wallpaperTypePreference);
+      }
     });
   }
 

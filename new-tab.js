@@ -1877,6 +1877,10 @@ const appSearchDefaultEngineContainer = document.getElementById('app-search-defa
 
 const appSearchDefaultEngineSelect = document.getElementById('app-search-default-engine-select');
 
+const appDimSlider = document.getElementById('app-dim-slider');
+
+const appDimLabel = document.getElementById('app-dim-value-label');
+
 const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-label') || 'Next Wallpaper';
 
 const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
@@ -1894,6 +1898,8 @@ const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
 const WALLPAPER_QUALITY_KEY = 'wallpaperQualityPreference';
 
 const APP_TIME_FORMAT_KEY = 'appTimeFormatPreference';
+
+const APP_BACKGROUND_DIM_KEY = 'appBackgroundDim';
 
 const APP_SHOW_SIDEBAR_KEY = 'appShowSidebar';
 
@@ -2000,6 +2006,8 @@ let galleryVirtualScrollHandler = null;
 let galleryVirtualResizeAttached = false;
 
 let timeFormatPreference = '12-hour';
+
+let appBackgroundDimPreference = 0;
 
 let appShowSidebarPreference = true;
 
@@ -8977,6 +8985,23 @@ function applyPerformanceMode(enabled) {
 }
 
 
+function applyBackgroundDim(value) {
+  const parsed = parseInt(value, 10);
+  const nextValue = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 90) : 0;
+
+  appBackgroundDimPreference = nextValue;
+
+  const opacity = nextValue / 100;
+  document.documentElement.style.setProperty('--bg-dim-opacity', opacity);
+
+  let overlay = document.getElementById('background-dim-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'background-dim-overlay';
+    document.body.prepend(overlay);
+  }
+}
+
 
 // --- Function to inject CSS ---
 function applyGlassStyle(styleId) {
@@ -9278,6 +9303,8 @@ async function loadAppSettingsFromStorage() {
 
       APP_BOOKMARK_FOLDER_COLOR_KEY,
 
+      APP_BACKGROUND_DIM_KEY,
+
       APP_PERFORMANCE_MODE_KEY,
 
       APP_BATTERY_OPTIMIZATION_KEY,
@@ -9362,6 +9389,8 @@ async function loadAppSettingsFromStorage() {
     appBatteryOptimizationPreference = stored[APP_BATTERY_OPTIMIZATION_KEY] === true;
     appCinemaModePreference = stored[APP_CINEMA_MODE_KEY] === true;
 
+    const savedBackgroundDim = stored.hasOwnProperty(APP_BACKGROUND_DIM_KEY) ? stored[APP_BACKGROUND_DIM_KEY] : 0;
+
     appContainerModePreference = stored[APP_CONTAINER_MODE_KEY] !== false;
 
     appContainerNewTabPreference = stored[APP_CONTAINER_NEW_TAB_KEY] !== false;
@@ -9374,6 +9403,16 @@ async function loadAppSettingsFromStorage() {
 
     applyPerformanceMode(appPerformanceModePreference);
     resetCinemaMode();
+
+    applyBackgroundDim(savedBackgroundDim);
+
+    if (appDimSlider) {
+      appDimSlider.value = appBackgroundDimPreference;
+    }
+
+    if (appDimLabel) {
+      appDimLabel.textContent = `${appBackgroundDimPreference}%`;
+    }
 
     applyWidgetVisibility();
 
@@ -9729,6 +9768,18 @@ function syncAppSettingsForm() {
   if (appTimeFormatSelect) {
 
     appTimeFormatSelect.value = timeFormatPreference;
+
+  }
+
+  if (appDimSlider) {
+
+    appDimSlider.value = appBackgroundDimPreference;
+
+  }
+
+  if (appDimLabel) {
+
+    appDimLabel.textContent = `${appBackgroundDimPreference}%`;
 
   }
 
@@ -10144,6 +10195,54 @@ function setupAppSettingsModal() {
 
   }
 
+  if (appDimSlider) {
+
+    appDimSlider.addEventListener('input', (e) => {
+
+      const val = parseInt(e.target.value, 10);
+
+      applyBackgroundDim(val);
+
+      if (appDimLabel) {
+
+        appDimLabel.textContent = `${appBackgroundDimPreference}%`;
+
+      }
+
+    });
+
+    appDimSlider.addEventListener('change', async (e) => {
+
+      const val = parseInt(e.target.value, 10);
+
+      applyBackgroundDim(val);
+
+      if (appDimLabel) {
+
+        appDimLabel.textContent = `${appBackgroundDimPreference}%`;
+
+      }
+
+      if (appDimSlider.value !== String(appBackgroundDimPreference)) {
+
+        appDimSlider.value = appBackgroundDimPreference;
+
+      }
+
+      try {
+
+        await browser.storage.local.set({ [APP_BACKGROUND_DIM_KEY]: appBackgroundDimPreference });
+
+      } catch (err) {
+
+        console.warn('Failed to save background dim preference', err);
+
+      }
+
+    });
+
+  }
+
   if (wallpaperQualityToggle && !wallpaperQualityToggle.dataset.qualityListenerAttached) {
     wallpaperQualityToggle.dataset.qualityListenerAttached = 'true';
     wallpaperQualityToggle.addEventListener('change', async (e) => {
@@ -10258,6 +10357,8 @@ function setupAppSettingsModal() {
 
       const nextAutoClose = appAutoCloseSelect ? parseInt(appAutoCloseSelect.value, 10) || 0 : 0;
 
+      const nextBackgroundDim = appDimSlider ? parseInt(appDimSlider.value, 10) || 0 : 0;
+
       const nextSearchOpenNewTab = appSearchOpenNewTabToggle ? appSearchOpenNewTabToggle.checked : false;
 
       const nextBookmarkNewTab = document.getElementById('app-bookmark-open-new-tab-toggle')?.checked || false;
@@ -10331,6 +10432,20 @@ function setupAppSettingsModal() {
 
       appAutoClosePreference = nextAutoClose;
 
+      applyBackgroundDim(nextBackgroundDim);
+
+      if (appDimSlider && appDimSlider.value !== String(appBackgroundDimPreference)) {
+
+        appDimSlider.value = appBackgroundDimPreference;
+
+      }
+
+      if (appDimLabel) {
+
+        appDimLabel.textContent = `${appBackgroundDimPreference}%`;
+
+      }
+
       appSearchOpenNewTabPreference = nextSearchOpenNewTab;
 
       appSearchRememberEnginePreference = nextRememberEngine;
@@ -10397,6 +10512,8 @@ function setupAppSettingsModal() {
           [APP_MAX_TABS_KEY]: nextMaxTabs,
 
           [APP_AUTOCLOSE_KEY]: nextAutoClose,
+
+          [APP_BACKGROUND_DIM_KEY]: appBackgroundDimPreference,
 
           [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
 

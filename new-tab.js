@@ -17878,30 +17878,33 @@ function renderCurrentGallery() {
 
 
 
-  if (isMyWallpapers) {
+  // --- STEP 1: Update Visibility FIRST (So dimensions are correct for calculation) ---
 
-    MyWallpapers.render();
+  // 1. Virtual Scroll View (The container causing the issue)
+  const virtualScrollView = document.getElementById('gallery-virtual-scroll-view');
 
-  } else {
+  if (virtualScrollView) {
 
-    renderGalleryVirtual(data);
-
-  }
-
-
-
-  if (galleryEmptyState) {
-
-    galleryEmptyState.classList.toggle('hidden', isSettings || isMyWallpapers || data.length > 0);
+    virtualScrollView.classList.toggle('hidden', isSettings || isMyWallpapers);
 
   }
 
+  // 2. Main Grid Container
   if (galleryGrid) {
 
     galleryGrid.classList.toggle('hidden', isSettings || isMyWallpapers);
 
   }
 
+  // 3. Empty State
+  if (galleryEmptyState) {
+
+    // Only show if NOT settings, NOT my-wallpapers, and NO data
+    galleryEmptyState.classList.toggle('hidden', isSettings || isMyWallpapers || data.length > 0);
+
+  }
+
+  // 4. Panels
   if (gallerySettingsPanel) {
 
     gallerySettingsPanel.classList.toggle('hidden', !isSettings);
@@ -17914,9 +17917,10 @@ function renderCurrentGallery() {
 
   }
 
+  // 5. My Wallpapers specific elements
   if (myWallpapersEmptyCard) {
 
-    const hasItems = MyWallpapers.hasItems();
+    const hasItems = typeof MyWallpapers !== 'undefined' && MyWallpapers.hasItems();
 
     myWallpapersEmptyCard.classList.toggle('hidden', hasItems || !isMyWallpapers);
 
@@ -17924,9 +17928,23 @@ function renderCurrentGallery() {
 
   if (myWallpapersGrid) {
 
-    const hasItems = MyWallpapers.hasItems();
+    const hasItems = typeof MyWallpapers !== 'undefined' && MyWallpapers.hasItems();
 
     myWallpapersGrid.classList.toggle('hidden', !isMyWallpapers || !hasItems);
+
+  }
+
+  // --- STEP 2: Render Content (Now that container is visible) ---
+
+  if (isMyWallpapers) {
+
+    MyWallpapers.render();
+
+  } else {
+
+    // This calculates width/columns. Since we un-hid the container above,
+    // it will now measure the correct width.
+    renderGalleryVirtual(data);
 
   }
 

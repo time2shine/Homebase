@@ -1988,6 +1988,17 @@ let currentWallpaperSelection = null;
 let wallpaperTypePreference = null; // 'video' | 'static'
 let wallpaperQualityPreference = 'low';
 
+let galleryVirtualState = {
+  items: [],
+  itemHeight: 320,
+  itemWidth: 240,
+  gap: 16,
+  renderBuffer: 2,
+  itemsPerRow: 1
+};
+let galleryVirtualScrollHandler = null;
+let galleryVirtualResizeAttached = false;
+
 let timeFormatPreference = '12-hour';
 
 let appShowSidebarPreference = true;
@@ -17657,38 +17668,31 @@ function closeGalleryModal() {
 
   closeModalWithAnimation('gallery-modal', '.gallery-dialog');
 
+  // Ensure preview media is cleaned up to avoid buffer/memory leaks
+  const previewVideo = document.getElementById('gallery-settings-preview-video');
+  const previewImg = document.getElementById('gallery-settings-preview-img');
+
+  if (previewVideo) {
+    previewVideo.pause();
+    previewVideo.removeAttribute('src');
+    const sources = previewVideo.querySelectorAll('source');
+    sources.forEach((s) => s.removeAttribute('src'));
+    previewVideo.load();
+    previewVideo.classList.add('hidden');
+  }
+
+  if (previewImg) {
+    previewImg.classList.remove('hidden');
+  }
+
 }
 
 
 
 function renderGallery(manifest = []) {
 
-  if (!galleryGrid) return;
-
-  const observer = getGalleryLoadMoreObserver();
-  if (observer) {
-    observer.disconnect();
-  }
-
-  galleryGrid.innerHTML = '';
-  galleryRenderQueue = Array.isArray(manifest) ? manifest : [];
-  galleryRenderIndex = 0;
-
-  if (!galleryRenderQueue.length) {
-    return;
-  }
-
-  renderNextGalleryBatch();
-
-  const sentinel = document.createElement('div');
-  sentinel.id = 'gallery-sentinel';
-  sentinel.style.height = '20px';
-  sentinel.style.width = '100%';
-  galleryGrid.appendChild(sentinel);
-
-  if (observer) {
-    observer.observe(sentinel);
-  }
+  // Retained for compatibility; now replaced by virtual grid rendering.
+  renderGalleryVirtual(manifest);
 
 }
 
@@ -17774,6 +17778,89 @@ function renderNextGalleryBatch() {
 
 
 
+function renderGalleryVirtual(items = []) {
+  galleryVirtualState.items = Array.isArray(items) ? items : [];
+  galleryGrid.innerHTML = '';
+  galleryGrid.style.position = 'relative';
+  attachGalleryVirtualListeners();
+  updateGalleryVirtualGrid();
+}
+
+function attachGalleryVirtualListeners() {
+  if (!galleryGrid) return;
+  const scrollParent = galleryGrid.parentElement;
+  if (!scrollParent) return;
+
+  if (galleryVirtualScrollHandler) {
+    scrollParent.removeEventListener('scroll', galleryVirtualScrollHandler);
+  }
+
+  galleryVirtualScrollHandler = () => {
+    window.requestAnimationFrame(() => updateGalleryVirtualGrid());
+  };
+
+  scrollParent.addEventListener('scroll', galleryVirtualScrollHandler);
+
+  if (!galleryVirtualResizeAttached) {
+    galleryVirtualResizeAttached = true;
+    window.addEventListener('resize', debounce(() => updateGalleryVirtualGrid(), 150));
+  }
+}
+
+function updateGalleryVirtualGrid() {
+  if (!galleryGrid) return;
+  const scrollParent = galleryGrid.parentElement;
+  if (!scrollParent) return;
+
+  const state = galleryVirtualState;
+  const items = state.items || [];
+  const containerWidth = galleryGrid.clientWidth || scrollParent.clientWidth || 1;
+  const gap = state.gap;
+  const itemWidth = state.itemWidth;
+  const itemHeight = state.itemHeight;
+
+  const itemsPerRow = Math.max(1, Math.floor((containerWidth + gap) / (itemWidth + gap)));
+  state.itemsPerRow = itemsPerRow;
+
+  const totalRows = Math.ceil(items.length / itemsPerRow);
+  const totalHeight = totalRows * (itemHeight + gap);
+
+  galleryGrid.style.height = `${totalHeight}px`;
+
+  const scrollTop = scrollParent.scrollTop;
+  const viewportHeight = scrollParent.clientHeight;
+
+  let startRow = Math.floor(scrollTop / (itemHeight + gap)) - state.renderBuffer;
+  let endRow = Math.ceil((scrollTop + viewportHeight) / (itemHeight + gap)) + state.renderBuffer;
+
+  startRow = Math.max(0, startRow);
+  endRow = Math.min(totalRows, endRow);
+
+  const startIndex = startRow * itemsPerRow;
+  const endIndex = Math.min(endRow * itemsPerRow, items.length);
+
+  galleryGrid.innerHTML = '';
+
+  const widthPercent = 100 / itemsPerRow;
+
+  for (let i = startIndex; i < endIndex; i++) {
+    const item = items[i];
+    const node = buildGalleryCard(item, i);
+    const row = Math.floor(i / itemsPerRow);
+    const col = i % itemsPerRow;
+
+    node.style.position = 'absolute';
+    node.style.top = `${row * (itemHeight + gap)}px`;
+    node.style.left = `${col * widthPercent}%`;
+    node.style.width = `${widthPercent}%`;
+    node.style.boxSizing = 'border-box';
+    node.style.padding = `${gap / 2}px`;
+
+    galleryGrid.appendChild(node);
+  }
+}
+
+
 function renderCurrentGallery() {
 
   const data = getGalleryDataForSection();
@@ -17790,7 +17877,7 @@ function renderCurrentGallery() {
 
   } else {
 
-    renderGallery(data);
+    renderGalleryVirtual(data);
 
   }
 

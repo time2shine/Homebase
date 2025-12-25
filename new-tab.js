@@ -65,7 +65,8 @@ const USER_WALLPAPER_CACHE_PREFIX = 'https://user-wallpapers.local/';
 
 const REMOTE_VIDEO_REGEX = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 
-const VIDEOS_JSON_URL = 'https://pub-d330ac9daa80435c82f1d50b5e43ca72.r2.dev/videos.json';
+const VIDEOS_JSON_URL = 'https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/manifest.json';
+const GALLERY_ASSETS_BASE_URL = 'https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/v/';
 const VIDEOS_JSON_CACHE_KEY = 'videosManifest';
 const VIDEOS_JSON_FETCHED_AT_KEY = 'videosManifestFetchedAt';
 const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -541,7 +542,7 @@ async function cacheGalleryPosters(manifest = []) {
 
     manifest
 
-      .map(v => v.posterUrl || v.poster)
+      .map(v => getWallpaperUrls(v.id).posterUrl || v.posterUrl || v.poster)
 
       .filter(Boolean)
 
@@ -1410,6 +1411,25 @@ function applyWallpaperBackground(posterUrl) {
 
 
 
+function getWallpaperUrls(id) {
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) {
+    return { videoUrl: '', posterUrl: '', thumbUrl: '' };
+  }
+
+  const quality = wallpaperQualityPreference === 'high' ? 'high' : 'low';
+  const basePath = `${GALLERY_ASSETS_BASE_URL}${normalizedId}/`;
+  const videoFile = quality === 'high' ? '1080p.mp4' : '720p.mp4';
+  const posterFile = quality === 'high' ? 'poster_1080p.webp' : 'poster_720p.webp';
+
+  return {
+    videoUrl: `${basePath}${videoFile}`,
+    posterUrl: `${basePath}${posterFile}`,
+    thumbUrl: `${basePath}thumb.webp`
+  };
+}
+
+
 async function pickNextWallpaper(manifest) {
 
   if (!manifest || !manifest.length) return null;
@@ -1433,8 +1453,9 @@ async function pickNextWallpaper(manifest) {
   if (!entry) return null;
 
 
-
-  const posterUrl = entry.poster || entry.posterUrl || '';
+  const { videoUrl: generatedVideoUrl, posterUrl: generatedPosterUrl } = getWallpaperUrls(entry.id);
+  const videoUrl = generatedVideoUrl || entry.url || '';
+  const posterUrl = generatedPosterUrl || entry.poster || entry.posterUrl || '';
   const posterCacheKey = entry.posterCacheKey || posterUrl || '';
 
   if (posterUrl) {
@@ -1447,9 +1468,9 @@ async function pickNextWallpaper(manifest) {
 
     id: entry.id,
 
-    videoUrl: entry.url,
+    videoUrl,
 
-    videoCacheKey: entry.url || '',
+    videoCacheKey: videoUrl || '',
 
     posterUrl,
 
@@ -1501,11 +1522,15 @@ async function checkBatteryStatus() {
 
 async function ensureDailyWallpaper(forceNext = false) {
 
-  const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY, DAILY_ROTATION_KEY]);
+  const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY, DAILY_ROTATION_KEY, WALLPAPER_QUALITY_KEY]);
 
   const now = Date.now();
 
   const storedFallbackUsedAt = stored[WALLPAPER_FALLBACK_USED_KEY] || 0;
+  const storedQuality = stored[WALLPAPER_QUALITY_KEY];
+  if (storedQuality) {
+    wallpaperQualityPreference = storedQuality === 'high' ? 'high' : 'low';
+  }
 
 
 
@@ -1887,6 +1912,7 @@ const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-labe
 const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
 
 const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
+const wallpaperQualityToggle = document.getElementById('gallery-wallpaper-quality-toggle');
 
 const galleryDailyToggle = document.getElementById('gallery-daily-toggle');
 
@@ -1895,6 +1921,7 @@ const FAVORITES_KEY = 'galleryFavorites';
 const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
 
 const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
+const WALLPAPER_QUALITY_KEY = 'wallpaperQualityPreference';
 
 const APP_TIME_FORMAT_KEY = 'appTimeFormatPreference';
 
@@ -1989,6 +2016,7 @@ let galleryFavorites = new Set();
 let currentWallpaperSelection = null;
 
 let wallpaperTypePreference = null; // 'video' | 'static'
+let wallpaperQualityPreference = 'low';
 
 let timeFormatPreference = '12-hour';
 
@@ -9280,7 +9308,9 @@ async function loadAppSettingsFromStorage() {
 
       APP_GRID_ANIMATION_ENABLED_KEY,
 
-      APP_GRID_ANIMATION_SPEED_KEY
+      APP_GRID_ANIMATION_SPEED_KEY,
+
+      WALLPAPER_QUALITY_KEY
 
     ]);
 
@@ -9354,6 +9384,8 @@ async function loadAppSettingsFromStorage() {
     appContainerModePreference = stored[APP_CONTAINER_MODE_KEY] !== false;
 
     appContainerNewTabPreference = stored[APP_CONTAINER_NEW_TAB_KEY] !== false;
+
+    wallpaperQualityPreference = stored[WALLPAPER_QUALITY_KEY] === 'high' ? 'high' : 'low';
 
     applyBookmarkFallbackColor(appBookmarkFallbackColorPreference);
 
@@ -9807,6 +9839,10 @@ function syncAppSettingsForm() {
 
   }
 
+  if (wallpaperQualityToggle) {
+    wallpaperQualityToggle.checked = wallpaperQualityPreference === 'high';
+  }
+
   const bookmarkNewTabToggle = document.getElementById('app-bookmark-open-new-tab-toggle');
 
   if (bookmarkNewTabToggle) {
@@ -10127,6 +10163,18 @@ function setupAppSettingsModal() {
 
   }
 
+  if (wallpaperQualityToggle && !wallpaperQualityToggle.dataset.qualityListenerAttached) {
+    wallpaperQualityToggle.dataset.qualityListenerAttached = 'true';
+    wallpaperQualityToggle.addEventListener('change', async (e) => {
+      wallpaperQualityPreference = e.target.checked ? 'high' : 'low';
+      try {
+        await browser.storage.local.set({ [WALLPAPER_QUALITY_KEY]: wallpaperQualityPreference });
+      } catch (err) {
+        console.warn('Failed to save wallpaper quality preference', err);
+      }
+    });
+  }
+
   const appConfigureWeatherBtn = document.getElementById('app-configure-weather-btn');
 
   if (appConfigureWeatherBtn) {
@@ -10244,6 +10292,7 @@ function setupAppSettingsModal() {
       const radioKeepBehavior = document.querySelector('input[name="container-behavior"][value="keep"]');
 
       const nextContainerNewTab = radioKeepBehavior ? radioKeepBehavior.checked : appContainerNewTabPreference;
+      const nextWallpaperQuality = wallpaperQualityToggle ? (wallpaperQualityToggle.checked ? 'high' : 'low') : wallpaperQualityPreference;
 
       const textBgColorTrigger = document.getElementById('app-bookmark-text-bg-color-trigger');
 
@@ -10314,6 +10363,7 @@ function setupAppSettingsModal() {
       appContainerModePreference = nextContainerMode;
 
       appContainerNewTabPreference = nextContainerNewTab;
+      wallpaperQualityPreference = nextWallpaperQuality;
 
       appBookmarkOpenNewTabPreference = nextBookmarkNewTab;
 
@@ -10374,6 +10424,7 @@ function setupAppSettingsModal() {
           [APP_CONTAINER_MODE_KEY]: nextContainerMode,
 
           [APP_CONTAINER_NEW_TAB_KEY]: nextContainerNewTab,
+          [WALLPAPER_QUALITY_KEY]: nextWallpaperQuality,
 
           [APP_BOOKMARK_TEXT_BG_KEY]: nextBookmarkTextBg,
 
@@ -10559,6 +10610,48 @@ function setupAnimationSettings() {
     closeModal();
   });
   if (modal) modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
+}
+
+function setupGalleryListeners() {
+  // 1. Wallpaper Quality Toggle
+  if (wallpaperQualityToggle) {
+    wallpaperQualityToggle.addEventListener('change', async (e) => {
+      const newQuality = e.target.checked ? 'high' : 'low';
+      wallpaperQualityPreference = newQuality;
+      await browser.storage.local.set({ [WALLPAPER_QUALITY_KEY]: newQuality });
+      console.log('Wallpaper quality set to:', newQuality);
+    });
+  }
+
+  // 2. Wallpaper Type Toggle (ON = Video, OFF = Static)
+  if (wallpaperTypeToggle) {
+    wallpaperTypeToggle.addEventListener('change', async (e) => {
+      const newType = e.target.checked ? 'video' : 'static';
+
+      wallpaperTypePreference = newType;
+      await browser.storage.local.set({ [WALLPAPER_TYPE_KEY]: newType });
+
+      if (currentWallpaperSelection) {
+        console.log('Switching wallpaper type to:', newType);
+        if (typeof applyWallpaperByType === 'function') {
+          applyWallpaperByType(currentWallpaperSelection, newType);
+        } else {
+          window.location.reload();
+        }
+      }
+    });
+  }
+
+  // 3. Daily Rotation Toggle
+  if (galleryDailyToggle) {
+    galleryDailyToggle.addEventListener('change', async (e) => {
+      const isEnabled = e.target.checked;
+      await browser.storage.local.set({ [DAILY_ROTATION_KEY]: isEnabled });
+      if (isEnabled) {
+        await ensureDailyWallpaper();
+      }
+    });
+  }
 }
 
 
@@ -16466,6 +16559,7 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
   setupMaterialColorPicker();
 
   setupSearchEnginesModal();
+  setupGalleryListeners();
 
   prefetchGalleryPosters().catch(() => {});
 
@@ -17229,7 +17323,8 @@ function buildGalleryCard(item, index = 0) {
 
   const marqueeDuration = Math.max(8, Math.min(20, Math.ceil(charCount / 2)));
 
-  const posterSrc = item.posterUrl || item.poster || item.url || '';
+  const { thumbUrl } = getWallpaperUrls(item.id);
+  const posterSrc = thumbUrl || item.posterUrl || item.poster || item.url || '';
 
   const loadingAttr = index < 40 ? 'eager' : 'lazy';
 
@@ -17410,8 +17505,9 @@ async function applyGalleryWallpaper(item) {
   }
 
   try {
-    const videoUrl = item.url;
-    const remotePosterUrl = item.posterUrl || item.poster || '';
+    const { videoUrl: generatedVideoUrl, posterUrl: generatedPosterUrl } = getWallpaperUrls(item.id);
+    const videoUrl = generatedVideoUrl || item.url;
+    const remotePosterUrl = generatedPosterUrl || item.posterUrl || item.poster || '';
 
     const cache = await caches.open(WALLPAPER_CACHE_NAME);
     let cachedResponse = await cache.match(videoUrl);
@@ -19636,7 +19732,8 @@ async function loadGallerySettings() {
 
 
 
-if (galleryDailyToggle) {
+if (galleryDailyToggle && !galleryDailyToggle.dataset.dailyListenerAttached) {
+  galleryDailyToggle.dataset.dailyListenerAttached = 'true';
 
   galleryDailyToggle.addEventListener('change', async (e) => {
 
@@ -19658,7 +19755,7 @@ async function loadWallpaperTypePreference() {
 
   if (wallpaperTypeToggle) {
 
-    wallpaperTypeToggle.checked = wallpaperTypePreference === 'static';
+    wallpaperTypeToggle.checked = wallpaperTypePreference === 'video';
 
   }
 
@@ -19755,11 +19852,12 @@ async function setWallpaperTypePreference(type) {
 
 
 
-if (wallpaperTypeToggle) {
+if (wallpaperTypeToggle && !wallpaperTypeToggle.dataset.typeListenerAttached) {
+  wallpaperTypeToggle.dataset.typeListenerAttached = 'true';
 
   wallpaperTypeToggle.addEventListener('change', async (e) => {
 
-    const type = e.target.checked ? 'static' : 'video';
+    const type = e.target.checked ? 'video' : 'static';
 
     await setWallpaperTypePreference(type);
 

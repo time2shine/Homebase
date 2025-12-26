@@ -171,9 +171,9 @@ body.ready .dock {
   background-color: rgba(0, 0, 0, 0.06);  /* light gray hover */
 }
 
-/* --- 1. Right Dock (MOVED) --- */
+/* --- 1. Right Dock --- */
 .dock {
-  flex: 0 0 40px; /* Fixed width for the dock */
+  flex: 0 0 40px;
   height: 100vh;
   padding: 64px 6px 10px;
   display: flex;
@@ -181,12 +181,24 @@ body.ready .dock {
   align-items: center;
   gap: 12px;
   z-index: 100;
-  background: transparent;
-  border-radius: 0; 
+
+  /* --- Glass Style Defaults --- */
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+
+  /* --- BORDER FIX --- */
+  /* We allow the left border to exist (so it can change color with themes), */
+  /* but we strictly force the others to be zero using !important. */
   border-left: 1px solid rgba(255, 255, 255, 0.15);
-  border-right: 0;
-  border-top: 0;
-  border-bottom: 0;
+  
+  border-right: 0 !important;
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+  border-radius: 0 !important;
+  
+  /* Prevent box-shadows from glass themes affecting the dock edge */
+  box-shadow: none !important; 
 }
 
 body.dock-collapsed .dock {

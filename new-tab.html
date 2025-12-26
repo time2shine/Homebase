@@ -1485,7 +1485,38 @@
 
           <section class="app-settings-section" data-section="gallery">
 
-            <div class="app-settings-placeholder">Gallery settings live inside the Gallery modal today.</div>
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Daily Rotation</div>
+                <div class="hint">Automatically change wallpaper every day.</div>
+              </div>
+              <label class="app-switch">
+                <input type="checkbox" id="app-daily-toggle">
+                <span class="app-switch-track"></span>
+              </label>
+            </div>
+
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Wallpaper Type</div>
+                <div class="hint">Prefer Video (Live) or Static images.</div>
+              </div>
+              <select id="app-wallpaper-type-select" class="app-setting-select">
+                <option value="video">Live (Video)</option>
+                <option value="static">Static (Image)</option>
+              </select>
+            </div>
+
+            <div class="app-setting-row">
+              <div class="app-setting-label">
+                <div class="title">Quality</div>
+                <div class="hint">Higher quality uses more data/bandwidth.</div>
+              </div>
+              <select id="app-wallpaper-quality-select" class="app-setting-select">
+                <option value="high">High (1080p)</option>
+                <option value="low">Low (720p)</option>
+              </select>
+            </div>
 
           </section>
 

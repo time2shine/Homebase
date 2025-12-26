@@ -1566,71 +1566,70 @@
 
 
         <div id="gallery-settings-panel" class="gallery-panel hidden">
-
           <div class="gs-container">
-
-            <div class="gs-section-title">Playback &amp; Quality</div>
-
-            <div class="gs-card">
-
-              <div class="gs-row">
-                <div class="gs-info">
-                  <div class="gs-label">Wallpaper Type</div>
-                  <div class="gs-sub">Live wallpapers pause when battery is low.</div>
-                </div>
-                <div class="gs-control">
-                  <div class="gs-toggle-group">
-                    <span class="gs-value-label">Static</span>
-                    <label class="gs-switch">
-                      <input type="checkbox" id="gallery-wallpaper-type-toggle" aria-label="Wallpaper type toggle">
-                      <span class="gs-slider"></span>
-                    </label>
-                    <span class="gs-value-label">Live</span>
+            
+            <div class="gs-column">
+              <div class="gs-section-title">Current Preview</div>
+              <div class="gs-preview-box">
+                <div class="settings-preview-box">
+                  <video id="gallery-settings-preview-video" class="settings-preview-media hidden" muted loop playsinline></video>
+                  <img id="gallery-settings-preview-img" class="settings-preview-media" src="assets/fallback.webp" alt="Preview wallpaper">
+                  <div class="settings-preview-caption">
+                    <div id="gallery-settings-preview-title" class="settings-preview-title">Daily Wallpaper</div>
+                    <div id="gallery-settings-preview-author" class="settings-preview-author">Default preview</div>
                   </div>
                 </div>
               </div>
-
-              <div class="gs-row">
-                <div class="gs-info">
-                  <div class="gs-label">Visual Quality</div>
-                  <div class="gs-sub">Higher quality uses more memory.</div>
-                </div>
-                <div class="gs-control">
-                  <div class="gs-toggle-group">
-                    <span class="gs-value-label">720p</span>
-                    <label class="gs-switch">
-                      <input type="checkbox" id="gallery-wallpaper-quality-toggle">
-                      <span class="gs-slider"></span>
-                    </label>
-                    <span class="gs-value-label">1080p</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="gs-row">
-                <div class="gs-info">
-                  <div class="gs-label">Daily Rotation</div>
-                  <div class="gs-sub">Automatically change wallpaper every 24h.</div>
-                </div>
-                <div class="gs-control">
-                  <label class="gs-switch">
-                    <input type="checkbox" id="gallery-daily-toggle">
-                    <span class="gs-slider"></span>
-                  </label>
-                </div>
-              </div>
-
             </div>
 
-            <div class="gs-section-title">Current Preview</div>
+            <div class="gs-column">
+              <div class="gs-section-title">Playback &amp; Quality</div>
+              <div class="gs-card">
+                <div class="gs-row">
+                  <div class="gs-info">
+                    <div class="gs-label">Wallpaper Type</div>
+                    <div class="gs-sub">Live wallpapers pause when battery is low.</div>
+                  </div>
+                  <div class="gs-control">
+                    <div class="gs-toggle-group">
+                      <span class="gs-value-label">Static</span>
+                      <label class="gs-switch">
+                        <input type="checkbox" id="gallery-wallpaper-type-toggle" aria-label="Wallpaper type toggle">
+                        <span class="gs-slider"></span>
+                      </label>
+                      <span class="gs-value-label">Live</span>
+                    </div>
+                  </div>
+                </div>
 
-            <div class="gs-preview-box">
-              <div class="settings-preview-box">
-                <video id="gallery-settings-preview-video" class="settings-preview-media hidden" muted loop playsinline></video>
-                <img id="gallery-settings-preview-img" class="settings-preview-media" src="assets/fallback.webp" alt="Preview wallpaper">
-                <div class="settings-preview-caption">
-                  <div id="gallery-settings-preview-title" class="settings-preview-title">Daily Wallpaper</div>
-                  <div id="gallery-settings-preview-author" class="settings-preview-author">Default preview</div>
+                <div class="gs-row">
+                  <div class="gs-info">
+                    <div class="gs-label">Visual Quality</div>
+                    <div class="gs-sub">Higher quality uses more memory.</div>
+                  </div>
+                  <div class="gs-control">
+                    <div class="gs-toggle-group">
+                      <span class="gs-value-label">720p</span>
+                      <label class="gs-switch">
+                        <input type="checkbox" id="gallery-wallpaper-quality-toggle">
+                        <span class="gs-slider"></span>
+                      </label>
+                      <span class="gs-value-label">1080p</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="gs-row">
+                  <div class="gs-info">
+                    <div class="gs-label">Daily Rotation</div>
+                    <div class="gs-sub">Automatically change wallpaper every 24h.</div>
+                  </div>
+                  <div class="gs-control">
+                    <label class="gs-switch">
+                      <input type="checkbox" id="gallery-daily-toggle">
+                      <span class="gs-slider"></span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>

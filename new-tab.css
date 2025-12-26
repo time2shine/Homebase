@@ -6293,9 +6293,16 @@ input:checked + .slider:before {
 /* ================================================= */
 
 .gs-container {
-  max-width: 600px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1.3fr; /* Preview Left, Settings Right */
+  gap: 30px;
+  align-items: start;
+}
+
+.gs-column {
   display: flex;
   flex-direction: column;
   gap: 20px;

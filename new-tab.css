@@ -3238,7 +3238,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   width: 100%;
   max-width: 100%;
   position: relative;
-  min-height: 235px;
+  min-height: 180px;
   height: auto;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;

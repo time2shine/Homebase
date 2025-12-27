@@ -541,7 +541,13 @@ async function cacheGalleryPosters(manifest = []) {
 
   const posters = Array.from(new Set(
     manifest
-      .map((v) => getWallpaperUrls(v.id).posterUrl || v.posterUrl || v.poster)
+      .map((v) => {
+        if (isGallerySelection(v)) {
+          const urls = getWallpaperUrls(v.id);
+          return urls.posterUrl || v.posterUrl || v.poster;
+        }
+        return v.posterUrl || v.poster;
+      })
       .filter(Boolean)
   ));
 
@@ -1368,6 +1374,10 @@ function applyWallpaperBackground(posterUrl) {
 
 
 function getWallpaperUrls(id) {
+  if (!id || id === 'fallback') {
+    return { videoUrl: '', posterUrl: '', thumbUrl: '' };
+  }
+
   const normalizedId = String(id || '').trim();
   if (!normalizedId) {
     return { videoUrl: '', posterUrl: '', thumbUrl: '' };
@@ -1383,6 +1393,55 @@ function getWallpaperUrls(id) {
     posterUrl: `${basePath}${posterFile}`,
     thumbUrl: `${basePath}thumb.webp`
   };
+}
+
+function isUserUploadSelection(sel) {
+  if (!sel) return false;
+  const startsWithUserPrefix = (val = '') => typeof val === 'string' && val.startsWith(USER_WALLPAPER_CACHE_PREFIX);
+  return (
+    startsWithUserPrefix(sel.videoCacheKey || '') ||
+    startsWithUserPrefix(sel.posterCacheKey || '') ||
+    startsWithUserPrefix(sel.videoUrl || '') ||
+    startsWithUserPrefix(sel.posterUrl || '') ||
+    sel.source === 'user'
+  );
+}
+
+function isGallerySelection(sel) {
+  if (!sel || isUserUploadSelection(sel)) return false;
+
+  const id = String(sel.id || '').trim();
+  const fromGalleryBase = (val = '') => typeof val === 'string' && val.startsWith(GALLERY_ASSETS_BASE_URL);
+  const looksLikeGalleryId = id && id !== 'fallback' && /^[a-z0-9_-]{3,}$/i.test(id);
+  const hasGalleryUrl =
+    fromGalleryBase(sel.videoUrl || '') ||
+    fromGalleryBase(sel.posterUrl || '') ||
+    fromGalleryBase(sel.videoCacheKey || '') ||
+    fromGalleryBase(sel.posterCacheKey || '');
+
+  return hasGalleryUrl || looksLikeGalleryId;
+}
+
+function getGalleryUrlsOrNull(selection) {
+  if (!selection || !isGallerySelection(selection)) return null;
+  const urls = getWallpaperUrls(selection.id);
+  if (!urls || !urls.videoUrl || !urls.posterUrl) return null;
+  return urls;
+}
+
+function rebuildCurrentSelectionFromGallery() {
+  const urls = getGalleryUrlsOrNull(currentWallpaperSelection);
+  if (!urls) return null;
+
+  const updated = {
+    ...currentWallpaperSelection,
+    videoUrl: urls.videoUrl,
+    posterUrl: urls.posterUrl,
+    videoCacheKey: urls.videoUrl,
+    posterCacheKey: urls.posterUrl
+  };
+  currentWallpaperSelection = updated;
+  return updated;
 }
 
 
@@ -1409,7 +1468,13 @@ async function pickNextWallpaper(manifest) {
   if (!entry) return null;
 
 
-  const { videoUrl: generatedVideoUrl, posterUrl: generatedPosterUrl } = getWallpaperUrls(entry.id);
+  let generatedVideoUrl = '';
+  let generatedPosterUrl = '';
+  if (isGallerySelection(entry)) {
+    const urls = getWallpaperUrls(entry.id);
+    generatedVideoUrl = urls.videoUrl;
+    generatedPosterUrl = urls.posterUrl;
+  }
   const videoUrl = generatedVideoUrl || entry.url || '';
   const posterUrl = generatedPosterUrl || entry.poster || entry.posterUrl || '';
   const posterCacheKey = entry.posterCacheKey || posterUrl || '';
@@ -1562,21 +1627,17 @@ async function ensureDailyWallpaper(forceNext = false) {
 
   }
 
-
-
-  // Refresh URLs based on current quality preference even when reusing a fresh selection
-  if (current && current.id && current.id !== 'fallback') {
-    const freshUrls = getWallpaperUrls(current.id);
+  const refreshedGalleryUrls = getGalleryUrlsOrNull(current);
+  if (refreshedGalleryUrls) {
     current = {
       ...current,
-      videoUrl: freshUrls.videoUrl,
-      posterUrl: freshUrls.posterUrl,
-      videoCacheKey: freshUrls.videoUrl,
-      posterCacheKey: freshUrls.posterUrl
+      videoUrl: refreshedGalleryUrls.videoUrl,
+      posterUrl: refreshedGalleryUrls.posterUrl,
+      videoCacheKey: refreshedGalleryUrls.videoUrl,
+      posterCacheKey: refreshedGalleryUrls.posterUrl
     };
     await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: current });
   }
-
 
   if (current) {
 
@@ -10342,18 +10403,6 @@ function setupAppSettingsModal() {
 
   }
 
-  if (wallpaperQualityToggle && !wallpaperQualityToggle.dataset.qualityListenerAttached) {
-    wallpaperQualityToggle.dataset.qualityListenerAttached = 'true';
-    wallpaperQualityToggle.addEventListener('change', async (e) => {
-      wallpaperQualityPreference = e.target.checked ? 'high' : 'low';
-      try {
-        await browser.storage.local.set({ [WALLPAPER_QUALITY_KEY]: wallpaperQualityPreference });
-      } catch (err) {
-        console.warn('Failed to save wallpaper quality preference', err);
-      }
-    });
-  }
-
   const appConfigureWeatherBtn = document.getElementById('app-configure-weather-btn');
 
   if (appConfigureWeatherBtn) {
@@ -10628,19 +10677,7 @@ function setupAppSettingsModal() {
 
       updateTime();
 
-      let updatedWallpaperSelection = null;
-
-      if (currentWallpaperSelection && currentWallpaperSelection.id) {
-        const urls = getWallpaperUrls(currentWallpaperSelection.id);
-        updatedWallpaperSelection = {
-          ...currentWallpaperSelection,
-          videoUrl: urls.videoUrl,
-          posterUrl: urls.posterUrl,
-          videoCacheKey: urls.videoUrl,
-          posterCacheKey: urls.posterUrl
-        };
-        currentWallpaperSelection = updatedWallpaperSelection;
-      }
+      let updatedWallpaperSelection = rebuildCurrentSelectionFromGallery();
 
       const nextWallpaperState = {
         daily: nextDailyRotation,
@@ -10882,7 +10919,8 @@ function setupAnimationSettings() {
 
 function setupGalleryListeners() {
   // 1. Wallpaper Quality Toggle
-  if (wallpaperQualityToggle) {
+  if (wallpaperQualityToggle && !wallpaperQualityToggle.dataset.qualityListenerAttached) {
+    wallpaperQualityToggle.dataset.qualityListenerAttached = 'true';
     wallpaperQualityToggle.addEventListener('change', async (e) => {
       const newQuality = e.target.checked ? 'high' : 'low';
       wallpaperQualityPreference = newQuality;
@@ -10892,22 +10930,13 @@ function setupGalleryListeners() {
       await browser.storage.local.set({ [WALLPAPER_QUALITY_KEY]: newQuality });
       console.log('Wallpaper quality set to:', newQuality);
 
-      // Rebuild current wallpaper URLs immediately to avoid reloads
-      if (currentWallpaperSelection && currentWallpaperSelection.id) {
-        const urls = getWallpaperUrls(currentWallpaperSelection.id);
-        currentWallpaperSelection = {
-          ...currentWallpaperSelection,
-          videoUrl: urls.videoUrl,
-          posterUrl: urls.posterUrl,
-          videoCacheKey: urls.videoUrl,
-          posterCacheKey: urls.posterUrl
-        };
+      const updatedSelection = rebuildCurrentSelectionFromGallery();
+      if (!updatedSelection) return;
 
-        // Persist updated selection so future loads use the new quality
-        await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: currentWallpaperSelection });
+      // Persist updated selection so future loads use the new quality
+      await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: updatedSelection });
 
-        await applyWallpaperByType(currentWallpaperSelection, wallpaperTypePreference);
-      }
+      await applyWallpaperByType(updatedSelection, wallpaperTypePreference);
     });
   }
 
@@ -17619,7 +17648,11 @@ function buildGalleryCard(item, index = 0) {
 
   const marqueeDuration = Math.max(8, Math.min(20, Math.ceil(charCount / 2)));
 
-  const { thumbUrl } = getWallpaperUrls(item.id);
+  let thumbUrl = '';
+  if (isGallerySelection(item)) {
+    const urls = getWallpaperUrls(item.id);
+    thumbUrl = urls.thumbUrl;
+  }
   const posterSrc = thumbUrl || item.posterUrl || item.poster || item.url || '';
 
   const loadingAttr = index < 40 ? 'eager' : 'lazy';
@@ -17801,7 +17834,13 @@ async function applyGalleryWallpaper(item) {
   }
 
   try {
-    const { videoUrl: generatedVideoUrl, posterUrl: generatedPosterUrl } = getWallpaperUrls(item.id);
+    let generatedVideoUrl = '';
+    let generatedPosterUrl = '';
+    if (isGallerySelection(item)) {
+      const urls = getWallpaperUrls(item.id);
+      generatedVideoUrl = urls.videoUrl;
+      generatedPosterUrl = urls.posterUrl;
+    }
     const videoUrl = generatedVideoUrl || item.url;
     const remotePosterUrl = generatedPosterUrl || item.posterUrl || item.poster || '';
 
@@ -20523,7 +20562,7 @@ function animateGridReorder(items, previousPositions) {
 
 
 function cleanupUnusedObjectUrls(currentSelection) {
-
+  const activeKeys = new Set();
   const activeUrls = new Set();
 
   if (currentSelection) {
@@ -20532,16 +20571,38 @@ function cleanupUnusedObjectUrls(currentSelection) {
 
     if (currentSelection.posterUrl) activeUrls.add(currentSelection.posterUrl);
 
+    if (currentSelection.videoCacheKey) {
+      getCacheKeyVariants(currentSelection.videoCacheKey).forEach(k => activeKeys.add(k));
+    }
+    if (currentSelection.posterCacheKey) {
+      getCacheKeyVariants(currentSelection.posterCacheKey).forEach(k => activeKeys.add(k));
+    }
+
+    // Back-compat: sometimes cacheKey is stored in videoUrl/posterUrl
+    if (currentSelection.videoUrl && !String(currentSelection.videoUrl).startsWith('blob:')) {
+      getCacheKeyVariants(currentSelection.videoUrl).forEach(k => activeKeys.add(k));
+    }
+    if (currentSelection.posterUrl &&
+        !String(currentSelection.posterUrl).startsWith('blob:') &&
+        !String(currentSelection.posterUrl).startsWith('data:')) {
+      getCacheKeyVariants(currentSelection.posterUrl).forEach(k => activeKeys.add(k));
+    }
   }
 
-
+  console.debug('cleanupUnusedObjectUrls', {
+    videoUrl: currentSelection && currentSelection.videoUrl,
+    videoCacheKey: currentSelection && currentSelection.videoCacheKey,
+    cacheEntries: Array.from(wallpaperObjectUrlCache.entries())
+  });
 
   for (const [cacheKey, objectUrl] of wallpaperObjectUrlCache.entries()) {
 
-    if (!activeUrls.has(objectUrl)) {
+    const keepBecauseKeyActive = activeKeys.has(cacheKey);
+    const keepBecauseUrlActive = activeUrls.has(objectUrl) || activeUrls.has(cacheKey);
 
-      URL.revokeObjectURL(objectUrl);
+    if (!keepBecauseKeyActive && !keepBecauseUrlActive) {
 
+      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
       wallpaperObjectUrlCache.delete(cacheKey);
 
     }

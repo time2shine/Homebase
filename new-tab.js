@@ -18703,8 +18703,12 @@ function optimizeStaticUpload(file) {
 const MyWallpapers = (() => {
   const MY_WALLPAPERS_KEY = 'myWallpapers';
   const MY_WALLPAPER_CACHE = 'user-wallpapers-v1';
+  const MW_MAX_IMAGE_MB = 12;
+  const MW_MAX_DIM = 3840;
+  const MW_OPTIMIZE_TRIGGER_MB = 3;
+  const MW_WEBP_QUALITY = 0.85;
   const MAX_ITEMS = 75;
-  const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+  const MAX_IMAGE_BYTES = MW_MAX_IMAGE_MB * 1024 * 1024;
   const MAX_GIF_BYTES = 25 * 1024 * 1024;
   const MAX_VIDEO_BYTES = 150 * 1024 * 1024;
   const MAX_TOTAL_BYTES = 500 * 1024 * 1024;
@@ -18730,6 +18734,150 @@ const MyWallpapers = (() => {
   const normalizeCacheKey = (key = '') => normalizeWallpaperCacheKey(key);
 
   const cacheKeyVariants = (key) => getCacheKeyVariants(key);
+
+  const sanitizeCacheName = (name = '') => {
+    const safe = (name || '').replace(/[^\w.-]+/g, '_').replace(/_+/g, '_').slice(-150);
+    return safe || 'upload';
+  };
+
+  const buildImageCacheKey = (fileName = '') => {
+    const safeName = sanitizeCacheName(fileName || 'wallpaper');
+    return `mw_img_${Date.now()}_${safeName}`;
+  };
+
+  const getImageDimensionsFromFile = async (file) => {
+    if (!file) return { width: 0, height: 0 };
+    try {
+      if (typeof createImageBitmap === 'function') {
+        const bitmap = await createImageBitmap(file);
+        const dims = { width: bitmap.width || 0, height: bitmap.height || 0 };
+        if (typeof bitmap.close === 'function') bitmap.close();
+        return dims;
+      }
+    } catch (err) {
+      // fallback to Image decoding below
+    }
+
+    return new Promise((resolve) => {
+      try {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve({ width: img.naturalWidth || img.width || 0, height: img.naturalHeight || img.height || 0 });
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve({ width: 0, height: 0 });
+        };
+        img.src = url;
+      } catch (err) {
+        resolve({ width: 0, height: 0 });
+      }
+    });
+  };
+
+  const optimizeImageFile = async (file) => {
+    let bitmap = null;
+    let img = null;
+    let objectUrl = '';
+
+    try {
+      if (typeof createImageBitmap === 'function') {
+        bitmap = await createImageBitmap(file);
+      }
+    } catch (err) {
+      bitmap = null;
+    }
+
+    if (!bitmap) {
+      try {
+        objectUrl = URL.createObjectURL(file);
+        img = await new Promise((resolve) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = () => resolve(null);
+          el.src = objectUrl;
+        });
+      } catch (err) {
+        img = null;
+      }
+    }
+
+    const sourceWidth = bitmap?.width || img?.naturalWidth || img?.width || 0;
+    const sourceHeight = bitmap?.height || img?.naturalHeight || img?.height || 0;
+
+    if (!sourceWidth || !sourceHeight) {
+      if (bitmap?.close) bitmap.close();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      return { blob: file, mimeType: file.type || 'image/webp', width: 0, height: 0 };
+    }
+
+    const scale = Math.min(1, MW_MAX_DIM / Math.max(sourceWidth, sourceHeight));
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+
+    const canvas = (typeof OffscreenCanvas !== 'undefined')
+      ? new OffscreenCanvas(targetWidth, targetHeight)
+      : document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      if (bitmap?.close) bitmap.close();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      return { blob: file, mimeType: file.type || 'image/webp', width: sourceWidth, height: sourceHeight };
+    }
+
+    ctx.drawImage(bitmap || img, 0, 0, targetWidth, targetHeight);
+
+    let blob = null;
+    let mimeType = file?.type || 'image/webp';
+
+    if (canvas.convertToBlob) {
+      try {
+        blob = await canvas.convertToBlob({ type: 'image/webp', quality: MW_WEBP_QUALITY });
+      } catch (err) {
+        blob = null;
+      }
+    }
+
+    if (!blob) {
+      try {
+        let exportCanvas = canvas;
+        if (typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas) {
+          const transfer = document.createElement('canvas');
+          transfer.width = targetWidth;
+          transfer.height = targetHeight;
+          const transferCtx = transfer.getContext('2d');
+          if (transferCtx) {
+            transferCtx.drawImage(canvas, 0, 0);
+            exportCanvas = transfer;
+          }
+        }
+        const dataUrl = exportCanvas?.toDataURL ? exportCanvas.toDataURL('image/jpeg', MW_WEBP_QUALITY) : '';
+        if (dataUrl) {
+          blob = dataUrlToBlob(dataUrl);
+          mimeType = 'image/jpeg';
+        }
+      } catch (err) {
+        blob = null;
+      }
+    } else {
+      mimeType = blob.type || mimeType;
+    }
+
+    if (bitmap?.close) bitmap.close();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+
+    return {
+      blob: blob || file,
+      mimeType: blob?.type || mimeType || file.type || 'image/webp',
+      width: targetWidth,
+      height: targetHeight
+    };
+  };
 
   const getList = () => (Array.isArray(state.list) ? state.list.slice() : []);
 
@@ -19490,6 +19638,9 @@ const MyWallpapers = (() => {
     }
 
     let { isVideo, isGif, mimeType, title } = validation;
+    const isStaticImage = !isVideo && !isGif;
+    const MAX_IMAGE_BYTES = MW_MAX_IMAGE_MB * 1024 * 1024;
+    const OPT_TRIGGER_BYTES = MW_OPTIMIZE_TRIGGER_MB * 1024 * 1024;
 
     // 2. Check Count Limits (10 Videos, 20 Images)
     // Note: We filter existing items in state.list to count them
@@ -19521,16 +19672,62 @@ const MyWallpapers = (() => {
       return null;
     }
 
+    if (isStaticImage && (file.size || 0) > MAX_IMAGE_BYTES) {
+      showCustomDialog('File Too Large', `Image too large. Max ${MW_MAX_IMAGE_MB}MB.`);
+      if (myWallpapersUploadInput) myWallpapersUploadInput.value = '';
+      return null;
+    }
+
+    const startOptimizingState = () => {
+      if (!myWallpapersUploadBtn && !myWallpapersUploadInput) return () => {};
+      const btn = myWallpapersUploadBtn;
+      const input = myWallpapersUploadInput;
+      if (btn) {
+        if (!btn.dataset.originalLabel) {
+          btn.dataset.originalLabel = btn.textContent || 'Upload';
+        }
+        btn.textContent = 'Optimizing...';
+        btn.disabled = true;
+      }
+      if (input) input.disabled = true;
+      return () => {
+        if (btn) {
+          btn.textContent = btn.dataset.originalLabel || 'Upload';
+          btn.disabled = false;
+          delete btn.dataset.originalLabel;
+        }
+        if (input) input.disabled = false;
+      };
+    };
+
     // ... Proceed with optimization and saving (keep existing logic below) ...
     let fileToSave = file;
+    let imageDimensions = { width: 0, height: 0 };
+    let needsOptimization = false;
+    let usedOptimizedOutput = false;
 
-    // [Existing Image Optimization Logic]
-    if (!isVideo && !isGif) {
-      try {
-        fileToSave = await optimizeStaticUpload(file);
-        mimeType = 'image/jpeg';
-      } catch (e) {
-        console.warn('Optimization failed', e);
+    if (isStaticImage) {
+      imageDimensions = await getImageDimensionsFromFile(file);
+      const maxDim = Math.max(imageDimensions.width || 0, imageDimensions.height || 0);
+      needsOptimization = maxDim > MW_MAX_DIM || (file.size || 0) > OPT_TRIGGER_BYTES;
+      if (needsOptimization) {
+        const restoreUploadState = startOptimizingState();
+        try {
+          const optimized = await optimizeImageFile(file);
+          if (optimized?.blob) {
+            fileToSave = optimized.blob;
+            mimeType = optimized.mimeType || optimized.blob.type || mimeType;
+            imageDimensions = {
+              width: optimized.width || imageDimensions.width,
+              height: optimized.height || imageDimensions.height
+            };
+            usedOptimizedOutput = true;
+          }
+        } catch (e) {
+          console.warn('Optimization failed', e);
+        } finally {
+          restoreUploadState();
+        }
       }
     }
 
@@ -19546,10 +19743,14 @@ const MyWallpapers = (() => {
     }
 
     const id = makeId();
-    const cacheKey = buildCacheKey(id, 'original', mimeType, file.name || '');
-    const posterCacheKey = posterBlob ? buildCacheKey(id, 'poster', posterBlob.type || 'image/webp') : '';
+    const baseImageCacheKey = isStaticImage ? buildImageCacheKey(file.name || '') : '';
+    const baseCacheKey = isStaticImage ? baseImageCacheKey : buildCacheKey(id, 'original', mimeType, file.name || '');
+    const cacheKeyToWrite = (isStaticImage && usedOptimizedOutput) ? `${baseCacheKey}__opt` : baseCacheKey;
+    const posterCacheKey = posterBlob
+      ? (isStaticImage ? `${baseCacheKey}__poster` : buildCacheKey(id, 'poster', posterBlob.type || 'image/webp'))
+      : '';
 
-    const normalizedCacheKey = await cachePut(cacheKey, fileToSave, mimeType);
+    const normalizedCacheKey = await cachePut(cacheKeyToWrite, fileToSave, mimeType);
     
     let normalizedPosterKey = '';
     if (posterBlob) {
@@ -19667,8 +19868,8 @@ const MyWallpapers = (() => {
       selectedAt: Date.now(),
       videoCacheKey: isVideo ? (item.cacheKey || '') : '',
       videoUrl: '',
-      posterCacheKey: item.posterCacheKey || (!isVideo ? item.cacheKey : ''),
-      posterUrl: item.posterCacheKey || (!isVideo ? item.cacheKey : ''),
+      posterCacheKey: !isVideo ? (item.cacheKey || '') : (item.posterCacheKey || ''),
+      posterUrl: !isVideo ? (item.cacheKey || '') : (item.posterCacheKey || ''),
       imageCacheKey: !isVideo ? (item.cacheKey || '') : '',
       mimeType: item.mimeType || ''
     };

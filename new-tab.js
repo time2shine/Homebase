@@ -94,6 +94,74 @@ const runWhenIdle = (cb) => {
 
 };
 
+async function isFirefoxBrowser() {
+
+  if (!browser || !browser.runtime || typeof browser.runtime.getBrowserInfo !== 'function') {
+
+    return false;
+
+  }
+
+  try {
+
+    const info = await browser.runtime.getBrowserInfo();
+
+    return Boolean(info && typeof info.name === 'string' && info.name.toLowerCase().includes('firefox'));
+
+  } catch (err) {
+
+    return false;
+
+  }
+
+}
+
+function showFirefoxShortcutInfo(feature) {
+
+  const shortcuts = {
+
+    history: { label: 'History', shortcut: 'Ctrl+H' },
+
+    bookmarks: { label: 'Bookmarks', shortcut: 'Ctrl+Shift+O' },
+
+    downloads: { label: 'Downloads', shortcut: 'Ctrl+J' },
+
+    addons: { label: 'Add-ons', shortcut: 'Ctrl+Shift+A' },
+
+  };
+
+  const normalized = (feature || '').toLowerCase();
+
+  const info = shortcuts[normalized];
+
+  if (!info) return;
+
+  const plainMessage = `Firefox blocks extensions from opening built-in pages like ${info.label}.\n\nUse ${info.shortcut} to open it.`;
+
+  const htmlMessage = `Firefox blocks extensions from opening built-in pages like ${info.label}.<br><br>Use <span style="color: #4da3ff; font-weight: 600;">${info.shortcut}</span> to open it.`;
+
+  const hasCustomAlert = document.getElementById('custom-alert-modal') && document.getElementById('custom-alert-ok-btn');
+
+  if (hasCustomAlert && typeof showCustomDialog === 'function') {
+
+    showCustomDialog(`${info.label} shortcut`, htmlMessage);
+
+    const msgEl = document.getElementById('custom-alert-message');
+
+    if (msgEl) {
+
+      msgEl.innerHTML = htmlMessage;
+
+    }
+
+  } else {
+
+    alert(plainMessage);
+
+  }
+
+}
+
 let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
 
 // --- Global Controller for Video Events ---
@@ -15425,37 +15493,47 @@ function setupDockNavigation() {
 
   };
 
+  const firefoxBrowserPromise = isFirefoxBrowser();
+
+  const handleDockClick = (id, url, featureKey) => {
+
+    const btn = document.getElementById(id);
+
+    if (!btn) return;
+
+    btn.addEventListener('click', async (e) => {
+
+      if (await firefoxBrowserPromise) {
+
+        e.preventDefault();
+
+        showFirefoxShortcutInfo(featureKey);
+
+        return;
+
+      }
+
+      openTab(e, url);
+
+    });
+
+  };
 
 
-  document.getElementById('dock-bookmarks-btn').addEventListener('click', (e) => {
 
-    openTab(e, 'about:bookmarks');
-
-  });
+  handleDockClick('dock-bookmarks-btn', 'about:bookmarks', 'bookmarks');
 
 
 
-  document.getElementById('dock-history-btn').addEventListener('click', (e) => {
-
-    openTab(e, 'about:history');
-
-  });
+  handleDockClick('dock-history-btn', 'about:history', 'history');
 
 
 
-  document.getElementById('dock-downloads-btn').addEventListener('click', (e) => {
-
-    openTab(e, 'about:downloads');
-
-  });
+  handleDockClick('dock-downloads-btn', 'about:downloads', 'downloads');
 
 
 
-  document.getElementById('dock-addons-btn').addEventListener('click', (e) => {
-
-    openTab(e, 'about:addons');
-
-  });
+  handleDockClick('dock-addons-btn', 'about:addons', 'addons');
 
 
 

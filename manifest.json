@@ -1,5 +1,5 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Homebase",
   "version": "1.0",
   "description": "Replaces the default new tab page with a custom dashboard.",
@@ -8,7 +8,7 @@
     "48": "icons/icon-48.png"
   },
 
-  "applications": {
+  "browser_specific_settings": {
     "gecko": {
       "id": "rokonmagura@egmail.com"
     }
@@ -18,33 +18,26 @@
     "newtab": "new-tab.html"
   },
 
-"permissions": [
+  "permissions": [
     "tabs",
     "storage",
     "history",
     "bookmarks",
     "clipboardRead",
-    "contextualIdentities",
+    "contextualIdentities"
+  ],
 
+  "host_permissions": [
     "https://api.quotable.io/*",
     "https://api.open-meteo.com/*",
     "https://geocoding-api.open-meteo.com/*",
- 
     "https://duckduckgo.com/ac/*",
     "https://suggest.yandex.com/*",
     "https://ff.search.yahoo.com/*",
     "https://api.bing.com/osjson.aspx*",
     "https://suggestqueries.google.com/*",
-     
     "https://en.wikipedia.org/*",
     "https://completion.amazon.com/*"
   ],
-  "optional_permissions": [],
-
-  "web_accessible_resources": [
-    "icons/*",
-    "google_icons/*",
-    "background.jpg",
-    "cached_wallpapers/*"
-  ]
+  "optional_permissions": []
 }

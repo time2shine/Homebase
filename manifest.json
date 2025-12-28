@@ -19,28 +19,25 @@
   },
 
 "permissions": [
-    "clipboardRead",
-    "https://api.open-meteo.com/*",
-    "https://geocoding-api.open-meteo.com/*",
-    "https://api.quotable.io/*",
-    "https://t2.gstatic.com/*",
-    "https://s2.googleusercontent.com/*",
     "tabs",
     "storage",
-    "bookmarks",
     "history",
-    "cookies",
+    "bookmarks",
+    "clipboardRead",
     "contextualIdentities",
+
+    "https://api.quotable.io/*",
+    "https://api.open-meteo.com/*",
+    "https://geocoding-api.open-meteo.com/*",
  
-    "https://suggestqueries.google.com/*",
     "https://duckduckgo.com/ac/*",
-    "https://api.bing.com/osjson.aspx*",
-    "https://ff.search.yahoo.com/*",
     "https://suggest.yandex.com/*",
+    "https://ff.search.yahoo.com/*",
+    "https://api.bing.com/osjson.aspx*",
+    "https://suggestqueries.google.com/*",
      
     "https://en.wikipedia.org/*",
-    "https://completion.amazon.com/*",
-    "https://pub-d330ac9daa80435c82f1d50b5e43ca72.r2.dev/*"
+    "https://completion.amazon.com/*"
   ],
   "optional_permissions": [],
 

@@ -619,34 +619,6 @@ function getCacheKeyVariants(cacheKey) {
 
 
 
-async function cacheUserWallpaperFile(cacheKey, file, mimeType = '') {
-
-  const normalizedKey = normalizeWallpaperCacheKey(cacheKey);
-
-  try {
-
-    const cache = await caches.open(WALLPAPER_CACHE_NAME);
-
-    await cache.put(normalizedKey, new Response(file, {
-
-      headers: {
-
-        'content-type': mimeType || file.type || 'application/octet-stream'
-
-      }
-
-    }));
-
-  } catch (err) {
-
-    console.warn('Failed to store wallpaper upload in cache', cacheKey, err);
-
-  }
-
-}
-
-
-
 async function getCachedObjectUrl(cacheKey) {
 
   const keys = getCacheKeyVariants(cacheKey);
@@ -699,14 +671,6 @@ async function getCachedObjectUrl(cacheKey) {
 
 
 
-async function hydrateManifestPosters(manifest = []) {
-  return Array.isArray(manifest) ? manifest : [];
-}
-
-async function prefetchGalleryPosters() {
-  return [];
-}
-
 async function warmGalleryPosterHydration() {
 
   if (galleryHydrationWarmPromise) return galleryHydrationWarmPromise;
@@ -715,11 +679,7 @@ async function warmGalleryPosterHydration() {
 
     try {
 
-      const manifest = await getVideosManifest();
-
-      const manifestList = Array.isArray(manifest) ? manifest : [];
-
-      await hydrateManifestPosters(manifestList);
+      await getVideosManifest();
 
     } catch (err) {
 
@@ -1115,34 +1075,6 @@ function blobToDataUrl(blob) {
       reader.readAsDataURL(blob);
 
     } catch (err) {
-
-      resolve('');
-
-    }
-
-  });
-
-}
-
-
-
-function readFileAsDataUrl(file) {
-
-  return new Promise((resolve) => {
-
-    try {
-
-      const reader = new FileReader();
-
-      reader.onload = (e) => resolve(e.target && e.target.result ? e.target.result : '');
-
-      reader.onerror = () => resolve('');
-
-      reader.readAsDataURL(file);
-
-    } catch (err) {
-
-      console.warn('Failed to read file as data URL', err);
 
       resolve('');
 
@@ -2044,14 +1976,6 @@ let galleryActiveTag = null;
 
 let gallerySection = 'gallery'; // gallery | favorites | my-wallpapers | settings (future)
 
-const GALLERY_BATCH_SIZE = 24;
-
-let galleryRenderQueue = [];
-
-let galleryRenderIndex = 0;
-
-let galleryLoadMoreObserver = null;
-
 const MY_WALLPAPERS_BATCH_SIZE = 24;
 
 let galleryFavorites = new Set();
@@ -2130,8 +2054,6 @@ let appBatteryOptimizationPreference = false;
 let appCinemaModePreference = false;
 
 const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
-
-const galleryGridContainer = document.getElementById('gallery-grid');
 
 const galleryEmptyState = document.getElementById('gallery-empty-state');
 
@@ -4380,14 +4302,6 @@ function hideEditFolderModal() {
 
 }
 
-function showEditFolderIconPrompt(text = 'Saved icon found for this folder.') {
-  if (!editFolderIconPrompt) return;
-  if (editFolderIconPromptText) {
-    editFolderIconPromptText.textContent = text;
-  }
-  editFolderIconPrompt.classList.remove('hidden');
-}
-
 function hideEditFolderIconPrompt() {
   if (!editFolderIconPrompt) return;
   editFolderIconPrompt.classList.add('hidden');
@@ -5939,73 +5853,6 @@ async function getBookmarkTree(forceRefresh = false) {
 
 
 // --- NEW: Grid Drag-and-Drop Handlers (Using Sortable.js) ---
-
-
-
-/**
-
- * Handles moving a bookmark and refreshing the UI
-
- * This function is now the single source of truth for UI updates after a D&D.
-
- */
-
-async function moveBookmark(id, destination) {
-
-  try {
-
-    await browser.bookmarks.move(id, destination);
-
-    
-
-    // Re-fetch the entire bookmark tree (deduped)
-
-    const newTree = await getBookmarkTree(true);
-
-
-
-    // Find the node for the currently displayed grid
-
-    const activeGridNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
-
-    
-
-    if (activeGridNode) {
-
-      // Re-render the *current* grid, passing the ID of the
-
-      // item that was just moved so it doesn't animate.
-
-      renderBookmarkGrid(activeGridNode, id); 
-
-    } else {
-
-      // Fallback if the active folder itself was moved/deleted.
-
-      console.warn("Could not find active grid node after move. Reloading main bookmarks.");
-
-      loadBookmarks(activeHomebaseFolderId);
-
-    }
-
-    
-
-  } catch (err) {
-
-    console.error("Error moving bookmark:", err);
-
-    // On error, just re-render the old node to reset.
-
-    if (currentGridFolderNode) {
-
-      renderBookmarkGrid(currentGridFolderNode, id);
-
-    }
-
-  }
-
-}
-
 
 
 /**
@@ -8680,8 +8527,6 @@ const quoteCopyBtn = document.getElementById('quote-copy-btn');
 
 const quoteNextBtn = document.getElementById('quote-next-btn');
 
-const DEFAULT_QUOTE_TAG = 'inspirational';
-
 const QUOTE_FREQUENCY_KEY = 'quoteUpdateFrequency';
 
 const QUOTE_LAST_FETCH_KEY = 'quoteLastFetched';
@@ -8691,8 +8536,6 @@ const QUOTE_CATEGORIES_CACHE_KEY = 'quoteCategoriesCache';
 const QUOTE_CATEGORIES_FETCHED_AT_KEY = 'quoteCategoriesFetchedAt';
 
 const QUOTE_BUFFER_KEY = 'quoteBufferCache';
-
-const QUOTE_BUFFER_SIZE = 5;
 
 const CATEGORIES_TTL = 24 * 60 * 60 * 1000; // 24 Hours
 
@@ -8712,37 +8555,6 @@ async function fetchAndCacheQuoteCategories() {
     return null;
   }
 }
-
-
-// Buffer quotes in advance so they can render instantly even if offline
-async function refillQuoteBuffer(tags = []) {
-  try {
-    const stored = await browser.storage.local.get(QUOTE_BUFFER_KEY);
-    let buffer = stored[QUOTE_BUFFER_KEY] || [];
-
-    if (buffer.length >= QUOTE_BUFFER_SIZE) return;
-
-    const needed = QUOTE_BUFFER_SIZE - buffer.length;
-    const tagsQuery = tags.length > 0 ? tags.join('|') : DEFAULT_QUOTE_TAG;
-    const res = await fetch(`https://api.quotable.io/quotes/random?limit=${needed}&tags=${encodeURIComponent(tagsQuery)}`);
-    if (!res.ok) return;
-
-    const newQuotes = await res.json();
-    const list = Array.isArray(newQuotes) ? newQuotes : [newQuotes];
-    const existingIds = new Set(buffer.map((q) => q._id));
-
-    list.forEach((q) => {
-      if (!existingIds.has(q._id)) {
-        buffer.push({ content: q.content, author: q.author, _id: q._id });
-      }
-    });
-
-    await browser.storage.local.set({ [QUOTE_BUFFER_KEY]: buffer });
-  } catch (e) {
-    console.warn('Background quote buffering failed', e);
-  }
-}
-
 
 
 // --- Rebuilt Quote Logic: The "Refiller" ---
@@ -16886,8 +16698,6 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
   setupSearchEnginesModal();
   setupGalleryListeners();
 
-  prefetchGalleryPosters().catch(() => {});
-
   runWhenIdle(() => warmGalleryPosterHydration());
 
   
@@ -17959,8 +17769,6 @@ async function openGalleryModal() {
 
     runWhenIdle(() => cacheGalleryPosters(manifestList));
 
-    const hydrationPromise = hydrateManifestPosters(manifestList).catch(() => manifestList);
-
     galleryManifest = manifestList;
 
     await loadGalleryFavorites();
@@ -17978,16 +17786,6 @@ async function openGalleryModal() {
     buildGalleryFilters(galleryManifest);
 
     setGalleryFilter(galleryActiveFilterValue || 'all');
-
-    hydrationPromise.then((hydrated) => {
-
-      if (!hydrated || !galleryModal || galleryModal.classList.contains('hidden') || galleryModal.classList.contains('closing')) return;
-
-      galleryManifest = Array.isArray(hydrated) ? hydrated : manifestList;
-
-      renderCurrentGallery();
-
-    });
 
   } catch (err) {
 
@@ -18020,95 +17818,6 @@ function closeGalleryModal() {
 
   if (previewImg) {
     previewImg.classList.remove('hidden');
-  }
-
-}
-
-
-
-function renderGallery(manifest = []) {
-
-  // Retained for compatibility; now replaced by virtual grid rendering.
-  renderGalleryVirtual(manifest);
-
-}
-
-
-
-function getGalleryLoadMoreObserver() {
-
-  if (!galleryGrid) return null;
-
-  if (!galleryLoadMoreObserver) {
-
-    galleryLoadMoreObserver = new IntersectionObserver((entries) => {
-
-      const entry = entries[0];
-
-      if (entry && entry.isIntersecting) {
-
-        renderNextGalleryBatch();
-
-      }
-
-    }, { root: galleryGrid, rootMargin: '400px' });
-
-  }
-
-  return galleryLoadMoreObserver;
-
-}
-
-
-
-function renderNextGalleryBatch() {
-
-  if (!galleryGrid) return;
-
-  if (galleryRenderIndex >= galleryRenderQueue.length) {
-
-    if (galleryLoadMoreObserver) {
-
-      galleryLoadMoreObserver.disconnect();
-
-    }
-
-    return;
-
-  }
-
-  const batch = galleryRenderQueue.slice(galleryRenderIndex, galleryRenderIndex + GALLERY_BATCH_SIZE);
-
-  const fragment = document.createDocumentFragment();
-
-  batch.forEach((item, idx) => {
-
-    const card = buildGalleryCard(item, galleryRenderIndex + idx);
-
-    card.dataset.id = item.id;
-
-    fragment.appendChild(card);
-
-  });
-
-  const sentinel = document.getElementById('gallery-sentinel');
-
-  if (sentinel) {
-
-    galleryGrid.insertBefore(fragment, sentinel);
-
-  } else {
-
-    galleryGrid.appendChild(fragment);
-
-  }
-
-  galleryRenderIndex += batch.length;
-
-  if (galleryRenderIndex >= galleryRenderQueue.length && galleryLoadMoreObserver) {
-
-    galleryLoadMoreObserver.disconnect();
-
   }
 
 }
@@ -18633,69 +18342,6 @@ if (galleryFooterButtons && galleryFooterButtons.length) {
   });
 
 }
-
-
-
-/**
- * Automatically resizes and compresses user uploads to the "Sweet Spot".
- * Target: Max 2560px, JPEG 85% Quality.
- */
-function optimizeStaticUpload(file) {
-  return new Promise((resolve) => {
-    // If it's not an image (or is a gif), return original
-    if (!file.type.startsWith('image/') || file.type === 'image/gif') {
-      return resolve(file);
-    }
-
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const canvas = document.createElement('canvas');
-
-      // SWEET SPOT: 2560px is great for 2K/4K screens but keeps file size low
-      const MAX_DIM = 2560;
-      let w = img.width;
-      let h = img.height;
-
-      // Only resize if the image is actually huge
-      if (w > MAX_DIM || h > MAX_DIM) {
-        const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
-        w = Math.round(w * ratio);
-        h = Math.round(h * ratio);
-      }
-
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-
-      // Compress to JPEG at 85% quality (Visuals look same, size drops 90%)
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const optimizedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
-            type: 'image/jpeg',
-            lastModified: Date.now()
-          });
-          resolve(optimizedFile);
-        } else {
-          resolve(file);
-        }
-      }, 'image/jpeg', 0.85);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(file);
-    };
-
-    img.src = url;
-  });
-}
-
-
-
 // ===============================================
 // My Wallpapers (new subsystem)
 // ===============================================
@@ -19775,25 +19421,6 @@ const MyWallpapers = (() => {
     await saveList(state.list);
     render();
     return item;
-  };
-
-  const getAppliedPosterDataUrl = async () => {
-    try {
-      const v = localStorage.getItem('cachedAppliedPosterDataUrl');
-      if (v && typeof v === 'string' && v.startsWith('data:')) return v;
-    } catch (e) {
-      // ignore localStorage errors
-    }
-
-    try {
-      const stored = await browser.storage.local.get('cachedAppliedPosterDataUrl');
-      const v = stored.cachedAppliedPosterDataUrl;
-      if (v && typeof v === 'string' && v.startsWith('data:')) return v;
-    } catch (e) {
-      // ignore storage errors
-    }
-
-    return '';
   };
 
   const ensureMyWallpaperDataPoster = async (posterKey, posterUrl) => {

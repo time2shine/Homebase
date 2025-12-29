@@ -15483,17 +15483,33 @@ function setupCinemaModeListeners() {
 
 function setupDockNavigation() {
 
-  // Helper function to prevent default link behavior and open a new tab
+  const firefoxBrowserPromise = isFirefoxBrowser();
 
-  const openTab = (e, url) => {
+  // Helper function to open the right destination per browser
 
-    e.preventDefault();
+  const openTab = async (featureKey, url, e) => {
 
-    browser.tabs.update({ url: url });
+    if (e) e.preventDefault();
+
+    if (await firefoxBrowserPromise) {
+
+      showFirefoxShortcutInfo(featureKey);
+
+      return;
+
+    }
+
+    if (typeof browser !== 'undefined' && browser && browser.tabs && browser.tabs.update) {
+
+      browser.tabs.update({ url });
+
+      return;
+
+    }
+
+    window.location.href = url;
 
   };
-
-  const firefoxBrowserPromise = isFirefoxBrowser();
 
   const handleDockClick = (id, url, featureKey) => {
 
@@ -15501,39 +15517,29 @@ function setupDockNavigation() {
 
     if (!btn) return;
 
-    btn.addEventListener('click', async (e) => {
+    btn.onclick = async (e) => {
 
-      if (await firefoxBrowserPromise) {
+      await openTab(featureKey, url, e);
 
-        e.preventDefault();
-
-        showFirefoxShortcutInfo(featureKey);
-
-        return;
-
-      }
-
-      openTab(e, url);
-
-    });
+    };
 
   };
 
 
 
-  handleDockClick('dock-bookmarks-btn', 'about:bookmarks', 'bookmarks');
+  handleDockClick('dock-bookmarks-btn', 'chrome://bookmarks', 'bookmarks');
 
 
 
-  handleDockClick('dock-history-btn', 'about:history', 'history');
+  handleDockClick('dock-history-btn', 'chrome://history', 'history');
 
 
 
-  handleDockClick('dock-downloads-btn', 'about:downloads', 'downloads');
+  handleDockClick('dock-downloads-btn', 'chrome://downloads', 'downloads');
 
 
 
-  handleDockClick('dock-addons-btn', 'about:addons', 'addons');
+  handleDockClick('dock-addons-btn', 'chrome://extensions', 'addons');
 
 
 

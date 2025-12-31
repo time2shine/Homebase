@@ -249,7 +249,27 @@ body.dock-collapsed .dock {
 .dock-item svg {
   width: 20px;
   height: 20px;
+  fill: none;
+  stroke: currentColor;
+}
+#dock-history-btn svg {
   fill: currentColor;
+  stroke: none;
+}
+.dock-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.dock-icon svg {
+  display: block;
+  opacity: 0.85;
+}
+.dock-icon svg[viewBox="0 -0.5 25 25"] {
+  transform: translateY(0.5px);
 }
 /* Ensure bottom dock buttons span full width while keeping box style */
 .dock-bottom .dock-item,

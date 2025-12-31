@@ -1150,33 +1150,37 @@
 
 
 
-            <div class="app-setting-row" id="app-container-new-tab-row" style="display: none; align-items: flex-start;">
+            <div id="container-sub-settings" class="sub-settings-container">
 
-              <div class="app-setting-label">
+              <div class="app-setting-row setting-sub-row visible" id="app-container-behavior-row" style="align-items: flex-start;">
 
-                <div class="title">Container Behavior</div>
+                <div class="app-setting-label">
 
-                <div class="hint">Choose how Homebase behaves when opening a container.</div>
+                  <div class="title">Container Behavior</div>
 
-              </div>
+                  <div class="hint">Choose how Homebase behaves when opening a container.</div>
 
-              <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 4px;">
+                </div>
 
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em; cursor: pointer; color: #0f172a;">
+                <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 4px;">
 
-                  <input type="radio" name="container-behavior" value="keep" checked style="accent-color: #2ca5ff;">
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em; cursor: pointer; color: #0f172a;">
 
-                  <span>Keep Homebase active (Open in background)</span>
+                    <input type="radio" name="container-behavior" value="keep" checked style="accent-color: #2ca5ff;">
 
-                </label>
+                    <span>Keep Homebase active (Open in background)</span>
 
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em; cursor: pointer; color: #0f172a;">
+                  </label>
 
-                  <input type="radio" name="container-behavior" value="close" style="accent-color: #2ca5ff;">
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em; cursor: pointer; color: #0f172a;">
 
-                  <span>Close Homebase (Switch to new tab)</span>
+                    <input type="radio" name="container-behavior" value="close" style="accent-color: #2ca5ff;">
 
-                </label>
+                    <span>Close Homebase (Switch to new tab)</span>
+
+                  </label>
+
+                </div>
 
               </div>
 

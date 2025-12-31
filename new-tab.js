@@ -9851,8 +9851,8 @@ function syncAppSettingsForm() {
   }
 
   const containerModeToggle = document.getElementById('app-container-mode-toggle');
-
-  const containerBehaviorRow = document.getElementById('app-container-new-tab-row');
+  const containerSubSettings = document.getElementById('container-sub-settings');
+  const containerBehaviorRow = document.getElementById('app-container-behavior-row');
 
   const radioKeep = document.querySelector('input[name="container-behavior"][value="keep"]');
 
@@ -9864,9 +9864,15 @@ function syncAppSettingsForm() {
 
   }
 
+  if (containerSubSettings) {
+
+    containerSubSettings.classList.toggle('expanded', appContainerModePreference);
+
+  }
+
   if (containerBehaviorRow) {
 
-    containerBehaviorRow.style.display = appContainerModePreference ? 'flex' : 'none';
+    containerBehaviorRow.classList.toggle('visible', appContainerModePreference);
 
   }
 
@@ -16325,9 +16331,9 @@ async function setupContainerMode() {
 
   const toggle = document.getElementById('app-container-mode-toggle');
 
-  const newTabRow = document.getElementById('app-container-new-tab-row');
+  const subSettings = document.getElementById('container-sub-settings');
 
-  const behaviorRow = document.getElementById('app-container-new-tab-row');
+  const behaviorRow = document.getElementById('app-container-behavior-row');
 
   const radioKeep = document.querySelector('input[name="container-behavior"][value="keep"]');
 
@@ -16341,7 +16347,7 @@ async function setupContainerMode() {
 
     if (row) row.style.display = 'none';
 
-    if (newTabRow) newTabRow.style.display = 'none';
+    if (subSettings) subSettings.style.display = 'none';
 
     if (behaviorRow) behaviorRow.style.display = 'none';
 
@@ -16355,9 +16361,19 @@ async function setupContainerMode() {
 
   if (row) row.style.display = 'flex';
 
-  if (newTabRow) newTabRow.style.display = appContainerModePreference ? 'flex' : 'none';
+  if (subSettings) {
 
-  if (behaviorRow) behaviorRow.style.display = appContainerModePreference ? 'flex' : 'none';
+    subSettings.style.display = '';
+
+    subSettings.classList.toggle('expanded', appContainerModePreference);
+
+  }
+
+  if (behaviorRow) {
+
+    behaviorRow.classList.toggle('visible', appContainerModePreference);
+
+  }
 
 
 
@@ -16377,9 +16393,9 @@ async function setupContainerMode() {
 
       appContainerModePreference = isEnabled;
 
-      if (newTabRow) newTabRow.style.display = isEnabled ? 'flex' : 'none';
+      if (subSettings) subSettings.classList.toggle('expanded', isEnabled);
 
-      if (behaviorRow) behaviorRow.style.display = isEnabled ? 'flex' : 'none';
+      if (behaviorRow) behaviorRow.classList.toggle('visible', isEnabled);
 
       await browser.storage.local.set({ [APP_CONTAINER_MODE_KEY]: isEnabled });
 

@@ -573,7 +573,9 @@
 
 
 
-      <div id="quick-actions-bar" class="glass-box">
+      <div class="bookmark-actions-wrapper">
+
+        <div id="quick-actions-bar" class="glass-box">
 
         <button id="quick-add-bookmark" class="quick-action-btn">
 
@@ -617,12 +619,15 @@
 
       </div>
 
+    </div>
+
 
 
     <div id="bookmarks-empty-state" class="glass-box" hidden>
       <div class="bookmarks-empty-inner">
         <h3 class="bookmarks-empty-title">Homebase bookmarks</h3>
-        <p id="bookmarks-empty-message" class="bookmarks-empty-description">Choose or create a folder to show your bookmarks here.</p>
+        <p id="bookmarks-empty-message" class="bookmarks-empty-description">Homebase shows bookmarks from a folder you choose. We automatically look for "Other Bookmarks &gt; Homebase" but did not found it there. You can create one or select an existing folder.</p>
+        <p class="bookmarks-empty-note">You can change this folder anytime later from Settings &gt; Bookmarks.</p>
         <div class="bookmarks-empty-actions">
           <button id="homebase-create-folder-btn" class="bookmarks-empty-primary">Create Homebase folder</button>
           <button id="homebase-choose-folder-btn" class="bookmarks-empty-secondary">Choose existing folder</button>
@@ -1394,6 +1399,20 @@
                 <span class="app-switch-track"></span>
 
               </label>
+
+            </div>
+
+            <div class="app-setting-row">
+
+              <div class="app-setting-label">
+
+                <div class="title">Bookmark root folder</div>
+
+                <div class="hint">Change which folder Homebase uses for your bookmarks grid.</div>
+
+              </div>
+
+              <button id="app-bookmarks-change-root-btn" class="gallery-secondary-btn">Change folder</button>
 
             </div>
 

@@ -41,6 +41,7 @@ const bookmarksGridEl = document.getElementById('bookmarks-grid');
 const bookmarksEmptyState = document.getElementById('bookmarks-empty-state');
 
 const bookmarksEmptyMessage = document.getElementById('bookmarks-empty-message');
+const appBookmarksChangeRootBtn = document.getElementById('app-bookmarks-change-root-btn');
 
 const homebaseCreateFolderBtn = document.getElementById('homebase-create-folder-btn');
 
@@ -5930,6 +5931,10 @@ let folderPickerSelectedId = null;
 
 let folderPickerLastFocusedEl = null;
 
+let cachedFolderIndex = null;
+let cachedFolderIndexAt = 0;
+const FOLDER_INDEX_TTL_MS = 30_000;
+
 async function getHomebaseRootId() {
   try {
     const stored = await browser.storage.local.get(HOMEBASE_BOOKMARK_ROOT_ID_KEY);
@@ -5967,6 +5972,18 @@ async function bookmarkNodeExists(id) {
   }
 }
 
+function setChangeFolderButtonVisibility(visible) {
+  if (!appBookmarksChangeRootBtn) return;
+  const shouldShow = Boolean(visible);
+  const changeFolderRow = appBookmarksChangeRootBtn.closest('.app-setting-row');
+  appBookmarksChangeRootBtn.hidden = !shouldShow;
+  appBookmarksChangeRootBtn.classList.toggle('hidden', !shouldShow);
+  if (changeFolderRow) {
+    changeFolderRow.hidden = !shouldShow;
+    changeFolderRow.classList.toggle('hidden', !shouldShow);
+  }
+}
+
 function hideBookmarksUI() {
   if (bookmarkBarWrapper) {
     bookmarkBarWrapper.hidden = true;
@@ -5976,6 +5993,7 @@ function hideBookmarksUI() {
     bookmarksGridEl.hidden = true;
     bookmarksGridEl.classList.add('hidden');
   }
+  setChangeFolderButtonVisibility(false);
 }
 
 function showBookmarksUI() {
@@ -5987,6 +6005,7 @@ function showBookmarksUI() {
     bookmarksGridEl.hidden = false;
     bookmarksGridEl.classList.remove('hidden');
   }
+  setChangeFolderButtonVisibility(rootDisplayFolderId);
 }
 
 function showBookmarksEmptyState(message) {
@@ -6006,7 +6025,9 @@ function showBookmarksEmptyState(message) {
   currentGridFolderNode = null;
   allBookmarks = [];
   if (bookmarksEmptyMessage) {
-    bookmarksEmptyMessage.textContent = message || 'Choose or create a folder to show your bookmarks here.';
+    bookmarksEmptyMessage.textContent =
+      message ||
+      'Homebase shows bookmarks from a folder you choose. We automatically look for "Other Bookmarks > Homebase". You can create one or select an existing folder.';
   }
   if (bookmarksEmptyState) {
     bookmarksEmptyState.hidden = false;
@@ -8705,6 +8726,11 @@ function resetFolderPickerState() {
   }
 }
 
+function invalidateFolderIndexCache() {
+  cachedFolderIndex = null;
+  cachedFolderIndexAt = 0;
+}
+
 function updateFolderPickerBreadcrumb() {
   if (!folderPickerBreadcrumb) return;
   const selected = folderPickerFolders.find((folder) => folder.id === folderPickerSelectedId);
@@ -8847,7 +8873,7 @@ function detachFolderPickerKeydown() {
   document.removeEventListener('keydown', handleFolderPickerKeydown, true);
 }
 
-async function openFolderPicker() {
+async function openFolderPicker(triggerSource) {
   if (!folderPickerModal || !folderPickerPanel) return;
 
   folderPickerLastFocusedEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -8855,7 +8881,8 @@ async function openFolderPicker() {
   setFolderPickerStatus('Loading folders...');
   attachFolderPickerKeydown();
 
-  openModalWithAnimation('folder-picker-modal', 'homebase-choose-folder-btn', '#folder-picker-panel');
+  const resolvedTriggerSource = triggerSource || homebaseChooseFolderBtn || 'homebase-choose-folder-btn';
+  openModalWithAnimation('folder-picker-modal', resolvedTriggerSource, '#folder-picker-panel');
 
   if (folderPickerSearchInput) {
     setTimeout(() => folderPickerSearchInput.focus(), 50);
@@ -8868,8 +8895,17 @@ async function openFolderPicker() {
       return;
     }
 
-    const tree = await getBookmarkTree(true);
-    folderPickerFolders = buildFolderIndexFromTree(tree);
+    const now = Date.now();
+    const useCachedIndex = cachedFolderIndex && now - cachedFolderIndexAt < FOLDER_INDEX_TTL_MS;
+
+    if (useCachedIndex) {
+      folderPickerFolders = cachedFolderIndex;
+    } else {
+      const tree = await getBookmarkTree(true);
+      folderPickerFolders = buildFolderIndexFromTree(tree);
+      cachedFolderIndex = folderPickerFolders;
+      cachedFolderIndexAt = Date.now();
+    }
 
     const storedRootId = await getHomebaseRootId();
     if (storedRootId && folderPickerFolders.some((folder) => folder.id === storedRootId)) {
@@ -9027,7 +9063,17 @@ function setupHomebaseRootControls() {
 
     homebaseChooseFolderBtn.addEventListener('click', () => {
 
-      openFolderPicker();
+      openFolderPicker(homebaseChooseFolderBtn);
+
+    });
+
+  }
+
+  if (appBookmarksChangeRootBtn) {
+
+    appBookmarksChangeRootBtn.addEventListener('click', () => {
+
+      openFolderPicker(appBookmarksChangeRootBtn);
 
     });
 
@@ -9064,33 +9110,52 @@ function setupFolderPickerModal() {
 
 function setupHomebaseRootListeners() {
 
-  if (!browser.bookmarks || !browser.bookmarks.onRemoved || typeof browser.bookmarks.onRemoved.addListener !== 'function') {
+  if (!browser.bookmarks) {
 
     return;
 
   }
 
-  try {
+  const bindBookmarkListener = (eventTarget, handler, label) => {
+    if (!eventTarget || typeof eventTarget.addListener !== 'function') return;
+    try {
+      eventTarget.addListener(handler);
+    } catch (err) {
+      console.warn(`Failed to bind bookmark ${label || 'event'} listener`, err);
+    }
+  };
 
-    browser.bookmarks.onRemoved.addListener(async (id) => {
+  const cacheInvalidator = () => {
+    invalidateFolderIndexCache();
+  };
 
-      const storedRootId = await getHomebaseRootId();
+  bindBookmarkListener(browser.bookmarks.onCreated, cacheInvalidator, 'creation');
+  bindBookmarkListener(browser.bookmarks.onChanged, cacheInvalidator, 'change');
+  bindBookmarkListener(browser.bookmarks.onMoved, cacheInvalidator, 'move');
 
-      if (storedRootId && id === storedRootId) {
+  bindBookmarkListener(
+    browser.bookmarks.onRemoved,
+    async (id) => {
+      invalidateFolderIndexCache();
 
-        await clearHomebaseRootId();
+      try {
+        const storedRootId = await getHomebaseRootId();
 
-        showBookmarksEmptyState();
+        if (storedRootId && id === storedRootId) {
+
+          await clearHomebaseRootId();
+
+          showBookmarksEmptyState();
+
+        }
+      } catch (err) {
+
+        console.warn('Failed to handle bookmark removal', err);
 
       }
-
-    });
-
-  } catch (err) {
-
-    console.warn('Failed to bind bookmark removal listener', err);
-
-  }
+    },
+    'removal'
+  );
 
 }
 

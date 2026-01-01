@@ -2562,6 +2562,27 @@
 
   </div>
 
+  <div id="folder-picker-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="folder-picker-title">
+    <div id="folder-picker-panel" class="dialog-content glass-box">
+      <h3 id="folder-picker-title" style="margin-bottom: 10px;">Choose a bookmarks folder</h3>
+
+      <div id="folder-picker-error" class="folder-picker-error hidden" role="alert"></div>
+
+      <div class="folder-picker-search">
+        <input id="folder-picker-search" type="search" class="dialog-input" placeholder="Search folders" autocomplete="off" />
+      </div>
+
+      <div id="folder-picker-list" class="folder-picker-list" role="listbox" aria-label="Bookmarks folders"></div>
+
+      <div id="folder-picker-breadcrumb" class="folder-picker-breadcrumb" aria-live="polite">No folder selected</div>
+
+      <div class="dialog-buttons folder-picker-actions">
+        <button id="folder-picker-cancel" class="dialog-btn">Cancel</button>
+        <button id="folder-picker-confirm" class="dialog-btn primary-btn" disabled>Select folder</button>
+      </div>
+    </div>
+  </div>
+
   <div id="animation-settings-modal" class="modal-overlay hidden">
     <div id="animation-settings-dialog" class="dialog-content glass-box" style="width: 550px; max-height: 85vh; display: flex; flex-direction: column;">
       <button id="animation-settings-close-btn" class="dialog-close-btn">×</button>

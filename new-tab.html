@@ -14,7 +14,7 @@
 
 </head>
 
-<body class="preload">
+<body class="preload bookmarks-booting">
   <svg style="display: none;" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <symbol id="icon-amazon" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="15%" fill="#f90"/>
@@ -615,9 +615,20 @@
 
       </div>
 
-    </div>
+      </div>
 
-    
+
+
+    <div id="bookmarks-empty-state" class="glass-box" hidden>
+      <div class="bookmarks-empty-inner">
+        <h3 class="bookmarks-empty-title">Homebase bookmarks</h3>
+        <p id="bookmarks-empty-message" class="bookmarks-empty-description">Choose or create a folder to show your bookmarks here.</p>
+        <div class="bookmarks-empty-actions">
+          <button id="homebase-create-folder-btn" class="bookmarks-empty-primary">Create Homebase folder</button>
+          <button id="homebase-choose-folder-btn" class="bookmarks-empty-secondary">Choose existing folder</button>
+        </div>
+      </div>
+    </div>
 
     <div id="bookmarks-grid">
 

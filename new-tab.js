@@ -34,6 +34,18 @@ const dock = document.querySelector('.dock');
 
 const bookmarkTabsTrack = document.getElementById('bookmark-tabs-track');
 
+const bookmarkBarWrapper = document.querySelector('.bookmark-bar-wrapper');
+
+const bookmarksGridEl = document.getElementById('bookmarks-grid');
+
+const bookmarksEmptyState = document.getElementById('bookmarks-empty-state');
+
+const bookmarksEmptyMessage = document.getElementById('bookmarks-empty-message');
+
+const homebaseCreateFolderBtn = document.getElementById('homebase-create-folder-btn');
+
+const homebaseChooseFolderBtn = document.getElementById('homebase-choose-folder-btn');
+
 const tabScrollLeftBtn = document.getElementById('tab-scroll-left');
 
 const tabScrollRightBtn = document.getElementById('tab-scroll-right');
@@ -2041,6 +2053,7 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
 // Map to store per-bookmark customization (id -> { icon })
 
 const BOOKMARK_META_KEY = 'bookmarkCustomMetadata';
+const HOMEBASE_BOOKMARK_ROOT_ID_KEY = 'homebaseBookmarkRootId';
 const FOLDER_META_KEY = 'folderCustomMetadata';
 const DOMAIN_ICON_MAP_KEY = 'domainIconMap';
 const LAST_USED_BOOKMARK_FOLDER_KEY = 'lastUsedBookmarkFolderId';
@@ -5895,6 +5908,168 @@ function setupAppLauncher() {
 
 let bookmarkTreeFetchPromise = null;
 
+async function getHomebaseRootId() {
+  try {
+    const stored = await browser.storage.local.get(HOMEBASE_BOOKMARK_ROOT_ID_KEY);
+    return stored[HOMEBASE_BOOKMARK_ROOT_ID_KEY] || '';
+  } catch (err) {
+    console.warn('Failed to read homebase root id', err);
+    return '';
+  }
+}
+
+async function setHomebaseRootId(id) {
+  try {
+    await browser.storage.local.set({ [HOMEBASE_BOOKMARK_ROOT_ID_KEY]: id || '' });
+  } catch (err) {
+    console.warn('Failed to persist homebase root id', err);
+  }
+}
+
+async function clearHomebaseRootId() {
+  try {
+    await browser.storage.local.remove(HOMEBASE_BOOKMARK_ROOT_ID_KEY);
+  } catch (err) {
+    console.warn('Failed to clear homebase root id', err);
+  }
+}
+
+async function bookmarkNodeExists(id) {
+  if (!id || !browser.bookmarks || typeof browser.bookmarks.get !== 'function') return null;
+  try {
+    const node = await browser.bookmarks.get(id);
+    return Array.isArray(node) && node.length > 0;
+  } catch (err) {
+    console.warn('Bookmark node lookup failed', err);
+    return null;
+  }
+}
+
+function hideBookmarksUI() {
+  if (bookmarkBarWrapper) {
+    bookmarkBarWrapper.hidden = true;
+    bookmarkBarWrapper.classList.add('hidden');
+  }
+  if (bookmarksGridEl) {
+    bookmarksGridEl.hidden = true;
+    bookmarksGridEl.classList.add('hidden');
+  }
+}
+
+function showBookmarksUI() {
+  if (bookmarkBarWrapper) {
+    bookmarkBarWrapper.hidden = false;
+    bookmarkBarWrapper.classList.remove('hidden');
+  }
+  if (bookmarksGridEl) {
+    bookmarksGridEl.hidden = false;
+    bookmarksGridEl.classList.remove('hidden');
+  }
+}
+
+function showBookmarksEmptyState(message) {
+  hideBookmarksUI();
+  if (bookmarksGridEl) {
+    bookmarksGridEl.innerHTML = '';
+  }
+  disableVirtualizer();
+  if (bookmarkFolderTabsContainer) {
+    bookmarkFolderTabsContainer.innerHTML = '';
+  }
+  if (bookmarkTabsTrack) {
+    bookmarkTabsTrack.scrollLeft = 0;
+  }
+  activeHomebaseFolderId = null;
+  rootDisplayFolderId = null;
+  currentGridFolderNode = null;
+  allBookmarks = [];
+  if (bookmarksEmptyMessage) {
+    bookmarksEmptyMessage.textContent = message || 'Choose or create a folder to show your bookmarks here.';
+  }
+  if (bookmarksEmptyState) {
+    bookmarksEmptyState.hidden = false;
+    bookmarksEmptyState.classList.remove('hidden');
+  }
+}
+
+function hideBookmarksEmptyState() {
+  if (bookmarksEmptyState) {
+    bookmarksEmptyState.hidden = true;
+    bookmarksEmptyState.classList.add('hidden');
+  }
+}
+
+function beginBookmarksBoot() {
+  if (document && document.body) {
+    document.body.classList.add('bookmarks-booting');
+  }
+  hideBookmarksEmptyState();
+  hideBookmarksUI();
+}
+
+function endBookmarksBoot() {
+  if (document && document.body) {
+    document.body.classList.remove('bookmarks-booting');
+  }
+}
+
+function findChildFolderByTitle(parentNode, titleLower) {
+  if (!parentNode || !parentNode.children) return null;
+  return parentNode.children.find(
+    (child) => child && child.children && (child.title || '').toLowerCase() === titleLower
+  ) || null;
+}
+
+async function ensureFolder(parentId, title) {
+  const titleLower = (title || '').toLowerCase();
+  try {
+    const children = await browser.bookmarks.getChildren(parentId);
+    const existing = findChildFolderByTitle({ children }, titleLower);
+    if (existing) return existing;
+    return await browser.bookmarks.create({ parentId, title });
+  } catch (err) {
+    console.warn('Failed to ensure folder', err);
+    return null;
+  }
+}
+
+async function ensureBookmark(parentId, title, url) {
+  const desiredUrl = (url || '').trim();
+  const normalizedDesiredUrl = desiredUrl.replace(/\/$/, '');
+  const titleLower = (title || '').toLowerCase();
+  try {
+    const children = await browser.bookmarks.getChildren(parentId);
+    const existing = (children || []).find((child) => {
+      const childUrl = (child.url || '').trim().replace(/\/$/, '');
+      const titleMatch = (child.title || '').toLowerCase() === titleLower;
+      return (!!child.url && (childUrl === normalizedDesiredUrl || titleMatch));
+    });
+    if (existing) return existing;
+    return await browser.bookmarks.create({ parentId, title, url: desiredUrl });
+  } catch (err) {
+    console.warn('Failed to ensure bookmark', err);
+    return null;
+  }
+}
+
+function getOtherBookmarksNode(rootChildren = []) {
+  if (!Array.isArray(rootChildren)) return null;
+  let node = rootChildren.find((folder) => folder && folder.id === 'unfiled_____');
+  if (node) return node;
+  node = rootChildren.find((folder) => folder && folder.id === '2');
+  if (node) return node;
+  return rootChildren.find(
+    (folder) => folder && folder.children && (folder.title || '').toLowerCase() === 'other bookmarks'
+  ) || null;
+}
+
+function findHomebaseUnderOtherBookmarks(treeRoot) {
+  if (!treeRoot || !treeRoot.children) return null;
+  const other = getOtherBookmarksNode(treeRoot.children);
+  if (!other || !other.children) return null;
+  return findChildFolderByTitle(other, 'homebase');
+}
+
 async function getBookmarkTree(forceRefresh = false) {
 
   if (bookmarkTree && !forceRefresh && !bookmarkTreeFetchPromise) {
@@ -7554,11 +7729,21 @@ async function createNewBookmarkFolder(name) {
 
     const tree = await getBookmarkTree(true);
 
-    
 
-    processBookmarks(tree, newFolderNode.id);
 
-    
+    const rootNode = tree && tree[0] ? findBookmarkNodeById(tree[0], rootDisplayFolderId) : null;
+
+    if (rootNode) {
+
+      processBookmarks([rootNode], newFolderNode.id, rootNode);
+
+    } else {
+
+      await loadBookmarks(newFolderNode.id);
+
+    }
+
+
 
   } catch (err) {
 
@@ -8284,82 +8469,20 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
 
 
-function processBookmarks(nodes, activeFolderId = null) {
+function processBookmarks(nodes, activeFolderId = null, rootNodeOverride = null) {
+  const rootNode = rootNodeOverride || (nodes && nodes[0]) || null;
 
-  allBookmarks = flattenBookmarks(nodes);
-
-  
-
-  if (!nodes || !nodes[0] || !nodes[0].children) {
-
+  if (!rootNode) {
     console.warn('Bookmark tree is empty or malformed.');
-
+    showBookmarksEmptyState();
     return;
-
   }
 
-
-
-  const rootChildren = nodes[0].children;
-
-  let targetFolder = null;
-
-
-
-  let otherBookmarksFolder = rootChildren.find(folder => folder.id === 'unfiled_____');
-
-  if (!otherBookmarksFolder) {
-
-    otherBookmarksFolder = rootChildren.find(
-
-      folder => folder.title.toLowerCase() === 'other bookmarks' && folder.children
-
-    );
-
-  }
-
-
-
-  if (otherBookmarksFolder && otherBookmarksFolder.children) {
-
-    targetFolder = otherBookmarksFolder.children.find(
-
-      folder => folder.title.toLowerCase() === 'homebase' && folder.children
-
-    );
-
-  }
-
-
-
-  if (targetFolder) {
-
-    rootDisplayFolderId = targetFolder.id;
-
-    createFolderTabs(targetFolder, activeFolderId);
-
-  } else {
-
-    console.warn('Could not find "Other Bookmarks -> homebase" path. Falling back to "Other Bookmarks".');
-
-    if (otherBookmarksFolder) {
-
-      rootDisplayFolderId = otherBookmarksFolder.id;
-
-      createFolderTabs(otherBookmarksFolder, activeFolderId);
-
-    } else {
-
-      console.warn('Could not even find "Other Bookmarks". Falling back to root.');
-
-      rootDisplayFolderId = nodes[0].id;
-
-      createFolderTabs(nodes[0], activeFolderId);
-
-    }
-
-  }
-
+  allBookmarks = flattenBookmarks([rootNode]);
+  rootDisplayFolderId = rootNode.id;
+  hideBookmarksEmptyState();
+  showBookmarksUI();
+  createFolderTabs(rootNode, activeFolderId);
 }
 
 
@@ -8463,6 +8586,114 @@ async function loadFolderMetadata() {
 
 
 
+async function createHomebaseFolder() {
+  if (!browser.bookmarks) {
+    showBookmarksEmptyState('Bookmarks permission unavailable.');
+    return;
+  }
+
+  beginBookmarksBoot();
+  try {
+    const tree = await getBookmarkTree(true);
+    const root = tree && tree[0];
+    const rootChildren = (root && root.children) || [];
+
+    const parentNode = getOtherBookmarksNode(rootChildren) || rootChildren[0] || root;
+    if (!parentNode || !parentNode.id) {
+      console.warn('Could not resolve Other Bookmarks node to create Homebase.');
+      showBookmarksEmptyState('Bookmarks permission unavailable.');
+      return;
+    }
+
+    const homebaseFolder = await ensureFolder(parentNode.id, 'Homebase');
+    if (!homebaseFolder || !homebaseFolder.id) {
+      showBookmarksEmptyState('Bookmarks permission unavailable.');
+      return;
+    }
+
+    const folderOne = await ensureFolder(homebaseFolder.id, 'Folder 1');
+    if (folderOne && folderOne.id) {
+      await ensureBookmark(folderOne.id, 'Google', 'https://www.google.com');
+    }
+
+    await setHomebaseRootId(homebaseFolder.id);
+    await loadBookmarks();
+  } catch (err) {
+    console.warn('Failed to create Homebase folder', err);
+    showBookmarksEmptyState('Bookmarks permission unavailable.');
+  } finally {
+    endBookmarksBoot();
+  }
+}
+
+async function chooseExistingFolder() {
+  if (!browser.bookmarks) {
+    showBookmarksEmptyState('Bookmarks permission unavailable.');
+    return;
+  }
+
+  beginBookmarksBoot();
+  try {
+    const tree = await getBookmarkTree(true);
+    const root = tree && tree[0];
+    if (!root) {
+      showBookmarksEmptyState('Bookmarks permission unavailable.');
+      return;
+    }
+
+    const folders = [];
+    const maxDepth = 5;
+    const traverse = (node, pathParts, depth) => {
+      if (!node || depth > maxDepth) return;
+      const nextPath = node.title ? [...pathParts, node.title] : pathParts;
+
+      if (node.children) {
+        if (depth > 0) {
+          const label = nextPath.filter(Boolean).join(' > ') || 'Root';
+          folders.push({ id: node.id, label });
+        }
+        node.children.forEach((child) => {
+          if (child.children) {
+            traverse(child, nextPath, depth + 1);
+          }
+        });
+      }
+    };
+
+    traverse(root, [], 0);
+
+    if (folders.length === 0) {
+      alert('No bookmark folders found.');
+      return;
+    }
+
+    const limitedFolders = folders.slice(0, 60);
+
+    const promptText = `Enter number for your Homebase folder:\n${limitedFolders
+      .map((folder, index) => `${index + 1}) ${folder.label}`)
+      .join('\\n')}`;
+
+    const userInput = window.prompt(promptText);
+    if (userInput === null) return;
+
+    const choice = parseInt(userInput, 10);
+    if (Number.isNaN(choice) || choice < 1 || choice > limitedFolders.length) {
+      alert('Invalid selection.');
+      return;
+    }
+
+    const selected = limitedFolders[choice - 1];
+    await setHomebaseRootId(selected.id);
+    await loadBookmarks();
+  } catch (err) {
+    console.warn('Failed to choose existing folder', err);
+    showBookmarksEmptyState('Bookmarks permission unavailable.');
+  } finally {
+    endBookmarksBoot();
+  }
+}
+
+
 /**
 
  * Now accepts an optional ID to keep a folder active after reload.
@@ -8471,18 +8702,12 @@ async function loadFolderMetadata() {
 
 async function loadBookmarks(activeFolderId = null) {
 
+  beginBookmarksBoot();
   if (!browser.bookmarks) {
 
     console.warn('Bookmarks API not available.');
 
-    const grid = document.getElementById('bookmarks-grid');
-
-    if (grid) {
-
-      grid.innerHTML = 'Bookmarks are not available.';
-
-    }
-
+    showBookmarksEmptyState('Bookmarks permission unavailable.');
     return;
 
   }
@@ -8492,22 +8717,128 @@ async function loadBookmarks(activeFolderId = null) {
   try {
 
     const tree = await getBookmarkTree(true);
+    const treeRoot = tree && tree[0];
+    if (!treeRoot) {
+      console.warn('Bookmark tree is empty.');
+      showBookmarksEmptyState();
+      return;
+    }
 
-    processBookmarks(tree, activeFolderId);
+    let rootNode = null;
+    const storedRootId = await getHomebaseRootId();
+
+    if (storedRootId) {
+      try {
+        const lookup = await browser.bookmarks.get(storedRootId);
+        const lookupNode = Array.isArray(lookup) ? lookup[0] : null;
+        if (lookupNode && !lookupNode.url) {
+          rootNode = findBookmarkNodeById(treeRoot, storedRootId);
+          if (!rootNode || rootNode.url) {
+            console.warn('Stored Homebase root not found in current tree.');
+            await clearHomebaseRootId();
+            rootNode = null;
+          }
+        } else {
+          console.warn('Stored Homebase root is missing or not a folder.');
+          await clearHomebaseRootId();
+        }
+      } catch (err) {
+        console.warn('Failed to validate stored Homebase root', err);
+        await clearHomebaseRootId();
+      }
+    }
+
+    if (!rootNode) {
+      rootNode = findHomebaseUnderOtherBookmarks(treeRoot);
+      if (rootNode && rootNode.id) {
+        await setHomebaseRootId(rootNode.id);
+      } else {
+        console.warn('Homebase folder not found under Other Bookmarks.');
+      }
+    }
+
+    if (!rootNode) {
+      showBookmarksEmptyState();
+      return;
+    }
+
+    hideBookmarksEmptyState();
+    showBookmarksUI();
+    processBookmarks([rootNode], activeFolderId, rootNode);
 
     // Warm favicon cache in the background so images are instant when rendered
-    runWhenIdle(() => warmFaviconCache(tree));
+    runWhenIdle(() => warmFaviconCache([rootNode]));
 
   } catch (err) {
 
     console.warn('Failed to load bookmarks', err);
+    showBookmarksEmptyState('Bookmarks permission unavailable.');
 
+  } finally {
+    endBookmarksBoot();
   }
 
 }
 
 
 
+
+
+function setupHomebaseRootControls() {
+
+  if (homebaseCreateFolderBtn) {
+
+    homebaseCreateFolderBtn.addEventListener('click', () => {
+
+      createHomebaseFolder();
+
+    });
+
+  }
+
+  if (homebaseChooseFolderBtn) {
+
+    homebaseChooseFolderBtn.addEventListener('click', () => {
+
+      chooseExistingFolder();
+
+    });
+
+  }
+
+}
+
+function setupHomebaseRootListeners() {
+
+  if (!browser.bookmarks || !browser.bookmarks.onRemoved || typeof browser.bookmarks.onRemoved.addListener !== 'function') {
+
+    return;
+
+  }
+
+  try {
+
+    browser.bookmarks.onRemoved.addListener(async (id) => {
+
+      const storedRootId = await getHomebaseRootId();
+
+      if (storedRootId && id === storedRootId) {
+
+        await clearHomebaseRootId();
+
+        showBookmarksEmptyState();
+
+      }
+
+    });
+
+  } catch (err) {
+
+    console.warn('Failed to bind bookmark removal listener', err);
+
+  }
+
+}
 
 
 // ===============================================
@@ -17027,7 +17358,11 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
   setupMoveModal();
 
-  
+  setupHomebaseRootControls();
+
+  setupHomebaseRootListeners();
+
+
 
   try {
 
@@ -17641,6 +17976,10 @@ if (browser?.storage?.onChanged) {
 
       if (changes[LAST_USED_BOOKMARK_FOLDER_KEY]) {
         lastUsedBookmarkFolderId = changes[LAST_USED_BOOKMARK_FOLDER_KEY].newValue || null;
+      }
+
+      if (changes[HOMEBASE_BOOKMARK_ROOT_ID_KEY]) {
+        loadBookmarks();
       }
 
     });

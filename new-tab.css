@@ -4811,7 +4811,9 @@ body.performance-mode.bookmark-text-bg-enabled .bookmark-item span {
 }
 
 /* Hide Animation settings in Performance Mode */
-body.performance-mode #app-grid-animation-toggle-row,
+body.performance-mode #app-grid-animation-row,
+body.performance-mode #app-glass-style-row,
+body.performance-mode #app-cinema-mode-row,
 body.performance-mode #grid-animation-sub-settings {
   display: none !important;
 }

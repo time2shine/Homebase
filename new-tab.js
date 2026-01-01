@@ -166,6 +166,7 @@ let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
 
 // --- Global Controller for Video Events ---
 let videoPlaybackController = null;
+let backgroundCrossfadeTimeout = null;
 
 function cleanupBackgroundPlayback() {
 
@@ -178,6 +179,11 @@ function cleanupBackgroundPlayback() {
 
   }
 
+  if (backgroundCrossfadeTimeout) {
+    clearTimeout(backgroundCrossfadeTimeout);
+    backgroundCrossfadeTimeout = null;
+  }
+
   // 2. Pause videos to stop CPU usage
   const videos = document.querySelectorAll('.background-video');
 
@@ -186,6 +192,8 @@ function cleanupBackgroundPlayback() {
     v.pause();
 
     v.classList.remove('is-active');
+    v.classList.remove('with-transition');
+    v.classList.remove('on-top');
 
   });
 
@@ -1309,6 +1317,7 @@ async function hydrateWallpaperSelection(selection) {
 
 
 function setBackgroundVideoSources(videoUrl, posterUrl = '') {
+  if (isPerformanceModeEnabled()) return;
 
   const videos = Array.from(document.querySelectorAll('.background-video'));
 
@@ -1542,6 +1551,8 @@ async function checkBatteryStatus() {
 
 
 async function ensureDailyWallpaper(forceNext = false) {
+
+  if (isPerformanceModeEnabled()) return;
 
   const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY, DAILY_ROTATION_KEY, WALLPAPER_QUALITY_KEY]);
 
@@ -2178,6 +2189,8 @@ function setNextWallpaperButtonLoading(isLoading) {
 function waitForWallpaperReady(selection, type = 'video') {
 
   return new Promise((resolve) => {
+
+    if (isPerformanceModeEnabled()) return resolve();
 
     if (!selection) return resolve();
 
@@ -8975,12 +8988,105 @@ function applyWidgetVisibility() {
 }
 
 
-function applyPerformanceMode(enabled) {
+function isPerformanceModeEnabled() {
+  return appPerformanceModePreference === true;
+}
 
-  appPerformanceModePreference = enabled;
+function disableGridAnimationRuntime() {
+  document.body.classList.remove('grid-animation-enabled');
 
-  document.body.classList.toggle('performance-mode', enabled);
+  let styleEl = document.getElementById('dynamic-grid-animation');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'dynamic-grid-animation';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.innerHTML = '';
 
+  const container = document.getElementById('grid-animation-sub-settings');
+  if (container) container.classList.remove('expanded');
+
+  document.querySelectorAll('.bookmark-item.newly-rendered').forEach((item) => {
+    item.classList.remove('newly-rendered');
+    item.style.animation = 'none';
+  });
+}
+
+function disableGlassRuntime() {
+  let styleEl = document.getElementById('dynamic-glass-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'dynamic-glass-style';
+    document.head.appendChild(styleEl);
+  }
+
+  styleEl.innerHTML = '';
+
+  document.documentElement.style.setProperty('--glass-blur', '0px');
+  document.documentElement.style.setProperty('--glass-bg', 'transparent');
+  document.documentElement.style.setProperty('--overlay-blur', '0px');
+}
+
+function enableGlassRuntimeFromPreference() {
+  document.documentElement.style.removeProperty('--glass-blur');
+  document.documentElement.style.removeProperty('--glass-bg');
+  document.documentElement.style.removeProperty('--overlay-blur');
+  applyGlassStyle(appGlassStylePreference);
+}
+
+function disableCinemaModeRuntime() {
+  document.body.classList.remove('cinema-mode');
+  if (cinemaTimeout) clearTimeout(cinemaTimeout);
+  detachCinemaModeListeners();
+}
+
+function applyPerformanceModeState(enabled) {
+  const isOn = !!enabled;
+
+  appPerformanceModePreference = isOn;
+
+  document.body.classList.toggle('performance-mode', isOn);
+
+  const perfToggle = document.getElementById('app-performance-mode-toggle');
+  if (perfToggle) perfToggle.checked = isOn;
+
+  const rowsToHide = [
+    document.getElementById('app-grid-animation-row'),
+    document.getElementById('app-glass-style-row'),
+    document.getElementById('app-cinema-mode-row'),
+    document.getElementById('grid-animation-sub-settings')
+  ];
+
+  rowsToHide.forEach((row) => {
+    if (row) row.style.display = isOn ? 'none' : '';
+  });
+
+  if (isOn) {
+    disableGridAnimationRuntime();
+    disableGlassRuntime();
+    disableCinemaModeRuntime();
+    cleanupBackgroundPlayback();
+    document.querySelectorAll('.background-video').forEach((v) => {
+      try { v.pause(); } catch (e) {}
+      try { v.currentTime = 0; } catch (e) {}
+      try {
+        if (v.src) v.src = v.src;
+        const source = v.querySelector('source');
+        if (source && source.src) source.src = source.src;
+      } catch (e) {}
+      v.classList.remove('is-active');
+      v.classList.remove('with-transition');
+      v.classList.remove('on-top');
+    });
+    return;
+  }
+
+  enableGlassRuntimeFromPreference();
+  applyGridAnimation(appGridAnimationPreference);
+  applyGridAnimationSpeed(appGridAnimationSpeedPreference);
+  applyGridAnimationEnabled(appGridAnimationEnabledPreference);
+  setupCinemaModeListeners();
+  resetCinemaMode();
 }
 
 
@@ -9005,6 +9111,7 @@ function applyBackgroundDim(value) {
 // --- Function to inject CSS ---
 function applyGlassStyle(styleId) {
   appGlassStylePreference = styleId || 'original';
+  if (isPerformanceModeEnabled()) return;
   const styleData = GLASS_STYLES.find(s => s.id === appGlassStylePreference) || GLASS_STYLES[0];
   
   let styleEl = document.getElementById('dynamic-glass-style');
@@ -9041,6 +9148,7 @@ async function loadGlassStylePref() {
  */
 function applyGridAnimation(animationKey) {
   appGridAnimationPreference = animationKey || 'default';
+  if (isPerformanceModeEnabled()) return;
   const animData = GRID_ANIMATIONS[appGridAnimationPreference] || GRID_ANIMATIONS['default'];
   
   let styleEl = document.getElementById('dynamic-grid-animation');
@@ -9069,6 +9177,7 @@ async function loadGridAnimationPref() {
 
 function applyGridAnimationEnabled(enabled) {
   appGridAnimationEnabledPreference = enabled;
+  if (isPerformanceModeEnabled()) return;
   document.body.classList.toggle('grid-animation-enabled', enabled);
   updateGridAnimationSettingsUI();
 }
@@ -9077,6 +9186,7 @@ function applyGridAnimationSpeed(seconds) {
   // Ensure it's a valid number
   const validSeconds = parseFloat(seconds) || 0.3;
   appGridAnimationSpeedPreference = validSeconds;
+  if (isPerformanceModeEnabled()) return;
   
   // Update CSS Variable globally
   document.documentElement.style.setProperty('--grid-animation-duration', `${validSeconds}s`);
@@ -9325,6 +9435,10 @@ async function loadAppSettingsFromStorage() {
 
     ]);
 
+    appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
+    appBatteryOptimizationPreference = stored[APP_BATTERY_OPTIMIZATION_KEY] === true;
+    appCinemaModePreference = stored[APP_CINEMA_MODE_KEY] === true;
+
     // Load animation pref
     await loadGridAnimationPref(); 
     await loadGlassStylePref(); 
@@ -9387,11 +9501,6 @@ async function loadAppSettingsFromStorage() {
     const savedSpeed = stored[APP_GRID_ANIMATION_SPEED_KEY];
     applyGridAnimationSpeed(savedSpeed !== undefined ? savedSpeed : 0.3);
 
-    appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
-
-    appBatteryOptimizationPreference = stored[APP_BATTERY_OPTIMIZATION_KEY] === true;
-    appCinemaModePreference = stored[APP_CINEMA_MODE_KEY] === true;
-
     const savedBackgroundDim = stored.hasOwnProperty(APP_BACKGROUND_DIM_KEY) ? stored[APP_BACKGROUND_DIM_KEY] : 0;
 
     appContainerModePreference = stored[APP_CONTAINER_MODE_KEY] !== false;
@@ -9414,7 +9523,7 @@ async function loadAppSettingsFromStorage() {
 
     applyBookmarkFolderColor(appBookmarkFolderColorPreference);
 
-    applyPerformanceMode(appPerformanceModePreference);
+    applyPerformanceModeState(appPerformanceModePreference);
     resetCinemaMode();
 
     applyBackgroundDim(savedBackgroundDim);
@@ -10037,7 +10146,15 @@ function syncAppSettingsForm() {
 
     // Toggle visibility of animation settings based on performance mode
     // (CSS also handles this via body.performance-mode selector)
-    perfToggle.addEventListener('change', () => {});
+    perfToggle.addEventListener('change', async () => {
+      const nextValue = perfToggle.checked;
+      applyPerformanceModeState(nextValue);
+      try {
+        await browser.storage.local.set({ [APP_PERFORMANCE_MODE_KEY]: nextValue });
+      } catch (err) {
+        console.warn('Failed to persist performance mode toggle', err);
+      }
+    });
 
   }
 
@@ -10562,7 +10679,8 @@ function setupAppSettingsModal() {
 
       applyBookmarkFolderColor(nextFolderColor);
 
-      applyPerformanceMode(nextPerformanceMode);
+      applyPerformanceModeState(nextPerformanceMode);
+      setupCinemaModeListeners();
       resetCinemaMode();
 
       applyGridAnimationEnabled(nextGridAnimEnabled);
@@ -10731,6 +10849,7 @@ function setupAnimationSettings() {
   };
 
   const playPreview = () => {
+    if (isPerformanceModeEnabled()) return;
     previewItems.forEach((item, index) => {
       // Reset animation to force a replay
       item.style.animation = 'none';
@@ -10744,6 +10863,10 @@ function setupAnimationSettings() {
 
   if (openBtn) {
     openBtn.addEventListener('click', () => {
+      if (isPerformanceModeEnabled()) {
+        console.warn('Performance Mode is on; animation settings are disabled.');
+        return;
+      }
       selectedKey = appGridAnimationPreference;
       
       // Build List
@@ -10895,6 +11018,10 @@ function setupGlassSettings() {
 
   if (openBtn) {
     openBtn.addEventListener('click', () => {
+      if (isPerformanceModeEnabled()) {
+        console.warn('Performance Mode is on; glass settings are disabled.');
+        return;
+      }
       selectedId = appGlassStylePreference; // Reset to current actual setting
       
       list.innerHTML = '';
@@ -15310,6 +15437,10 @@ async function setupWeather() {
 // ===============================================
 
 function setupBackgroundVideoCrossfade() {
+  if (isPerformanceModeEnabled()) {
+    cleanupBackgroundPlayback();
+    return;
+  }
   const videos = Array.from(document.querySelectorAll('.background-video'));
   if (videos.length < 2) return;
 
@@ -15332,6 +15463,7 @@ function setupBackgroundVideoCrossfade() {
   const bufferSec = bufferMs / 1000;
 
   const playAndFadeIn = async (videoEl, enableTransition, onReady) => {
+    if (isPerformanceModeEnabled()) return;
     try {
       if (enableTransition) {
         videoEl.classList.add('with-transition');
@@ -15372,6 +15504,7 @@ function setupBackgroundVideoCrossfade() {
   };
 
   const startCycle = (current, next) => {
+    if (isPerformanceModeEnabled()) return;
     let fading = false;
 
     const primeNext = () => {
@@ -15382,6 +15515,7 @@ function setupBackgroundVideoCrossfade() {
     };
 
     const doFade = async () => {
+      if (isPerformanceModeEnabled()) return;
       if (fading) return;
       fading = true;
       primeNext();
@@ -15404,7 +15538,9 @@ function setupBackgroundVideoCrossfade() {
 
       playAndFadeIn(next, shouldAnimate, () => {
         const holdTime = shouldAnimate ? fadeMs + 50 : 50;
-        setTimeout(() => {
+        if (backgroundCrossfadeTimeout) clearTimeout(backgroundCrossfadeTimeout);
+        backgroundCrossfadeTimeout = setTimeout(() => {
+          backgroundCrossfadeTimeout = null;
           current.classList.remove('is-active');
           current.classList.remove('with-transition');
           current.pause();
@@ -15449,14 +15585,20 @@ function setupBackgroundVideoCrossfade() {
 // --- CINEMA MODE LOGIC ---
 // ===============================================
 let cinemaTimeout;
+let cinemaMoveListener;
+let cinemaKeyListener;
+let cinemaClickListener;
+let cinemaListenersAttached = false;
 
 function resetCinemaMode() {
   document.body.classList.remove('cinema-mode');
   if (cinemaTimeout) clearTimeout(cinemaTimeout);
 
+  if (isPerformanceModeEnabled()) return;
   if (!appCinemaModePreference) return;
 
   cinemaTimeout = setTimeout(() => {
+    if (isPerformanceModeEnabled()) return;
     if (!appCinemaModePreference) return;
     if (document.body.classList.contains('modal-open')) return;
 
@@ -15477,11 +15619,40 @@ function throttle(fn, limit) {
   };
 }
 
+function detachCinemaModeListeners() {
+  if (cinemaMoveListener) {
+    window.removeEventListener('mousemove', cinemaMoveListener);
+    cinemaMoveListener = null;
+  }
+  if (cinemaKeyListener) {
+    window.removeEventListener('keydown', cinemaKeyListener);
+    cinemaKeyListener = null;
+  }
+  if (cinemaClickListener) {
+    window.removeEventListener('click', cinemaClickListener);
+    cinemaClickListener = null;
+  }
+  cinemaListenersAttached = false;
+}
+
 function setupCinemaModeListeners() {
+  if (isPerformanceModeEnabled() || !appCinemaModePreference) {
+    detachCinemaModeListeners();
+    resetCinemaMode();
+    return;
+  }
+
+  if (cinemaListenersAttached) return;
+
   const throttledReset = throttle(resetCinemaMode, 200);
-  window.addEventListener('mousemove', throttledReset);
-  window.addEventListener('keydown', resetCinemaMode);
-  window.addEventListener('click', resetCinemaMode);
+  cinemaMoveListener = throttledReset;
+  cinemaKeyListener = resetCinemaMode;
+  cinemaClickListener = resetCinemaMode;
+
+  window.addEventListener('mousemove', cinemaMoveListener);
+  window.addEventListener('keydown', cinemaKeyListener);
+  window.addEventListener('click', cinemaClickListener);
+  cinemaListenersAttached = true;
   resetCinemaMode();
 }
 
@@ -20319,6 +20490,8 @@ document.addEventListener('visibilitychange', () => {
 
   } else {
 
+    if (isPerformanceModeEnabled()) return;
+
     const activeVideo = document.querySelector('.background-video.is-active') || videos[0];
 
     if (activeVideo) {
@@ -20623,6 +20796,19 @@ function applyWallpaperByType(selection, type = 'video') {
 
   cleanupUnusedObjectUrls(selection);
 
+  if (isPerformanceModeEnabled() && finalType === 'video') {
+    cleanupBackgroundPlayback();
+    applyWallpaperBackground(poster);
+    lastAppliedWallpaper = {
+      id: selection.id || null,
+      poster,
+      video,
+      type: finalType
+    };
+    updateSettingsPreview(selection, finalType);
+    return;
+  }
+
 
 
   if (!unchanged) {
@@ -20717,6 +20903,11 @@ function clearBackgroundVideos() {
 
 function startBackgroundVideos() {
 
+  if (isPerformanceModeEnabled()) {
+    cleanupBackgroundPlayback();
+    return;
+  }
+
   const videos = Array.from(document.querySelectorAll('.background-video'));
 
   if (!videos.length) return;
@@ -20777,6 +20968,8 @@ function updateSettingsPreview(selection, type = 'video') {
 
   const finalType = type === 'static' ? 'static' : 'video';
 
+  const perfModeOn = isPerformanceModeEnabled();
+
   const poster = (selection && (selection.posterUrl || selection.poster)) || 'assets/fallback.webp';
 
   const title = (selection && selection.title) || 'Wallpaper';
@@ -20795,7 +20988,7 @@ function updateSettingsPreview(selection, type = 'video') {
 
 
 
-  if (finalType === 'video' && selection && selection.videoUrl) {
+  if (!perfModeOn && finalType === 'video' && selection && selection.videoUrl) {
 
     settingsPreviewVideo.classList.remove('hidden');
 

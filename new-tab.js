@@ -16395,8 +16395,6 @@ async function setupContainerMode() {
 
       if (subSettings) subSettings.classList.toggle('expanded', isEnabled);
 
-      if (behaviorRow) behaviorRow.classList.toggle('visible', isEnabled);
-
       await browser.storage.local.set({ [APP_CONTAINER_MODE_KEY]: isEnabled });
 
     });

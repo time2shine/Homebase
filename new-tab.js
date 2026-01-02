@@ -498,9 +498,13 @@ function scrollBookmarkTabs(direction) {
 
   if (!bookmarkTabsTrack) return;
 
-  bookmarkTabsTrack.scrollBy({
+  const maxScrollLeft = Math.max(0, bookmarkTabsTrack.scrollWidth - bookmarkTabsTrack.clientWidth);
+  const delta = direction * TAB_SCROLL_STEP;
+  const target = Math.min(Math.max(bookmarkTabsTrack.scrollLeft + delta, 0), maxScrollLeft);
 
-    left: direction * TAB_SCROLL_STEP,
+  bookmarkTabsTrack.scrollTo({
+
+    left: target,
 
     behavior: 'smooth'
 

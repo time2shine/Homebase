@@ -27,6 +27,13 @@
       const w = JSON.parse(wData);
       // Valid for 1 hour
       if (w.__timestamp && (Date.now() - w.__timestamp < 3600000)) {
+        const getUpdatedLabel = () => {
+          if (w.updated) return w.updated;
+          if (!w.__timestamp) return '';
+          const d = new Date(w.__timestamp);
+          if (Number.isNaN(d.getTime())) return '';
+          return `Updated: ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        };
         
         // Map DOM IDs to the exact JSON keys saved in new-tab.js
         const fieldMap = {
@@ -39,12 +46,13 @@
           'weather-cloudcover': 'cloudcover',
           'weather-precip-prob': 'precipProb',
           'weather-sunrise': 'sunrise',
-          'weather-sunset': 'sunset'
+          'weather-sunset': 'sunset',
+          'weather-updated': 'updated'
         };
 
         Object.keys(fieldMap).forEach(id => {
           const key = fieldMap[id];
-          const val = w[key];
+          const val = id === 'weather-updated' ? getUpdatedLabel() : w[key];
           const el = document.getElementById(id);
 
           if (id === 'weather-icon') {
@@ -53,7 +61,7 @@
                el.style.fontSize = '3.5em'; 
                el.style.lineHeight = '1'; 
              }
-          } else if (el && val) {
+          } else if (el && val !== undefined) {
              el.textContent = val;
           }
         });

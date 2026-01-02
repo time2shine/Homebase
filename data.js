@@ -192,6 +192,19 @@ function tintSvgElement(svg, color) {
   svg.style.setProperty('fill', color, 'important');
 }
 
+// Skip redundant DOM writes for frequent UI updates
+function setText(el, value) {
+  if (!el) return;
+  const next = value == null ? '' : String(value);
+  if (el.textContent !== next) el.textContent = next;
+}
+
+function setAttr(el, name, value) {
+  if (!el) return;
+  const next = value == null ? '' : String(value);
+  if (el.getAttribute(name) !== next) el.setAttribute(name, next);
+}
+
 function isLightColor(hex, alpha = 1) {
   const clean = (hex || '').replace('#', '');
   if (clean.length !== 6) return false;

@@ -2063,6 +2063,11 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   align-items: center;
   margin-bottom: 10px;
 }
+.weather-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .weather-body {
   display: flex;
   justify-content: space-between;
@@ -2084,6 +2089,16 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   align-items: flex-start;
 }
 .weather-stats span { font-size: 0.85em; line-height: 1.5; }
+.weather-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 0.8em;
+  color: #ddd;
+  opacity: 0.9;
+}
+#weather-updated { font-style: italic; }
 
 /* --- Quote Styles --- */
 .widget-quote:hover #quote-settings-btn { opacity: 1.0; }
@@ -2167,6 +2182,10 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 .icon-btn:hover { opacity: 1; }
 .widget-weather:hover #settings-btn { opacity: 1; }
 #settings-btn { opacity: 0; transition: opacity 0.2s ease-in-out; }
+.widget-weather:hover #weather-refresh-btn { opacity: 1; }
+.widget-weather:hover #weather-refresh-btn[disabled] { opacity: 0.6; }
+#weather-refresh-btn { opacity: 0; transition: opacity 0.2s ease-in-out; }
+#weather-refresh-btn[disabled] { cursor: not-allowed; }
 
 /* --- Settings Panel Styles --- */
 .hidden { display: none !important; } 

@@ -15832,10 +15832,11 @@ async function handleSearchInput() {
 
 
 // ===============================================
-
 // --- WEATHER WIDGET & SETTINGS ---
-
 // ===============================================
+// =============================
+// Weather widget (single impl)
+// =============================
 
 const weatherWidget = document.querySelector('.widget-weather');
 
@@ -15859,9 +15860,16 @@ const weatherLocationResults = document.getElementById('modal-location-results')
 
 const weatherUseCurrentBtn = document.getElementById('modal-set-location-auto-btn');
 
-let selectedLocation = null;
+const weatherRefreshBtn = document.getElementById('weather-refresh-btn');
 
+const weatherUpdatedEl = document.getElementById('weather-updated');
+
+let selectedLocation = null;
 let searchTimeout = null;
+// Abort stale geocode lookups and ignore late responses
+let geoAbortController = null;
+let geoRequestId = 0;
+let weatherRefreshInFlight = false;
 
 
 
@@ -15923,15 +15931,30 @@ function getWeatherDescription(code) {
 
 
 
+function formatWeatherUpdated(timestamp) {
+
+  if (!timestamp) return '';
+
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) return '';
+
+  return `Updated: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+}
+
+
 async function loadCachedWeather() {
 
   try {
 
-    const data = await browser.storage.local.get(['cachedWeatherData', 'cachedCityName', 'cachedUnits']);
+    const data = await browser.storage.local.get(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
 
     if (data.cachedWeatherData && data.cachedCityName) {
 
-      updateWeatherUI(data.cachedWeatherData, data.cachedCityName, data.cachedUnits || 'celsius');
+      const cachedTs = data.weatherFetchedAt ?? data.cachedWeatherData.__timestamp ?? Date.now();
+
+      updateWeatherUI(data.cachedWeatherData, data.cachedCityName, data.cachedUnits || 'celsius', cachedTs);
 
     }
 
@@ -15945,7 +15968,7 @@ async function loadCachedWeather() {
 
 
 
-function updateWeatherUI(data, cityName, units) {
+function updateWeatherUI(data, cityName, units, fetchedAt = Date.now()) {
 
   const iconEl = document.getElementById('weather-icon');
 
@@ -15967,21 +15990,45 @@ function updateWeatherUI(data, cityName, units) {
 
   const sunsetEl = document.getElementById('weather-sunset');
 
-  const weather = data.current_weather, hourly = data.hourly, daily = data.daily;
+  const updatedEl = weatherUpdatedEl || document.getElementById('weather-updated');
 
-  const temp = Math.round(weather.temperature), code = weather.weathercode;
+  if (!data) {
 
-  const pressure = hourly.surface_pressure ? Math.round(hourly.surface_pressure[0] * 0.75006) : '--';
+    showWeatherError(new Error('Weather data missing'));
 
-  const humidity = hourly.relative_humidity_2m ? hourly.relative_humidity_2m[0] : '--';
+    return;
 
-  const cloudcover = hourly.cloudcover ? hourly.cloudcover[0] : '--';
+  }
 
-  const precipProb = hourly.precipitation_probability ? hourly.precipitation_probability[0] : '--';
+  const weather = data.current_weather || {};
+
+  const hourly = data.hourly || {};
+
+  const daily = data.daily || {};
+
+  const tempValue = Number.isFinite(weather.temperature) ? Math.round(weather.temperature) : '--';
+
+  const code = weather.weathercode;
+
+  const pressure = (Array.isArray(hourly.surface_pressure) && Number.isFinite(hourly.surface_pressure[0]))
+    ? Math.round(hourly.surface_pressure[0] * 0.75006)
+    : '--';
+
+  const humidity = (Array.isArray(hourly.relative_humidity_2m) && Number.isFinite(hourly.relative_humidity_2m[0]))
+    ? hourly.relative_humidity_2m[0]
+    : '--';
+
+  const cloudcover = (Array.isArray(hourly.cloudcover) && Number.isFinite(hourly.cloudcover[0]))
+    ? hourly.cloudcover[0]
+    : '--';
+
+  const precipProb = (Array.isArray(hourly.precipitation_probability) && Number.isFinite(hourly.precipitation_probability[0]))
+    ? hourly.precipitation_probability[0]
+    : '--';
 
   let sunrise = '--', sunset = '--';
 
-  if (daily && daily.sunrise && daily.sunrise[0] && daily.sunset && daily.sunset[0]) {
+  if (Array.isArray(daily.sunrise) && daily.sunrise[0] && Array.isArray(daily.sunset) && daily.sunset[0]) {
 
     const sunriseDate = new Date(daily.sunrise[0]);
 
@@ -15995,31 +16042,47 @@ function updateWeatherUI(data, cityName, units) {
 
   }
 
-  cityEl.textContent = cityName;
+  const effectiveTimestamp = typeof fetchedAt === 'number' ? fetchedAt : Date.now();
 
-  tempEl.textContent = `${temp}\u00b0${units === 'celsius' ? 'C' : 'F'}`;
+  const unitLabel = units === 'fahrenheit' ? 'F' : 'C';
 
-  descEl.textContent = getWeatherDescription(code);
+  const tempLabel = `${tempValue === '--' ? '--' : tempValue}\u00b0${unitLabel}`;
 
-  pressureEl.textContent = `Pressure: ${pressure}${pressure !== '--' ? ' mmHg' : ''}`;
+  const description = getWeatherDescription(code);
 
-  humidityEl.textContent = `Humidity: ${humidity}${humidity !== '--' ? '%' : ''}`;
+  const icon = getWeatherEmoji(code);
 
-  cloudcoverEl.textContent = `Cloudcover: ${cloudcover}${cloudcover !== '--' ? '%' : ''}`;
+  const updatedLabel = formatWeatherUpdated(effectiveTimestamp);
 
-  precipProbEl.textContent = `Rain Chance: ${precipProb}${precipProb !== '--' ? '%' : ''}`;
+  setText(cityEl, cityName);
 
-  sunriseEl.textContent = `Sunrise: ${sunrise}`;
+  setText(tempEl, tempLabel);
 
-  sunsetEl.textContent = `Sunset: ${sunset}`;
+  setText(descEl, description);
 
-  iconEl.textContent = getWeatherEmoji(code);
+  setText(pressureEl, `Pressure: ${pressure}${pressure !== '--' ? ' mmHg' : ''}`);
 
-  iconEl.style.fontSize = '3.5em';
+  setText(humidityEl, `Humidity: ${humidity}${humidity !== '--' ? '%' : ''}`);
 
-  iconEl.style.lineHeight = '1';
+  setText(cloudcoverEl, `Cloudcover: ${cloudcover}${cloudcover !== '--' ? '%' : ''}`);
 
-  setLocationBtn.classList.add('hidden');
+  setText(precipProbEl, `Rain Chance: ${precipProb}${precipProb !== '--' ? '%' : ''}`);
+
+  setText(sunriseEl, `Sunrise: ${sunrise}`);
+
+  setText(sunsetEl, `Sunset: ${sunset}`);
+
+  if (updatedEl) setText(updatedEl, updatedLabel);
+
+  setText(iconEl, icon);
+
+  setAttr(iconEl, 'data-weather-code', code ?? '');
+
+  if (iconEl && iconEl.style.fontSize !== '3.5em') iconEl.style.fontSize = '3.5em';
+
+  if (iconEl && iconEl.style.lineHeight !== '1') iconEl.style.lineHeight = '1';
+
+  if (setLocationBtn) setLocationBtn.classList.add('hidden');
 
   browser.storage.local.set({
 
@@ -16029,7 +16092,7 @@ function updateWeatherUI(data, cityName, units) {
 
     cachedUnits: units,
 
-    weatherFetchedAt: Date.now()
+    weatherFetchedAt: effectiveTimestamp
 
   });
 
@@ -16041,9 +16104,9 @@ function updateWeatherUI(data, cityName, units) {
   try {
     const fastWeather = {
       city: cityName,
-      temp: `${temp}\u00b0${units === 'celsius' ? 'C' : 'F'}`,
-      desc: getWeatherDescription(code),
-      icon: getWeatherEmoji(code),
+      temp: tempLabel,
+      desc: description,
+      icon,
       // --- NEW: Cache detailed stats for instant load ---
       pressure: `Pressure: ${pressure}${pressure !== '--' ? ' mmHg' : ''}`,
       humidity: `Humidity: ${humidity}${humidity !== '--' ? '%' : ''}`,
@@ -16051,7 +16114,8 @@ function updateWeatherUI(data, cityName, units) {
       precipProb: `Rain Chance: ${precipProb}${precipProb !== '--' ? '%' : ''}`,
       sunrise: `Sunrise: ${sunrise}`,
       sunset: `Sunset: ${sunset}`,
-      __timestamp: Date.now()
+      updated: updatedLabel,
+      __timestamp: effectiveTimestamp
     };
     localStorage.setItem('fast-weather', JSON.stringify(fastWeather));
   } catch (e) {
@@ -16062,26 +16126,30 @@ function updateWeatherUI(data, cityName, units) {
 
 
 
-function showWeatherError(error) {
-
-  if (error) console.error('Weather Error:', error);
-
-  document.getElementById('weather-city').textContent = 'Weather Error';
-
-  document.getElementById('weather-temp').textContent = '--\u00b0';
-
-  document.getElementById('weather-desc').textContent = 'Could not load data';
-
-  document.getElementById('weather-icon').textContent = '-';
-
-  setLocationBtn.classList.remove('hidden');
-
-  revealWidget('.widget-weather');
-
-  browser.storage.local.remove(['cachedWeatherData', 'cachedCityName', 'cachedUnits']);
-
+function setText(el, value) {
+  if (!el) return;
+  const v = String(value ?? '');
+  if (el.textContent !== v) el.textContent = v;
 }
 
+function showWeatherError(error) {
+  if (error) console.error('Weather Error:', error);
+
+  setText(document.getElementById('weather-city'), 'Weather Error');
+  setText(document.getElementById('weather-temp'), '--°');
+  setText(document.getElementById('weather-desc'), 'Could not load data');
+  setText(document.getElementById('weather-icon'), '-');
+
+  const updatedEl = document.getElementById('weather-updated');
+  if (updatedEl) setText(updatedEl, '');
+
+  if (typeof setLocationBtn !== 'undefined' && setLocationBtn) {
+    setLocationBtn.classList.remove('hidden');
+  }
+
+  revealWidget('.widget-weather');
+  browser.storage.local.remove(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
+}
 
 
 
@@ -16094,7 +16162,11 @@ async function fetchWeather(lat, lon, units, cityName) {
 
     const dailyParams = 'sunrise,sunset';
 
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=${units}&hourly=${hourlyParams}&daily=${dailyParams}&timezone=auto`;
+    const weatherUrl =
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current_weather=true&temperature_unit=${units}` +
+      `&hourly=${hourlyParams}&daily=${dailyParams}` +
+      `&forecast_days=1&timezone=auto`;
 
     const weatherResponse = await fetch(weatherUrl);
 
@@ -16102,7 +16174,7 @@ async function fetchWeather(lat, lon, units, cityName) {
 
     const weatherData = await weatherResponse.json();
 
-    updateWeatherUI(weatherData, cityName, units);
+    updateWeatherUI(weatherData, cityName, units, Date.now());
 
   } catch (error) {
 
@@ -16112,9 +16184,8 @@ async function fetchWeather(lat, lon, units, cityName) {
 
 }
 
-
-
-
+// Sanity: There must be only ONE of each:
+// fetchWeather / showWeatherError / updateWeatherUI / setText / setAttr / formatWeatherUpdated
 
 function showCustomAlert(message) {
 
@@ -16314,49 +16385,81 @@ function showDeleteConfirm(message, options = {}) {
 
 function startGeolocation() {
 
-  if ('geolocation' in navigator) {
+  if (!('geolocation' in navigator)) {
+
+    showWeatherError(new Error('Geolocation not supported'));
+
+    return Promise.resolve();
+
+  }
+
+  return new Promise((resolve) => {
 
     navigator.geolocation.getCurrentPosition(
 
       async (position) => {
 
-        const lat = position.coords.latitude, lon = position.coords.longitude;
+        try {
 
-        await browser.storage.local.set({
+          const lat = position.coords.latitude, lon = position.coords.longitude;
 
-          weatherLat: lat,
+          await browser.storage.local.set({
 
-          weatherLon: lon,
+            weatherLat: lat,
 
-          weatherCityName: 'Current Location'
+            weatherLon: lon,
 
-        });
+            weatherCityName: 'Current Location'
 
-        const data = await browser.storage.local.get('weatherUnits');
+          });
 
-        fetchWeather(lat, lon, data.weatherUnits || 'celsius', 'Current Location');
+          const data = await browser.storage.local.get('weatherUnits');
+
+          await fetchWeather(lat, lon, data.weatherUnits || 'celsius', 'Current Location');
+
+        } catch (err) {
+
+          showWeatherError(err);
+
+        } finally {
+
+          resolve();
+
+        }
 
       },
 
-      showWeatherError
+      (err) => {
+
+        showWeatherError(err);
+
+        resolve();
+
+      }
 
     );
 
-  } else {
-
-    showWeatherError(new Error('Geolocation not supported'));
-
-  }
+  });
 
 }
 
 
 
-async function searchForLocation() {
+async function searchForLocation(searchTerm) {
 
   if (!weatherLocationInput || !weatherLocationResults) return;
 
-  const query = weatherLocationInput.value;
+  const query = (typeof searchTerm === 'string' ? searchTerm : weatherLocationInput.value || '').trim();
+
+  const requestId = ++geoRequestId;
+
+  if (geoAbortController) {
+
+    geoAbortController.abort();
+
+    geoAbortController = null;
+
+  }
 
   if (query.length < 3) {
 
@@ -16368,13 +16471,19 @@ async function searchForLocation() {
 
   }
 
+  geoAbortController = new AbortController();
+
+  const { signal } = geoAbortController;
+
   try {
 
     const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5`;
 
-    const geoResponse = await fetch(geoUrl);
+    const geoResponse = await fetch(geoUrl, { signal });
 
     const geoData = await geoResponse.json();
+
+    if (requestId !== geoRequestId) return;
 
     weatherLocationResults.innerHTML = '';
 
@@ -16414,7 +16523,17 @@ async function searchForLocation() {
 
   } catch (error) {
 
+    if (error?.name === 'AbortError') return; // Expected when a newer request wins
+
     console.error('Location search error:', error);
+
+  } finally {
+
+    if (requestId === geoRequestId && geoAbortController?.signal === signal) {
+
+      geoAbortController = null;
+
+    }
 
   }
 
@@ -16464,10 +16583,33 @@ async function setupWeather() {
     });
   }
 
+  if (weatherRefreshBtn) {
+    weatherRefreshBtn.addEventListener('click', async () => {
+      if (weatherRefreshInFlight) return;
+      weatherRefreshInFlight = true;
+      weatherRefreshBtn.disabled = true;
+
+      try {
+        const data = await browser.storage.local.get(['weatherLat', 'weatherLon', 'weatherUnits', 'weatherCityName']);
+        const units = data.weatherUnits || 'celsius';
+
+        if (data.weatherLat && data.weatherLon) {
+          await fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName || 'Current Location');
+        } else {
+          await startGeolocation();
+        }
+      } finally {
+        weatherRefreshInFlight = false;
+        weatherRefreshBtn.disabled = false;
+      }
+    });
+  }
+
   if (weatherLocationInput) {
     weatherLocationInput.addEventListener('input', () => {
       clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(searchForLocation, 300);
+      const value = weatherLocationInput.value;
+      searchTimeout = setTimeout(() => searchForLocation(value), 300);
     });
   }
 

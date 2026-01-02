@@ -141,6 +141,11 @@ body.ready .dock {
   --glass-blur: 12px;
   --glass-bg: rgba(255, 255, 255, 0.14);
   --overlay-blur: 6px;
+  --main-col-width: 88%;
+  --main-col-left: 10px;
+  --main-col-max: none;
+  --main-col-pad: 0px;
+  --tabs-arrow-reserve: 30px;
 }
 
 
@@ -337,15 +342,16 @@ body.sidebar-collapsed .sidebar {
   display: none;
 }
 
+body.sidebar-collapsed {
+  --main-col-width: 100%;
+  --main-col-left: 0px;
+  --main-col-max: none;
+  --main-col-pad: 0px;
+}
+
 body.sidebar-collapsed .main-content {
   padding: 20px;
   width: 100%;
-}
-
-body.sidebar-collapsed .search-area-wrapper {
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
 }
 
 body.sidebar-hidden {
@@ -356,36 +362,18 @@ body.sidebar-hidden .sidebar {
   display: none;
 }
 
+body.sidebar-hidden {
+  --main-col-width: 100%;
+  --main-col-left: auto;
+  --main-col-max: 1160px;
+  --main-col-pad: 12px;
+}
+
 body.sidebar-hidden .main-content {
   width: 100%;
   max-width: 1240px;
   padding: 20px 32px;
   margin: 0 auto;
-}
-
-body.sidebar-hidden .search-area-wrapper {
-  width: 100%;
-  max-width: 1160px;
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: 12px;
-  padding-right: 12px;
-}
-
-body.sidebar-hidden #bookmarks-grid {
-  width: 100%;
-  max-width: 1160px;
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: 12px;
-  padding-right: 12px;
-}
-
-body.sidebar-hidden .bookmark-bar-wrapper {
-  width: 100%;
-  max-width: 1160px;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 body.sidebar-hidden .collapsed-clock-slot {
@@ -436,16 +424,26 @@ body.sidebar-collapsed .collapsed-clock-slot {
 /* --- UNIFIED SEARCH WIDGET STYLES --- */
 /* ======================================= */
 
+/* SINGLE SOURCE OF TRUTH: main column geometry (do not override these below) */
+.search-area-wrapper,
+.bookmark-bar-wrapper,
+#bookmarks-grid,
+#bookmarks-empty-state {
+  width: var(--main-col-width);
+  margin-left: var(--main-col-left);
+  margin-right: auto;
+  max-width: var(--main-col-max);
+  padding-left: var(--main-col-pad);
+  padding-right: var(--main-col-pad);
+  box-sizing: border-box;
+}
+
 .search-area-wrapper {
   display: flex;
   align-items: center;
-  max-width: none; /* Allow full width for a wider bar */
-
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 30px; /* Push down from the top */
-  margin-left: 10px; /* Align with folder tabs */
-  margin-right: auto; /* Keep remaining space on the right */
-
-  width: 88%; /* Ensure it fills the new max-width */
 }
 
 /* This new container holds the search bar AND the results panel */
@@ -875,8 +873,7 @@ body.sidebar-collapsed .collapsed-clock-slot {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-  margin-left: 25px;
-  transition: opacity 0.3s ease-out, max-width 0.3s ease-out, margin-left 0.3s ease-out;
+  transition: opacity 0.3s ease-out, max-width 0.3s ease-out;
   opacity: 1;
   max-width: 100px; /* Needs a max-width for transition */
   overflow: hidden;
@@ -886,7 +883,6 @@ body.sidebar-collapsed .collapsed-clock-slot {
 .search-area-wrapper.search-focused .search-toolbar-buttons {
   opacity: 0;
   max-width: 0;
-  margin-left: 0; /* Remove the margin */
 }
 
 
@@ -974,38 +970,18 @@ body.performance-mode .bookmark-item.newly-rendered {
   justify-content: start; 
   align-content: start;
   
-  /* NEW: Match the width and margin of the Search & Tab bars */
-  width: 88%; 
-  margin-left: 10px;
-  
-  /* MODIFIED: Remove horizontal padding so items line up flush with tabs */
-  padding: 5px 0; 
-}
-
-body.sidebar-collapsed #bookmarks-grid {
-  width: 100%;
-  margin-left: 0;
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 
 #bookmarks-empty-state {
-  width: 88%;
-  margin-left: 10px;
   margin-top: 12px;
-  padding: 22px 20px;
+  padding-top: 22px;
+  padding-bottom: 22px;
   display: flex;
   justify-content: center;
   align-items: center;
   text-align: center;
-}
-
-body.sidebar-collapsed #bookmarks-empty-state {
-  width: 100%;
-  margin-left: 0;
-}
-
-body.sidebar-hidden #bookmarks-empty-state {
-  width: 100%;
-  margin-left: 0;
 }
 
 body.bookmarks-booting #bookmarks-empty-state {
@@ -1616,29 +1592,27 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  
-  /* NEW: Match the geometry of .search-area-wrapper */
-  width: 88%; 
-  margin-left: 10px;
-  padding: 0; /* Remove padding so it aligns perfectly with the element above */
-  margin-top: 10px; /* Optional: Adds a tiny bit of breathing room */
-}
 
-body.sidebar-collapsed .bookmark-bar-wrapper {
-  width: 100%;
-  margin-left: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 10px; /* Optional: Adds a tiny bit of breathing room */
 }
 
 .bookmark-tabs-wrapper {
   display: grid;
-  grid-template-columns: 30px 1fr 30px;
+  grid-template-columns: var(--tabs-arrow-reserve) 1fr var(--tabs-arrow-reserve);
   align-items: center;
   gap: 6px;
+  width: calc(100% + (var(--tabs-arrow-reserve) * 2));
+  margin-left: calc(var(--tabs-arrow-reserve) * -1);
+  margin-right: calc(var(--tabs-arrow-reserve) * -1);
+  box-sizing: border-box;
   flex: 1;
   min-width: 0;
 }
 
-.bookmark-actions-wrapper {
+.bookmark-actions-wrapper,
+.search-actions-wrapper {
   display: flex;
   align-items: center;
   gap: 10px;

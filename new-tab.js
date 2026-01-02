@@ -7765,22 +7765,16 @@ function flattenBookmarks(nodes) {
 }
 
 
+function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
+  if (!wrapper || !bookmarkNode) return;
 
-function renderBookmark(bookmarkNode) {
-  const item = document.createElement('div');
-  item.className = 'bookmark-item';
-  if (bookmarkNode.isBackButton) item.classList.add('back-button');
-
-  item.dataset.bookmarkId = bookmarkNode.id;
-  item.dataset.isFolder = 'false';
+  wrapper.textContent = '';
+  wrapper.style.backgroundColor = '';
 
   const title = bookmarkNode.title || ' ';
   const fallbackLetter = (title.trim().charAt(0) || '?').toUpperCase();
-
-  const iconWrapper = document.createElement('div');
-  iconWrapper.className = 'bookmark-icon-wrapper';
-
   const meta = (bookmarkMetadata && bookmarkMetadata[bookmarkNode.id]) || {};
+  const fallbackColor = appBookmarkFallbackColorPreference || '#00b8d4';
 
   // --- NEW: Check for Custom Icon ---
   if (meta && meta.icon) {
@@ -7789,30 +7783,30 @@ function renderBookmark(bookmarkNode) {
     customImg.alt = '';
     customImg.onload = () => {
       customImg.classList.add('loaded');
-      iconWrapper.style.backgroundColor = 'transparent';
+      wrapper.style.backgroundColor = 'transparent';
     };
     customImg.onerror = () => {
       customImg.remove();
       const fallbackIcon = document.createElement('div');
       fallbackIcon.className = 'bookmark-fallback-icon show-fallback';
       fallbackIcon.textContent = fallbackLetter;
-      iconWrapper.appendChild(fallbackIcon);
-      iconWrapper.style.backgroundColor = appBookmarkFallbackColorPreference || '#00b8d4';
+      wrapper.appendChild(fallbackIcon);
+      wrapper.style.backgroundColor = fallbackColor;
     };
     customImg.src = meta.icon;
-    iconWrapper.appendChild(customImg);
+    wrapper.appendChild(customImg);
   } else if (meta && meta.iconCleared === true) {
     const fallbackIcon = document.createElement('div');
     fallbackIcon.className = 'bookmark-fallback-icon show-fallback';
     fallbackIcon.textContent = fallbackLetter;
-    iconWrapper.appendChild(fallbackIcon);
-    iconWrapper.style.backgroundColor = appBookmarkFallbackColorPreference || '#00b8d4';
+    wrapper.appendChild(fallbackIcon);
+    wrapper.style.backgroundColor = fallbackColor;
   } else {
     // 1. Prepare fallback letter icon and render it immediately so it shows first.
     const fallbackIcon = document.createElement('div');
     fallbackIcon.className = 'bookmark-fallback-icon';
     fallbackIcon.textContent = fallbackLetter;
-    iconWrapper.appendChild(fallbackIcon);
+    wrapper.appendChild(fallbackIcon);
 
     // 2. Prepare image icon (stacked above fallback).
     const imgIcon = document.createElement('img');
@@ -7832,7 +7826,7 @@ function renderBookmark(bookmarkNode) {
       imgIcon.onload = () => {
         if (imgIcon.naturalWidth > 16) {
           imgIcon.classList.add('loaded');
-          iconWrapper.style.backgroundColor = 'transparent';
+          wrapper.style.backgroundColor = 'transparent';
         } else {
           imgIcon.remove();
           showFallback();
@@ -7849,18 +7843,146 @@ function renderBookmark(bookmarkNode) {
       if (imgIcon.complete && imgIcon.naturalWidth > 0) {
         if (imgIcon.naturalWidth > 16) {
           imgIcon.classList.add('loaded');
-          iconWrapper.style.backgroundColor = 'transparent';
+          wrapper.style.backgroundColor = 'transparent';
         } else {
           imgIcon.remove();
           showFallback();
         }
       }
 
-      iconWrapper.appendChild(imgIcon);
+      wrapper.appendChild(imgIcon);
     } else {
       fallbackIcon.classList.add('show-fallback');
     }
   }
+
+  wrapper.dataset.iconKey = iconKey !== undefined ? iconKey : getIconKeyForNode(bookmarkNode);
+}
+
+function renderFolderIconInto(wrapper, folderNode, iconKey) {
+  if (!wrapper || !folderNode) return;
+
+  wrapper.textContent = '';
+
+  const meta = (folderMetadata && folderMetadata[folderNode.id]) || {};
+  const customColor = meta.color || null;
+  const customIcon = meta.icon || null;
+  
+  // Defaults
+
+  const scale = meta.scale ?? 1;
+
+  const offsetY = meta.offsetY ?? 0;
+  const rotation = meta.rotation ?? 0;
+
+
+
+  // 1. ALWAYS render the Base Folder SVG
+
+  wrapper.innerHTML = useSvgIcon('bookmarkFolderLarge');
+
+  
+
+  // Apply Color to SVG
+
+  const appliedColor = customColor || appBookmarkFolderColorPreference;
+
+  const baseSvg = wrapper.querySelector('svg');
+
+  tintSvgElement(baseSvg, appliedColor);
+
+
+
+  // Complementary color for inner icon based on folder color
+
+  const iconFillColor = getComplementaryColor(appliedColor);
+
+
+
+  // 2. Render Custom Icon (Updated with transforms)
+
+  if (customIcon) {
+
+    // Base style for the icon (centered + custom offset/scale)
+
+    // NOTE: Base CSS has transform: translate(-50%, -50%) scale(0.9). 
+
+    // We override it here.
+
+    const transformStyle = `transform: translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.9}) rotate(${rotation}deg);`;
+
+
+
+    if (customIcon.startsWith('builtin:')) {
+
+      const key = customIcon.replace('builtin:', '');
+
+      const svgString = useSvgIcon(key);
+
+
+
+      if (svgString) {
+
+        const iconDiv = document.createElement('div');
+
+        iconDiv.className = 'bookmark-folder-custom-icon';
+
+        iconDiv.innerHTML = svgString;
+
+        iconDiv.setAttribute('style', transformStyle);
+
+
+
+        // Apply contrast fill to built-in SVG paths
+
+        const svg = iconDiv.querySelector('svg');
+
+        if (svg) {
+
+          tintSvgElement(svg, iconFillColor);
+
+        }
+
+        wrapper.appendChild(iconDiv);
+
+      }
+
+    } else {
+
+      const img = document.createElement('img');
+
+      img.src = customIcon;
+
+      img.className = 'bookmark-folder-custom-icon';
+
+      img.setAttribute('style', transformStyle);
+
+      wrapper.appendChild(img);
+
+    }
+
+  }
+
+
+
+  wrapper.dataset.iconKey = iconKey !== undefined ? iconKey : getIconKeyForNode(folderNode);
+}
+
+
+
+function renderBookmark(bookmarkNode) {
+  const item = document.createElement('div');
+  item.className = 'bookmark-item';
+  if (bookmarkNode.isBackButton) item.classList.add('back-button');
+
+  item.dataset.bookmarkId = bookmarkNode.id;
+  item.dataset.isFolder = 'false';
+
+  const title = bookmarkNode.title || ' ';
+
+  const iconWrapper = document.createElement('div');
+  iconWrapper.className = 'bookmark-icon-wrapper';
+  renderBookmarkIconInto(iconWrapper, bookmarkNode);
 
   const titleSpan = document.createElement('span');
   titleSpan.textContent = title;
@@ -8073,128 +8195,19 @@ function renderBookmarkFolder(folderNode) {
 
 
 
-  const meta = folderMetadata[folderNode.id] || {};
-
-  const customColor = meta.color || null;
-
-  const customIcon = meta.icon || null;
-
-  
-
-  // Defaults
-
-  const scale = meta.scale ?? 1;
-
-  const offsetY = meta.offsetY ?? 0;
-  const rotation = meta.rotation ?? 0;
-
-
-
   const wrapper = document.createElement('div');
 
   wrapper.className = 'bookmark-icon-wrapper';
 
 
 
-  // 1. ALWAYS render the Base Folder SVG
-
-  wrapper.innerHTML = useSvgIcon('bookmarkFolderLarge');
-
-  
-
-  // Apply Color to SVG
-
-  const appliedColor = customColor || appBookmarkFolderColorPreference;
-
-  const baseSvg = wrapper.querySelector('svg');
-
-  tintSvgElement(baseSvg, appliedColor);
-
-
-
-  // Complementary color for inner icon based on folder color
-
-  const iconFillColor = getComplementaryColor(appliedColor);
-
-
-
-  // 2. Render Custom Icon (Updated with transforms)
-
-  if (customIcon) {
-
-    // Base style for the icon (centered + custom offset/scale)
-
-    // NOTE: Base CSS has transform: translate(-50%, -50%) scale(0.9). 
-
-    // We override it here.
-
-    const transformStyle = `transform: translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.9}) rotate(${rotation}deg);`;
-
-
-
-    if (customIcon.startsWith('builtin:')) {
-
-      const key = customIcon.replace('builtin:', '');
-
-      const svgString = useSvgIcon(key);
-
-
-
-      if (svgString) {
-
-        const iconDiv = document.createElement('div');
-
-        iconDiv.className = 'bookmark-folder-custom-icon';
-
-        iconDiv.innerHTML = svgString;
-
-        iconDiv.setAttribute('style', transformStyle);
-
-
-
-        // Apply contrast fill to built-in SVG paths
-
-        const svg = iconDiv.querySelector('svg');
-
-        if (svg) {
-
-          tintSvgElement(svg, iconFillColor);
-
-        }
-
-        wrapper.appendChild(iconDiv);
-
-      }
-
-    } else {
-
-      const img = document.createElement('img');
-
-      img.src = customIcon;
-
-      img.className = 'bookmark-folder-custom-icon';
-
-      img.setAttribute('style', transformStyle);
-
-      wrapper.appendChild(img);
-
-    }
-
-  }
-
-
+  renderFolderIconInto(wrapper, folderNode);
 
   item.appendChild(wrapper);
 
-
-
   const span = document.createElement('span');
-
   span.textContent = folderNode.title;
-
   item.appendChild(span);
-
-
 
   return item;
 
@@ -8474,6 +8487,39 @@ function createNodeForVirtualizer(node) {
   return renderBookmark(node);
 }
 
+function getIconKeyForNode(node) {
+  if (!node || node.isBackButton) return '';
+
+  const iconParts = [];
+  const fallbackTextPref = (typeof appBookmarkFallbackTextColorPreference !== 'undefined')
+    ? appBookmarkFallbackTextColorPreference
+    : '';
+
+  if (node.children) {
+    const meta = (folderMetadata && folderMetadata[node.id]) || {};
+    iconParts.push('folder');
+    iconParts.push(meta.color || '');
+    iconParts.push(meta.icon || '');
+    iconParts.push(meta.scale ?? 1);
+    iconParts.push(meta.offsetY ?? 0);
+    iconParts.push(meta.rotation ?? 0);
+    iconParts.push(appBookmarkFolderColorPreference || '');
+  } else {
+    const meta = (bookmarkMetadata && bookmarkMetadata[node.id]) || {};
+    const title = node.title || ' ';
+    const fallbackLetter = (title.trim().charAt(0) || '?').toUpperCase();
+    iconParts.push('bookmark');
+    iconParts.push(node.url || '');
+    iconParts.push(fallbackLetter);
+    iconParts.push(meta.icon || '');
+    iconParts.push(`cleared:${meta.iconCleared === true}`);
+    iconParts.push(appBookmarkFallbackColorPreference || '');
+    iconParts.push(fallbackTextPref);
+  }
+
+  return iconParts.join('|');
+}
+
 function updateElementData(el, node) {
   const recyclingType = node.isBackButton ? 'back' : (node.children ? 'folder' : 'bookmark');
   el.dataset.recyclingType = recyclingType;
@@ -8495,10 +8541,19 @@ function updateElementData(el, node) {
   if (iconWrapper) {
     if (node.isBackButton) return;
 
-    const tempEl = node.children ? renderBookmarkFolder(node) : renderBookmark(node);
-    const newIcon = tempEl.querySelector('.bookmark-icon-wrapper');
-    if (newIcon) {
-      iconWrapper.replaceWith(newIcon);
+    const nextKey = getIconKeyForNode(node);
+    const prevKey = iconWrapper.dataset.iconKey;
+
+    if (nextKey !== prevKey) {
+      if (node.children) {
+        renderFolderIconInto(iconWrapper, node, nextKey);
+      } else {
+        renderBookmarkIconInto(iconWrapper, node, nextKey);
+      }
+
+      // DEV-ONLY: uncomment for parity checks against legacy rendering.
+      // const legacyIcon = (node.children ? renderBookmarkFolder(node) : renderBookmark(node)).querySelector('.bookmark-icon-wrapper');
+      // console.assert(!legacyIcon || iconWrapper.innerHTML === legacyIcon.innerHTML, 'Icon mismatch', node);
     }
   }
 }

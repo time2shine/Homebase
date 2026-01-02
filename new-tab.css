@@ -1508,8 +1508,19 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   pointer-events: none;
 }
 
-body.is-tab-dragging .bookmark-folder-tab {
-  cursor: grabbing;
+/* fallbackOnBody moves drag clone under <body>; enforce grabbing cursor globally while dragging */
+body.is-tab-dragging {
+  cursor: grabbing !important;
+}
+
+body.is-tab-dragging * {
+  cursor: grabbing !important;
+}
+
+body.is-tab-dragging > .bookmark-folder-tab,
+body.is-tab-dragging .bookmark-folder-tab.sortable-drag-tab,
+body.is-tab-dragging .bookmark-fallback-ghost-tab {
+  cursor: grabbing !important;
 }
 
 /* === End new Tab D&D styles === */

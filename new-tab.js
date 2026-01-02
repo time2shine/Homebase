@@ -105,6 +105,8 @@ const GALLERY_POSTERS_CACHE_KEY = 'cachedGalleryPosters';
 
 let videosManifestPromise = null;
 
+let tabsScrollController = null; // Manages tab strip overflow, arrows, and wheel physics
+
 const isRemoteHttpUrl = (url = '') => typeof url === 'string' && /^https?:\/\//i.test(url);
 
 const isRemoteVideoUrl = (url = '') => isRemoteHttpUrl(url) && REMOTE_VIDEO_REGEX.test(url);
@@ -466,23 +468,15 @@ function updateSidebarCollapseState() {
 
 function updateBookmarkTabOverflow() {
 
-  if (!bookmarkTabsTrack || !tabScrollLeftBtn || !tabScrollRightBtn) return;
+  if (tabsScrollController) {
+    tabsScrollController.refresh();
+    return;
+  }
 
-
-
-  const maxScrollLeft = Math.max(0, bookmarkTabsTrack.scrollWidth - bookmarkTabsTrack.clientWidth);
-
-  const currentScroll = bookmarkTabsTrack.scrollLeft;
-
-  const showLeft = maxScrollLeft > 0 && currentScroll > 4;
-
-  const showRight = maxScrollLeft > 0 && currentScroll < (maxScrollLeft - 4);
-
-
-
-  tabScrollLeftBtn.classList.toggle('visible', showLeft);
-
-  tabScrollRightBtn.classList.toggle('visible', showRight);
+  // Fallback: hide arrows when controller is unavailable.
+  if (!tabScrollLeftBtn || !tabScrollRightBtn) return;
+  tabScrollLeftBtn.classList.remove('visible');
+  tabScrollRightBtn.classList.remove('visible');
 
 }
 
@@ -533,18 +527,16 @@ function scrollActiveFolderTabIntoView({ behavior = 'smooth', centerIfLarge = fa
 
 function scrollBookmarkTabs(direction) {
 
+  if (tabsScrollController) {
+    tabsScrollController.scrollByStep(direction);
+    return;
+  }
+
   if (!bookmarkTabsTrack) return;
 
-  const maxScrollLeft = Math.max(0, bookmarkTabsTrack.scrollWidth - bookmarkTabsTrack.clientWidth);
-  const delta = direction * TAB_SCROLL_STEP;
-  const target = Math.min(Math.max(bookmarkTabsTrack.scrollLeft + delta, 0), maxScrollLeft);
-
-  bookmarkTabsTrack.scrollTo({
-
-    left: target,
-
+  bookmarkTabsTrack.scrollBy({
+    left: direction * TAB_SCROLL_STEP,
     behavior: 'smooth'
-
   });
 
 }
@@ -1778,6 +1770,8 @@ window.addEventListener('beforeunload', () => {
   debouncedResize.cancel?.();
 });
 
+tabsScrollController = initTabsScrollController();
+
 updateSidebarCollapseState();
 
 updateBookmarkTabOverflow();
@@ -1796,22 +1790,407 @@ if (tabScrollRightBtn) {
 
 }
 
-if (bookmarkTabsTrack) {
+function initTabsScrollController() {
 
-  bookmarkTabsTrack.addEventListener('scroll', () => {
+  if (!bookmarkTabsTrack || !tabScrollLeftBtn || !tabScrollRightBtn) return null;
 
-    if (tabsOverflowRafScheduled) return; // rAF guard to avoid redundant queueing
-    tabsOverflowRafScheduled = true;
-    window.requestAnimationFrame(() => {
-      tabsOverflowRafScheduled = false;
-      updateBookmarkTabOverflow();
+
+
+  const track = bookmarkTabsTrack;
+
+  const leftBtn = tabScrollLeftBtn;
+
+  const rightBtn = tabScrollRightBtn;
+
+
+
+  const startSentinel = document.createElement('span');
+
+  startSentinel.className = 'tabs-edge-sentinel tabs-edge-start';
+
+  const endSentinel = document.createElement('span');
+
+  endSentinel.className = 'tabs-edge-sentinel tabs-edge-end';
+
+
+
+  const state = {
+
+    atStart: true,
+
+    atEnd: false,
+
+    hasOverflow: false,
+
+    wheelVelocity: 0,
+
+    wheelRaf: 0
+
+  };
+
+  let edgeObserver = null;
+
+
+
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+
+
+  const ensureSentinels = () => {
+
+    if (startSentinel.parentElement !== track) {
+
+      track.insertBefore(startSentinel, track.firstChild || null);
+
+    } else if (track.firstChild !== startSentinel) {
+
+      track.insertBefore(startSentinel, track.firstChild);
+
+    }
+
+
+    if (endSentinel.parentElement !== track) {
+
+      track.appendChild(endSentinel);
+
+    } else if (track.lastChild !== endSentinel) {
+
+      track.appendChild(endSentinel);
+
+    }
+
+  };
+
+
+
+  const updateButtons = () => {
+
+    if (!leftBtn || !rightBtn) return;
+
+
+    if (!state.hasOverflow) {
+
+      leftBtn.classList.remove('visible');
+
+      rightBtn.classList.remove('visible');
+
+      return;
+
+    }
+
+
+    leftBtn.classList.toggle('visible', !state.atStart);
+
+    rightBtn.classList.toggle('visible', !state.atEnd);
+
+  };
+
+
+
+  const refreshOverflow = () => {
+
+    const maxScrollLeft = Math.max(0, track.scrollWidth - track.clientWidth);
+
+    state.hasOverflow = maxScrollLeft > 1;
+
+
+    if (!state.hasOverflow) {
+
+      state.atStart = true;
+
+      state.atEnd = true;
+
+    }
+
+
+  };
+
+
+
+  const refresh = () => {
+
+    ensureSentinels();
+
+    refreshOverflow();
+
+    if (edgeObserver) {
+
+      const pending = edgeObserver.takeRecords();
+
+      if (pending.length) {
+
+        handleIntersections(pending);
+
+      }
+
+    }
+
+    updateButtons();
+
+  };
+
+
+
+  const handleIntersections = (entries) => {
+
+    entries.forEach((entry) => {
+
+      if (entry.target === startSentinel) {
+
+        state.atStart = entry.isIntersecting;
+
+      } else if (entry.target === endSentinel) {
+
+        state.atEnd = entry.isIntersecting;
+
+      }
+
     });
+
+    updateButtons();
+
+  };
+
+
+
+  const normalizeWheelToPx = (e) => {
+
+    const absX = Math.abs(e.deltaX);
+
+    const absY = Math.abs(e.deltaY);
+
+    let delta = absX > absY ? e.deltaX : e.deltaY;
+
+    if (!delta) return 0;
+
+
+    if (e.deltaMode === 1) {
+
+      delta *= 16;
+
+    } else if (e.deltaMode === 2) {
+
+      delta *= track.clientWidth;
+
+    }
+
+
+    return delta;
+
+  };
+
+
+
+  const stopWheelLoop = () => {
+
+    if (state.wheelRaf) {
+
+      cancelAnimationFrame(state.wheelRaf);
+
+      state.wheelRaf = 0;
+
+    }
+
+    state.wheelVelocity = 0;
+
+  };
+
+
+
+  const startWheelLoop = () => {
+
+    if (state.wheelRaf) return;
+
+
+    const step = () => {
+
+      const maxScrollLeft = Math.max(0, track.scrollWidth - track.clientWidth);
+
+      if (maxScrollLeft <= 0) {
+
+        stopWheelLoop();
+
+        updateButtons();
+
+        return;
+
+      }
+
+
+      let next = track.scrollLeft + state.wheelVelocity;
+
+      if (next < 0) {
+
+        next = 0;
+
+        state.wheelVelocity = 0;
+
+      } else if (next > maxScrollLeft) {
+
+        next = maxScrollLeft;
+
+        state.wheelVelocity = 0;
+
+      }
+
+
+      track.scrollLeft = next;
+
+
+      state.wheelVelocity *= 0.86;
+
+
+      if (Math.abs(state.wheelVelocity) < 0.15) {
+
+        stopWheelLoop();
+
+        updateButtons();
+
+        return;
+
+      }
+
+
+      state.wheelRaf = requestAnimationFrame(step);
+
+    };
+
+
+    state.wheelRaf = requestAnimationFrame(step);
+
+  };
+
+
+
+  const handleWheel = (e) => {
+
+    if (isTabDragging || isGridDragging) return;
+
+    if (e.buttons !== 0) return;
+
+
+    const maxScrollLeft = Math.max(0, track.scrollWidth - track.clientWidth);
+
+    if (maxScrollLeft <= 0) return;
+
+
+    const deltaPx = normalizeWheelToPx(e);
+
+
+    e.preventDefault();
+
+    e.stopPropagation();
+
+
+    if (!deltaPx) return;
+
+
+    const impulse = clamp(deltaPx * 0.35, -120, 120);
+
+
+    state.wheelVelocity = clamp(state.wheelVelocity + impulse, -80, 80);
+
+
+    startWheelLoop();
+
+  };
+
+
+
+  const scrollByStep = (direction) => {
+
+    const tabs = Array.from(track.querySelectorAll('.bookmark-folder-tab'));
+
+    const viewLeft = track.scrollLeft;
+
+    const viewRight = viewLeft + track.clientWidth;
+
+
+    if (direction > 0) {
+
+      const targetTab = tabs.find((tab) => (tab.offsetLeft + tab.offsetWidth) > (viewRight + 1));
+
+      if (targetTab) {
+
+        targetTab.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
+
+        return;
+
+      }
+
+    } else {
+
+      for (let i = tabs.length - 1; i >= 0; i -= 1) {
+
+        const tab = tabs[i];
+
+        if (tab.offsetLeft < (viewLeft - 1)) {
+
+          tab.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+
+          return;
+
+        }
+
+      }
+
+    }
+
+
+    track.scrollBy({
+
+      left: direction * track.clientWidth * 0.7,
+
+      behavior: 'smooth'
+
+    });
+
+  };
+
+
+
+  ensureSentinels();
+
+
+  edgeObserver = new IntersectionObserver(handleIntersections, {
+
+    root: track,
+
+    threshold: 0.99,
+
+    rootMargin: '0px 1px'
 
   });
 
+  edgeObserver.observe(startSentinel);
+
+  edgeObserver.observe(endSentinel);
+
+
+  const resizeObserver = new ResizeObserver(() => refresh());
+
+  resizeObserver.observe(track);
+
+
+  track.addEventListener('wheel', handleWheel, { passive: false });
+
+
+  refresh();
+
+
+  return {
+
+    refresh,
+
+    updateButtons,
+
+    scrollByStep,
+
+    handleWheel
+
+  };
+
 }
-
-
 
 // Optimized: Throttle pointermove to Animation Frame to reduce CPU usage
 
@@ -1884,8 +2263,6 @@ let isGridDragging = false;       // Track active drag to block click navigation
 let isTabDragging = false;        // Track tab drag state to avoid click misfires
 
 let activeTabDropTarget = null;   // Currently highlighted folder tab drop target
-
-let tabsOverflowRafScheduled = false; // Throttle tab overflow checks to one per frame
 
 
 

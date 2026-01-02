@@ -1599,15 +1599,11 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 }
 
 .bookmark-tabs-wrapper {
-  display: grid;
-  grid-template-columns: var(--tabs-arrow-reserve) 1fr var(--tabs-arrow-reserve);
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  width: calc(100% + (var(--tabs-arrow-reserve) * 2));
-  margin-left: calc(var(--tabs-arrow-reserve) * -1);
-  margin-right: calc(var(--tabs-arrow-reserve) * -1);
   box-sizing: border-box;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1616,6 +1612,7 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 0 0 auto;
 }
 
 .bookmarks-change-root-btn {
@@ -1643,15 +1640,33 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 }
 
 .bookmark-tabs-track {
-  flex: 1;
-  overflow: hidden;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
-  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-left: var(--tabs-arrow-reserve);
+  padding-right: var(--tabs-arrow-reserve);
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
+  touch-action: pan-y;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
 }
 
 .bookmark-tabs-track::-webkit-scrollbar {
   display: none;
+}
+
+.tabs-edge-sentinel {
+  width: 1px;
+  height: 1px;
+  flex: 0 0 1px;
+  pointer-events: none;
+  opacity: 0;
 }
 
 .tab-scroll-btn {
@@ -1669,6 +1684,10 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   justify-content: center;
   font-size: 1.2em;
   transition: background-color 0.2s ease, opacity 0.15s ease;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
 }
 
 .tab-scroll-btn.visible {
@@ -1678,6 +1697,14 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 
 .tab-scroll-btn:hover {
   background-color: rgba(0, 0, 0, 0.5);
+}
+
+#tab-scroll-left {
+  left: 0;
+}
+
+#tab-scroll-right {
+  right: 0;
 }
 
 

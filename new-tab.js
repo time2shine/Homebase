@@ -486,6 +486,43 @@ function updateBookmarkTabOverflow() {
 
 }
 
+/**
+ * Ensures the active folder tab is visible inside the scrollable track.
+ * Clamps target scroll so we never overshoot the bounds.
+ */
+function scrollActiveFolderTabIntoView({ behavior = 'smooth', centerIfLarge = false } = {}) {
+  const track = bookmarkTabsTrack;
+  if (!track) return;
+
+  const activeTab = track.querySelector('.bookmark-folder-tab.active');
+  if (!activeTab) return;
+
+  const left = activeTab.offsetLeft;
+  const right = left + activeTab.offsetWidth;
+  const viewLeft = track.scrollLeft;
+  const viewRight = viewLeft + track.clientWidth;
+
+  const isFullyVisible = left >= viewLeft && right <= viewRight;
+  if (isFullyVisible) return;
+
+  let target;
+  if (left < viewLeft) {
+    target = left - 12;
+  } else {
+    // If it's wider than the viewport and we want to center, do so; else align right edge.
+    if (centerIfLarge && activeTab.offsetWidth > track.clientWidth) {
+      target = left - Math.max(0, (track.clientWidth - activeTab.offsetWidth) / 2);
+    } else {
+      target = right - track.clientWidth + 12;
+    }
+  }
+
+  const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
+  const clamped = Math.min(Math.max(target, 0), maxScroll);
+
+  track.scrollTo({ left: clamped, behavior });
+}
+
 
 
 /**
@@ -1763,7 +1800,12 @@ if (bookmarkTabsTrack) {
 
   bookmarkTabsTrack.addEventListener('scroll', () => {
 
-    window.requestAnimationFrame(updateBookmarkTabOverflow);
+    if (tabsOverflowRafScheduled) return; // rAF guard to avoid redundant queueing
+    tabsOverflowRafScheduled = true;
+    window.requestAnimationFrame(() => {
+      tabsOverflowRafScheduled = false;
+      updateBookmarkTabOverflow();
+    });
 
   });
 
@@ -1839,7 +1881,11 @@ let tabsSortable = null;          // Instance for the folder tabs
 
 let isGridDragging = false;       // Track active drag to block click navigation
 
+let isTabDragging = false;        // Track tab drag state to avoid click misfires
+
 let activeTabDropTarget = null;   // Currently highlighted folder tab drop target
+
+let tabsOverflowRafScheduled = false; // Throttle tab overflow checks to one per frame
 
 
 
@@ -6601,7 +6647,43 @@ function setupTabsSortable(tabsContainer) {
 
     dragClass: 'sortable-drag-tab',
 
-    onEnd: handleTabDrop,
+    forceFallback: true,
+
+    fallbackOnBody: true,
+
+    fallbackClass: 'bookmark-fallback-ghost-tab',
+
+    fallbackTolerance: 5,
+
+    setData: (dataTransfer, dragEl) => {
+
+      dataTransfer.setData('text/plain', dragEl.dataset.folderId || '');
+
+    },
+
+    onStart: () => {
+
+      isTabDragging = true;
+
+      document.body.classList.add('is-tab-dragging');
+
+    },
+
+    onEnd: (evt) => {
+
+      setTimeout(() => {
+
+        isTabDragging = false;
+
+      }, 50);
+
+      document.body.classList.remove('is-tab-dragging');
+
+      handleTabDrop(evt);
+
+      requestAnimationFrame(() => scrollActiveFolderTabIntoView({ behavior: 'smooth' }));
+
+    },
 
     preventOnFilter: true
 
@@ -8328,6 +8410,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
   const tabClickHandler = (e) => {
     const tabButton = e.target.closest('.bookmark-folder-tab');
     if (!tabButton) return;
+    if (isTabDragging) return;
 
     document.querySelectorAll('.bookmark-folder-tab').forEach(btn => btn.classList.remove('active'));
     tabButton.classList.add('active');
@@ -8339,6 +8422,8 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
       renderBookmarkGrid(freshNode);
       activeHomebaseFolderId = freshNode.id;
     }
+
+    requestAnimationFrame(() => scrollActiveFolderTabIntoView({ behavior: 'smooth' }));
   };
 
   bookmarkFolderTabsContainer.addEventListener('click', tabClickHandler);
@@ -8487,6 +8572,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
   bookmarkFolderTabsContainer.appendChild(addButton);
 
   requestAnimationFrame(updateBookmarkTabOverflow);
+  requestAnimationFrame(() => scrollActiveFolderTabIntoView({ behavior: 'smooth' }));
 
 
 

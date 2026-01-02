@@ -1487,6 +1487,7 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
 /* This is the tab being dragged (following cursor) */
 .bookmark-folder-tab.sortable-drag-tab {
   pointer-events: none;
+  opacity: 1 !important; /* Keep the dragged element visible even if Chromium adds chosen */
 }
 
 /* This is the "ghost" placeholder for the tab */
@@ -1496,9 +1497,19 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   opacity: 0.5;
 }
 
-/* This is the tab in its original spot while dragging */
-.bookmark-folder-tab.sortable-chosen-tab {
+/* Hide only the in-place tab; Chromium can put chosen on the dragged clone */
+.bookmark-folder-tab.sortable-chosen-tab:not(.sortable-drag-tab) {
   opacity: 0 !important; /* Hide the original tab */
+}
+
+/* Ghost element used when fallback dragging is active */
+.bookmark-fallback-ghost-tab {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+body.is-tab-dragging .bookmark-folder-tab {
+  cursor: grabbing;
 }
 
 /* === End new Tab D&D styles === */

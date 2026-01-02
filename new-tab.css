@@ -425,7 +425,7 @@ body.sidebar-collapsed .collapsed-clock-slot {
 /* --- UNIFIED SEARCH WIDGET STYLES --- */
 /* ======================================= */
 
-/* Content rail: keep search bar, folder tabs, grid, and empty state aligned */
+/* Content rail contract: search row sets the horizontal edges. Folder tabs, the grid, and the empty state must reuse these vars and never add their own margins/padding for alignment. Adjust --main-col-* here, not in individual components. */
 .search-area-wrapper,
 .bookmark-bar-wrapper,
 #bookmarks-grid,
@@ -967,8 +967,9 @@ body.performance-mode .bookmark-item.newly-rendered {
   /* Standard gap between items */
   gap: 5px; 
   
-  /* CHANGED: Align items to the start (left) instead of center */
-  justify-content: start; 
+  /* Center sparse rows within the rail while preserving the grid track layout */
+  justify-content: center; 
+  justify-items: center;
   align-content: start;
   
   padding-top: 5px;

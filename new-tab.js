@@ -90,6 +90,7 @@ const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
 
 const WALLPAPER_CACHE_NAME = 'wallpaper-assets';
 const GALLERY_POSTERS_CACHE_NAME = 'gallery-posters';
+const POSTER_CACHE_CONCURRENCY = 4;
 
 const USER_WALLPAPER_CACHE_PREFIX = 'https://user-wallpapers.local/';
 
@@ -111,19 +112,92 @@ const isRemoteHttpUrl = (url = '') => typeof url === 'string' && /^https?:\/\//i
 
 const isRemoteVideoUrl = (url = '') => isRemoteHttpUrl(url) && REMOTE_VIDEO_REGEX.test(url);
 
-const runWhenIdle = (cb) => {
+const runWhenIdle = (cb, timeout = 500) => {
 
   if ('requestIdleCallback' in window) {
 
-    requestIdleCallback(cb, { timeout: 500 });
+    requestIdleCallback(cb, { timeout });
 
   } else {
 
-    setTimeout(cb, 50);
+    setTimeout(() => cb({ didTimeout: true, timeRemaining: () => 0 }), Math.min(timeout, 500));
 
   }
 
 };
+
+const IDLE_TASK_BUDGET_MS = 12;
+const idleTaskQueue = [];
+let idleTaskScheduled = false;
+
+async function processIdleTasks(deadline) {
+
+  idleTaskScheduled = false;
+
+  const start = performance.now();
+
+  const hasDeadline = deadline && typeof deadline.timeRemaining === 'function';
+
+  while (idleTaskQueue.length) {
+
+    const timeRemaining = hasDeadline ? deadline.timeRemaining() : Infinity;
+
+    const elapsed = performance.now() - start;
+
+    if (elapsed >= IDLE_TASK_BUDGET_MS || (hasDeadline && timeRemaining <= 1)) {
+
+      break;
+
+    }
+
+    const task = idleTaskQueue.shift();
+
+    if (!task) continue;
+
+    try {
+
+      const result = task.fn();
+
+      if (result && typeof result.then === 'function') {
+
+        await result;
+
+      }
+
+    } catch (err) {
+
+      console.warn('Idle task failed:', task.label, err);
+
+    }
+
+  }
+
+  if (idleTaskQueue.length) {
+
+    idleTaskScheduled = true;
+
+    runWhenIdle(processIdleTasks);
+
+  }
+
+}
+
+// Queue background work to run in short idle slices.
+function scheduleIdleTask(fn, label = 'task') {
+
+  if (typeof fn !== 'function') return;
+
+  idleTaskQueue.push({ fn, label });
+
+  if (!idleTaskScheduled) {
+
+    idleTaskScheduled = true;
+
+    runWhenIdle(processIdleTasks);
+
+  }
+
+}
 
 async function isFirefoxBrowser() {
 
@@ -324,11 +398,7 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
     document.documentElement.dataset.initialWallpaper = poster;
   }
 
-  runWhenIdle(() => {
-
-    cacheAppliedWallpaperPoster(poster, posterCacheKey).catch(() => {});
-
-  });
+  scheduleIdleTask(() => cacheAppliedWallpaperPoster(poster, posterCacheKey).catch(() => {}), 'cacheAppliedWallpaperPoster');
 
 }
 
@@ -617,7 +687,7 @@ async function getVideosManifest() {
 
   if (manifest && isFresh) {
 
-    runWhenIdle(() => cacheGalleryPosters(manifest));
+    scheduleIdleTask(() => cacheGalleryPosters(manifest), 'cacheGalleryPosters');
 
     return manifest;
 
@@ -625,7 +695,7 @@ async function getVideosManifest() {
 
   const fetched = await fetchVideosManifestIfNeeded();
 
-  runWhenIdle(() => cacheGalleryPosters(fetched));
+  scheduleIdleTask(() => cacheGalleryPosters(fetched), 'cacheGalleryPosters');
 
   return fetched;
 
@@ -675,6 +745,68 @@ async function cacheAsset(url) {
 
 
 
+// Run async work with limited concurrency while preserving order.
+async function mapLimit(items, limit, worker) {
+
+  const results = [];
+
+  const list = Array.isArray(items) ? items : [];
+
+  const max = Math.max(1, limit || 1);
+
+  let index = 0;
+  let active = 0;
+
+  return new Promise((resolve) => {
+
+    const next = () => {
+
+      if (index >= list.length && active === 0) {
+
+        resolve(results);
+
+        return;
+
+      }
+
+      while (active < max && index < list.length) {
+
+        const current = index++;
+
+        active++;
+
+        Promise.resolve()
+          .then(() => worker(list[current], current))
+          .then((res) => {
+
+            results[current] = res;
+
+          })
+          .catch((err) => {
+
+            results[current] = err instanceof Error ? err : new Error(String(err));
+
+          })
+          .finally(() => {
+
+            active--;
+
+            next();
+
+          });
+
+      }
+
+    };
+
+    next();
+
+  });
+
+}
+
+
+
 async function cacheGalleryPosters(manifest = []) {
 
   const posters = Array.from(new Set(
@@ -693,16 +825,17 @@ async function cacheGalleryPosters(manifest = []) {
 
   try {
     const cache = await caches.open(GALLERY_POSTERS_CACHE_NAME);
-    const tasks = posters.map(async (url) => {
+    await mapLimit(posters, POSTER_CACHE_CONCURRENCY, async (url) => {
       try {
         const existing = await cache.match(url);
-        if (existing) return;
+        if (existing) return existing;
         await cache.add(url);
+        return true;
       } catch (e) {
         console.warn('Failed to cache poster', url, e);
+        return e;
       }
     });
-    await Promise.allSettled(tasks);
   } catch (e) {
     console.error('cacheGalleryPosters error:', e);
   }
@@ -1743,7 +1876,7 @@ async function ensureDailyWallpaper(forceNext = false) {
 
     applyWallpaperByType(hydratedSelection, type);
 
-    runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
+    scheduleIdleTask(() => cacheAppliedWallpaperVideo(hydratedSelection), 'cacheAppliedWallpaperVideo');
 
   } else {
 
@@ -2293,6 +2426,300 @@ let virtualizerState = {
 
 let sortableTimeout = null;
 
+const PERF_OVERLAY_CACHE_THROTTLE_MS = 5000;
+const perfState = {
+  overlayEnabled: false,
+  lastGridRenderMs: 0,
+  lastRenderedStartIndex: -1,
+  lastRenderedEndIndex: -1,
+  totalCount: 0,
+  gridRenderedNodes: 0,
+  lastVirtualRange: { start: -1, end: -1 },
+  cacheBytes: null,
+  localStorageBytes: 0,
+  lastCacheCheck: 0
+};
+
+let perfOverlayEl = null;
+let perfOverlayInterval = null;
+let perfOverlayCachePromise = null;
+
+// Format bytes into a human readable string.
+function formatBytes(bytes = 0) {
+
+  if (!bytes || Number.isNaN(bytes)) return '0 B';
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+
+  const value = bytes / (1024 ** i);
+
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[i]}`;
+
+}
+
+// Estimate localStorage usage in bytes.
+function estimateLocalStorageBytes() {
+
+  let total = 0;
+
+  try {
+
+    for (let i = 0; i < localStorage.length; i++) {
+
+      const key = localStorage.key(i) || '';
+
+      const val = localStorage.getItem(key) || '';
+
+      total += (key.length + val.length) * 2;
+
+    }
+
+  } catch (err) {
+
+    console.warn('Failed to estimate localStorage size', err);
+
+  }
+
+  return total;
+
+}
+
+// Throttled cache size computation for the perf overlay.
+async function computeCacheBytes() {
+
+  const cacheNames = new Set([WALLPAPER_CACHE_NAME, GALLERY_POSTERS_CACHE_NAME]);
+
+  try {
+
+    const myWallpapersCache = (() => {
+
+      try {
+
+        if (typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.getCacheName === 'function') {
+
+          return MyWallpapers.getCacheName();
+
+        }
+
+      } catch (err) {
+
+        return null;
+
+      }
+
+      return null;
+
+    })();
+
+    if (myWallpapersCache) cacheNames.add(myWallpapersCache);
+
+  } catch (err) {
+
+    // Ignore—MyWallpapers may not be initialized yet.
+
+  }
+
+  let totalBytes = 0;
+
+  for (const name of cacheNames) {
+
+    if (!name) continue;
+
+    try {
+
+      const cache = await caches.open(name);
+
+      const requests = await cache.keys();
+
+      for (const request of requests) {
+
+        const res = await cache.match(request);
+
+        if (!res) continue;
+
+        const len = res.headers.get('content-length');
+
+        const parsed = len ? parseInt(len, 10) : NaN;
+
+        if (!Number.isNaN(parsed)) {
+
+          totalBytes += parsed;
+
+          continue;
+
+        }
+
+        if (res.type === 'opaque') continue;
+
+        try {
+
+          const buf = await res.clone().arrayBuffer();
+
+          totalBytes += buf.byteLength;
+
+        } catch (err) {
+
+          // Ignore failures from unreadable responses.
+
+        }
+
+      }
+
+    } catch (err) {
+
+      console.warn('Perf overlay cache size check failed for', name, err);
+
+    }
+
+  }
+
+  perfState.cacheBytes = totalBytes;
+
+  return totalBytes;
+
+}
+
+function ensurePerfOverlayElement() {
+
+  if (perfOverlayEl && perfOverlayEl.isConnected) return perfOverlayEl;
+
+  const el = document.createElement('div');
+
+  el.id = 'perf-debug-overlay';
+
+  el.style.cssText = `
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    background: rgba(0,0,0,0.78);
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+    line-height: 1.5;
+    pointer-events: none;
+    z-index: 9999;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    max-width: 340px;
+    white-space: pre-line;
+  `;
+
+  perfOverlayEl = el;
+
+  const attach = () => {
+
+    if (document && document.body && !el.isConnected) {
+
+      document.body.appendChild(el);
+
+    } else {
+
+      requestAnimationFrame(attach);
+
+    }
+
+  };
+
+  attach();
+
+  return el;
+
+}
+
+function updatePerfOverlay(forceCacheRefresh = false) {
+
+  if (!perfState.overlayEnabled) return;
+
+  const el = ensurePerfOverlayElement();
+
+  const now = Date.now();
+
+  if ((forceCacheRefresh || now - perfState.lastCacheCheck >= PERF_OVERLAY_CACHE_THROTTLE_MS) && !perfOverlayCachePromise) {
+
+    perfState.lastCacheCheck = now;
+
+    perfOverlayCachePromise = computeCacheBytes().catch(() => {}).finally(() => {
+
+      perfOverlayCachePromise = null;
+
+      if (perfState.overlayEnabled) updatePerfOverlay(false);
+
+    });
+
+  }
+
+  perfState.localStorageBytes = estimateLocalStorageBytes();
+
+  const startIdx = perfState.lastVirtualRange.start >= 0 ? perfState.lastVirtualRange.start : (perfState.lastRenderedStartIndex >= 0 ? perfState.lastRenderedStartIndex : 0);
+
+  const endIdx = perfState.lastVirtualRange.end >= 0 ? perfState.lastVirtualRange.end : (perfState.lastRenderedEndIndex >= 0 ? perfState.lastRenderedEndIndex : 0);
+
+  const cacheDisplay = perfState.cacheBytes != null ? formatBytes(perfState.cacheBytes) : '...';
+
+  const gridRender = perfState.lastGridRenderMs ? perfState.lastGridRenderMs.toFixed(1) : '0.0';
+
+  el.textContent = [
+    `Grid render: ${gridRender} ms`,
+    `Grid nodes: ${perfState.gridRenderedNodes}`,
+    `Virtual range: ${startIdx}-${endIdx} / ${perfState.totalCount}`,
+    `Cache size: ${cacheDisplay}`,
+    `localStorage: ${formatBytes(perfState.localStorageBytes)}`
+  ].join('\n');
+
+}
+
+function setPerfOverlayEnabled(enabled) {
+
+  const isEnabled = enabled === true;
+
+  perfState.overlayEnabled = isEnabled;
+
+  debugPerfOverlayPreference = isEnabled;
+
+  if (isEnabled) {
+
+    ensurePerfOverlayElement();
+
+    updatePerfOverlay(true);
+
+    if (!perfOverlayInterval) {
+
+      perfOverlayInterval = setInterval(() => updatePerfOverlay(false), 1000);
+
+    }
+
+  } else {
+
+    if (perfOverlayInterval) {
+
+      clearInterval(perfOverlayInterval);
+
+      perfOverlayInterval = null;
+
+    }
+
+    if (perfOverlayEl) {
+
+      perfOverlayEl.remove();
+
+    }
+
+    perfOverlayEl = null;
+
+    perfState.gridRenderedNodes = 0;
+    perfState.lastRenderedStartIndex = -1;
+    perfState.lastRenderedEndIndex = -1;
+    perfState.lastVirtualRange = { start: -1, end: -1 };
+    perfState.totalCount = 0;
+    perfState.lastGridRenderMs = 0;
+
+  }
+
+}
+
 
 
 // === CONTEXT MENU ELEMENTS ===
@@ -2478,6 +2905,7 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
   const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
 
   const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
+  const APP_DEBUG_PERF_OVERLAY_KEY = 'debugPerfOverlay';
 
   const APP_BATTERY_OPTIMIZATION_KEY = 'appBatteryOptimization';
 
@@ -2590,6 +3018,7 @@ let appGridAnimationEnabledPreference = false;
 let appGlassStylePreference = 'original';
 
 let appPerformanceModePreference = false;
+let debugPerfOverlayPreference = false;
 
 let appBatteryOptimizationPreference = false;
 
@@ -7826,6 +8255,8 @@ function updateVirtualGrid() {
   const { mainContentEl, gridEl, items, rowHeight, itemWidth } = virtualizerState;
 
   if (!mainContentEl || !gridEl) return;
+
+  const renderStart = performance.now();
   
   // 1. Calculate Columns
   const gridWidth = gridEl.clientWidth;
@@ -7850,6 +8281,10 @@ function updateVirtualGrid() {
 
   const startIndex = startRow * cols;
   const endIndex = Math.min(items.length, endRow * cols);
+  perfState.lastRenderedStartIndex = startIndex;
+  perfState.lastRenderedEndIndex = Math.max(startIndex, endIndex - 1);
+  perfState.lastVirtualRange = { start: startIndex, end: Math.max(startIndex, endIndex - 1) };
+  perfState.totalCount = items.length;
 
   // 5. Optimization: Only render if range changed (unless it's the first render)
   if (!virtualizerState.initialRender && startIndex === virtualizerState.lastStart && endIndex === virtualizerState.lastEnd) {
@@ -7909,6 +8344,10 @@ function updateVirtualGrid() {
   while (gridEl.children.length > visibleItems.length) {
     gridEl.lastChild.remove();
   }
+
+  const nodeCount = visibleItems.length;
+  perfState.gridRenderedNodes = nodeCount;
+  perfState.lastGridRenderMs = performance.now() - renderStart;
 
   // --- NEW: Disable animation for future scrolls ---
   if (virtualizerState.initialRender) {
@@ -10532,6 +10971,7 @@ async function loadAppSettingsFromStorage() {
       APP_BACKGROUND_DIM_KEY,
 
       APP_PERFORMANCE_MODE_KEY,
+      APP_DEBUG_PERF_OVERLAY_KEY,
 
       APP_BATTERY_OPTIMIZATION_KEY,
       APP_CINEMA_MODE_KEY,
@@ -10553,6 +10993,7 @@ async function loadAppSettingsFromStorage() {
     ]);
 
     appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
+    debugPerfOverlayPreference = stored[APP_DEBUG_PERF_OVERLAY_KEY] === true;
     appBatteryOptimizationPreference = stored[APP_BATTERY_OPTIMIZATION_KEY] === true;
     appCinemaModePreference = stored[APP_CINEMA_MODE_KEY] === true;
 
@@ -10641,6 +11082,7 @@ async function loadAppSettingsFromStorage() {
     applyBookmarkFolderColor(appBookmarkFolderColorPreference);
 
     applyPerformanceModeState(appPerformanceModePreference);
+    setPerfOverlayEnabled(debugPerfOverlayPreference);
     resetCinemaMode();
 
     applyBackgroundDim(savedBackgroundDim);
@@ -11275,6 +11717,38 @@ function syncAppSettingsForm() {
 
   }
 
+  const perfDebugToggle = document.getElementById('app-perf-debug-overlay-toggle');
+
+  if (perfDebugToggle) {
+
+    perfDebugToggle.checked = debugPerfOverlayPreference;
+
+    if (!perfDebugToggle.dataset.listenerAttached) {
+
+      perfDebugToggle.dataset.listenerAttached = 'true';
+
+      perfDebugToggle.addEventListener('change', async () => {
+
+        const nextValue = perfDebugToggle.checked;
+
+        setPerfOverlayEnabled(nextValue);
+
+        try {
+
+          await browser.storage.local.set({ [APP_DEBUG_PERF_OVERLAY_KEY]: nextValue });
+
+        } catch (err) {
+
+          console.warn('Failed to persist perf overlay toggle', err);
+
+        }
+
+      });
+
+    }
+
+  }
+
   const batteryToggle = document.getElementById('app-battery-optimization-toggle');
 
   if (batteryToggle) {
@@ -11680,6 +12154,10 @@ function setupAppSettingsModal() {
 
       const nextPerformanceMode = document.getElementById('app-performance-mode-toggle')?.checked || false;
 
+      const nextDebugPerfOverlay = document.getElementById('app-perf-debug-overlay-toggle')?.checked || false;
+      const prevDebugPerfOverlay = debugPerfOverlayPreference;
+      const perfOverlayChanged = nextDebugPerfOverlay !== prevDebugPerfOverlay;
+
       const nextBatteryOptimization = document.getElementById('app-battery-optimization-toggle')?.checked || false;
 
       const nextCinemaMode = document.getElementById('app-cinema-mode-toggle')?.checked || false;
@@ -11786,6 +12264,7 @@ function setupAppSettingsModal() {
       appBookmarkFolderColorPreference = nextFolderColor;
 
       appPerformanceModePreference = nextPerformanceMode;
+      debugPerfOverlayPreference = nextDebugPerfOverlay;
 
       appBatteryOptimizationPreference = nextBatteryOptimization;
       appCinemaModePreference = nextCinemaMode;
@@ -11872,11 +12351,16 @@ function setupAppSettingsModal() {
           [APP_SINGLETON_MODE_KEY]: nextSingletonMode,
 
           [APP_PERFORMANCE_MODE_KEY]: nextPerformanceMode,
+          [APP_DEBUG_PERF_OVERLAY_KEY]: nextDebugPerfOverlay,
 
           [APP_BATTERY_OPTIMIZATION_KEY]: nextBatteryOptimization,
           [APP_CINEMA_MODE_KEY]: nextCinemaMode
 
         });
+
+        if (perfOverlayChanged) {
+          setPerfOverlayEnabled(nextDebugPerfOverlay);
+        }
 
         if (wallpaperChanged && updatedWallpaperSelection) {
           await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: updatedWallpaperSelection });
@@ -18270,7 +18754,7 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
   setupSearchEnginesModal();
   setupGalleryListeners();
 
-  runWhenIdle(() => warmGalleryPosterHydration());
+  scheduleIdleTask(() => warmGalleryPosterHydration(), 'warmGalleryPosterHydration');
 
   
 
@@ -19321,7 +19805,7 @@ async function applyGalleryWallpaper(item) {
       applyWallpaperByType(hydrated, type);
     }
 
-    runWhenIdle(() => cacheAppliedWallpaperVideo(hydrated));
+    scheduleIdleTask(() => cacheAppliedWallpaperVideo(hydrated), 'cacheAppliedWallpaperVideo');
 
     closeGalleryModal();
 
@@ -19353,7 +19837,7 @@ async function openGalleryModal() {
 
     const manifestList = Array.isArray(manifest) ? manifest : [];
 
-    runWhenIdle(() => cacheGalleryPosters(manifestList));
+    scheduleIdleTask(() => cacheGalleryPosters(manifestList), 'cacheGalleryPosters');
 
     galleryManifest = manifestList;
 
@@ -21149,8 +21633,8 @@ const MyWallpapers = (() => {
 
     if (desiredType === 'static') {
       applyWallpaperByType(hydratedSelection, 'static');
-      runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
-      runWhenIdle(async () => {
+      scheduleIdleTask(() => cacheAppliedWallpaperVideo(hydratedSelection), 'cacheAppliedWallpaperVideo');
+      scheduleIdleTask(async () => {
         try {
           // Defer poster data URL work so My Wallpapers stays snappy; gallery paths remain untouched.
           const isDataPoster = (hydratedSelection.posterUrl || '').startsWith('data:');
@@ -21190,7 +21674,7 @@ const MyWallpapers = (() => {
         } catch (err) {
           // ignore poster caching errors
         }
-      });
+      }, 'persistPosterDataUrl');
       if (preserveType) {
         // Regression guard: ensure we didn't mutate global type preference when applying My Wallpapers
         try {
@@ -21207,7 +21691,7 @@ const MyWallpapers = (() => {
       resetButton();
     } else {
       applyWallpaperByType(hydratedSelection, desiredType);
-      runWhenIdle(() => cacheAppliedWallpaperVideo(hydratedSelection));
+      scheduleIdleTask(() => cacheAppliedWallpaperVideo(hydratedSelection), 'cacheAppliedWallpaperVideo');
       resetButton();
     }
 
@@ -21253,7 +21737,7 @@ const MyWallpapers = (() => {
           [WALLPAPER_TYPE_KEY]: 'video'
         });
         applyWallpaperByType(fallbackSelection, 'video');
-        runWhenIdle(() => cacheAppliedWallpaperVideo(fallbackSelection));
+        scheduleIdleTask(() => cacheAppliedWallpaperVideo(fallbackSelection), 'cacheAppliedWallpaperVideo');
       }
     } catch (err) {
       console.warn('Failed to reset wallpaper after deletion', err);
@@ -21484,7 +21968,7 @@ if (myWallpapersUseFallbackBtn) {
 
       applyWallpaperByType(selection, type);
 
-      runWhenIdle(() => cacheAppliedWallpaperVideo(selection));
+      scheduleIdleTask(() => cacheAppliedWallpaperVideo(selection), 'cacheAppliedWallpaperVideo');
 
     } catch (err) {
 

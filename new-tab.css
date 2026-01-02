@@ -145,6 +145,7 @@ body.ready .dock {
   --main-col-left: 10px;
   --main-col-max: none;
   --main-col-pad: 0px;
+  --tabs-arrow-size: 30px;
   --tabs-arrow-reserve: 30px;
 }
 
@@ -424,7 +425,7 @@ body.sidebar-collapsed .collapsed-clock-slot {
 /* --- UNIFIED SEARCH WIDGET STYLES --- */
 /* ======================================= */
 
-/* SINGLE SOURCE OF TRUTH: main column geometry (do not override these below) */
+/* Content rail: keep search bar, folder tabs, grid, and empty state aligned */
 .search-area-wrapper,
 .bookmark-bar-wrapper,
 #bookmarks-grid,
@@ -1592,6 +1593,7 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  overflow: visible;
 
   padding-top: 0;
   padding-bottom: 0;
@@ -1605,9 +1607,17 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   box-sizing: border-box;
   flex: 1 1 auto;
   min-width: 0;
+  overflow: visible;
 }
 
-.bookmark-actions-wrapper,
+.bookmark-actions-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
 .search-actions-wrapper {
   display: flex;
   align-items: center;
@@ -1648,8 +1658,8 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   box-sizing: border-box;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-left: var(--tabs-arrow-reserve);
-  padding-right: var(--tabs-arrow-reserve);
+  padding-left: 0;
+  padding-right: 0;
   overscroll-behavior-x: contain;
   overscroll-behavior-y: none;
   touch-action: pan-y;
@@ -1661,6 +1671,44 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   display: none;
 }
 
+.bookmark-tabs-wrapper::before,
+.bookmark-tabs-wrapper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.bookmark-tabs-wrapper::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.35), transparent);
+}
+
+.bookmark-tabs-wrapper::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.35), transparent);
+}
+
+.bookmark-tabs-wrapper.tabs-fade-left::before {
+  opacity: 1;
+}
+
+.bookmark-tabs-wrapper.tabs-fade-right::after {
+  opacity: 1;
+}
+
+.bookmark-tabs-wrapper:has(#tab-scroll-left.visible)::before {
+  opacity: 1;
+}
+
+.bookmark-tabs-wrapper:has(#tab-scroll-right.visible)::after {
+  opacity: 1;
+}
+
 .tabs-edge-sentinel {
   width: 1px;
   height: 1px;
@@ -1670,8 +1718,8 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 }
 
 .tab-scroll-btn {
-  width: 30px;
-  height: 30px;
+  width: var(--tabs-arrow-size);
+  height: var(--tabs-arrow-size);
   border-radius: 50%;
   border: none;
   background-color: rgba(0, 0, 0, 0.3);
@@ -1688,6 +1736,14 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   top: 50%;
   transform: translateY(-50%);
   z-index: 5;
+}
+
+#tab-scroll-left {
+  left: calc(-1 * (var(--tabs-arrow-size) + 6px));
+}
+
+#tab-scroll-right {
+  right: calc(-1 * (var(--tabs-arrow-size) + 6px));
 }
 
 .tab-scroll-btn.visible {
@@ -2503,6 +2559,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   padding: 0 4px;
   border-radius: 18px;
 
+  margin-left: 0;
   margin-right: 0;
 }
 
@@ -2532,6 +2589,21 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   height: 14px; /* was 16px */
   background-color: rgba(255, 255, 255, 0.3);
   margin: 0 4px;
+}
+
+/* DEBUG: alignment outlines (toggle by adding body.debug-align) */
+body.debug-align .search-area-wrapper,
+body.debug-align .bookmark-bar-wrapper,
+body.debug-align #bookmarks-grid {
+  outline: 1px dashed rgba(255, 255, 255, 0.6);
+}
+
+body.debug-align #google-apps-btn {
+  outline: 1px solid rgba(0, 255, 0, 0.8);
+}
+
+body.debug-align #quick-actions-bar {
+  outline: 1px solid rgba(255, 0, 0, 0.8);
 }
 
 

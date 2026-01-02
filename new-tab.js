@@ -128,6 +128,7 @@ const runWhenIdle = (cb, timeout = 500) => {
 
 const IDLE_TASK_BUDGET_MS = 12;
 const idleTaskQueue = [];
+const idleTaskLabels = new Map();
 let idleTaskScheduled = false;
 
 async function processIdleTasks(deadline) {
@@ -154,6 +155,8 @@ async function processIdleTasks(deadline) {
 
     if (!task) continue;
 
+    task.isRunning = true;
+
     try {
 
       const result = task.fn();
@@ -167,6 +170,26 @@ async function processIdleTasks(deadline) {
     } catch (err) {
 
       console.warn('Idle task failed:', task.label, err);
+
+    }
+
+    task.isRunning = false;
+
+    if (task.label) {
+
+      if (task.nextFn) {
+
+        task.fn = task.nextFn;
+
+        task.nextFn = null;
+
+        idleTaskQueue.push(task);
+
+      } else {
+
+        idleTaskLabels.delete(task.label);
+
+      }
 
     }
 
@@ -187,7 +210,37 @@ function scheduleIdleTask(fn, label = 'task') {
 
   if (typeof fn !== 'function') return;
 
-  idleTaskQueue.push({ fn, label });
+  if (label) {
+
+    const existing = idleTaskLabels.get(label);
+
+    if (existing) {
+
+      if (existing.isRunning) {
+
+        existing.nextFn = fn;
+
+      } else {
+
+        existing.fn = fn;
+
+      }
+
+      return;
+
+    }
+
+    const task = { fn, label, nextFn: null, isRunning: false };
+
+    idleTaskLabels.set(label, task);
+
+    idleTaskQueue.push(task);
+
+  } else {
+
+    idleTaskQueue.push({ fn, label: '', nextFn: null, isRunning: false });
+
+  }
 
   if (!idleTaskScheduled) {
 
@@ -1248,43 +1301,53 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
       }
     } catch (e) {}
 
-    let dataUrlStored = false;
+    const cacheKeyToUse = posterCacheKey || posterUrl;
 
-    try {
-      // Resolve the poster
-      const blob = await resolvePosterBlob(urlToStore, posterCacheKey || posterUrl);
-      if (blob && blob.size > 0) {
+    // Defer poster encoding so Apply stays responsive; work runs when the browser is idle.
+    scheduleIdleTask(async () => {
+      try {
+        const storedUrlResult = await browser.storage.local.get(CACHED_APPLIED_POSTER_URL_KEY);
+        const storedUrl = storedUrlResult && storedUrlResult[CACHED_APPLIED_POSTER_URL_KEY];
+        if (storedUrl !== urlToStore) {
+          return; // Race guard: applied poster changed before we started.
+        }
 
-        // [FIX]: Check if blob is too big for localStorage (>2MB).
-        // If so, compress it for the "Instant Cache" only.
         let dataUrl = '';
-        if (blob.size > 2 * 1024 * 1024) {
-          dataUrl = await createOptimizedPosterDataUrl(blob);
-        } else {
-          dataUrl = await blobToDataUrl(blob);
+        const blob = await resolvePosterBlob(urlToStore, cacheKeyToUse);
+
+        if (blob && blob.size > 0) {
+          if (blob.size > 2 * 1024 * 1024) {
+            dataUrl = await createOptimizedPosterDataUrl(blob);
+          } else {
+            dataUrl = await blobToDataUrl(blob);
+          }
+        }
+
+        const latestStored = await browser.storage.local.get(CACHED_APPLIED_POSTER_URL_KEY);
+        const latestUrl = latestStored && latestStored[CACHED_APPLIED_POSTER_URL_KEY];
+        if (latestUrl !== urlToStore) {
+          return; // Race guard: poster switched while encoding.
         }
 
         if (dataUrl) {
           await browser.storage.local.set({ [CACHED_APPLIED_POSTER_DATA_URL_KEY]: dataUrl });
-          if (window.localStorage) {
-            localStorage.setItem('cachedAppliedPosterDataUrl', dataUrl);
-          }
-          dataUrlStored = true;
+          try {
+            if (window.localStorage) {
+              localStorage.setItem('cachedAppliedPosterDataUrl', dataUrl);
+            }
+          } catch (e) {}
+        } else {
+          await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+          try {
+            if (window.localStorage) {
+              localStorage.removeItem('cachedAppliedPosterDataUrl');
+            }
+          } catch (e) {}
         }
+      } catch (e) {
+        console.warn('Failed to generate data URL for poster', e);
       }
-    } catch (e) {
-      console.warn('Failed to generate data URL for poster', e);
-    }
-
-    // Cleanup if Data URL generation failed
-    if (!dataUrlStored) {
-      await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
-      try {
-        if (window.localStorage) {
-          localStorage.removeItem('cachedAppliedPosterDataUrl');
-        }
-      } catch (e) {}
-    }
+    }, 'posterDataUrlGeneration');
   } catch (err) {
     console.warn('Failed to cache applied wallpaper poster', err);
   }
@@ -1294,39 +1357,81 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
  * Creates a resized/compressed Data URL specifically for instant startup cache.
  * Keeps the file within localStorage limits (~5MB) without affecting the actual high-res wallpaper.
  */
-function createOptimizedPosterDataUrl(blob) {
-  return new Promise((resolve) => {
+async function createOptimizedPosterDataUrl(blob) {
+  if (!blob) {
+    return '';
+  }
+
+  const MAX_DIM = 2000;
+  let objectUrl = '';
+
+  try {
     const img = new Image();
-    const url = URL.createObjectURL(blob);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const canvas = document.createElement('canvas');
 
-      // Resize to safe instant-load dimensions (e.g., 1920px or 2560px max)
-      const MAX_DIM = 2000;
-      let w = img.width;
-      let h = img.height;
+    objectUrl = URL.createObjectURL(blob);
 
-      if (w > MAX_DIM || h > MAX_DIM) {
-        const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
-        w = Math.round(w * ratio);
-        h = Math.round(h * ratio);
-      }
+    await new Promise((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Image failed to load'));
+      img.src = objectUrl;
+    });
 
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
+    let w = img.width;
+    let h = img.height;
 
-      // Compress to JPEG 80% to ensure it fits in localStorage
-      resolve(canvas.toDataURL('image/jpeg', 0.8));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve('');
-    };
-    img.src = url;
-  });
+    if (!w || !h) {
+      return '';
+    }
+
+    if (w > MAX_DIM || h > MAX_DIM) {
+      const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
+      w = Math.round(w * ratio);
+      h = Math.round(h * ratio);
+    }
+
+    const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : document.createElement('canvas');
+
+    canvas.width = w;
+    canvas.height = h;
+
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      return '';
+    }
+
+    ctx.drawImage(img, 0, 0, w, h);
+
+    let jpegBlob = null;
+
+    if (typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas && typeof canvas.convertToBlob === 'function') {
+      jpegBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+    } else {
+      jpegBlob = await new Promise((resolve) => {
+        if (typeof canvas.toBlob === 'function') {
+          canvas.toBlob((result) => resolve(result || null), 'image/jpeg', 0.8);
+        } else {
+          resolve(null);
+        }
+      });
+    }
+
+    if (!jpegBlob) {
+      return '';
+    }
+
+    const dataUrl = await blobToDataUrl(jpegBlob);
+
+    return typeof dataUrl === 'string' ? dataUrl : '';
+  } catch (err) {
+    return '';
+  } finally {
+    if (objectUrl) {
+      try {
+        URL.revokeObjectURL(objectUrl);
+      } catch (e) {}
+    }
+  }
 }
 
 

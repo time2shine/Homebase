@@ -3073,6 +3073,8 @@ let galleryVirtualState = {
 };
 let galleryVirtualScrollHandler = null;
 let galleryVirtualResizeAttached = false;
+let galleryNodePool = [];
+let galleryPoolAttached = 0;
 
 let timeFormatPreference = '12-hour';
 
@@ -20060,12 +20062,149 @@ function closeGalleryModal() {
 
 
 
+function createGalleryCardShell() {
+  const card = document.createElement('div');
+  card.className = 'gallery-card';
+  card.style.position = 'absolute';
+  card.style.boxSizing = 'border-box';
+
+  const img = document.createElement('img');
+  img.className = 'gallery-card-image';
+  img.loading = 'lazy';
+  img.referrerPolicy = 'no-referrer';
+  card.appendChild(img);
+
+  const favBtn = document.createElement('div');
+  favBtn.className = 'gallery-fav-btn';
+  const heart = document.createElement('div');
+  heart.className = 'heart';
+  favBtn.appendChild(heart);
+  card.appendChild(favBtn);
+
+  const meta = document.createElement('div');
+  meta.className = 'gallery-card-meta';
+
+  const title = document.createElement('span');
+  title.className = 'gallery-card-title';
+  const titleText = document.createElement('span');
+  title.appendChild(titleText);
+  meta.appendChild(title);
+
+  const applyBtn = document.createElement('button');
+  applyBtn.type = 'button';
+  applyBtn.className = 'gallery-card-apply apply-button';
+  applyBtn.setAttribute('aria-label', 'Apply this wallpaper');
+  applyBtn.textContent = 'Apply';
+  meta.appendChild(applyBtn);
+
+  card.appendChild(meta);
+
+  const tagsWrap = document.createElement('div');
+  tagsWrap.className = 'gallery-card-tags';
+  tagsWrap.style.display = 'none';
+  card.appendChild(tagsWrap);
+
+  card._refs = { img, favBtn, titleEl: title, titleText, applyBtn, tagsWrap };
+  card._boundItemKey = null;
+
+  return card;
+}
+
+
+function ensureGalleryPoolSize(size = 0) {
+  const needed = Math.max(0, size - galleryNodePool.length);
+  for (let i = 0; i < needed; i++) {
+    galleryNodePool.push(createGalleryCardShell());
+  }
+}
+
+
+function resetGalleryPoolBindings() {
+  for (let i = 0; i < galleryPoolAttached; i++) {
+    const node = galleryNodePool[i];
+    if (!node) continue;
+    node._boundItemKey = null;
+  }
+}
+
+
+function updateGalleryCardNode(card, item, itemIndex = 0) {
+  if (!card || !item) return;
+
+  const refs = card._refs || {};
+  const idStr = item.id != null ? String(item.id) : '';
+  const isFavorite = galleryFavorites.has(item.id);
+
+  card.dataset.id = idStr;
+
+  if (refs.favBtn) {
+    refs.favBtn.classList.toggle('is-active', isFavorite);
+  }
+
+  if (card._boundItemKey === idStr) {
+    return;
+  }
+
+  let thumbUrl = '';
+  if (isGallerySelection(item)) {
+    const urls = getWallpaperUrls(item.id);
+    thumbUrl = urls.thumbUrl;
+  }
+  const posterSrc = thumbUrl || item.posterUrl || item.poster || item.url || '';
+  const titleTextValue = item.title || 'Wallpaper';
+  const wordCount = titleTextValue.trim().split(/\s+/).filter(Boolean).length;
+  const charCount = titleTextValue.length;
+  const needsMarquee = charCount > 15 || wordCount >= 5;
+  const marqueeDuration = Math.max(8, Math.min(20, Math.ceil(charCount / 2)));
+
+  if (refs.img) {
+    refs.img.src = posterSrc;
+    refs.img.alt = item.title || 'Wallpaper';
+    refs.img.loading = itemIndex < 40 ? 'eager' : 'lazy';
+  }
+
+  if (refs.titleEl) {
+    refs.titleEl.classList.toggle('gallery-marquee', needsMarquee);
+    if (needsMarquee) {
+      refs.titleEl.style.setProperty('--gallery-marquee-duration', `${marqueeDuration}s`);
+    } else {
+      refs.titleEl.style.removeProperty('--gallery-marquee-duration');
+    }
+  }
+
+  if (refs.titleText) {
+    refs.titleText.textContent = titleTextValue;
+  }
+
+  if (refs.tagsWrap) {
+    const tags = Array.isArray(item.tags) ? item.tags.map((tag) => String(tag).trim()).filter(Boolean) : [];
+    if (tags.length) {
+      const frag = document.createDocumentFragment();
+      tags.forEach((tag) => {
+        const tagEl = document.createElement('span');
+        tagEl.className = 'gallery-card-tag';
+        tagEl.dataset.tag = tag;
+        tagEl.textContent = tag;
+        frag.appendChild(tagEl);
+      });
+      refs.tagsWrap.replaceChildren(frag);
+      refs.tagsWrap.style.display = '';
+    } else {
+      refs.tagsWrap.replaceChildren();
+      refs.tagsWrap.style.display = 'none';
+    }
+  }
+
+  card._boundItemKey = idStr;
+}
+
+
 function renderGalleryVirtual(items = []) {
   galleryVirtualState.items = Array.isArray(items) ? items : [];
-  galleryGrid.innerHTML = '';
   galleryGrid.style.display = 'block';
   galleryGrid.style.position = 'relative';
   attachGalleryVirtualListeners();
+  resetGalleryPoolBindings();
   updateGalleryVirtualGrid();
 }
 
@@ -20127,25 +20266,45 @@ function updateGalleryVirtualGrid() {
 
   const startIndex = startRow * itemsPerRow;
   const endIndex = Math.min(endRow * itemsPerRow, items.length);
+  const visibleCount = Math.max(0, endIndex - startIndex);
 
-  galleryGrid.innerHTML = '';
+  ensureGalleryPoolSize(visibleCount);
+
+  if (galleryPoolAttached < visibleCount) {
+    const fragment = document.createDocumentFragment();
+    for (let i = galleryPoolAttached; i < visibleCount; i++) {
+      fragment.appendChild(galleryNodePool[i]);
+    }
+    galleryGrid.appendChild(fragment);
+    galleryPoolAttached = visibleCount;
+  }
 
   const widthPercent = 100 / itemsPerRow;
 
-  for (let i = startIndex; i < endIndex; i++) {
+  for (let slot = 0; slot < visibleCount; slot++) {
+    const i = startIndex + slot;
     const item = items[i];
-    const node = buildGalleryCard(item, i);
+    const node = galleryNodePool[slot];
+
+    if (!item || !node) continue;
+
     const row = Math.floor(i / itemsPerRow);
     const col = i % itemsPerRow;
 
-    node.style.position = 'absolute';
+    node.style.display = '';
     node.style.top = `${row * (itemHeight + gap)}px`;
     node.style.left = `${col * widthPercent}%`;
     node.style.width = `${widthPercent}%`;
-    node.style.boxSizing = 'border-box';
     node.style.padding = `${gap / 2}px`;
 
-    galleryGrid.appendChild(node);
+    updateGalleryCardNode(node, item, i);
+  }
+
+  for (let slot = visibleCount; slot < galleryPoolAttached; slot++) {
+    const node = galleryNodePool[slot];
+    if (!node) continue;
+    node.style.display = 'none';
+    node._boundItemKey = null;
   }
 }
 

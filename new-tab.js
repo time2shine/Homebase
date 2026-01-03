@@ -157,19 +157,69 @@ async function processIdleTasks(deadline) {
 
     task.isRunning = true;
 
+    let result;
+
     try {
 
-      const result = task.fn();
-
-      if (result && typeof result.then === 'function') {
-
-        await result;
-
-      }
+      result = task.fn(deadline);
 
     } catch (err) {
 
       console.warn('Idle task failed:', task.label, err);
+
+    }
+
+    const isPromise = result && typeof result.then === 'function';
+
+    if (isPromise) {
+
+      task.isPending = true;
+
+      Promise.resolve(result)
+        .catch((err) => {
+
+          console.warn('Idle task failed:', task.label, err);
+
+        })
+        .finally(() => {
+
+          task.isPending = false;
+
+          if (task.nextFn) {
+
+            task.fn = task.nextFn;
+
+            task.nextFn = null;
+
+            idleTaskQueue.push(task);
+
+            if (!idleTaskScheduled) {
+
+              idleTaskScheduled = true;
+
+              runWhenIdle(processIdleTasks);
+
+            }
+
+          } else {
+
+            task.isRunning = false;
+
+            if (task.label) {
+
+              idleTaskLabels.delete(task.label);
+
+            }
+
+            return;
+
+          }
+
+        });
+
+      task.isRunning = false;
+
+      continue;
 
     }
 
@@ -185,7 +235,7 @@ async function processIdleTasks(deadline) {
 
         idleTaskQueue.push(task);
 
-      } else {
+      } else if (!task.isPending) {
 
         idleTaskLabels.delete(task.label);
 
@@ -195,7 +245,7 @@ async function processIdleTasks(deadline) {
 
   }
 
-  if (idleTaskQueue.length) {
+  if (idleTaskQueue.length && !idleTaskScheduled) {
 
     idleTaskScheduled = true;
 
@@ -216,7 +266,7 @@ function scheduleIdleTask(fn, label = 'task') {
 
     if (existing) {
 
-      if (existing.isRunning) {
+      if (existing.isRunning || existing.isPending) {
 
         existing.nextFn = fn;
 
@@ -230,7 +280,7 @@ function scheduleIdleTask(fn, label = 'task') {
 
     }
 
-    const task = { fn, label, nextFn: null, isRunning: false };
+    const task = { fn, label, nextFn: null, isRunning: false, isPending: false };
 
     idleTaskLabels.set(label, task);
 
@@ -238,7 +288,7 @@ function scheduleIdleTask(fn, label = 'task') {
 
   } else {
 
-    idleTaskQueue.push({ fn, label: '', nextFn: null, isRunning: false });
+    idleTaskQueue.push({ fn, label: '', nextFn: null, isRunning: false, isPending: false });
 
   }
 
@@ -249,6 +299,100 @@ function scheduleIdleTask(fn, label = 'task') {
     runWhenIdle(processIdleTasks);
 
   }
+
+}
+
+function scheduleIdleChunkedTask(label, stepFn, initialState) {
+
+  if (typeof stepFn !== 'function') return;
+
+  let state = initialState;
+
+  const runner = (deadline) => {
+
+    const hasDeadline = deadline && typeof deadline.timeRemaining === 'function';
+
+    const start = performance.now();
+
+    const shouldYield = () => {
+
+      if (hasDeadline) {
+
+        return deadline.timeRemaining() <= 2;
+
+      }
+
+      return (performance.now() - start) >= Math.max(0, IDLE_TASK_BUDGET_MS - 2);
+
+    };
+
+    while (true) {
+
+      if (shouldYield()) {
+
+        const task = label ? idleTaskLabels.get(label) : null;
+
+        if (task && !task.nextFn) {
+
+          task.nextFn = runner;
+
+        }
+
+        return;
+
+      }
+
+      const result = stepFn(state, deadline);
+
+      if (result && typeof result.then === 'function') {
+
+        return Promise.resolve(result).then((resolved) => {
+
+          const { done, state: newState } = resolved || {};
+
+          if (typeof newState !== 'undefined') {
+
+            state = newState;
+
+          }
+
+          if (done === true) {
+
+            return;
+
+          }
+
+          const task = label ? idleTaskLabels.get(label) : null;
+
+          if (task && !task.nextFn) {
+
+            task.nextFn = runner;
+
+          }
+
+        });
+
+      }
+
+      const { done, state: newState } = result || {};
+
+      if (typeof newState !== 'undefined') {
+
+        state = newState;
+
+      }
+
+      if (done === true) {
+
+        return;
+
+      }
+
+    }
+
+  };
+
+  scheduleIdleTask(runner, label);
 
 }
 
@@ -1304,50 +1448,109 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
     const cacheKeyToUse = posterCacheKey || posterUrl;
 
     // Defer poster encoding so Apply stays responsive; work runs when the browser is idle.
-    scheduleIdleTask(async () => {
+    const posterDataTaskState = { phase: 0, dataUrl: '' };
+
+    scheduleIdleChunkedTask('posterDataUrlGeneration', async (state = posterDataTaskState) => {
+
       try {
-        const storedUrlResult = await browser.storage.local.get(CACHED_APPLIED_POSTER_URL_KEY);
-        const storedUrl = storedUrlResult && storedUrlResult[CACHED_APPLIED_POSTER_URL_KEY];
-        if (storedUrl !== urlToStore) {
-          return; // Race guard: applied poster changed before we started.
-        }
 
-        let dataUrl = '';
-        const blob = await resolvePosterBlob(urlToStore, cacheKeyToUse);
+        if (state.phase === 0) {
 
-        if (blob && blob.size > 0) {
-          if (blob.size > 2 * 1024 * 1024) {
-            dataUrl = await createOptimizedPosterDataUrl(blob);
-          } else {
-            dataUrl = await blobToDataUrl(blob);
+          const storedUrlResult = await browser.storage.local.get(CACHED_APPLIED_POSTER_URL_KEY);
+
+          const storedUrl = storedUrlResult && storedUrlResult[CACHED_APPLIED_POSTER_URL_KEY];
+
+          if (storedUrl !== urlToStore) {
+
+            return { done: true, state: { ...state, phase: 3 } }; // Race guard: applied poster changed before we started.
+
           }
+
+          return { done: false, state: { ...state, phase: 1 } };
+
         }
 
-        const latestStored = await browser.storage.local.get(CACHED_APPLIED_POSTER_URL_KEY);
-        const latestUrl = latestStored && latestStored[CACHED_APPLIED_POSTER_URL_KEY];
-        if (latestUrl !== urlToStore) {
-          return; // Race guard: poster switched while encoding.
+        if (state.phase === 1) {
+
+          let dataUrl = '';
+
+          const blob = await resolvePosterBlob(urlToStore, cacheKeyToUse);
+
+          if (blob && blob.size > 0) {
+
+            if (blob.size > 2 * 1024 * 1024) {
+
+              dataUrl = await createOptimizedPosterDataUrl(blob);
+
+            } else {
+
+              dataUrl = await blobToDataUrl(blob);
+
+            }
+
+          }
+
+          return { done: false, state: { ...state, dataUrl, phase: 2 } };
+
         }
 
-        if (dataUrl) {
-          await browser.storage.local.set({ [CACHED_APPLIED_POSTER_DATA_URL_KEY]: dataUrl });
-          try {
-            if (window.localStorage) {
-              localStorage.setItem('cachedAppliedPosterDataUrl', dataUrl);
-            }
-          } catch (e) {}
-        } else {
-          await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
-          try {
-            if (window.localStorage) {
-              localStorage.removeItem('cachedAppliedPosterDataUrl');
-            }
-          } catch (e) {}
+        if (state.phase === 2) {
+
+          const latestStored = await browser.storage.local.get(CACHED_APPLIED_POSTER_URL_KEY);
+
+          const latestUrl = latestStored && latestStored[CACHED_APPLIED_POSTER_URL_KEY];
+
+          if (latestUrl !== urlToStore) {
+
+            return { done: true, state: { ...state, phase: 3 } }; // Race guard: poster switched while encoding.
+
+          }
+
+          if (state.dataUrl) {
+
+            await browser.storage.local.set({ [CACHED_APPLIED_POSTER_DATA_URL_KEY]: state.dataUrl });
+
+            try {
+
+              if (window.localStorage) {
+
+                localStorage.setItem('cachedAppliedPosterDataUrl', state.dataUrl);
+
+              }
+
+            } catch (e) {}
+
+          } else {
+
+            await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+
+            try {
+
+              if (window.localStorage) {
+
+                localStorage.removeItem('cachedAppliedPosterDataUrl');
+
+              }
+
+            } catch (e) {}
+
+          }
+
+          return { done: true, state: { ...state, phase: 3 } };
+
         }
+
+        return { done: true, state };
+
       } catch (e) {
+
         console.warn('Failed to generate data URL for poster', e);
+
+        return { done: true, state: { ...state, phase: 3 } };
+
       }
-    }, 'posterDataUrlGeneration');
+
+    }, posterDataTaskState);
   } catch (err) {
     console.warn('Failed to cache applied wallpaper poster', err);
   }

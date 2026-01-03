@@ -534,6 +534,11 @@ body.sidebar-collapsed .collapsed-clock-slot {
      The expansion usually reveals enough context. */
   z-index: 10;
 }
+/* Instant-load classes: used by instant_load.js to avoid inline styles */
+.search-engine-selector.is-instant-fixed {
+  --collapsed-width: 42px;
+  --expanded-width: 42px;
+}
 
 /* --- Inner Sliding List --- */
 .search-engine-list {
@@ -2139,6 +2144,11 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 #weather-city { font-size: 1.5em; font-weight: bold; }
 #weather-desc { font-size: 1em; font-style: italic; color: #ddd; margin-top: 5px; }
 #weather-temp { font-size: 2.8em; line-height: 1; margin-top: 5px; }
+/* Instant-load classes: used by instant_load.js to avoid inline styles */
+#weather-icon.is-instant-icon {
+  font-size: 3.5em;
+  line-height: 1;
+}
 .weather-stats {
   display: flex;
   flex-direction: column;

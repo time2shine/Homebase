@@ -1,9 +1,35 @@
 (function() {
   try {
+    const elCache = new Map();
+    function $(id) {
+      if (!elCache.has(id)) {
+        elCache.set(id, document.getElementById(id));
+      }
+      return elCache.get(id);
+    }
+    function setText(el, next) {
+      if (!el) return;
+      const nextStr = String(next);
+      if (el.textContent !== nextStr) {
+        el.textContent = nextStr;
+      }
+    }
+    function addClass(el, cls) {
+      if (el) el.classList.add(cls);
+    }
+    function removeClass(el, cls) {
+      if (el) el.classList.remove(cls);
+    }
+    function showWidget(el) {
+      if (!el) return;
+      removeClass(el, 'widget-hidden');
+      addClass(el, 'widget-visible');
+    }
+
     // --- 1. Instant Clock ---
     const nowTime = new Date();
-    const timeEl = document.getElementById('current-time');
-    const dateEl = document.getElementById('current-date');
+    const timeEl = $('current-time');
+    const dateEl = $('current-date');
     const timeWidget = document.querySelector('.widget-time');
 
     // FIX: Check localStorage for 24-hour preference
@@ -13,13 +39,10 @@
       if (storedFmt === '24-hour') use12Hour = false;
     } catch (e) {}
 
-    if (timeEl) timeEl.textContent = nowTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: use12Hour });
-    if (dateEl) dateEl.textContent = nowTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    if (timeEl) setText(timeEl, nowTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: use12Hour }));
+    if (dateEl) setText(dateEl, nowTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }));
 
-    if (timeWidget) {
-      timeWidget.classList.remove('widget-hidden');
-      timeWidget.classList.add('widget-visible');
-    }
+    showWidget(timeWidget);
 
     // --- 2. Instant Weather (FIXED KEY MAPPING) ---
     const wData = localStorage.getItem('fast-weather');
@@ -53,24 +76,20 @@
         Object.keys(fieldMap).forEach(id => {
           const key = fieldMap[id];
           const val = id === 'weather-updated' ? getUpdatedLabel() : w[key];
-          const el = document.getElementById(id);
+          const el = $(id);
 
           if (id === 'weather-icon') {
              if (el && val) { 
-               el.textContent = val; 
-               el.style.fontSize = '3.5em'; 
-               el.style.lineHeight = '1'; 
+               setText(el, val);
+               el.classList.add('is-instant-icon');
              }
           } else if (el && val !== undefined) {
-             el.textContent = val;
+             setText(el, val);
           }
         });
 
         const wWidget = document.querySelector('.widget-weather');
-        if (wWidget) {
-          wWidget.classList.remove('widget-hidden');
-          wWidget.classList.add('widget-visible');
-        }
+        showWidget(wWidget);
       }
     }
 
@@ -79,19 +98,16 @@
     if (sData) {
       const s = JSON.parse(sData);
       const searchWidget = document.querySelector('.widget-search');
-      const searchInput = document.getElementById('search-input');
-      const searchSelector = document.getElementById('search-engine-selector');
+      const searchInput = $('search-input');
+      const searchSelector = $('search-engine-selector');
 
       if (searchWidget && searchInput && searchSelector) {
         if (s.placeholder) searchInput.placeholder = s.placeholder;
         if (s.selectorHtml) {
           searchSelector.innerHTML = s.selectorHtml;
-          searchSelector.style.setProperty('--collapsed-width', '42px');
-          searchSelector.style.setProperty('--expanded-width', '42px');
+          searchSelector.classList.add('is-instant-fixed');
         }
-        searchWidget.classList.remove('widget-hidden');
-        searchWidget.style.opacity = '1';
-        searchWidget.style.transform = 'translateY(0)';
+        showWidget(searchWidget);
       }
     }
 
@@ -116,17 +132,14 @@
       }
 
       if (state.current && state.current.text) {
-        const qText = document.getElementById('quote-text');
-        const qAuthor = document.getElementById('quote-author');
+        const qText = $('quote-text');
+        const qAuthor = $('quote-author');
         const qWidget = document.querySelector('.widget-quote');
 
-        if (qText) qText.textContent = `"${state.current.text}"`;
-        if (qAuthor) qAuthor.textContent = state.current.author ? `- ${state.current.author}` : '';
+        if (qText) setText(qText, `"${state.current.text}"`);
+        if (qAuthor) setText(qAuthor, state.current.author ? `- ${state.current.author}` : '');
         
-        if (qWidget) {
-          qWidget.classList.remove('widget-hidden');
-          qWidget.classList.add('widget-visible');
-        }
+        showWidget(qWidget);
       }
     }
 

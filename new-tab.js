@@ -2524,6 +2524,7 @@ let virtualizerState = {
   gridEl: document.getElementById('bookmarks-grid'),
   scrollListener: null,
   resizeObserver: null,
+  updateRafId: 0,
   // Cache the last rendered range to avoid DOM thrashing
   lastStart: -1,
   lastEnd: -1
@@ -8589,35 +8590,36 @@ function initVirtualizer(allItems) {
   virtualizerState.isEnabled = true;
   virtualizerState.lastStart = -1;
   virtualizerState.lastEnd = -1;
+  virtualizerState.updateRafId = 0;
   
   // --- NEW: Flag to trigger animation only on first paint ---
   virtualizerState.initialRender = true; 
 
-  // Attach Scroll Listener (Throttled via RequestAnimationFrame)
-  let ticking = false;
+  // Shared RAF scheduler for scroll + resize
+  let virtualGridRafId = 0;
+  function scheduleVirtualGridUpdate() {
+
+    if (!virtualizerState.isEnabled) return;
+    if (virtualizerState.updateRafId) return;
+
+    virtualGridRafId = requestAnimationFrame(() => {
+      virtualizerState.updateRafId = 0;
+      virtualGridRafId = 0;
+      if (!virtualizerState.isEnabled) return;
+      updateVirtualGrid();
+    });
+    virtualizerState.updateRafId = virtualGridRafId;
+  }
+
+  // Attach Scroll Listener (Throttled via shared scheduler)
   virtualizerState.scrollListener = () => {
-
-    if (!ticking) {
-
-      window.requestAnimationFrame(() => {
-
-        updateVirtualGrid();
-
-        ticking = false;
-
-      });
-
-      ticking = true;
-
-    }
+    scheduleVirtualGridUpdate();
   };
   virtualizerState.mainContentEl.addEventListener('scroll', virtualizerState.scrollListener, { passive: true });
 
   // Attach Resize Listener
   virtualizerState.resizeObserver = new ResizeObserver(() => {
-
-    updateVirtualGrid();
-
+    scheduleVirtualGridUpdate();
   });
   virtualizerState.resizeObserver.observe(virtualizerState.gridEl);
 
@@ -8634,6 +8636,10 @@ function initVirtualizer(allItems) {
 function disableVirtualizer() {
 
   virtualizerState.isEnabled = false;
+  if (virtualizerState.updateRafId) {
+    cancelAnimationFrame(virtualizerState.updateRafId);
+    virtualizerState.updateRafId = 0;
+  }
 
   if (sortableTimeout) {
     clearTimeout(sortableTimeout);

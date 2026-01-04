@@ -18437,28 +18437,41 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
 // ===============================================
 
+function logInitSettled(name, result) {
+  if (result.status === 'rejected') console.warn('[init]', name, 'failed:', result.reason);
+}
+
 // --- INITIALIZE THE PAGE (MODIFIED) ---
 
 // ===============================================
 
   async function initializePage() {
+    performance.mark('init:start');
 
-    await ensureDailyWallpaper();
-
+    const dailyWallpaperP = ensureDailyWallpaper();
     setupBackgroundVideoCrossfade();
+    const wallpaperTypeP = getWallpaperTypePreference();
 
-    const type = await getWallpaperTypePreference();
+    const settingsP = loadAppSettingsFromStorage();
+    const bookmarkMetaP = loadBookmarkMetadata();
+    const iconMapP = loadDomainIconMap();
+    const lastFolderP = loadLastUsedFolderId();
 
+    const type = await wallpaperTypeP;
+    await dailyWallpaperP;
     // allow the video to buffer without blocking UI setup
     waitForWallpaperReady(currentWallpaperSelection, type);
 
-    await loadAppSettingsFromStorage();
+    performance.mark('init:parallel-start');
+    const parallelResults = await Promise.allSettled([settingsP, bookmarkMetaP, iconMapP, lastFolderP]);
+    performance.mark('init:parallel-done');
+    performance.measure('init:parallel', 'init:parallel-start', 'init:parallel-done');
 
-    await loadBookmarkMetadata();
-
-    await loadDomainIconMap();
-
-    await loadLastUsedFolderId();
+    const [settingsResult, bookmarkMetaResult, iconMapResult, lastFolderResult] = parallelResults;
+    logInitSettled('loadAppSettingsFromStorage', settingsResult);
+    logInitSettled('loadBookmarkMetadata', bookmarkMetaResult);
+    logInitSettled('loadDomainIconMap', iconMapResult);
+    logInitSettled('loadLastUsedFolderId', lastFolderResult);
 
     await loadFolderMetadata();
 

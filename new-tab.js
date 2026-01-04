@@ -130,6 +130,17 @@ const IDLE_TASK_BUDGET_MS = 12;
 const idleTaskQueue = [];
 const idleTaskLabels = new Map();
 let idleTaskScheduled = false;
+const DEBUG_IDLE_STARTUP = false;
+const DEBUG_STARTUP_GUARDS = false;
+const STARTUP_IDLE_LABELS = new Set([
+  'startup:loadCachedWeather',
+  'startup:quoteCategories',
+  'startup:setupQuoteWidget',
+  'startup:setupSearch',
+  'startup:setupWeather',
+  'startup:setupAppLauncher',
+  'startup:fetchQuote',
+]);
 
 async function processIdleTasks(deadline) {
 
@@ -10599,6 +10610,18 @@ async function fetchAndCacheQuoteCategories() {
   }
 }
 
+async function fetchQuoteCategoriesIfNeeded() {
+  try {
+    const storedCats = await browser.storage.local.get([QUOTE_CATEGORIES_FETCHED_AT_KEY]);
+    const lastCatFetch = storedCats[QUOTE_CATEGORIES_FETCHED_AT_KEY] || 0;
+    if ((Date.now() - lastCatFetch) > CATEGORIES_TTL) {
+      fetchAndCacheQuoteCategories();
+    }
+  } catch (err) {
+    console.warn('Failed to refresh quote categories', err);
+  }
+}
+
 
 // --- Rebuilt Quote Logic: The "Refiller" ---
 async function fetchQuote() {
@@ -18445,7 +18468,16 @@ function logInitSettled(name, result) {
 
 // ===============================================
 
+// ===============================================
+// STARTUP CONTRACT
+// - initializePage must not await non-critical hydration (weather/search/quote/appLauncher)
+// - startup hydration must be scheduled only in scheduleStartupHydrationTasks()
+// - all startup idle labels must be prefixed with "startup:"
+// - ready flip must not wait for hydration
+// ===============================================
   async function initializePage() {
+    let STARTUP_PHASE = 'critical';
+    let markReadyCount = 0;
     performance.mark('init:start');
 
     const dailyWallpaperP = ensureDailyWallpaper();
@@ -18529,46 +18561,156 @@ function logInitSettled(name, result) {
 
   }
 
-
-
-  runWhenIdle(async () => {
-
-    await loadCachedWeather();
-
-    const storedCats = await browser.storage.local.get([QUOTE_CATEGORIES_FETCHED_AT_KEY]);
-
-    const lastCatFetch = storedCats[QUOTE_CATEGORIES_FETCHED_AT_KEY] || 0;
-
-    if ((Date.now() - lastCatFetch) > CATEGORIES_TTL) {
-
-      fetchAndCacheQuoteCategories();
-
+  const markPageReadyOnce = () => {
+    const b = document?.body;
+    if (!b) return;
+    if (b.classList.contains('ready')) {
+      if (DEBUG_STARTUP_GUARDS) console.warn('[startup guard] markPageReadyOnce called after ready');
+      return;
     }
+    markReadyCount += 1;
+    if (DEBUG_STARTUP_GUARDS && markReadyCount > 1) {
+      console.warn('[startup guard] markPageReadyOnce invoked multiple times');
+    }
+    try {
+      b.classList.remove('preload');
+      b.classList.add('ready');
+    } catch (err) {
+      if (DEBUG_STARTUP_GUARDS) console.warn('[startup guard] ready flip failed', err);
+    }
+    STARTUP_PHASE = 'ready';
+  };
 
-    setupQuoteWidget();
+  const loadCachedWeatherSafe = async () => {
+    if (!document || !document.body || !weatherWidget) return;
+    const start = performance.now();
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:loadCachedWeather start');
+    try {
+      await loadCachedWeather();
+    } catch (err) {
+      console.warn('Startup task failed:', 'startup:loadCachedWeather', err);
+    } finally {
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:loadCachedWeather end in', Math.round(performance.now() - start), 'ms');
+    }
+  };
 
-    await setupSearch();
+  const maybeRefreshQuoteCategoriesSafe = async () => {
+    if (!document || !document.body) return;
+    const start = performance.now();
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteCategories start');
+    try {
+      await fetchQuoteCategoriesIfNeeded();
+    } catch (err) {
+      console.warn('Startup task failed:', 'startup:quoteCategories', err);
+    } finally {
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteCategories end in', Math.round(performance.now() - start), 'ms');
+    }
+  };
 
-    await setupWeather();
+  const setupQuoteWidgetSafe = () => {
+    if (!document || !document.body || !quoteWidget) return;
+    const start = performance.now();
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupQuoteWidget start');
+    try {
+      setupQuoteWidget();
+    } catch (err) {
+      console.warn('Startup task failed:', 'startup:setupQuoteWidget', err);
+    } finally {
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupQuoteWidget end in', Math.round(performance.now() - start), 'ms');
+    }
+  };
 
-    setupAppLauncher();
+  const setupSearchSafe = async () => {
+    if (!document || !document.body || !searchForm || !searchInput || !searchSelect || !searchResultsPanel || !searchWidget) return;
+    const start = performance.now();
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupSearch start');
+    try {
+      await setupSearch();
+    } catch (err) {
+      console.warn('Startup task failed:', 'startup:setupSearch', err);
+    } finally {
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupSearch end in', Math.round(performance.now() - start), 'ms');
+    }
+    if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
+      console.warn('[startup guard] setupSearchSafe ran during critical phase');
+    }
+  };
 
-    fetchQuote();
+  const setupWeatherSafe = async () => {
+    if (!document || !document.body || !weatherWidget) return;
+    const start = performance.now();
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupWeather start');
+    try {
+      await setupWeather();
+    } catch (err) {
+      console.warn('Startup task failed:', 'startup:setupWeather', err);
+    } finally {
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupWeather end in', Math.round(performance.now() - start), 'ms');
+    }
+    if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
+      console.warn('[startup guard] setupWeatherSafe ran during critical phase');
+    }
+  };
 
+  const setupAppLauncherSafe = () => {
+    if (!document || !document.body || !googleAppsBtn || !googleAppsPanel) return;
+    const start = performance.now();
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupAppLauncher start');
+    try {
+      setupAppLauncher();
+    } catch (err) {
+      console.warn('Startup task failed:', 'startup:setupAppLauncher', err);
+    } finally {
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupAppLauncher end in', Math.round(performance.now() - start), 'ms');
+    }
+  };
 
+  const fetchQuoteSafe = () => {
+    if (!document || !document.body || !quoteText || !quoteAuthor) return;
+    const start = performance.now();
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote start');
+    try {
+      fetchQuote();
+    } catch (err) {
+      console.warn('Startup task failed:', 'startup:fetchQuote', err);
+    } finally {
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote end in', Math.round(performance.now() - start), 'ms');
+    }
+    if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
+      console.warn('[startup guard] fetchQuoteSafe ran during critical phase');
+    }
+  };
 
-    requestAnimationFrame(() => {
-
-      if (document && document.body) {
-
-        document.body.classList.remove('preload');
-
-        document.body.classList.add('ready');
-
+  const scheduleStartupHydrationTasks = () => {
+    const scheduleLabeled = (fn, label) => {
+      if (!label.startsWith('startup:')) {
+        console.warn('[startup guard] startup task label missing prefix', label);
       }
+      if (!STARTUP_IDLE_LABELS.has(label)) {
+        console.warn('[startup guard] startup task label not in allowlist', label);
+      }
+      scheduleIdleTask(async () => {
+        try {
+          await fn();
+        } catch (err) {
+          console.warn('Startup task failed:', label, err);
+        }
+      }, label);
+    };
 
-    });
+    scheduleLabeled(() => loadCachedWeatherSafe(), 'startup:loadCachedWeather');
+    scheduleLabeled(() => maybeRefreshQuoteCategoriesSafe(), 'startup:quoteCategories');
+    scheduleLabeled(() => setupQuoteWidgetSafe(), 'startup:setupQuoteWidget');
+    scheduleLabeled(() => setupSearchSafe(), 'startup:setupSearch');
+    scheduleLabeled(() => setupWeatherSafe(), 'startup:setupWeather');
+    scheduleLabeled(() => setupAppLauncherSafe(), 'startup:setupAppLauncher');
+    scheduleLabeled(() => fetchQuoteSafe(), 'startup:fetchQuote');
+  };
 
+  requestAnimationFrame(markPageReadyOnce);
+
+  runWhenIdle(() => {
+    scheduleStartupHydrationTasks();
   });
 
 
@@ -19223,19 +19365,26 @@ function extractAverageColor(imgUrl) {
 
 async function updateDynamicAccent() {
 
-  const poster = document.body.style.backgroundImage.replace(/^url\("|"\)$/g, '');
+  if (!document || !document.body || !document.documentElement) return;
 
-  if (!poster) return;
+  try {
+    const bg = document.body.style?.backgroundImage;
+    if (!bg || bg === 'none') return;
 
-  const avg = await extractAverageColor(poster);
+    const poster = bg.replace(/^url\("|"\)$/g, '');
+    if (!poster) return;
 
-  document.documentElement.style.setProperty('--dynamic-accent', avg);
+    const avg = await extractAverageColor(poster);
+    document.documentElement.style.setProperty('--dynamic-accent', avg);
+  } catch (err) {
+    console.warn('Dynamic accent update failed', err);
+  }
 
 }
 
 
 
-setTimeout(updateDynamicAccent, 600);
+scheduleIdleTask(() => updateDynamicAccent(), 'startup:updateDynamicAccent');
 
 
 

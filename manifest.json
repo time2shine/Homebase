@@ -28,7 +28,6 @@
   ],
 
   "host_permissions": [
-    "https://api.quotable.io/*",
     "https://api.open-meteo.com/*",
     "https://geocoding-api.open-meteo.com/*",
     "https://duckduckgo.com/ac/*",

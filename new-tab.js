@@ -134,7 +134,7 @@ const DEBUG_IDLE_STARTUP = false;
 const DEBUG_STARTUP_GUARDS = false;
 const STARTUP_IDLE_LABELS = new Set([
   'startup:loadCachedWeather',
-  'startup:quoteCategories',
+  'startup:quoteIndex',
   'startup:setupQuoteWidget',
   'startup:setupSearch',
   'startup:setupWeather',
@@ -10585,91 +10585,386 @@ const QUOTE_FREQUENCY_KEY = 'quoteUpdateFrequency';
 
 const QUOTE_LAST_FETCH_KEY = 'quoteLastFetched';
 
-const QUOTE_CATEGORIES_CACHE_KEY = 'quoteCategoriesCache';
-
-const QUOTE_CATEGORIES_FETCHED_AT_KEY = 'quoteCategoriesFetchedAt';
-
 const QUOTE_BUFFER_KEY = 'quoteBufferCache';
 
-const CATEGORIES_TTL = 24 * 60 * 60 * 1000; // 24 Hours
+const QUOTES_JSON_PATH = 'assets/quotes.json';
 
-async function fetchAndCacheQuoteCategories() {
-  try {
-    const res = await fetch('https://api.quotable.io/tags');
-    if (!res.ok) throw new Error('Could not fetch tags');
-    const allTags = await res.json();
-    allTags.sort((a, b) => a.name.localeCompare(b.name));
-    await browser.storage.local.set({
-      [QUOTE_CATEGORIES_CACHE_KEY]: allTags,
-      [QUOTE_CATEGORIES_FETCHED_AT_KEY]: Date.now()
-    });
-    return allTags;
-  } catch (err) {
-    console.warn('Failed to fetch quote categories in background', err);
-    return null;
+const QUOTE_INDEX_KEY = 'quoteLocalIndexV1';
+
+const QUOTE_INDEX_VERSION = 1;
+
+const QUOTE_SOURCE_MODE = 'local';
+
+let quotesCachePromise = null;
+
+let quoteIndexPromise = null;
+
+let quoteIndexCache = null;
+
+// Local quote loader (bundled JSON)
+async function loadLocalQuotes() {
+
+  const url = browser.runtime.getURL(QUOTES_JSON_PATH);
+
+  const res = await fetch(url);
+
+  if (!res.ok) {
+
+    throw new Error('Failed to load local quotes');
+
   }
+
+  const data = await res.json();
+
+  if (!Array.isArray(data)) {
+
+    throw new Error('Invalid quotes format');
+
+  }
+
+  const sanitized = data.map((q) => {
+
+    const tags = Array.isArray(q?.tags)
+      ? q.tags.map((t) => typeof t === 'string' ? t.trim() : '').filter(Boolean)
+      : [];
+
+    return {
+      id: q.id,
+      text: q.text,
+      author: q.author || '',
+      tags
+    };
+
+  }).filter((q) => q.id !== undefined && typeof q.text === 'string');
+
+  return sanitized;
+
 }
 
-async function fetchQuoteCategoriesIfNeeded() {
-  try {
-    const storedCats = await browser.storage.local.get([QUOTE_CATEGORIES_FETCHED_AT_KEY]);
-    const lastCatFetch = storedCats[QUOTE_CATEGORIES_FETCHED_AT_KEY] || 0;
-    if ((Date.now() - lastCatFetch) > CATEGORIES_TTL) {
-      fetchAndCacheQuoteCategories();
-    }
-  } catch (err) {
-    console.warn('Failed to refresh quote categories', err);
+async function loadLocalQuotesCached() {
+
+  if (!quotesCachePromise) {
+
+    quotesCachePromise = (async () => {
+
+      const quotes = await loadLocalQuotes();
+
+      const quotesById = new Map();
+
+      for (const q of quotes) {
+
+        quotesById.set(q.id, q);
+
+      }
+
+      return { quotes, quotesById };
+
+    })();
+
   }
+
+  return quotesCachePromise;
+
+}
+
+// Build and cache quote ID index for quick tag lookups
+async function ensureQuoteIndexBuilt() {
+
+  if (quoteIndexCache) return quoteIndexCache;
+
+  if (quoteIndexPromise) return quoteIndexPromise;
+
+  quoteIndexPromise = (async () => {
+
+    const stored = await browser.storage.local.get([QUOTE_INDEX_KEY]);
+
+    const storedIndex = stored[QUOTE_INDEX_KEY];
+
+    const { quotes } = await loadLocalQuotesCached();
+
+    const expectedCount = quotes.length;
+
+    const isStoredValid = storedIndex
+      && storedIndex.version === QUOTE_INDEX_VERSION
+      && storedIndex.count === expectedCount
+      && Array.isArray(storedIndex.allIds)
+      && storedIndex.allIds.length === expectedCount
+      && storedIndex.tagToIds
+      && typeof storedIndex.tagToIds === 'object';
+
+    if (isStoredValid) {
+
+      quoteIndexCache = storedIndex;
+
+      return storedIndex;
+
+    }
+
+    const tagToIds = {};
+
+    const allIds = [];
+
+    for (const q of quotes) {
+
+      if (q.id === undefined || q.id === null) continue;
+
+      allIds.push(q.id);
+
+      for (const tag of q.tags || []) {
+
+        if (!tagToIds[tag]) {
+
+          tagToIds[tag] = [];
+
+        }
+
+        tagToIds[tag].push(q.id);
+
+      }
+
+    }
+
+    const newIndex = {
+      version: QUOTE_INDEX_VERSION,
+      builtAt: Date.now(),
+      count: allIds.length,
+      allIds,
+      tagToIds
+    };
+
+    quoteIndexCache = newIndex;
+
+    await browser.storage.local.set({ [QUOTE_INDEX_KEY]: newIndex });
+
+    return newIndex;
+
+  })();
+
+  try {
+
+    return await quoteIndexPromise;
+
+  } finally {
+
+    quoteIndexPromise = null;
+
+  }
+
+}
+
+async function getLocalQuote(tags = [], avoidId = null) {
+
+  const normalizedTags = Array.isArray(tags) ? tags.filter((t) => typeof t === 'string' && t.trim()) : [];
+
+  const index = await ensureQuoteIndexBuilt();
+
+  const { quotesById } = await loadLocalQuotesCached();
+
+  let candidateIds = [];
+
+  if (normalizedTags.length === 0) {
+
+    candidateIds = index.allIds.slice();
+
+  } else {
+
+    const set = new Set();
+
+    normalizedTags.forEach((tag) => {
+
+      const ids = index.tagToIds[tag];
+
+      if (Array.isArray(ids)) {
+
+        ids.forEach((id) => set.add(id));
+
+      }
+
+    });
+
+    candidateIds = Array.from(set);
+
+    if (candidateIds.length === 0) {
+
+      candidateIds = index.allIds.slice();
+
+    }
+
+  }
+
+  if (!candidateIds.length) {
+
+    throw new Error('No local quotes available');
+
+  }
+
+  if (avoidId !== null && candidateIds.length > 1) {
+
+    const filtered = candidateIds.filter((id) => id !== avoidId);
+
+    if (filtered.length) {
+
+      candidateIds = filtered;
+
+    }
+
+  }
+
+  const selectedId = candidateIds[Math.floor(Math.random() * candidateIds.length)];
+
+  const quote = quotesById.get(selectedId) || quotesById.values().next().value;
+
+  if (!quote) {
+
+    throw new Error('No quote object found for selected id');
+
+  }
+
+  return {
+    id: quote.id,
+    text: quote.text,
+    author: quote.author,
+    tags: quote.tags || []
+  };
+
+}
+
+async function getLocalQuoteTags() {
+
+  const index = await ensureQuoteIndexBuilt();
+
+  const tags = Object.keys(index.tagToIds || {});
+
+  tags.sort((a, b) => a.localeCompare(b));
+
+  return tags.map((name) => ({ name }));
+
 }
 
 
 // --- Rebuilt Quote Logic: The "Refiller" ---
-async function fetchQuote() {
+async function fetchQuote(options = {}) {
+
+  const forceRefresh = options.forceRefresh === true;
+
+  const ignorePrefetched = options.ignorePrefetched === true;
+
   try {
-    // 1. Read the state from LocalStorage (Source of Truth)
+
     let localStateRaw = localStorage.getItem('fast-quote-state');
-    let localState = localStateRaw ? JSON.parse(localStateRaw) : { current: null, next: null, config: {} };
 
-    // 2. Get Settings
+    let localState = { current: null, next: null, config: {} };
+
+    if (localStateRaw) {
+
+      try {
+
+        const parsed = JSON.parse(localStateRaw);
+
+        localState = {
+          current: parsed.current || null,
+          next: parsed.next || null,
+          config: parsed.config || {}
+        };
+
+      } catch (err) {
+
+        console.warn('Failed to parse quote state, resetting', err);
+
+      }
+
+    }
+
     const stored = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY]);
-    const freq = stored[QUOTE_FREQUENCY_KEY] || 'hourly';
-    const tags = stored.quoteTags || ['inspirational'];
 
-    // 3. Update Config in State
+    const freq = stored[QUOTE_FREQUENCY_KEY] || 'hourly';
+
+    const tags = Array.isArray(stored.quoteTags) ? stored.quoteTags.filter((t) => typeof t === 'string' && t.trim()) : [];
+
     localState.config.frequency = freq;
 
-    // 4. EMERGENCY RENDER: Only if instant_load failed (Current is empty)
-    if (!localState.current) {
-      const q = await getOnlineQuote(tags);
-      localState.current = q;
-      localState.config.lastShown = Date.now();
-      
-      // Update DOM immediately
+    localState.config.source = QUOTE_SOURCE_MODE;
+
+    const renderQuote = (q) => {
+
+      if (!q || !quoteText || !quoteAuthor) return;
+
       quoteText.textContent = `"${q.text}"`;
+
       quoteAuthor.textContent = q.author ? `- ${q.author}` : '';
+
       revealWidget('.widget-quote');
+
+    };
+
+    const now = Date.now();
+
+    let rotatedFromNext = false;
+
+    if (forceRefresh && !ignorePrefetched && localState.next && localState.next.text) {
+
+      localState.current = localState.next;
+
+      localState.next = null;
+
+      localState.config.lastShown = now;
+
+      rotatedFromNext = true;
+
+      renderQuote(localState.current);
+
     }
 
-    // 5. THE FIX: Refill the "Next" slot silently
-    if (!localState.next) {
-      const nextQ = await getOnlineQuote(tags);
+    if (!localState.current || !localState.current.text) {
+
+      const q = await getLocalQuote(tags);
+
+      localState.current = q;
+
+      localState.config.lastShown = now;
+
+      renderQuote(q);
+
+    } else if (forceRefresh && !rotatedFromNext) {
+
+      const newCurrent = await getLocalQuote(tags, localState.current.id);
+
+      localState.current = newCurrent;
+
+      localState.config.lastShown = now;
+
+      renderQuote(newCurrent);
+
+    } else {
+
+      renderQuote(localState.current);
+
+    }
+
+    const avoidId = localState.current ? localState.current.id : null;
+
+    const shouldRefreshNext = forceRefresh || !localState.next || !localState.next.text || (avoidId !== null && localState.next.id === avoidId);
+
+    if (shouldRefreshNext) {
+
+      const nextQ = await getLocalQuote(tags, avoidId);
+
       localState.next = nextQ;
+
     }
 
-    // 6. Save everything back for next time
-    localStorage.setItem('fast-quote-state', JSON.stringify(localState));
+    localStorage.setItem('fast-quote-state', JSON.stringify({
+      current: localState.current,
+      next: localState.next,
+      config: localState.config
+    }));
 
   } catch (e) {
-    console.warn("Quote Logic Error", e);
-  }
-}
 
-// Helper to fetch from API
-async function getOnlineQuote(tags) {
-  const res = await fetch(`https://api.quotable.io/quotes/random?limit=1&tags=${encodeURIComponent(tags.join('|'))}`);
-  const data = await res.json();
-  const item = Array.isArray(data) ? data[0] : data;
-  return { text: item.content, author: item.author };
+    console.warn("Quote Logic Error", e);
+
+  }
+
 }
 
 
@@ -10678,71 +10973,141 @@ async function populateQuoteCategories() {
 
   if (!quoteCategoriesList) return;
 
-  quoteCategoriesList.innerHTML = '';
+  quoteCategoriesList.innerHTML = '<span style="color:#666; padding:10px;">Loading categories...</span>';
 
-  const stored = await browser.storage.local.get([QUOTE_CATEGORIES_CACHE_KEY, QUOTE_CATEGORIES_FETCHED_AT_KEY, 'quoteTags']);
+  const stored = await browser.storage.local.get(['quoteTags']);
 
-  let categories = stored[QUOTE_CATEGORIES_CACHE_KEY] || [];
+  const savedRaw = Array.isArray(stored.quoteTags) ? stored.quoteTags.filter((t) => typeof t === 'string' && t.trim()) : [];
 
-  const lastFetched = stored[QUOTE_CATEGORIES_FETCHED_AT_KEY] || 0;
-
-  const savedTags = new Set(stored.quoteTags || []);
+  const savedTags = new Set(savedRaw);
 
   const render = (tags) => {
 
     quoteCategoriesList.innerHTML = '';
 
+    const allPill = document.createElement('button');
+
+    allPill.className = 'quote-category-pill';
+
+    allPill.textContent = 'All Categories';
+
+    allPill.dataset.value = '__all__';
+
+    allPill.style.fontWeight = '600';
+
+    quoteCategoriesList.appendChild(allPill);
+
+    const tagPills = [];
+
     tags.forEach((tag) => {
+
+      const tagName = typeof tag === 'string' ? tag : tag.name;
+
+      if (!tagName) return;
 
       const pill = document.createElement('button');
 
       pill.className = 'quote-category-pill';
 
-      pill.textContent = tag.name;
+      pill.textContent = tagName;
 
-      pill.dataset.value = tag.name;
+      pill.dataset.value = tagName;
 
-      if (savedTags.has(tag.name)) {
+      quoteCategoriesList.appendChild(pill);
 
-        pill.classList.add('selected');
+      tagPills.push(pill);
 
-      }
+    });
 
-      pill.addEventListener('click', () => {
+    const isAllMode = savedTags.size === 0;
 
-        pill.classList.toggle('selected');
+    if (isAllMode) {
+
+      allPill.classList.add('selected');
+
+    } else {
+
+      tagPills.forEach((pill) => {
+
+        if (savedTags.has(pill.dataset.value)) {
+
+          pill.classList.add('selected');
+
+        }
 
       });
 
-      quoteCategoriesList.appendChild(pill);
+      const anySelected = tagPills.some((pill) => pill.classList.contains('selected'));
+
+      if (!anySelected) {
+
+        allPill.classList.add('selected');
+
+      }
+
+    }
+
+    const selectAllOnly = () => {
+
+      allPill.classList.add('selected');
+
+      tagPills.forEach((pill) => pill.classList.remove('selected'));
+
+    };
+
+    const ensureFallbackAll = () => {
+
+      const anySelected = tagPills.some((pill) => pill.classList.contains('selected'));
+
+      if (!anySelected) {
+
+        selectAllOnly();
+
+      }
+
+    };
+
+    allPill.addEventListener('click', () => {
+
+      selectAllOnly();
+
+    });
+
+    tagPills.forEach((pill) => {
+
+      pill.addEventListener('click', () => {
+
+        allPill.classList.remove('selected');
+
+        pill.classList.toggle('selected');
+
+        ensureFallbackAll();
+
+      });
 
     });
 
   };
 
-  if (categories.length > 0) {
+  try {
 
-    render(categories);
+    const categories = await getLocalQuoteTags();
 
-  } else {
+    if (categories.length > 0) {
 
-    quoteCategoriesList.innerHTML = '<span style="color:#666; padding:10px;">Loading categories...</span>';
+      render(categories);
 
-  }
+    } else {
 
-  const now = Date.now();
+      quoteCategoriesList.innerHTML = '<span style="color:#666; padding:10px;">No categories found</span>';
 
-  if (categories.length === 0 || (now - lastFetched > CATEGORIES_TTL)) {
+    }
 
-    fetchAndCacheQuoteCategories().then((newCategories) => {
+  } catch (err) {
 
-      if (newCategories && newCategories.length > 0) {
+    console.warn('Failed to load local quote categories', err);
 
-        render(newCategories);
-
-      }
-
-    });
+    quoteCategoriesList.innerHTML = '<span style="color:#666; padding:10px;">Unable to load categories</span>';
 
   }
 
@@ -10833,7 +11198,7 @@ function setupQuoteWidget() {
 
       await browser.storage.local.set({ [QUOTE_LAST_FETCH_KEY]: 0 });
 
-      fetchQuote();
+      fetchQuote({ forceRefresh: true });
 
     });
 
@@ -10857,19 +11222,27 @@ function setupQuoteWidget() {
 
     quoteSettingsSaveBtn.addEventListener('click', async () => {
 
-      const selectedPills = quoteCategoriesList ? quoteCategoriesList.querySelectorAll('.quote-category-pill.selected') : [];
+      const allPill = quoteCategoriesList ? quoteCategoriesList.querySelector('.quote-category-pill[data-value="__all__"]') : null;
 
-      const selectedTags = Array.from(selectedPills).map((pill) => pill.dataset.value);
+      const categoryPills = quoteCategoriesList ? quoteCategoriesList.querySelectorAll('.quote-category-pill') : [];
+
+      const selectedTags = Array.from(categoryPills)
+        .filter((pill) => pill.dataset.value !== '__all__' && pill.classList.contains('selected'))
+        .map((pill) => pill.dataset.value);
+
+      const allSelected = allPill ? allPill.classList.contains('selected') : selectedTags.length === 0;
+
+      const tagsToSave = allSelected ? [] : selectedTags;
 
       const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : 'hourly';
 
       await browser.storage.local.remove(QUOTE_BUFFER_KEY);
 
-      await browser.storage.local.set({ quoteTags: selectedTags, [QUOTE_FREQUENCY_KEY]: frequency, [QUOTE_LAST_FETCH_KEY]: 0 });
+      await browser.storage.local.set({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency, [QUOTE_LAST_FETCH_KEY]: 0 });
 
       closeQuoteSettingsModal();
 
-      fetchQuote();
+      fetchQuote({ forceRefresh: true, ignorePrefetched: true });
 
     });
 
@@ -18594,16 +18967,16 @@ function logInitSettled(name, result) {
     }
   };
 
-  const maybeRefreshQuoteCategoriesSafe = async () => {
+  const buildQuoteIndexSafe = async () => {
     if (!document || !document.body) return;
     const start = performance.now();
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteCategories start');
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex start');
     try {
-      await fetchQuoteCategoriesIfNeeded();
+      await ensureQuoteIndexBuilt();
     } catch (err) {
-      console.warn('Startup task failed:', 'startup:quoteCategories', err);
+      console.warn('Startup task failed:', 'startup:quoteIndex', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteCategories end in', Math.round(performance.now() - start), 'ms');
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex end in', Math.round(performance.now() - start), 'ms');
     }
   };
 
@@ -18699,7 +19072,7 @@ function logInitSettled(name, result) {
     };
 
     scheduleLabeled(() => loadCachedWeatherSafe(), 'startup:loadCachedWeather');
-    scheduleLabeled(() => maybeRefreshQuoteCategoriesSafe(), 'startup:quoteCategories');
+    scheduleLabeled(() => buildQuoteIndexSafe(), 'startup:quoteIndex');
     scheduleLabeled(() => setupQuoteWidgetSafe(), 'startup:setupQuoteWidget');
     scheduleLabeled(() => setupSearchSafe(), 'startup:setupSearch');
     scheduleLabeled(() => setupWeatherSafe(), 'startup:setupWeather');

@@ -11882,6 +11882,14 @@ async function loadAppSettingsFromStorage() {
     resetCinemaMode();
 
     applyBackgroundDim(savedBackgroundDim);
+    // Keep preload fast path in sync even if Settings UI is never opened
+    try {
+      if (window.localStorage) {
+        localStorage.setItem('fast-bg-dim', String(appBackgroundDimPreference));
+      }
+    } catch (err) {
+      // Ignore; best-effort mirror only
+    }
 
     if (appDimSlider) {
       appDimSlider.value = appBackgroundDimPreference;

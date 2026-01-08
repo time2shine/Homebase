@@ -1,4 +1,19 @@
 (function () {
+  // Instant Background Dim (sync fast path)
+  try {
+    const raw = (window.localStorage && localStorage.getItem('fast-bg-dim')) || '';
+    if (raw !== '') {
+      let v = parseInt(raw, 10);
+      if (!Number.isFinite(v)) v = 0;
+      if (v < 0) v = 0;
+      if (v > 90) v = 90;
+      const opacity = v / 100;
+      document.documentElement.style.setProperty('--bg-dim-opacity', String(opacity));
+    }
+  } catch (e) {
+    // Ignore; dim is optional
+  }
+
   function applyInitial(url) {
     if (!url) return;
 

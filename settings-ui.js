@@ -110,6 +110,14 @@ window.SettingsUI = (() => {
         if (appDimSlider.value !== String(appBackgroundDimPreference)) {
           appDimSlider.value = appBackgroundDimPreference;
         }
+        // Instant-load mirror for preload.js (sync)
+        try {
+          if (window.localStorage) {
+            localStorage.setItem('fast-bg-dim', String(appBackgroundDimPreference));
+          }
+        } catch (err) {
+          // Ignore; instant mirror is best-effort only
+        }
         try {
           await browser.storage.local.set({ [APP_BACKGROUND_DIM_KEY]: appBackgroundDimPreference });
         } catch (err) {

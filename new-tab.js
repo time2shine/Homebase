@@ -4790,39 +4790,31 @@ function handleBookmarkIconUpload(file) {
 
       const MAX_SIZE = 128;
 
-      let w = img.width;
+      const sourceWidth = img.width;
 
-      let h = img.height;
+      const sourceHeight = img.height;
 
-      if (w > h) {
+      const side = Math.min(sourceWidth, sourceHeight);
 
-        if (w > MAX_SIZE) {
+      const sx = Math.floor((sourceWidth - side) / 2);
 
-          h *= MAX_SIZE / w;
+      const sy = Math.floor((sourceHeight - side) / 2);
 
-          w = MAX_SIZE;
+      canvas.width = MAX_SIZE;
 
-        }
-
-      } else {
-
-        if (h > MAX_SIZE) {
-
-          w *= MAX_SIZE / h;
-
-          h = MAX_SIZE;
-
-        }
-
-      }
-
-      canvas.width = w;
-
-      canvas.height = h;
+      canvas.height = MAX_SIZE;
 
       const ctx = canvas.getContext('2d');
 
-      ctx.drawImage(img, 0, 0, w, h);
+      if (!ctx) {
+        console.warn('[icon-upload] no 2d context');
+        return;
+      }
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, MAX_SIZE, MAX_SIZE);
 
       delete pendingBookmarkMeta.iconCleared;
       pendingBookmarkMeta.icon = canvas.toDataURL('image/webp', 0.85);

@@ -3280,6 +3280,96 @@ const DOMAIN_ICON_MAP_KEY = 'domainIconMap';
 const LAST_USED_BOOKMARK_FOLDER_KEY = 'lastUsedBookmarkFolderId';
 const DOMAIN_ICON_MAP_LIMIT = 200;
 
+// ==========================
+// FAVICON PERF CACHE (NEW)
+// ==========================
+const FAVICON_SIZE_PX = 48;          // was effectively 64+ in some places; keep small for grid icons
+const FAVICON_NEGATIVE_TTL_MS = 10 * 60 * 1000;
+const FAVICON_RESOLVED_CACHE_LIMIT = 300;
+
+const faviconResolvedCache = new Map(); // domainKey -> resolved favicon URL (string)
+const faviconInflightCache = new Map(); // domainKey -> Promise<string|null>
+const faviconNegativeCache = new Map(); // domainKey -> lastFailureTimestamp (number)
+const faviconWaiters = new Map(); // domainKey -> Array<(resolvedUrl|null) => void>
+
+function setFaviconResolved(domainKey, url) {
+  if (!domainKey || !url) return;
+  faviconResolvedCache.set(domainKey, url);
+  if (faviconResolvedCache.size > FAVICON_RESOLVED_CACHE_LIMIT) {
+    const oldestKey = faviconResolvedCache.keys().next().value;
+    if (oldestKey) {
+      faviconResolvedCache.delete(oldestKey);
+    }
+  }
+}
+
+function notifyFaviconWaiters(domainKey, resolvedUrl) {
+  const waiters = faviconWaiters.get(domainKey);
+  if (waiters && waiters.length) {
+    waiters.forEach((resolve) => resolve(resolvedUrl));
+    faviconWaiters.delete(domainKey);
+  }
+  faviconInflightCache.delete(domainKey);
+}
+
+function isValidFaviconTargetUrl(rawUrl) {
+  if (typeof rawUrl !== 'string') return false;
+  try {
+    const parsed = new URL(rawUrl);
+    const protocol = parsed.protocol;
+    const hostname = parsed.hostname || '';
+    if (protocol !== 'http:' && protocol !== 'https:') return false;
+    if (!hostname || !hostname.includes('.')) return false;
+    if (/\s/.test(hostname)) return false;
+    if (hostname.endsWith('.')) return false;
+    if (hostname === 'localhost') return false;
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function getDomainKeyFromUrl(rawUrl) {
+  if (!isValidFaviconTargetUrl(rawUrl)) return '';
+  try {
+    return new URL(rawUrl).hostname.toLowerCase();
+  } catch (err) {
+    return '';
+  }
+}
+
+function buildFaviconCandidates(rawUrl) {
+  if (!isValidFaviconTargetUrl(rawUrl)) return [];
+  const parsed = new URL(rawUrl);
+  const origin = parsed.origin;
+  const gstaticV2 = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(origin)}&size=${FAVICON_SIZE_PX}`;
+  const googleS2 = `https://www.google.com/s2/favicons?sz=${FAVICON_SIZE_PX}&domain_url=${encodeURIComponent(origin)}`;
+  return [gstaticV2, googleS2].filter(Boolean);
+}
+
+async function getFaviconUrlForRawUrl(rawUrl) {
+  try {
+    if (!isValidFaviconTargetUrl(rawUrl)) return null;
+    const domainKey = getDomainKeyFromUrl(rawUrl);
+    if (!domainKey) return null;
+    const cached = faviconResolvedCache.get(domainKey);
+    if (cached) return cached;
+    const lastFailedAt = faviconNegativeCache.get(domainKey);
+    if (lastFailedAt) {
+      if (Date.now() - lastFailedAt < FAVICON_NEGATIVE_TTL_MS) {
+        return null;
+      }
+      faviconNegativeCache.delete(domainKey);
+    }
+    const inflight = faviconInflightCache.get(domainKey);
+    if (inflight) return inflight;
+    const candidates = buildFaviconCandidates(rawUrl);
+    return candidates[0] || null;
+  } catch (err) {
+    return null;
+  }
+}
+
 let bookmarkMetadata = {};
 let pendingBookmarkMeta = {};
 
@@ -4633,37 +4723,46 @@ function updateBookmarkModalPreview() {
     return;
   }
 
-  const domain = getDomainFromUrl(urlVal);
+  const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(urlVal);
+  const preparedUrl = hasScheme ? urlVal : (urlVal ? `https://${urlVal}` : '');
+  const domainKey = getDomainKeyFromUrl(preparedUrl);
 
-  if (domain) {
-    const faviconUrl = faviconUrlCache.get(domain) || `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
-    if (!faviconUrlCache.has(domain)) {
-      faviconUrlCache.set(domain, faviconUrl);
-    }
-
+  if (domainKey) {
     const existingImg = bookmarkIconPreview.querySelector('img');
-    if (existingImg) {
+    let imgEl = existingImg;
+
+    if (!imgEl) {
+      bookmarkIconPreview.innerHTML = '';
       bookmarkIconPreview.textContent = '';
       bookmarkIconPreview.style.color = '';
       bookmarkIconPreview.style.fontSize = '';
       bookmarkIconPreview.style.backgroundColor = '';
-      if (existingImg.src !== faviconUrl) {
-        existingImg.src = faviconUrl;
-      }
-      lastPreviewDomain = domain;
-      return;
+
+      imgEl = document.createElement('img');
+      bookmarkIconPreview.appendChild(imgEl);
+    } else {
+      bookmarkIconPreview.textContent = '';
+      bookmarkIconPreview.style.color = '';
+      bookmarkIconPreview.style.fontSize = '';
+      bookmarkIconPreview.style.backgroundColor = '';
     }
 
-    bookmarkIconPreview.innerHTML = '';
-    bookmarkIconPreview.textContent = '';
-    bookmarkIconPreview.style.color = '';
-    bookmarkIconPreview.style.fontSize = '';
-    bookmarkIconPreview.style.backgroundColor = '';
-
-    const img = document.createElement('img');
-    img.src = faviconUrl;
-    bookmarkIconPreview.appendChild(img);
-    lastPreviewDomain = domain;
+    lastPreviewDomain = domainKey;
+    getFaviconUrlForRawUrl(preparedUrl)
+      .then((resolvedUrl) => {
+        if (lastPreviewDomain !== domainKey) return;
+        if (!resolvedUrl) {
+          lastPreviewDomain = '';
+          bookmarkIconPreview.innerHTML = '';
+          const letter = (bookmarkNameInput && bookmarkNameInput.value ? bookmarkNameInput.value.trim().charAt(0) : '') || '?';
+          renderBookmarkFallbackPreview(letter);
+          return;
+        }
+        if (imgEl && imgEl.src !== resolvedUrl) {
+          imgEl.src = resolvedUrl;
+        }
+      })
+      .catch(() => {});
     return;
   }
 
@@ -4780,7 +4879,9 @@ async function handleBookmarkGetIcon() {
 
 
 
-  const domain = getDomainFromUrl(urlVal);
+  const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(urlVal);
+  const preparedUrl = hasScheme ? urlVal : (urlVal ? `https://${urlVal}` : '');
+  const domain = getDomainKeyFromUrl(preparedUrl);
   if (!domain) {
     validateBookmarkModalInputs();
     return;
@@ -4792,35 +4893,23 @@ async function handleBookmarkGetIcon() {
   bookmarkGetAbortController = controller;
 
 
-  const googleApiUrl = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
-
-
-
   try {
+    const resolvedUrl = await getFaviconUrlForRawUrl(preparedUrl);
+    if (!resolvedUrl) {
+      throw new Error('Icon resolve failed');
+    }
+    if (controller.signal.aborted) {
+      return;
+    }
+    delete pendingBookmarkMeta.iconCleared;
+    pendingBookmarkMeta.icon = resolvedUrl;
 
-    const resp = await fetch(googleApiUrl, { signal: controller.signal });
+    userExplicitlySetIconThisSession = true;
 
-    if (!resp.ok) throw new Error('Icon fetch failed');
+    storeIconForDomain(domain, resolvedUrl);
 
-    const blob = await resp.blob();
-
-    const reader = new FileReader();
-
-    reader.onloadend = () => {
-
-      delete pendingBookmarkMeta.iconCleared;
-      pendingBookmarkMeta.icon = reader.result;
-
-      userExplicitlySetIconThisSession = true;
-
-      storeIconForDomain(domain, reader.result);
-
-      updateBookmarkModalPreview();
-      validateBookmarkModalInputs();
-
-    };
-
-    reader.readAsDataURL(blob);
+    updateBookmarkModalPreview();
+    validateBookmarkModalInputs();
 
   } catch (err) {
 
@@ -6477,18 +6566,14 @@ async function handleEditFolderSave() {
  * browser cache and render instantly without flashing.
  */
 function warmFaviconCache(nodes) {
-  const uniqueDomains = new Set();
+  const domainSamples = new Map();
 
   const traverse = (list) => {
     list.forEach(node => {
-      if (node.url) {
-        try {
-          const domain = new URL(node.url).hostname;
-          if (domain && domain.includes('.')) {
-            uniqueDomains.add(domain);
-          }
-        } catch (e) {
-          // Ignore malformed URLs
+      if (node.url && isValidFaviconTargetUrl(node.url)) {
+        const domainKey = getDomainKeyFromUrl(node.url);
+        if (domainKey && !domainSamples.has(domainKey)) {
+          domainSamples.set(domainKey, node.url);
         }
       }
       if (node.children) traverse(node.children);
@@ -6497,28 +6582,32 @@ function warmFaviconCache(nodes) {
 
   traverse(nodes);
 
-  const domains = Array.from(uniqueDomains);
+  const domains = Array.from(domainSamples.keys());
   let index = 0;
 
   function processChunk(deadline) {
     while (index < domains.length && (deadline.timeRemaining() > 0 || deadline.didTimeout)) {
-      const domain = domains[index++];
-      const img = new Image();
-      img.src = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=64`;
+      const domainKey = domains[index++];
+      if (faviconResolvedCache.has(domainKey)) continue;
+      const sampleUrl = domainSamples.get(domainKey);
+      if (!sampleUrl) continue;
+      if (!buildFaviconCandidates(sampleUrl).length) continue;
     }
 
     if (index < domains.length) {
-      requestIdleCallback(processChunk);
-    } else {
-      console.log('Favicon cache warming complete.');
+      scheduleNextChunk();
     }
   }
 
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(processChunk);
-  } else {
-    setTimeout(() => processChunk({ timeRemaining: () => 50, didTimeout: true }), 2000);
-  }
+  const scheduleNextChunk = () => {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(processChunk);
+    } else {
+      setTimeout(() => processChunk({ timeRemaining: () => 50, didTimeout: true }), 2000);
+    }
+  };
+
+  scheduleNextChunk();
 }
 
 
@@ -8010,13 +8099,39 @@ function flattenBookmarks(nodes) {
 
 }
 
+async function resolveFaviconUrlForDomain(domainKey, candidates) {
+  if (!domainKey) return null;
+
+  const cached = faviconResolvedCache.get(domainKey);
+  if (cached) return cached;
+
+  const lastFailedAt = faviconNegativeCache.get(domainKey);
+  if (lastFailedAt) {
+    if (Date.now() - lastFailedAt < FAVICON_NEGATIVE_TTL_MS) {
+      return null;
+    }
+    faviconNegativeCache.delete(domainKey);
+  }
+
+  const existing = faviconInflightCache.get(domainKey);
+  if (existing) return existing;
+
+  const inflightPromise = new Promise((resolve) => {
+    const waiters = faviconWaiters.get(domainKey) || [];
+    waiters.push(resolve);
+    faviconWaiters.set(domainKey, waiters);
+  });
+
+  faviconInflightCache.set(domainKey, inflightPromise);
+
+  return inflightPromise;
+}
+
 
 function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
   if (!wrapper || !bookmarkNode) return;
 
-  wrapper.textContent = '';
-  wrapper.style.backgroundColor = '';
-
+  const nextKey = iconKey !== undefined ? iconKey : getIconKeyForNode(bookmarkNode);
   const title = bookmarkNode.title || ' ';
   const fallbackLetter = (title.trim().charAt(0) || '?').toUpperCase();
   const meta = (bookmarkMetadata && bookmarkMetadata[bookmarkNode.id]) || {};
@@ -8024,6 +8139,9 @@ function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
 
   // --- NEW: Check for Custom Icon ---
   if (meta && meta.icon) {
+    wrapper.textContent = '';
+    wrapper.style.backgroundColor = '';
+
     const customImg = document.createElement('img');
     customImg.className = 'bookmark-img';
     customImg.alt = '';
@@ -8041,68 +8159,173 @@ function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
     };
     customImg.src = meta.icon;
     wrapper.appendChild(customImg);
-  } else if (meta && meta.iconCleared === true) {
+    wrapper.dataset.iconKey = nextKey;
+    delete wrapper.dataset.faviconDomain;
+    return;
+  }
+
+  if (meta && meta.iconCleared === true) {
+    wrapper.textContent = '';
+    wrapper.style.backgroundColor = '';
+
     const fallbackIcon = document.createElement('div');
     fallbackIcon.className = 'bookmark-fallback-icon show-fallback';
     fallbackIcon.textContent = fallbackLetter;
     wrapper.appendChild(fallbackIcon);
     wrapper.style.backgroundColor = fallbackColor;
-  } else {
-    // 1. Prepare fallback letter icon and render it immediately so it shows first.
-    const fallbackIcon = document.createElement('div');
-    fallbackIcon.className = 'bookmark-fallback-icon';
-    fallbackIcon.textContent = fallbackLetter;
-    wrapper.appendChild(fallbackIcon);
-
-    // 2. Prepare image icon (stacked above fallback).
-    const imgIcon = document.createElement('img');
-    imgIcon.className = 'bookmark-img';
-    imgIcon.loading = 'lazy';
-    imgIcon.decoding = 'async';
-    imgIcon.alt = '';
-
-    let domain = '';
-    try {
-      domain = new URL(bookmarkNode.url).hostname;
-    } catch (e) {}
-
-    if (domain.includes('.')) {
-      const showFallback = () => fallbackIcon.classList.add('show-fallback');
-
-      imgIcon.onload = () => {
-        if (imgIcon.naturalWidth > 16) {
-          imgIcon.classList.add('loaded');
-          wrapper.style.backgroundColor = 'transparent';
-        } else {
-          imgIcon.remove();
-          showFallback();
-        }
-      };
-
-      imgIcon.onerror = () => {
-        imgIcon.remove();
-        showFallback();
-      };
-
-      imgIcon.src = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(bookmarkNode.url || '')}&size=128`;
-
-      if (imgIcon.complete && imgIcon.naturalWidth > 0) {
-        if (imgIcon.naturalWidth > 16) {
-          imgIcon.classList.add('loaded');
-          wrapper.style.backgroundColor = 'transparent';
-        } else {
-          imgIcon.remove();
-          showFallback();
-        }
-      }
-
-      wrapper.appendChild(imgIcon);
-    } else {
-      fallbackIcon.classList.add('show-fallback');
-    }
+    wrapper.dataset.iconKey = nextKey;
+    delete wrapper.dataset.faviconDomain;
+    return;
   }
 
-  wrapper.dataset.iconKey = iconKey !== undefined ? iconKey : getIconKeyForNode(bookmarkNode);
+  const domainKey = getDomainKeyFromUrl(bookmarkNode.url);
+
+  if (!domainKey) {
+    wrapper.textContent = '';
+    wrapper.style.backgroundColor = '';
+
+    const fallbackIcon = document.createElement('div');
+    fallbackIcon.className = 'bookmark-fallback-icon show-fallback';
+    fallbackIcon.textContent = '?';
+    wrapper.appendChild(fallbackIcon);
+    wrapper.dataset.iconKey = nextKey;
+    delete wrapper.dataset.faviconDomain;
+    return;
+  }
+
+  const existingLoaded = wrapper.querySelector('img.bookmark-img.loaded');
+
+  if (wrapper.dataset.iconKey === nextKey &&
+      wrapper.dataset.faviconDomain === domainKey &&
+      existingLoaded) {
+    wrapper.dataset.iconKey = nextKey;
+    return;
+  }
+
+  wrapper.textContent = '';
+  wrapper.style.backgroundColor = '';
+
+  // 1. Prepare fallback letter icon and render it immediately so it shows first.
+  const fallbackIcon = document.createElement('div');
+  fallbackIcon.className = 'bookmark-fallback-icon';
+  fallbackIcon.textContent = fallbackLetter;
+  wrapper.appendChild(fallbackIcon);
+
+  // 2. Prepare image icon (stacked above fallback).
+  const imgIcon = document.createElement('img');
+  imgIcon.className = 'bookmark-img';
+  if (!imgIcon.decoding) {
+    imgIcon.decoding = 'async';
+  }
+  if (!imgIcon.loading) {
+    imgIcon.loading = 'lazy';
+  }
+  if (!imgIcon.getAttribute('fetchpriority')) {
+    imgIcon.setAttribute('fetchpriority', 'low');
+  }
+  if (!imgIcon.referrerPolicy) {
+    imgIcon.referrerPolicy = 'no-referrer';
+  }
+  imgIcon.alt = '';
+
+  const showFallback = () => fallbackIcon.classList.add('show-fallback');
+  const markLoaded = () => {
+    if (imgIcon.naturalWidth >= 6) {
+      imgIcon.classList.add('loaded');
+      wrapper.style.backgroundColor = 'transparent';
+      return true;
+    }
+    return false;
+  };
+
+  const candidates = buildFaviconCandidates(bookmarkNode.url);
+
+  wrapper.dataset.iconKey = nextKey;
+  wrapper.dataset.faviconDomain = domainKey;
+  wrapper.appendChild(imgIcon);
+
+  const cachedUrl = faviconResolvedCache.get(domainKey);
+  if (cachedUrl) {
+    imgIcon.src = cachedUrl;
+    if (imgIcon.complete && imgIcon.naturalWidth > 0) {
+      markLoaded();
+    }
+    return;
+  }
+
+  const lastFailedAt = faviconNegativeCache.get(domainKey);
+  if (lastFailedAt && (Date.now() - lastFailedAt < FAVICON_NEGATIVE_TTL_MS)) {
+    showFallback();
+    return;
+  }
+  if (lastFailedAt) {
+    faviconNegativeCache.delete(domainKey);
+  }
+
+  const shouldAbort = () =>
+    wrapper.dataset.iconKey !== nextKey ||
+    wrapper.dataset.faviconDomain !== domainKey;
+
+  const hadInflight = faviconInflightCache.has(domainKey);
+  const inflightPromise = resolveFaviconUrlForDomain(domainKey, candidates);
+
+  if (hadInflight) {
+    Promise.resolve(inflightPromise)
+      .then((resolvedUrl) => {
+        if (!resolvedUrl) {
+          showFallback();
+          return;
+        }
+        if (shouldAbort()) return;
+        imgIcon.src = resolvedUrl;
+        if (imgIcon.complete && imgIcon.naturalWidth > 0) {
+          markLoaded();
+        }
+      })
+      .catch(() => {
+        showFallback();
+      });
+    return;
+  }
+
+  const attemptCandidate = (index) => {
+    if (shouldAbort()) {
+      notifyFaviconWaiters(domainKey, null);
+      return;
+    }
+
+    if (!candidates || index >= candidates.length) {
+      faviconNegativeCache.set(domainKey, Date.now());
+      notifyFaviconWaiters(domainKey, null);
+      showFallback();
+      return;
+    }
+
+    const candidate = candidates[index];
+    imgIcon.onload = () => {
+      if (shouldAbort()) {
+        notifyFaviconWaiters(domainKey, null);
+        return;
+      }
+      if (!markLoaded()) {
+        attemptCandidate(index + 1);
+        return;
+      }
+      setFaviconResolved(domainKey, candidate);
+      faviconNegativeCache.delete(domainKey);
+      notifyFaviconWaiters(domainKey, candidate);
+    };
+    imgIcon.onerror = () => {
+      if (shouldAbort()) {
+        notifyFaviconWaiters(domainKey, null);
+        return;
+      }
+      attemptCandidate(index + 1);
+    };
+    imgIcon.src = candidate;
+  };
+
+  attemptCandidate(0);
 }
 
 function renderFolderIconInto(wrapper, folderNode, iconKey) {
@@ -8279,11 +8502,7 @@ async function deleteBookmarkOrFolder(id, isFolder) {
 
     try {
 
-      const urlObj = new URL(node.url);
-
-      const domain = urlObj.hostname || node.url;
-
-      faviconUrl = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=64`;
+      faviconUrl = await getFaviconUrlForRawUrl(node.url);
 
     } catch (e) {
 
@@ -15914,6 +16133,123 @@ function updatePanelVisibility() {
 
 
 
+function hydrateSearchResultFavicons(container) {
+  if (!container) return;
+  const targets = Array.from(container.querySelectorAll('.result-favicon[data-favicon-raw-url]'));
+  if (!targets.length) return;
+
+  targets.forEach((img) => {
+    if (!img.decoding) {
+      img.decoding = 'async';
+    }
+    if (!img.loading) {
+      img.loading = 'lazy';
+    }
+    if (!img.getAttribute('fetchpriority')) {
+      img.setAttribute('fetchpriority', 'low');
+    }
+    if (!img.referrerPolicy) {
+      img.referrerPolicy = 'no-referrer';
+    }
+
+    const rawUrl = img.dataset.faviconRawUrl || '';
+    const hideImg = () => {
+      img.style.display = 'none';
+      img.removeAttribute('src');
+    };
+
+    if (!rawUrl) {
+      hideImg();
+      return;
+    }
+
+    const domainKey = getDomainKeyFromUrl(rawUrl);
+    if (!domainKey) {
+      hideImg();
+      return;
+    }
+
+    const cached = faviconResolvedCache.get(domainKey);
+    if (cached) {
+      img.style.display = '';
+      img.src = cached;
+      return;
+    }
+
+    const lastFailedAt = faviconNegativeCache.get(domainKey);
+    if (lastFailedAt && (Date.now() - lastFailedAt < FAVICON_NEGATIVE_TTL_MS)) {
+      hideImg();
+      return;
+    }
+    if (lastFailedAt) {
+      faviconNegativeCache.delete(domainKey);
+    }
+
+    const candidates = buildFaviconCandidates(rawUrl);
+    if (!candidates.length) {
+      hideImg();
+      return;
+    }
+
+    const shouldAbort = () => img.dataset.faviconRawUrl !== rawUrl;
+    const hadInflight = faviconInflightCache.has(domainKey);
+    const inflightPromise = resolveFaviconUrlForDomain(domainKey, candidates);
+
+    if (hadInflight) {
+      Promise.resolve(inflightPromise)
+        .then((resolvedUrl) => {
+          if (!resolvedUrl) {
+            hideImg();
+            return;
+          }
+          if (shouldAbort()) return;
+          img.style.display = '';
+          img.src = resolvedUrl;
+        })
+        .catch(() => {
+          hideImg();
+        });
+      return;
+    }
+
+    const attemptCandidate = (index) => {
+      if (shouldAbort()) {
+        notifyFaviconWaiters(domainKey, null);
+        return;
+      }
+
+      if (index >= candidates.length) {
+        faviconNegativeCache.set(domainKey, Date.now());
+        notifyFaviconWaiters(domainKey, null);
+        hideImg();
+        return;
+      }
+
+      const candidate = candidates[index];
+      img.onload = () => {
+        if (shouldAbort()) {
+          notifyFaviconWaiters(domainKey, null);
+          return;
+        }
+        img.style.display = '';
+        setFaviconResolved(domainKey, candidate);
+        faviconNegativeCache.delete(domainKey);
+        notifyFaviconWaiters(domainKey, candidate);
+      };
+      img.onerror = () => {
+        if (shouldAbort()) {
+          notifyFaviconWaiters(domainKey, null);
+          return;
+        }
+        attemptCandidate(index + 1);
+      };
+      img.src = candidate;
+    };
+
+    attemptCandidate(0);
+  });
+}
+
 // Merged logic into one async function
 
 async function handleSearchInput() {
@@ -16122,10 +16458,6 @@ async function handleSearchInput() {
 
         shownUrls.add(bookmarkUrl);
 
-        let domain = '';
-
-        try { domain = new URL(bookmarkUrl).hostname; } catch (err) {}
-
         const safeTitle = escapeHtml(bookmark.title || 'No Title');
 
         const safeUrl = escapeHtml(bookmarkUrl);
@@ -16134,7 +16466,7 @@ async function handleSearchInput() {
 
           <button type="button" class="result-item" data-url="${safeUrl}">
 
-            <img src="https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=64" alt="">
+            <img class="result-favicon" data-favicon-raw-url="${safeUrl}" loading="lazy" decoding="async" alt="">
 
             <div class="result-item-info">
 
@@ -16239,6 +16571,7 @@ async function handleSearchInput() {
     bookmarkResultsContainer.innerHTML = topSectionHtml;
 
     lastBookmarkHtml = topSectionHtml;
+    hydrateSearchResultFavicons(bookmarkResultsContainer);
 
   }
 

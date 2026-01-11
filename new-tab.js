@@ -3629,6 +3629,8 @@ let bookmarkModalEscBound = false;
 
 let bookmarkModalBound = false;
 
+let bookmarkPressStartedOnOverlay = false;
+
 let bookmarkUrlErrorEl;
 
 let bookmarkDomainIconPrompt;
@@ -4345,15 +4347,16 @@ function setupBookmarkModal() {
 
 
   // 3. Click background overlay to close
+  addBookmarkModal.addEventListener('pointerdown', (e) => {
+    bookmarkPressStartedOnOverlay = e.target === addBookmarkModal;
+  }, true);
 
   addBookmarkModal.addEventListener('click', (e) => {
-
-    if (e.target === addBookmarkModal) {
-
+    if (e.target === addBookmarkModal && bookmarkPressStartedOnOverlay) {
       hideAddBookmarkModal();
-
     }
 
+    bookmarkPressStartedOnOverlay = false;
   });
 
 

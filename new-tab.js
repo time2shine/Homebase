@@ -11541,8 +11541,72 @@ function applySidebarVisibility(showSidebar = true) {
 
   updateWidgetSettingsUI();
 
-  applyWidgetVisibility();
+}
 
+function setWeatherPreference(show = true, options = {}) {
+  const shouldShow = show !== false;
+  appShowWeatherPreference = shouldShow;
+
+  if (document.documentElement) {
+    document.documentElement.classList.toggle('weather-hidden', !shouldShow);
+  }
+
+  try {
+    if (window.localStorage) {
+      localStorage.setItem('fast-show-weather', shouldShow ? '1' : '0');
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+
+  if (options.persist !== false && browser && browser.storage && browser.storage.local) {
+    browser.storage.local
+      .set({ [APP_SHOW_WEATHER_KEY]: shouldShow })
+      .catch((err) => {
+        console.warn('Failed to save weather visibility preference', err);
+      });
+  }
+
+  if (options.applyVisibility !== false) {
+    applyWidgetVisibility();
+  }
+
+  if (options.updateUI !== false) {
+    updateWidgetSettingsUI();
+  }
+}
+
+function setQuotePreference(show = true, options = {}) {
+  const shouldShow = show !== false;
+  appShowQuotePreference = shouldShow;
+
+  if (document.documentElement) {
+    document.documentElement.classList.toggle('quote-hidden', !shouldShow);
+  }
+
+  try {
+    if (window.localStorage) {
+      localStorage.setItem('fast-show-quote', shouldShow ? '1' : '0');
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+
+  if (options.persist !== false && browser && browser.storage && browser.storage.local) {
+    browser.storage.local
+      .set({ [APP_SHOW_QUOTE_KEY]: shouldShow })
+      .catch((err) => {
+        console.warn('Failed to save quote visibility preference', err);
+      });
+  }
+
+  if (options.applyVisibility !== false) {
+    applyWidgetVisibility();
+  }
+
+  if (options.updateUI !== false) {
+    updateWidgetSettingsUI();
+  }
 }
 
 
@@ -12027,11 +12091,14 @@ async function loadAppSettingsFromStorage() {
 
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
 
-    applySidebarVisibility(stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true);
+    const storedShowSidebar = stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true;
+    const storedShowWeather = stored.hasOwnProperty(APP_SHOW_WEATHER_KEY) ? stored[APP_SHOW_WEATHER_KEY] !== false : true;
+    const storedShowQuote = stored.hasOwnProperty(APP_SHOW_QUOTE_KEY) ? stored[APP_SHOW_QUOTE_KEY] !== false : true;
 
-    appShowWeatherPreference = stored.hasOwnProperty(APP_SHOW_WEATHER_KEY) ? stored[APP_SHOW_WEATHER_KEY] !== false : true;
-
-    appShowQuotePreference = stored.hasOwnProperty(APP_SHOW_QUOTE_KEY) ? stored[APP_SHOW_QUOTE_KEY] !== false : true;
+    setWeatherPreference(storedShowWeather, { persist: false, applyVisibility: false, updateUI: false });
+    setQuotePreference(storedShowQuote, { persist: false, applyVisibility: false, updateUI: false });
+    applySidebarVisibility(storedShowSidebar);
+    applyWidgetVisibility();
 
     appMaxTabsPreference = parseInt(stored[APP_MAX_TABS_KEY] || 0, 10);
 
@@ -12126,8 +12193,6 @@ async function loadAppSettingsFromStorage() {
     if (appDimLabel) {
       appDimLabel.textContent = `${appBackgroundDimPreference}%`;
     }
-
-    applyWidgetVisibility();
 
     updateWidgetSettingsUI();
 

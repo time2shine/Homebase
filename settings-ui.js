@@ -76,20 +76,17 @@ window.SettingsUI = (() => {
     if (appSidebarToggle) {
       appSidebarToggle.addEventListener('change', (e) => {
         applySidebarVisibility(e.target.checked);
+        applyWidgetVisibility();
       });
     }
     if (appWeatherToggle) {
       appWeatherToggle.addEventListener('change', (e) => {
-        appShowWeatherPreference = e.target.checked;
-        applyWidgetVisibility();
-        updateWidgetSettingsUI();
+        setWeatherPreference(e.target.checked);
       });
     }
     if (appQuoteToggle) {
       appQuoteToggle.addEventListener('change', (e) => {
-        appShowQuotePreference = e.target.checked;
-        applyWidgetVisibility();
-        updateWidgetSettingsUI();
+        setQuotePreference(e.target.checked);
       });
     }
     if (appDimSlider) {
@@ -239,9 +236,10 @@ window.SettingsUI = (() => {
         const nextSearchHistory = appSearchHistoryToggle ? appSearchHistoryToggle.checked : false;
 
         applyTimeFormatPreference(nextFormat);
-        appShowWeatherPreference = nextShowWeather;
-        appShowQuotePreference = nextShowQuote;
+        setWeatherPreference(nextShowWeather, { applyVisibility: false, updateUI: false });
+        setQuotePreference(nextShowQuote, { applyVisibility: false, updateUI: false });
         applySidebarVisibility(nextSidebarVisible);
+        applyWidgetVisibility();
         appMaxTabsPreference = nextMaxTabs;
         appAutoClosePreference = nextAutoClose;
         applyBackgroundDim(nextBackgroundDim);
@@ -314,8 +312,6 @@ window.SettingsUI = (() => {
         try {
           await browser.storage.local.set({
             [APP_TIME_FORMAT_KEY]: nextFormat,
-            [APP_SHOW_WEATHER_KEY]: nextShowWeather,
-            [APP_SHOW_QUOTE_KEY]: nextShowQuote,
             [APP_MAX_TABS_KEY]: nextMaxTabs,
             [APP_AUTOCLOSE_KEY]: nextAutoClose,
             [APP_BACKGROUND_DIM_KEY]: appBackgroundDimPreference,

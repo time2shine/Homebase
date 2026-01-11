@@ -26,6 +26,30 @@
     // Ignore; instant mirror is best-effort only
   }
 
+  // Instant Weather Visibility (sync fast path)
+  let fastWeatherState = '';
+  try {
+    const rawWeather = (window.localStorage && localStorage.getItem('fast-show-weather')) || '';
+    if (rawWeather === '0' || rawWeather === '1') {
+      fastWeatherState = rawWeather;
+      document.documentElement.classList.toggle('weather-hidden', rawWeather === '0');
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+
+  // Instant Quote Visibility (sync fast path)
+  let fastQuoteState = '';
+  try {
+    const rawQuote = (window.localStorage && localStorage.getItem('fast-show-quote')) || '';
+    if (rawQuote === '0' || rawQuote === '1') {
+      fastQuoteState = rawQuote;
+      document.documentElement.classList.toggle('quote-hidden', rawQuote === '0');
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+
   function applyInitial(url) {
     if (!url) return;
 
@@ -83,6 +107,8 @@
     .catch(() => {});
 
   const SIDEBAR_PREF_KEY = 'appShowSidebar';
+  const WEATHER_PREF_KEY = 'appShowWeather';
+  const QUOTE_PREF_KEY = 'appShowQuote';
   browserApi.storage.local
     .get([SIDEBAR_PREF_KEY])
     .then((res) => {
@@ -97,6 +123,36 @@
           localStorage.setItem('fast-show-sidebar', nextFastState);
         }
       } catch (e) {}
+    })
+    .catch(() => {});
+
+  browserApi.storage.local
+    .get([WEATHER_PREF_KEY, QUOTE_PREF_KEY])
+    .then((res) => {
+      const storedWeather = res && Object.prototype.hasOwnProperty.call(res, WEATHER_PREF_KEY) ? res[WEATHER_PREF_KEY] : undefined;
+      const storedQuote = res && Object.prototype.hasOwnProperty.call(res, QUOTE_PREF_KEY) ? res[QUOTE_PREF_KEY] : undefined;
+      const shouldShowWeather = storedWeather !== false;
+      const shouldShowQuote = storedQuote !== false;
+      const nextFastWeatherState = shouldShowWeather ? '1' : '0';
+      const nextFastQuoteState = shouldShowQuote ? '1' : '0';
+
+      if (fastWeatherState !== nextFastWeatherState) {
+        document.documentElement.classList.toggle('weather-hidden', !shouldShowWeather);
+        try {
+          if (window.localStorage) {
+            localStorage.setItem('fast-show-weather', nextFastWeatherState);
+          }
+        } catch (e) {}
+      }
+
+      if (fastQuoteState !== nextFastQuoteState) {
+        document.documentElement.classList.toggle('quote-hidden', !shouldShowQuote);
+        try {
+          if (window.localStorage) {
+            localStorage.setItem('fast-show-quote', nextFastQuoteState);
+          }
+        } catch (e) {}
+      }
     })
     .catch(() => {});
 })();

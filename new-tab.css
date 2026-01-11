@@ -2116,6 +2116,9 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   min-height: 215px; /* Layout stability */
 }
 
+html.weather-hidden .widget-weather { display: none !important; }
+html.quote-hidden .widget-quote { display: none !important; }
+
 .widget-quote {
   font-style: italic;
   text-shadow: 1px 1px 2px rgba(0,0,0,0.4);

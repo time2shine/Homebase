@@ -88,8 +88,16 @@
           }
         });
 
-        const wWidget = document.querySelector('.widget-weather');
-        showWidget(wWidget);
+        let allowWeatherInstant = true;
+        try {
+          allowWeatherInstant = localStorage.getItem('fast-show-weather') !== '0';
+        } catch (e) {
+          allowWeatherInstant = true;
+        }
+        if (allowWeatherInstant) {
+          const wWidget = document.querySelector('.widget-weather');
+          showWidget(wWidget);
+        }
       }
     }
 
@@ -132,14 +140,22 @@
       }
 
       if (state.current && state.current.text) {
+        let allowQuoteInstant = true;
+        try {
+          allowQuoteInstant = localStorage.getItem('fast-show-quote') !== '0';
+        } catch (e) {
+          allowQuoteInstant = true;
+        }
         const qText = $('quote-text');
         const qAuthor = $('quote-author');
         const qWidget = document.querySelector('.widget-quote');
 
         if (qText) setText(qText, `"${state.current.text}"`);
         if (qAuthor) setText(qAuthor, state.current.author ? `- ${state.current.author}` : '');
-        
-        showWidget(qWidget);
+
+        if (allowQuoteInstant) {
+          showWidget(qWidget);
+        }
       }
     }
 

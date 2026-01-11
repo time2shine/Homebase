@@ -11514,7 +11514,28 @@ function applySidebarVisibility(showSidebar = true) {
 
   appShowSidebarPreference = showSidebar !== false;
 
-  document.body.classList.toggle('sidebar-hidden', !appShowSidebarPreference);
+  if (document.documentElement) {
+    document.documentElement.classList.toggle('sidebar-hidden', !appShowSidebarPreference);
+  }
+  if (document.body) {
+    document.body.classList.toggle('sidebar-hidden', !appShowSidebarPreference);
+  }
+
+  try {
+    if (window.localStorage) {
+      localStorage.setItem('fast-show-sidebar', appShowSidebarPreference ? '1' : '0');
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+
+  if (browser && browser.storage && browser.storage.local) {
+    browser.storage.local
+      .set({ [APP_SHOW_SIDEBAR_KEY]: appShowSidebarPreference })
+      .catch((err) => {
+        console.warn('Failed to save sidebar visibility preference', err);
+      });
+  }
 
   updateSidebarCollapseState();
 

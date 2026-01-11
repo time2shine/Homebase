@@ -355,33 +355,39 @@ body.sidebar-collapsed .main-content {
   width: 100%;
 }
 
-body.sidebar-hidden {
+body.sidebar-hidden,
+html.sidebar-hidden {
   justify-content: center;
 }
 
-body.sidebar-hidden .sidebar {
+body.sidebar-hidden .sidebar,
+html.sidebar-hidden .sidebar {
   display: none;
 }
 
-body.sidebar-hidden {
+body.sidebar-hidden,
+html.sidebar-hidden {
   --main-col-width: 100%;
   --main-col-left: auto;
   --main-col-max: 1160px;
   --main-col-pad: 12px;
 }
 
-body.sidebar-hidden .main-content {
+body.sidebar-hidden .main-content,
+html.sidebar-hidden .main-content {
   width: 100%;
   max-width: 1240px;
   padding: 20px 32px;
   margin: 0 auto;
 }
 
-body.sidebar-hidden .collapsed-clock-slot {
+body.sidebar-hidden .collapsed-clock-slot,
+html.sidebar-hidden .collapsed-clock-slot {
   display: none !important;
 }
 
-body.sidebar-hidden .widget-time {
+body.sidebar-hidden .widget-time,
+html.sidebar-hidden .widget-time {
   display: none !important;
 }
 

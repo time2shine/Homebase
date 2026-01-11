@@ -314,7 +314,6 @@ window.SettingsUI = (() => {
         try {
           await browser.storage.local.set({
             [APP_TIME_FORMAT_KEY]: nextFormat,
-            [APP_SHOW_SIDEBAR_KEY]: nextSidebarVisible,
             [APP_SHOW_WEATHER_KEY]: nextShowWeather,
             [APP_SHOW_QUOTE_KEY]: nextShowQuote,
             [APP_MAX_TABS_KEY]: nextMaxTabs,

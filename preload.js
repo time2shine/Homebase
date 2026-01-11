@@ -14,6 +14,18 @@
     // Ignore; dim is optional
   }
 
+  // Instant Sidebar Visibility (sync fast path)
+  let fastSidebarState = '';
+  try {
+    const rawSidebar = (window.localStorage && localStorage.getItem('fast-show-sidebar')) || '';
+    if (rawSidebar === '0' || rawSidebar === '1') {
+      fastSidebarState = rawSidebar;
+      document.documentElement.classList.toggle('sidebar-hidden', rawSidebar === '0');
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+
   function applyInitial(url) {
     if (!url) return;
 
@@ -65,6 +77,24 @@
           if (asyncUrl) {
             localStorage.setItem('cachedAppliedPosterUrl', asyncUrl);
           }
+        }
+      } catch (e) {}
+    })
+    .catch(() => {});
+
+  const SIDEBAR_PREF_KEY = 'appShowSidebar';
+  browserApi.storage.local
+    .get([SIDEBAR_PREF_KEY])
+    .then((res) => {
+      const stored = res && Object.prototype.hasOwnProperty.call(res, SIDEBAR_PREF_KEY) ? res[SIDEBAR_PREF_KEY] : undefined;
+      const shouldShowSidebar = stored !== false;
+      const nextFastState = shouldShowSidebar ? '1' : '0';
+      if (fastSidebarState === nextFastState) return;
+
+      document.documentElement.classList.toggle('sidebar-hidden', !shouldShowSidebar);
+      try {
+        if (window.localStorage) {
+          localStorage.setItem('fast-show-sidebar', nextFastState);
         }
       } catch (e) {}
     })

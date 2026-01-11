@@ -1099,6 +1099,31 @@ body.bookmarks-booting .bookmark-folder-tabs-container {
   filter: grayscale(0.1) brightness(0.85);
 }
 
+.bookmark-item.is-skeleton {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.bookmark-item.is-skeleton .bookmark-icon-wrapper {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.bookmark-skeleton-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.bookmark-item.is-skeleton .bookmark-skeleton-text {
+  width: 70%;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.25);
+  color: transparent;
+}
+
 .bookmark-loading-spinner {
   position: absolute;
   inset: 0;

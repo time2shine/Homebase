@@ -2266,22 +2266,27 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 
 /* Nested widget settings */
 .sub-settings-container {
-  max-height: 0;
+  display: grid;
+  grid-template-rows: 0fr;
   opacity: 0;
-  overflow: hidden;
-  transform: translateY(-10px);
+  transform: translateY(-4px);
   margin-left: 24px;
   padding-left: 20px;
   border-left: 2px solid #e2e8f0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: grid-template-rows 200ms ease, opacity 200ms ease, transform 200ms ease;
 }
 
 .sub-settings-container.expanded {
-  max-height: 600px;
+  grid-template-rows: 1fr;
   opacity: 1;
   transform: translateY(0);
   margin-top: 10px;
   padding-bottom: 10px;
+}
+
+.sub-settings-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 
 .setting-sub-row {
@@ -2732,6 +2737,7 @@ body.debug-align #quick-actions-bar {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .app-settings-section {

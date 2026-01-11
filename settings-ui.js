@@ -172,7 +172,12 @@ window.SettingsUI = (() => {
     const animToggle = document.getElementById('app-grid-animation-toggle');
     if (animToggle) {
       animToggle.addEventListener('change', (e) => {
-        applyGridAnimationEnabled(e.target.checked);
+        const isEnabled = e.target.checked;
+        applyGridAnimationEnabled(isEnabled);
+        const gridSubSettings = document.getElementById('grid-animation-sub-settings');
+        if (gridSubSettings) {
+          setSubSettingsExpanded(gridSubSettings, isEnabled, isEnabled ? { scrollIntoView: true } : {});
+        }
       });
     }
 

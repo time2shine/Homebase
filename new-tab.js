@@ -11567,7 +11567,7 @@ function disableGridAnimationRuntime() {
   styleEl.innerHTML = '';
 
   const container = document.getElementById('grid-animation-sub-settings');
-  if (container) container.classList.remove('expanded');
+  if (container) setSubSettingsExpanded(container, false);
 
   document.querySelectorAll('.bookmark-item.newly-rendered').forEach((item) => {
     item.classList.remove('newly-rendered');
@@ -11771,11 +11771,7 @@ function updateGridAnimationSettingsUI() {
   }
   
   if (container) {
-    if (appGridAnimationEnabledPreference) {
-      container.classList.add('expanded');
-    } else {
-      container.classList.remove('expanded');
-    }
+    setSubSettingsExpanded(container, appGridAnimationEnabledPreference);
   }
 }
 
@@ -12402,6 +12398,37 @@ function updateColorTrigger(triggerEl, color) {
 
 
 
+function ensureSubSettingsInner(container) {
+  if (!container) return null;
+  const directChildren = Array.from(container.children);
+  if (
+    directChildren.length === 1 &&
+    directChildren[0].classList &&
+    directChildren[0].classList.contains('sub-settings-inner')
+  ) {
+    return directChildren[0];
+  }
+
+  const inner = document.createElement('div');
+  inner.className = 'sub-settings-inner';
+  while (container.firstChild) {
+    inner.appendChild(container.firstChild);
+  }
+  container.appendChild(inner);
+  return inner;
+}
+
+function setSubSettingsExpanded(container, expanded, opts = {}) {
+  if (!container) return;
+  ensureSubSettingsInner(container);
+  container.classList.toggle('expanded', !!expanded);
+  if (expanded && opts.scrollIntoView) {
+    requestAnimationFrame(() => {
+      container.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }
+}
+
 function updateWidgetSettingsUI() {
 
   const subSettings = document.getElementById('widget-sub-settings');
@@ -12428,7 +12455,7 @@ function updateWidgetSettingsUI() {
 
   if (!appShowSidebarPreference) {
 
-    if (subSettings) subSettings.classList.remove('expanded');
+    if (subSettings) setSubSettingsExpanded(subSettings, false);
 
     if (weatherConfigRow) weatherConfigRow.classList.remove('visible');
 
@@ -12438,11 +12465,7 @@ function updateWidgetSettingsUI() {
 
   }
 
-  if (subSettings) {
-
-    subSettings.classList.add('expanded');
-
-  }
+  if (subSettings) setSubSettingsExpanded(subSettings, true);
 
   if (weatherConfigRow) {
 
@@ -12549,13 +12572,13 @@ function syncAppSettingsForm() {
 
   if (containerSubSettings) {
 
-    containerSubSettings.classList.toggle('expanded', appContainerModePreference);
+    setSubSettingsExpanded(containerSubSettings, appContainerModePreference);
 
   }
 
   if (containerBehaviorRow) {
 
-    containerBehaviorRow.classList.toggle('visible', appContainerModePreference);
+    containerBehaviorRow.style.display = appContainerModePreference ? 'flex' : 'none';
 
   }
 
@@ -18738,13 +18761,13 @@ async function setupContainerMode() {
 
     subSettings.style.display = '';
 
-    subSettings.classList.toggle('expanded', appContainerModePreference);
+    setSubSettingsExpanded(subSettings, appContainerModePreference);
 
   }
 
   if (behaviorRow) {
 
-    behaviorRow.classList.toggle('visible', appContainerModePreference);
+    behaviorRow.style.display = appContainerModePreference ? 'flex' : 'none';
 
   }
 
@@ -18766,7 +18789,8 @@ async function setupContainerMode() {
 
       appContainerModePreference = isEnabled;
 
-      if (subSettings) subSettings.classList.toggle('expanded', isEnabled);
+      if (subSettings) setSubSettingsExpanded(subSettings, isEnabled, { scrollIntoView: true });
+      if (behaviorRow) behaviorRow.style.display = isEnabled ? 'flex' : 'none';
 
       await browser.storage.local.set({ [APP_CONTAINER_MODE_KEY]: isEnabled });
 
@@ -19212,6 +19236,10 @@ function logInitSettled(name, result) {
     logInitSettled('loadLastUsedFolderId', lastFolderResult);
 
     await loadFolderMetadata();
+
+    document.querySelectorAll('.sub-settings-container').forEach((container) => {
+      ensureSubSettingsInner(container);
+    });
 
     syncAppSettingsForm();
 

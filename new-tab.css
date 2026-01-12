@@ -1214,16 +1214,21 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
 /* Dim the folder SVG so text stands out */
 .bookmark-item.drag-over[data-is-folder="true"] .bookmark-folder-icon {
   opacity: 0.7;
+  position: relative;
+  z-index: 1;
 }
 
 .bookmark-item.drag-over[data-is-folder="true"] .bookmark-icon-wrapper::after {
-  content: "Drop Here";
+  content: "DROP\A HERE";
   position: absolute;
 
   /* Center a small pill instead of covering the whole icon */
-  top: 60%;
+  top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  white-space: pre;
+  text-align: center;
+  z-index: 5;
 
   display: inline-flex;
   align-items: center;
@@ -4739,6 +4744,7 @@ input:checked + .slider:before {
   place-items: center;
 
   position: relative;          /* so ::after can sit on top */
+  z-index: 0;
   overflow: visible;           /* allow shadows to render fully */
 
   transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;

@@ -766,6 +766,7 @@ function updateSidebarCollapseState() {
 }
 
 
+
 /**
 
  * Shows or hides the folder tab scroll arrows based on overflow and scroll position.
@@ -2717,8 +2718,6 @@ let allBookmarks = [];
 let suggestionAbortController = null; // To cancel old requests
 
 let bookmarkTree = []; // To store the entire bookmark tree
-let bookmarkStartupRenderState = null;
-let bookmarkSnapshotStats = null;
 
 
 
@@ -3108,6 +3107,8 @@ let currentContextItemId = null;
 
 let currentContextIsFolder = false;
 
+let currentContextSourceTile = null;
+
 
 
 // === QUICK ACTION ELEMENTS ===
@@ -3279,12 +3280,6 @@ const HOMEBASE_BOOKMARK_ROOT_ID_KEY = 'homebaseBookmarkRootId';
 const FOLDER_META_KEY = 'folderCustomMetadata';
 const DOMAIN_ICON_MAP_KEY = 'domainIconMap';
 const LAST_USED_BOOKMARK_FOLDER_KEY = 'lastUsedBookmarkFolderId';
-const BOOKMARK_SNAPSHOT_KEY = 'fast-bookmarks-snapshot-v1';
-const BOOKMARK_SNAPSHOT_TTL_MS = 10 * 60 * 1000;
-const BOOKMARK_SNAPSHOT_MAX_ITEMS = 120;
-const BOOKMARK_SNAPSHOT_MAX_BYTES = 120 * 1024;
-const BOOKMARK_VIRTUALIZATION_THRESHOLD = 150;
-const DEBUG_BOOKMARK_SNAPSHOT = false;
 const DOMAIN_ICON_MAP_LIMIT = 200;
 
 // ==========================
@@ -7341,259 +7336,17 @@ function hideBookmarksEmptyState() {
 }
 
 function beginBookmarksBoot() {
-  const hasFastRender = Boolean(bookmarkStartupRenderState);
-  if (document && document.body && !hasFastRender) {
+  if (document && document.body) {
     document.body.classList.add('bookmarks-booting');
   }
   hideBookmarksEmptyState();
-  if (!hasFastRender) {
-    hideBookmarksUI();
-  }
+  hideBookmarksUI();
 }
 
 function endBookmarksBoot() {
   if (document && document.body) {
     document.body.classList.remove('bookmarks-booting');
   }
-}
-
-function logBookmarkSnapshot(...args) {
-  if (!DEBUG_BOOKMARK_SNAPSHOT) return;
-  console.log('[bookmark snapshot]', ...args);
-}
-
-function clearBookmarkStartupRenderState() {
-  bookmarkStartupRenderState = null;
-  if (document && document.body) {
-    document.body.classList.remove('bookmarks-from-snapshot');
-    document.body.classList.remove('bookmarks-from-skeleton');
-  }
-}
-
-function getFastSkeletonCount() {
-  const width = (document && document.documentElement && document.documentElement.clientWidth) || window.innerWidth || 1200;
-  if (width >= 1400) return 16;
-  if (width >= 1000) return 12;
-  return 8;
-}
-
-function validateBookmarkSnapshot(snapshot) {
-  if (!snapshot || snapshot.v !== 1) return false;
-  if (typeof snapshot.savedAt !== 'number') return false;
-  if (!snapshot.folderId || typeof snapshot.folderId !== 'string') return false;
-  if (!Array.isArray(snapshot.items)) return false;
-  if (snapshot.items.length > BOOKMARK_SNAPSHOT_MAX_ITEMS) return false;
-  if ((Date.now() - snapshot.savedAt) > BOOKMARK_SNAPSHOT_TTL_MS) return false;
-  for (const item of snapshot.items) {
-    if (!item || typeof item.id !== 'string' || typeof item.title !== 'string') return false;
-    if (item.type !== 'bookmark' && item.type !== 'folder') return false;
-    if (item.type === 'bookmark' && (typeof item.url !== 'string' || !item.url)) return false;
-  }
-  return true;
-}
-
-function readBookmarkSnapshot() {
-  if (!window || !window.localStorage) return null;
-  let raw = null;
-  try {
-    raw = localStorage.getItem(BOOKMARK_SNAPSHOT_KEY);
-  } catch (err) {
-    logBookmarkSnapshot('snapshot read failed', err);
-    return null;
-  }
-  if (!raw) return null;
-  if (raw.length > BOOKMARK_SNAPSHOT_MAX_BYTES) {
-    logBookmarkSnapshot('snapshot too large, skipping');
-    return null;
-  }
-  const parseStart = performance.now();
-  let parsed = null;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (err) {
-    logBookmarkSnapshot('snapshot parse failed', err);
-    return null;
-  }
-  const parseMs = performance.now() - parseStart;
-  if (!validateBookmarkSnapshot(parsed)) {
-    logBookmarkSnapshot('snapshot invalid or expired');
-    return null;
-  }
-  bookmarkSnapshotStats = {
-    parseMs,
-    ageMs: Date.now() - parsed.savedAt,
-    size: raw.length,
-    itemCount: Array.isArray(parsed.items) ? parsed.items.length : 0
-  };
-  return parsed;
-}
-
-function buildBookmarkSnapshotFromLive(folderNode) {
-  if (!folderNode || !folderNode.id) return null;
-  const children = Array.isArray(folderNode.children) ? folderNode.children : [];
-  const items = [];
-  for (const node of children) {
-    if (!node || !node.id) continue;
-    if (items.length >= BOOKMARK_SNAPSHOT_MAX_ITEMS) break;
-    if (node.url) {
-      items.push({
-        id: node.id,
-        type: 'bookmark',
-        title: node.title || ' ',
-        url: node.url,
-        parentId: node.parentId
-      });
-    } else if (node.children) {
-      items.push({
-        id: node.id,
-        type: 'folder',
-        title: node.title || ' ',
-        parentId: node.parentId
-      });
-    }
-  }
-  return {
-    v: 1,
-    savedAt: Date.now(),
-    folderId: folderNode.id,
-    title: folderNode.title || null,
-    items
-  };
-}
-
-function writeBookmarkSnapshotAsync(snapshot, reason = '') {
-  if (!snapshot || !validateBookmarkSnapshot(snapshot)) return;
-  scheduleIdleTask(() => {
-    try {
-      const serialized = JSON.stringify(snapshot);
-      const bytes = new TextEncoder().encode(serialized).length;
-      if (bytes > BOOKMARK_SNAPSHOT_MAX_BYTES) {
-        logBookmarkSnapshot('snapshot write skipped (size)', bytes);
-        return;
-      }
-      localStorage.setItem(BOOKMARK_SNAPSHOT_KEY, serialized);
-      logBookmarkSnapshot('snapshot write ok', reason || 'idle', bytes);
-    } catch (err) {
-      logBookmarkSnapshot('snapshot write failed', err);
-    }
-  }, 'bookmarkSnapshot:write');
-}
-
-function scheduleBookmarkSnapshotUpdate(folderNode, reason = '') {
-  const snapshot = buildBookmarkSnapshotFromLive(folderNode);
-  if (!snapshot) return;
-  writeBookmarkSnapshotAsync(snapshot, reason);
-}
-
-function getCurrentGridFolderNode() {
-  if (currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
-    return findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id) || currentGridFolderNode;
-  }
-  if (activeHomebaseFolderId && bookmarkTree && bookmarkTree[0]) {
-    return findBookmarkNodeById(bookmarkTree[0], activeHomebaseFolderId);
-  }
-  return null;
-}
-
-function renderBookmarkSnapshotItem(item) {
-  const el = document.createElement('div');
-  el.className = 'bookmark-item';
-  el.dataset.bookmarkId = item.id;
-  el.dataset.isFolder = item.type === 'folder' ? 'true' : 'false';
-  el.dataset.snapshotItem = '1';
-  if (item.type === 'bookmark' && item.url) {
-    el.dataset.bookmarkUrl = item.url;
-  }
-
-  const iconWrapper = document.createElement('div');
-  iconWrapper.className = 'bookmark-icon-wrapper';
-
-  if (item.type === 'folder') {
-    iconWrapper.innerHTML = useSvgIcon('bookmarkFolderLarge');
-  } else {
-    const title = item.title || ' ';
-    const fallbackLetter = (title.trim().charAt(0) || '?').toUpperCase();
-    const fallbackIcon = document.createElement('div');
-    fallbackIcon.className = 'bookmark-fallback-icon show-fallback';
-    fallbackIcon.textContent = fallbackLetter;
-    iconWrapper.appendChild(fallbackIcon);
-    iconWrapper.style.backgroundColor = appBookmarkFallbackColorPreference || '#00b8d4';
-  }
-
-  const titleSpan = document.createElement('span');
-  titleSpan.textContent = item.title || ' ';
-
-  el.appendChild(iconWrapper);
-  el.appendChild(titleSpan);
-  return el;
-}
-
-function renderBookmarkGridFromSnapshot(snapshot) {
-  if (!bookmarksGridEl || !snapshot) return;
-  const start = performance.now();
-  bookmarksGridEl.innerHTML = '';
-  const fragment = document.createDocumentFragment();
-  snapshot.items.forEach((item) => {
-    if (!item || !item.id) return;
-    fragment.appendChild(renderBookmarkSnapshotItem(item));
-  });
-  bookmarksGridEl.appendChild(fragment);
-  hideBookmarksEmptyState();
-  showBookmarksUI();
-  if (document && document.body) {
-    document.body.classList.add('bookmarks-from-snapshot');
-  }
-  bookmarkStartupRenderState = { mode: 'snapshot', folderId: snapshot.folderId };
-  if (bookmarkSnapshotStats) {
-    logBookmarkSnapshot('snapshot used', {
-      ageMs: bookmarkSnapshotStats.ageMs,
-      parseMs: Math.round(bookmarkSnapshotStats.parseMs),
-      count: bookmarkSnapshotStats.itemCount
-    });
-  }
-  logBookmarkSnapshot('snapshot render ms', Math.round(performance.now() - start));
-}
-
-function renderBookmarkGridSkeleton(count) {
-  if (!bookmarksGridEl) return;
-  const start = performance.now();
-  bookmarksGridEl.innerHTML = '';
-  const fragment = document.createDocumentFragment();
-  const total = Math.max(0, count || 0);
-  for (let i = 0; i < total; i += 1) {
-    const item = document.createElement('div');
-    item.className = 'bookmark-item is-skeleton';
-    item.dataset.placeholder = 'true';
-    const iconWrapper = document.createElement('div');
-    iconWrapper.className = 'bookmark-icon-wrapper';
-    const icon = document.createElement('div');
-    icon.className = 'bookmark-skeleton-icon';
-    iconWrapper.appendChild(icon);
-    const titleSpan = document.createElement('span');
-    titleSpan.className = 'bookmark-skeleton-text';
-    titleSpan.textContent = ' ';
-    item.appendChild(iconWrapper);
-    item.appendChild(titleSpan);
-    fragment.appendChild(item);
-  }
-  bookmarksGridEl.appendChild(fragment);
-  hideBookmarksEmptyState();
-  showBookmarksUI();
-  if (document && document.body) {
-    document.body.classList.add('bookmarks-from-skeleton');
-  }
-  bookmarkStartupRenderState = { mode: 'skeleton', folderId: null };
-  logBookmarkSnapshot('snapshot missing, skeleton render ms', Math.round(performance.now() - start));
-}
-
-function primeBookmarkGridOnStartup() {
-  const snapshot = readBookmarkSnapshot();
-  if (snapshot) {
-    renderBookmarkGridFromSnapshot(snapshot);
-    return snapshot.folderId;
-  }
-  renderBookmarkGridSkeleton(getFastSkeletonCount());
-  return null;
 }
 
 function findChildFolderByTitle(parentNode, titleLower) {
@@ -7969,15 +7722,6 @@ function moveItemInLocalTree(parentId, oldIndex, newIndex) {
   parentNode.children.forEach((child, idx) => (child.index = idx));
 }
 
-function shouldUseSnapshotReconcile(folderNode) {
-  if (!bookmarkStartupRenderState || !folderNode) return false;
-  if (bookmarkStartupRenderState.mode === 'skeleton') return true;
-  if (bookmarkStartupRenderState.mode === 'snapshot') {
-    return bookmarkStartupRenderState.folderId === folderNode.id;
-  }
-  return false;
-}
-
 /**
  * NEW: Unified handler for grid drop (re-ordering or moving into a folder).
  * This is a Sortable.js `onEnd` callback.
@@ -8058,19 +7802,15 @@ async function handleGridDrop(evt) {
       }
     }
 
-      // 3. API: Sync in background
-      try {
-        await browser.bookmarks.move(draggedItemId, { parentId: targetFolderId });
-        getBookmarkTree(true).catch(e => console.warn(e));
-        const activeNode = getCurrentGridFolderNode();
-        if (activeNode) {
-          scheduleBookmarkSnapshotUpdate(activeNode, 'grid-move');
-        }
-      } catch (e) {
-        console.warn('Move failed', e);
-        if (currentGridFolderNode) loadBookmarks(currentGridFolderNode.id);
-      }
-      return;
+    // 3. API: Sync in background
+    try {
+      await browser.bookmarks.move(draggedItemId, { parentId: targetFolderId });
+      getBookmarkTree(true).catch(e => console.warn(e));
+    } catch (e) {
+      console.warn('Move failed', e);
+      if (currentGridFolderNode) loadBookmarks(currentGridFolderNode.id);
+    }
+    return;
   }
 
   // ============================================================
@@ -8102,17 +7842,11 @@ async function handleGridDrop(evt) {
       }
     }
 
-      browser.bookmarks.move(draggedItemId, { index: dataNewIndex })
-        .then(() => {
-          const activeNode = getCurrentGridFolderNode();
-          if (activeNode) {
-            scheduleBookmarkSnapshotUpdate(activeNode, 'grid-reorder');
-          }
-        })
-        .catch(err => {
-          console.error('Move failed, reverting...', err);
-          loadBookmarks(parentId);
-        });
+    browser.bookmarks.move(draggedItemId, { index: dataNewIndex })
+      .catch(err => {
+        console.error('Move failed, reverting...', err);
+        loadBookmarks(parentId);
+      });
   }
 }
 
@@ -8709,9 +8443,6 @@ function renderBookmark(bookmarkNode) {
 
   item.dataset.bookmarkId = bookmarkNode.id;
   item.dataset.isFolder = 'false';
-  if (bookmarkNode.url) {
-    item.dataset.bookmarkUrl = bookmarkNode.url;
-  }
 
   const title = bookmarkNode.title || ' ';
 
@@ -8730,7 +8461,7 @@ function renderBookmark(bookmarkNode) {
 
 
 
-async function deleteBookmarkOrFolder(id, isFolder) {
+async function deleteBookmarkOrFolder(id, isFolder, sourceTileEl = null) {
 
   if (!id) return;
 
@@ -8787,6 +8518,10 @@ async function deleteBookmarkOrFolder(id, isFolder) {
     faviconUrl,
 
     isFolder,
+
+    node,
+
+    sourceTileEl,
 
   });
 
@@ -9397,211 +9132,6 @@ function disableVirtualizer() {
   virtualizerState.gridEl.style.paddingBottom = '';
 }
 
-function getGridItemsForFolder(folderNode) {
-  let itemsToRender = [];
-  if (!folderNode) return itemsToRender;
-  if (
-    folderNode.id !== rootDisplayFolderId &&
-    folderNode.parentId !== rootDisplayFolderId &&
-    folderNode.parentId !== '0' &&
-    folderNode.parentId !== 'root________'
-  ) {
-    const parentNode = bookmarkTree && bookmarkTree[0]
-      ? findBookmarkNodeById(bookmarkTree[0], folderNode.parentId)
-      : null;
-    if (parentNode && parentNode.id !== rootDisplayFolderId) {
-      itemsToRender.push({ isBackButton: true, parentId: parentNode.id });
-    }
-  }
-
-  if (folderNode.children) {
-    itemsToRender = itemsToRender.concat(folderNode.children);
-  }
-  return itemsToRender;
-}
-
-function getRenderedGridKey(el) {
-  if (!el || !el.dataset) return null;
-  if (el.dataset.backTargetId) {
-    return `back:${el.dataset.backTargetId}`;
-  }
-  return el.dataset.bookmarkId || null;
-}
-
-function getLiveGridKey(item) {
-  if (!item) return null;
-  if (item.isBackButton) {
-    return `back:${item.parentId || ''}`;
-  }
-  return item.id || null;
-}
-
-function buildGridElementFromLiveItem(item) {
-  if (!item) return null;
-  if (item.isBackButton) {
-    const btn = createBackButton(item.parentId);
-    btn.classList.add('back-button');
-    return btn;
-  }
-  if (item.url) {
-    return renderBookmark(item);
-  }
-  if (item.children) {
-    return renderBookmarkFolder(item);
-  }
-  return null;
-}
-
-function updateGridElementFromLive(el, item) {
-  if (!el || !item || item.isBackButton) return false;
-  const isFolder = !item.url && item.children;
-  const nextIsFolder = isFolder ? 'true' : 'false';
-  const needsHydration = el.dataset.snapshotItem === '1';
-  let updated = false;
-
-  if (el.dataset.isFolder !== nextIsFolder) {
-    el.dataset.isFolder = nextIsFolder;
-    updated = true;
-  }
-  if (!isFolder && item.url && el.dataset.bookmarkUrl !== item.url) {
-    el.dataset.bookmarkUrl = item.url;
-    updated = true;
-  }
-
-  const titleSpan = el.querySelector('span');
-  const nextTitle = item.title || ' ';
-  if (titleSpan && titleSpan.textContent !== nextTitle) {
-    titleSpan.textContent = nextTitle;
-    updated = true;
-  }
-
-  const iconWrapper = el.querySelector('.bookmark-icon-wrapper');
-  if (iconWrapper) {
-    if (isFolder) {
-      if (needsHydration || updated) {
-        renderFolderIconInto(iconWrapper, item);
-      }
-    } else if (needsHydration || updated) {
-      renderBookmarkIconInto(iconWrapper, item);
-    }
-  } else {
-    const replacement = buildGridElementFromLiveItem(item);
-    if (replacement) {
-      el.replaceWith(replacement);
-      return true;
-    }
-  }
-
-  if (el.dataset.snapshotItem) {
-    delete el.dataset.snapshotItem;
-  }
-  return updated || needsHydration;
-}
-
-function reconcileRenderedGridWithLive(folderNode) {
-  if (!bookmarksGridEl || !folderNode) return;
-  const start = performance.now();
-  const grid = bookmarksGridEl;
-  const liveItems = getGridItemsForFolder(folderNode);
-  const liveKeys = liveItems.map(getLiveGridKey).filter(Boolean);
-  const existingEls = Array.from(grid.children);
-  const hasSkeleton = existingEls.some((el) => el.classList.contains('is-skeleton'));
-  const shouldVirtualize = liveItems.length > BOOKMARK_VIRTUALIZATION_THRESHOLD && !appPerformanceModePreference;
-
-  if (shouldVirtualize) {
-    logBookmarkSnapshot('reconcile: rebuild (virtual)', liveItems.length);
-    renderBookmarkGrid(folderNode);
-    return;
-  }
-
-  let rebuild = false;
-  if (!hasSkeleton) {
-    const existingKeys = existingEls.map(getRenderedGridKey).filter(Boolean);
-    const compareLen = Math.min(existingKeys.length, liveKeys.length);
-    let mismatch = Math.abs(existingKeys.length - liveKeys.length);
-    for (let i = 0; i < compareLen; i += 1) {
-      if (existingKeys[i] !== liveKeys[i]) mismatch += 1;
-    }
-    if (mismatch > 20 && liveKeys.length > 0) {
-      rebuild = true;
-    }
-  }
-
-  if (hasSkeleton || rebuild) {
-    const fragment = document.createDocumentFragment();
-    liveItems.forEach((item) => {
-      const el = buildGridElementFromLiveItem(item);
-      if (el) fragment.appendChild(el);
-    });
-    grid.innerHTML = '';
-    grid.appendChild(fragment);
-    if (sortableTimeout) clearTimeout(sortableTimeout);
-    sortableTimeout = setTimeout(() => {
-      setupGridSortable(grid);
-      sortableTimeout = null;
-    }, 200);
-    logBookmarkSnapshot('reconcile: rebuild', {
-      reason: hasSkeleton ? 'skeleton' : 'diff',
-      count: liveItems.length
-    });
-  } else {
-    const existingMap = new Map();
-    existingEls.forEach((el) => {
-      const key = getRenderedGridKey(el);
-      if (key) existingMap.set(key, el);
-    });
-    let created = 0;
-    let moved = 0;
-    let updated = 0;
-    let removed = 0;
-
-    for (let i = 0; i < liveItems.length; i += 1) {
-      const item = liveItems[i];
-      const key = getLiveGridKey(item);
-      if (!key) continue;
-      let el = existingMap.get(key);
-      if (el) {
-        existingMap.delete(key);
-        if (updateGridElementFromLive(el, item)) updated += 1;
-      } else {
-        el = buildGridElementFromLiveItem(item);
-        if (!el) continue;
-        created += 1;
-      }
-
-      const currentAtPos = grid.children[i];
-      if (currentAtPos !== el) {
-        grid.insertBefore(el, currentAtPos || null);
-        moved += 1;
-      }
-    }
-
-    existingMap.forEach((el) => {
-      el.remove();
-      removed += 1;
-    });
-
-    if (sortableTimeout) clearTimeout(sortableTimeout);
-    sortableTimeout = setTimeout(() => {
-      setupGridSortable(grid);
-      sortableTimeout = null;
-    }, 200);
-
-    logBookmarkSnapshot('reconcile: patch', {
-      created,
-      moved,
-      updated,
-      removed,
-      count: liveItems.length
-    });
-  }
-
-  currentGridFolderNode = folderNode;
-  clearBookmarkStartupRenderState();
-  scheduleBookmarkSnapshotUpdate(folderNode, 'reconcile');
-  logBookmarkSnapshot('reconcile ms', Math.round(performance.now() - start));
-}
-
 
 
 /**
@@ -9655,7 +9185,9 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
   }
 
   // 3. DECISION: Virtualize or Standard?
-  if (itemsToRender.length > BOOKMARK_VIRTUALIZATION_THRESHOLD && !appPerformanceModePreference) {
+  const VIRTUALIZATION_THRESHOLD = 150; // Enable if > 150 items
+
+  if (itemsToRender.length > VIRTUALIZATION_THRESHOLD && !appPerformanceModePreference) {
 
     // --- VIRTUAL MODE ---
     initVirtualizer(itemsToRender);
@@ -9739,11 +9271,9 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
 
   }
 
-  if (bookmarkStartupRenderState) {
-    clearBookmarkStartupRenderState();
-  }
-  scheduleBookmarkSnapshotUpdate(folderNode, 'render');
 }
+
+
 
 /**
 
@@ -10296,7 +9826,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
           `Delete "${folderNode.title}" and all its contents?`,
 
-          { isFolder: true }
+          { isFolder: true, node: folderNode }
 
         );
 
@@ -10501,11 +10031,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
   if (folderToSelect) {
 
-    if (shouldUseSnapshotReconcile(folderToSelect)) {
-      reconcileRenderedGridWithLive(folderToSelect);
-    } else {
-      renderBookmarkGrid(folderToSelect);
-    }
+    renderBookmarkGrid(folderToSelect);
 
     activeHomebaseFolderId = folderToSelect.id;
 
@@ -10513,11 +10039,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     console.warn(`No folders found inside "${homebaseFolder.title}". Displaying its contents.`);
 
-    if (shouldUseSnapshotReconcile(homebaseFolder)) {
-      reconcileRenderedGridWithLive(homebaseFolder);
-    } else {
-      renderBookmarkGrid(homebaseFolder);
-    }
+    renderBookmarkGrid(homebaseFolder);
 
     activeHomebaseFolderId = homebaseFolder.id;
 
@@ -10878,7 +10400,6 @@ function handleFolderPickerKeydown(e) {
       first.focus();
     }
   }
-
 }
 
 function attachFolderPickerKeydown() {
@@ -10991,19 +10512,11 @@ async function loadBookmarks(activeFolderId = null) {
 
   }
 
-  const liveFetchStart = DEBUG_BOOKMARK_SNAPSHOT ? performance.now() : 0;
-  if (DEBUG_BOOKMARK_SNAPSHOT) {
-    logBookmarkSnapshot('live fetch start');
-  }
-
 
 
   try {
 
     const tree = await getBookmarkTree(true);
-    if (DEBUG_BOOKMARK_SNAPSHOT) {
-      logBookmarkSnapshot('live fetch end ms', Math.round(performance.now() - liveFetchStart));
-    }
     const treeRoot = tree && tree[0];
     if (!treeRoot) {
       console.warn('Bookmark tree is empty.');
@@ -17745,6 +17258,52 @@ function showCustomDialog(title, message) {
   };
 }
 
+function buildDeleteDialogIconPreview(sourceTileEl) {
+  if (!sourceTileEl || !sourceTileEl.isConnected) return null;
+
+  const iconWrapper = sourceTileEl.querySelector('.bookmark-icon-wrapper');
+  if (!iconWrapper) return null;
+
+  const clone = iconWrapper.cloneNode(true);
+  if (sourceTileEl.dataset.isFolder === 'true') {
+    clone.classList.add('folder-preview');
+  }
+  const computed = window.getComputedStyle(iconWrapper);
+  const cssVarsToCopy = [
+    '--bookmark-folder-color',
+    '--bookmark-fallback-color',
+    '--bookmark-fallback-text-color'
+  ];
+
+  cssVarsToCopy.forEach((varName) => {
+    const value = computed.getPropertyValue(varName);
+    if (value) {
+      clone.style.setProperty(varName, value.trim());
+    }
+  });
+
+  return clone;
+}
+
+function buildIconPreviewFromNode(node) {
+  if (!node || node.isBackButton) return null;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'bookmark-icon-wrapper';
+  if (node.children) {
+    wrapper.classList.add('folder-preview');
+  }
+
+  const nextKey = getIconKeyForNode(node);
+  if (node.children) {
+    renderFolderIconInto(wrapper, node, nextKey);
+  } else {
+    renderBookmarkIconInto(wrapper, node, nextKey);
+  }
+
+  return wrapper;
+}
+
 
 // message is optional; options can contain { title, faviconUrl, isFolder }
 
@@ -17766,7 +17325,13 @@ function showDeleteConfirm(message, options = {}) {
 
 
 
-    const { title = '', faviconUrl = null, isFolder = false } = options;
+    const {
+      title = '',
+      faviconUrl = null,
+      isFolder = false,
+      node = null,
+      sourceTileEl = null
+    } = options;
 
 
 
@@ -17806,38 +17371,28 @@ function showDeleteConfirm(message, options = {}) {
 
 
 
-    if (isFolder) {
+    const previewIcon =
+      buildDeleteDialogIconPreview(sourceTileEl) ||
+      buildIconPreviewFromNode(node);
 
+    if (previewIcon) {
+      iconSpan.appendChild(previewIcon);
+    } else if (isFolder) {
       iconSpan.innerHTML = `
-
         <div class="bookmark-icon-wrapper">
-
           ${useSvgIcon('bookmarkFolderLarge')}
-
         </div>
-
       `;
-
     } else if (faviconUrl) {
-
       const img = document.createElement('img');
-
       img.src = faviconUrl;
-
       img.alt = '';
-
       iconSpan.appendChild(img);
-
     } else if (title) {
-
       const fallback = document.createElement('div');
-
       fallback.className = 'bookmark-fallback-icon';
-
       fallback.textContent = title.charAt(0).toUpperCase();
-
       iconSpan.appendChild(fallback);
-
     }
 
 
@@ -19792,8 +19347,6 @@ function logInitSettled(name, result) {
     let markReadyCount = 0;
     performance.mark('init:start');
 
-    const startupBookmarkFolderId = primeBookmarkGridOnStartup();
-
     const dailyWallpaperP = ensureDailyWallpaper();
     setupBackgroundVideoCrossfade();
     const wallpaperTypeP = getWallpaperTypePreference();
@@ -19869,11 +19422,11 @@ function logInitSettled(name, result) {
 
 
 
-    try {
+  try {
 
-      await loadBookmarks(startupBookmarkFolderId || null);
+    await loadBookmarks();
 
-    } catch (e) {
+  } catch (e) {
 
     console.warn(e);
 
@@ -20174,6 +19727,8 @@ function logInitSettled(name, result) {
 
       currentContextIsFolder = isFolder;
 
+      currentContextSourceTile = item;
+
 
 
       folderContextMenu.classList.add('hidden');
@@ -20389,7 +19944,7 @@ function logInitSettled(name, result) {
 
         // Delete a folder (and its children) in the grid
 
-        deleteBookmarkOrFolder(currentContextItemId, true);
+        deleteBookmarkOrFolder(currentContextItemId, true, currentContextSourceTile);
 
       } else if (action === 'move') {
 
@@ -20453,7 +20008,7 @@ function logInitSettled(name, result) {
 
         // Delete a regular bookmark icon
 
-        deleteBookmarkOrFolder(currentContextItemId, false);
+        deleteBookmarkOrFolder(currentContextItemId, false, currentContextSourceTile);
 
       } else if (action === 'move') {
 

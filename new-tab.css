@@ -1335,6 +1335,24 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   transform: scale(0.85);
 }
 
+/* Ensure folder wrapper sizing/centering applies during drag + fallback ghost */
+#bookmarks-grid .bookmark-item[data-is-folder="true"] .bookmark-icon-wrapper,
+.bookmark-item.sortable-drag[data-is-folder="true"] .bookmark-icon-wrapper,
+.bookmark-fallback-ghost[data-is-folder="true"] .bookmark-icon-wrapper {
+  width: 84px;   /* same as .bookmark-folder-icon */
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* center SVG inside wrapper */
+}
+
+/* Keep folder SVG sizing consistent during drag + fallback ghost */
+.bookmark-item.sortable-drag[data-is-folder="true"] .bookmark-icon-wrapper svg,
+.bookmark-fallback-ghost[data-is-folder="true"] .bookmark-icon-wrapper svg {
+  width: 100%;
+  height: 100%;
+}
+
 
 /* === End new D&D styles === */
 
@@ -1400,15 +1418,6 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
 }
 /* === END NEW CSS === */
 
-
-/* Make folder wrapper match the big folder icon */
-#bookmarks-grid .bookmark-item[data-is-folder="true"] .bookmark-icon-wrapper {
-  width: 84px;   /* same as .bookmark-folder-icon */
-  height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: center; /* center SVG inside wrapper */
-}
 
 /* (Optional) make the folder tile itself this wide so text lines up nicely */
 #bookmarks-grid .bookmark-item[data-is-folder="true"] {

@@ -3288,11 +3288,22 @@ const DOMAIN_ICON_MAP_LIMIT = 200;
 const FAVICON_SIZE_PX = 48;          // was effectively 64+ in some places; keep small for grid icons
 const FAVICON_NEGATIVE_TTL_MS = 10 * 60 * 1000;
 const FAVICON_RESOLVED_CACHE_LIMIT = 300;
+const FAVICON_META_PREFIX = 'fav:meta:';
+const FAVICON_META_STALE_MS = 30 * 24 * 60 * 60 * 1000;
+const FAVICON_FAIL_RETRY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const FAVICON_META_MAX_ENTRIES = 5000;
+const MAX_CONCURRENT_FAVICON_TASKS = 6;
+const FAVICON_CACHE_NAME = 'favicons-v1';
+const FAVICON_OBSERVER_ROOT_MARGIN = '250px';
+const FAVICON_OBSERVER_THRESHOLD = 0.01;
 
-const faviconResolvedCache = new Map(); // domainKey -> resolved favicon URL (string)
-const faviconInflightCache = new Map(); // domainKey -> Promise<string|null>
+const faviconResolvedCache = new Map(); // domainKey -> { url, cacheKey, cached }
+const faviconInflightCache = new Map(); // domainKey -> Promise<{ url, cacheKey, cached }|null>
 const faviconNegativeCache = new Map(); // domainKey -> lastFailureTimestamp (number)
-const faviconWaiters = new Map(); // domainKey -> Array<(resolvedUrl|null) => void>
+const faviconWaiters = new Map(); // domainKey -> Array<(resolved|null) => void>
+const faviconTaskQueue = [];
+let faviconTaskActiveCount = 0;
+let faviconIntersectionObserver = null;
 const DEBUG_FAVICON = false;
 
 function debugFavicon(event, details) {
@@ -3304,9 +3315,14 @@ function debugFavicon(event, details) {
   console.debug('[favicon]', event);
 }
 
-function setFaviconResolved(domainKey, url) {
+function setFaviconResolved(domainKey, url, options = {}) {
   if (!domainKey || !url) return;
-  faviconResolvedCache.set(domainKey, url);
+  const entry = {
+    url,
+    cacheKey: options.cacheKey || null,
+    cached: Boolean(options.cached)
+  };
+  faviconResolvedCache.set(domainKey, entry);
   if (faviconResolvedCache.size > FAVICON_RESOLVED_CACHE_LIMIT) {
     const oldestKey = faviconResolvedCache.keys().next().value;
     if (oldestKey) {
@@ -3315,13 +3331,349 @@ function setFaviconResolved(domainKey, url) {
   }
 }
 
-function notifyFaviconWaiters(domainKey, resolvedUrl) {
+function getFaviconResolvedEntry(domainKey) {
+  if (!domainKey) return null;
+  const entry = faviconResolvedCache.get(domainKey);
+  if (!entry) return null;
+  if (typeof entry === 'string') {
+    return { url: entry, cacheKey: null, cached: false };
+  }
+  return entry;
+}
+
+function getFaviconResolvedUrl(domainKey) {
+  const entry = getFaviconResolvedEntry(domainKey);
+  return entry && entry.url ? entry.url : null;
+}
+
+function notifyFaviconWaiters(domainKey, resolved) {
   const waiters = faviconWaiters.get(domainKey);
   if (waiters && waiters.length) {
-    waiters.forEach((resolve) => resolve(resolvedUrl));
+    waiters.forEach((resolve) => resolve(resolved));
     faviconWaiters.delete(domainKey);
   }
   faviconInflightCache.delete(domainKey);
+}
+
+function runNextFaviconTask() {
+  if (faviconTaskActiveCount >= MAX_CONCURRENT_FAVICON_TASKS) return;
+  const next = faviconTaskQueue.shift();
+  if (!next) return;
+  faviconTaskActiveCount += 1;
+  Promise.resolve()
+    .then(next.task)
+    .then(next.resolve)
+    .catch(next.reject)
+    .finally(() => {
+      faviconTaskActiveCount -= 1;
+      runNextFaviconTask();
+    });
+}
+
+function enqueueFaviconTask(task) {
+  return new Promise((resolve, reject) => {
+    faviconTaskQueue.push({ task, resolve, reject });
+    runNextFaviconTask();
+  });
+}
+
+function getFaviconCache() {
+  return caches.open(FAVICON_CACHE_NAME);
+}
+
+function cacheKeyFor(domainKey, size) {
+  return `/favicons/${domainKey}@${size}`;
+}
+
+async function readIconFromCache(cacheKey) {
+  if (!cacheKey || !('caches' in window)) return null;
+  try {
+    const cache = await getFaviconCache();
+    const cached = await cache.match(cacheKey);
+    return cached || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function writeIconToCache(cacheKey, response) {
+  if (!cacheKey || !response || !response.ok) return false;
+  try {
+    const cache = await getFaviconCache();
+    await cache.put(cacheKey, response);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function responseToObjectURL(response) {
+  if (!response) return '';
+  try {
+    const blob = await response.blob();
+    if (!blob || !blob.size) return '';
+    return URL.createObjectURL(blob);
+  } catch (err) {
+    return '';
+  }
+}
+
+function xhrFetchBlob(url, timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(null);
+      return;
+    }
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'blob';
+      xhr.timeout = timeoutMs;
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300 && xhr.response && xhr.response.size) {
+          resolve(xhr.response);
+          return;
+        }
+        resolve(null);
+      };
+      xhr.onerror = () => resolve(null);
+      xhr.ontimeout = () => resolve(null);
+      xhr.onabort = () => resolve(null);
+      xhr.send();
+    } catch (err) {
+      resolve(null);
+    }
+  });
+}
+
+function blobToResponse(blob) {
+  if (!blob) return new Response();
+  const headers = new Headers();
+  if (blob.type) {
+    headers.set('Content-Type', blob.type);
+  } else {
+    headers.set('Content-Type', 'image/png');
+  }
+  return new Response(blob, { headers });
+}
+
+function setFaviconObjectUrlForImage(img, objectUrl) {
+  if (!img || !objectUrl) return;
+  const previous = img.dataset.faviconObjectUrl;
+  if (previous && previous !== objectUrl) {
+    URL.revokeObjectURL(previous);
+  }
+  img.dataset.faviconObjectUrl = objectUrl;
+  img.src = objectUrl;
+}
+
+function revokeFaviconObjectUrl(img) {
+  if (!img || !img.dataset) return;
+  const previous = img.dataset.faviconObjectUrl;
+  if (previous) {
+    URL.revokeObjectURL(previous);
+    delete img.dataset.faviconObjectUrl;
+  }
+}
+
+function setFaviconImageSrc(img, url) {
+  if (!img || !url) return;
+  revokeFaviconObjectUrl(img);
+  img.src = url;
+}
+
+function loadFaviconObjectUrlIntoImage(img, objectUrl, shouldAbort, acceptCandidate) {
+  return new Promise((resolve) => {
+    if (!img || !objectUrl) {
+      resolve({ accepted: false, aborted: false });
+      return;
+    }
+    if (shouldAbort && shouldAbort()) {
+      resolve({ accepted: false, aborted: true });
+      return;
+    }
+    let settled = false;
+    const finalize = (accepted, aborted) => {
+      if (settled) return;
+      settled = true;
+      img.onload = null;
+      img.onerror = null;
+      resolve({ accepted, aborted });
+    };
+    img.onload = () => {
+      if (shouldAbort && shouldAbort()) {
+        finalize(false, true);
+        return;
+      }
+      const accepted = typeof acceptCandidate === 'function' ? acceptCandidate(img) : true;
+      finalize(accepted, false);
+    };
+    img.onerror = () => {
+      if (shouldAbort && shouldAbort()) {
+        finalize(false, true);
+        return;
+      }
+      finalize(false, false);
+    };
+    setFaviconObjectUrlForImage(img, objectUrl);
+    if (img.complete) {
+      const accepted = img.naturalWidth > 0 && (typeof acceptCandidate === 'function' ? acceptCandidate(img) : true);
+      finalize(accepted, false);
+    }
+  });
+}
+
+function testFaviconCandidateUrl(candidate, acceptCandidate) {
+  return new Promise((resolve) => {
+    const testImg = new Image();
+    testImg.referrerPolicy = 'no-referrer';
+    testImg.onload = () => {
+      const accepted = typeof acceptCandidate === 'function' ? acceptCandidate(testImg) : true;
+      resolve(accepted);
+    };
+    testImg.onerror = () => {
+      resolve(false);
+    };
+    testImg.src = candidate;
+  });
+}
+
+function testFaviconCandidateObjectUrl(objectUrl, acceptCandidate) {
+  return new Promise((resolve) => {
+    const testImg = new Image();
+    testImg.onload = () => {
+      const accepted = typeof acceptCandidate === 'function' ? acceptCandidate(testImg) : true;
+      URL.revokeObjectURL(objectUrl);
+      resolve(accepted);
+    };
+    testImg.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(false);
+    };
+    testImg.src = objectUrl;
+  });
+}
+
+function getFaviconMetaStorageKey(domainKey) {
+  return `${FAVICON_META_PREFIX}${domainKey}`;
+}
+
+async function getFaviconMeta(domainKey) {
+  if (!domainKey || !browser || !browser.storage || !browser.storage.local) return null;
+  try {
+    const key = getFaviconMetaStorageKey(domainKey);
+    const stored = await browser.storage.local.get(key);
+    const meta = stored && stored[key];
+    if (!meta || typeof meta !== 'object') return null;
+    return meta;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function setFaviconMeta(domainKey, meta) {
+  if (!domainKey || !meta || !browser || !browser.storage || !browser.storage.local) return;
+  const payload = {
+    cacheKey: meta.cacheKey || null,
+    lastSeen: Number.isFinite(meta.lastSeen) ? meta.lastSeen : 0,
+    failCount: Number.isFinite(meta.failCount) ? meta.failCount : 0,
+    lastOkAt: Number.isFinite(meta.lastOkAt) ? meta.lastOkAt : 0
+  };
+  try {
+    const key = getFaviconMetaStorageKey(domainKey);
+    await browser.storage.local.set({ [key]: payload });
+  } catch (err) {}
+}
+
+async function bumpFaviconFail(domainKey) {
+  if (!domainKey) return null;
+  const now = Date.now();
+  const existing = await getFaviconMeta(domainKey);
+  const nextMeta = {
+    cacheKey: existing && existing.cacheKey ? existing.cacheKey : null,
+    lastSeen: now,
+    failCount: (existing && Number.isFinite(existing.failCount) ? existing.failCount : 0) + 1,
+    lastOkAt: existing && Number.isFinite(existing.lastOkAt) ? existing.lastOkAt : 0
+  };
+  await setFaviconMeta(domainKey, nextMeta);
+  return nextMeta;
+}
+
+function isFaviconMetaStale(meta) {
+  if (!meta || !meta.lastOkAt) return false;
+  return Date.now() - meta.lastOkAt > FAVICON_META_STALE_MS;
+}
+
+function shouldBlockFaviconMeta(meta) {
+  if (!meta) return false;
+  if (meta.failCount >= 3 && meta.lastSeen && Date.now() - meta.lastSeen < FAVICON_FAIL_RETRY_WINDOW_MS) {
+    return true;
+  }
+  return false;
+}
+
+async function pruneFaviconMetaIfNeeded() {
+  if (!browser || !browser.storage || !browser.storage.local) return;
+  try {
+    const stored = await browser.storage.local.get(null);
+    const keys = Object.keys(stored || {}).filter((key) => key.startsWith(FAVICON_META_PREFIX));
+    if (keys.length <= FAVICON_META_MAX_ENTRIES) return;
+    const entries = keys
+      .map((key) => {
+        const meta = stored[key] || {};
+        return {
+          key,
+          lastSeen: Number.isFinite(meta.lastSeen) ? meta.lastSeen : 0
+        };
+      })
+      .sort((a, b) => a.lastSeen - b.lastSeen);
+    const remove = entries.slice(0, keys.length - FAVICON_META_MAX_ENTRIES).map((entry) => entry.key);
+    if (remove.length) {
+      await browser.storage.local.remove(remove);
+    }
+  } catch (err) {}
+}
+
+function ensureFaviconObserver() {
+  if (faviconIntersectionObserver || !('IntersectionObserver' in window)) return;
+  const root = document.querySelector('.main-content');
+  faviconIntersectionObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      const img = entry.target;
+      if (faviconIntersectionObserver) {
+        faviconIntersectionObserver.unobserve(img);
+      }
+      const resolveTask = img._faviconResolve;
+      if (resolveTask) {
+        delete img._faviconResolve;
+        resolveTask();
+      }
+    });
+  }, {
+    root: root || null,
+    rootMargin: FAVICON_OBSERVER_ROOT_MARGIN,
+    threshold: FAVICON_OBSERVER_THRESHOLD
+  });
+}
+
+function queueFaviconResolution(img, resolveTask) {
+  if (!img || typeof resolveTask !== 'function') return;
+  const runTask = () => {
+    try {
+      const result = resolveTask();
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => {});
+      }
+    } catch (err) {}
+  };
+  ensureFaviconObserver();
+  if (!faviconIntersectionObserver) {
+    runTask();
+    return;
+  }
+  img._faviconResolve = runTask;
+  faviconIntersectionObserver.observe(img);
 }
 
 function isValidFaviconTargetUrl(rawUrl) {
@@ -3364,7 +3716,7 @@ async function getFaviconUrlForRawUrl(rawUrl) {
     if (!isValidFaviconTargetUrl(rawUrl)) return null;
     const domainKey = getDomainKeyFromUrl(rawUrl);
     if (!domainKey) return null;
-    const cached = faviconResolvedCache.get(domainKey);
+    const cached = getFaviconResolvedUrl(domainKey);
     if (cached) return cached;
     const lastFailedAt = faviconNegativeCache.get(domainKey);
     if (lastFailedAt) {
@@ -3373,8 +3725,15 @@ async function getFaviconUrlForRawUrl(rawUrl) {
       }
       faviconNegativeCache.delete(domainKey);
     }
+    const meta = await getFaviconMeta(domainKey);
+    if (shouldBlockFaviconMeta(meta)) {
+      return null;
+    }
     const inflight = faviconInflightCache.get(domainKey);
-    if (inflight) return inflight;
+    if (inflight) {
+      const resolved = await inflight;
+      return resolved && resolved.url ? resolved.url : null;
+    }
     const candidates = buildFaviconCandidates(rawUrl);
     return candidates[0] || null;
   } catch (err) {
@@ -3634,8 +3993,6 @@ let bookmarkModalEditingId = null;
 let bookmarkPreviewDebounceTimer = null;
 
 let lastPreviewDomain = '';
-
-const faviconUrlCache = new Map();
 
 let bookmarkModalEscBound = false;
 
@@ -6566,57 +6923,6 @@ async function handleEditFolderSave() {
 }
 
 
-/**
- * OPTIMIZATION: Background Cache Warming
- * Silently pre-loads favicons for all bookmarks when the CPU is idle.
- * This ensures that when you scroll down, images are already in the
- * browser cache and render instantly without flashing.
- */
-function warmFaviconCache(nodes) {
-  const domainSamples = new Map();
-
-  const traverse = (list) => {
-    list.forEach(node => {
-      if (node.url && isValidFaviconTargetUrl(node.url)) {
-        const domainKey = getDomainKeyFromUrl(node.url);
-        if (domainKey && !domainSamples.has(domainKey)) {
-          domainSamples.set(domainKey, node.url);
-        }
-      }
-      if (node.children) traverse(node.children);
-    });
-  };
-
-  traverse(nodes);
-
-  const domains = Array.from(domainSamples.keys());
-  let index = 0;
-
-  function processChunk(deadline) {
-    while (index < domains.length && (deadline.timeRemaining() > 0 || deadline.didTimeout)) {
-      const domainKey = domains[index++];
-      if (faviconResolvedCache.has(domainKey)) continue;
-      const sampleUrl = domainSamples.get(domainKey);
-      if (!sampleUrl) continue;
-      if (!buildFaviconCandidates(sampleUrl).length) continue;
-    }
-
-    if (index < domains.length) {
-      scheduleNextChunk();
-    }
-  }
-
-  const scheduleNextChunk = () => {
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(processChunk);
-    } else {
-      setTimeout(() => processChunk({ timeRemaining: () => 50, didTimeout: true }), 2000);
-    }
-  };
-
-  scheduleNextChunk();
-}
-
 
 // ===============================================
 
@@ -8106,35 +8412,97 @@ function flattenBookmarks(nodes) {
 
 }
 
-async function resolveFaviconUrlForDomain(domainKey, candidates) {
-  if (!domainKey) return null;
-
-  const cached = faviconResolvedCache.get(domainKey);
-  if (cached) return cached;
-
-  const lastFailedAt = faviconNegativeCache.get(domainKey);
-  if (lastFailedAt) {
-    if (Date.now() - lastFailedAt < FAVICON_NEGATIVE_TTL_MS) {
-      return null;
-    }
-    faviconNegativeCache.delete(domainKey);
+async function applyResolvedFaviconResult({
+  img,
+  resolved,
+  shouldAbort,
+  onResolved,
+  onFailed,
+  onAbort,
+  acceptCandidate
+}) {
+  if (!resolved) {
+    onFailed();
+    return;
   }
-
-  const existing = faviconInflightCache.get(domainKey);
-  if (existing) return existing;
-
-  const inflightPromise = new Promise((resolve) => {
-    const waiters = faviconWaiters.get(domainKey) || [];
-    waiters.push(resolve);
-    faviconWaiters.set(domainKey, waiters);
-  });
-
-  faviconInflightCache.set(domainKey, inflightPromise);
-
-  return inflightPromise;
+  if (shouldAbort && shouldAbort()) {
+    if (onAbort) onAbort();
+    return;
+  }
+  const isOnline = navigator.onLine !== false;
+  if (resolved.cached && resolved.cacheKey) {
+    const cachedResponse = await readIconFromCache(resolved.cacheKey);
+    if (cachedResponse) {
+      const objectUrl = await responseToObjectURL(cachedResponse);
+      if (objectUrl) {
+        const loadResult = await loadFaviconObjectUrlIntoImage(img, objectUrl, shouldAbort, acceptCandidate);
+        if (loadResult.aborted) {
+          revokeFaviconObjectUrl(img);
+          if (onAbort) onAbort();
+          return;
+        }
+        if (loadResult.accepted) {
+          onResolved(objectUrl, { fromCache: true, sourceAlreadySet: true });
+          return;
+        }
+        revokeFaviconObjectUrl(img);
+      }
+    }
+  }
+  if (resolved.url && isOnline) {
+    onResolved(resolved.url, { fromCache: false, sourceAlreadySet: false });
+    return;
+  }
+  onFailed();
 }
 
-function resolveFaviconForImageTarget({
+async function resolveFaviconFromNetwork({
+  domainKey,
+  candidates,
+  acceptCandidate,
+  cacheKey
+}) {
+  if (!domainKey || !candidates || !candidates.length) return null;
+  const now = Date.now();
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    const blob = await xhrFetchBlob(candidate, 8000);
+    if (blob && blob.size) {
+      const objectUrl = URL.createObjectURL(blob);
+      const accepted = await testFaviconCandidateObjectUrl(objectUrl, acceptCandidate);
+      if (accepted) {
+        const responseForCache = blobToResponse(blob);
+        const cached = await writeIconToCache(cacheKey, responseForCache.clone());
+        setFaviconResolved(domainKey, candidate, { cacheKey: cached ? cacheKey : null, cached });
+        faviconNegativeCache.delete(domainKey);
+        await setFaviconMeta(domainKey, {
+          cacheKey: cached ? cacheKey : null,
+          lastSeen: now,
+          failCount: 0,
+          lastOkAt: now
+        });
+        return { url: candidate, cacheKey: cached ? cacheKey : null, cached };
+      }
+    }
+    const acceptedByUrl = await testFaviconCandidateUrl(candidate, acceptCandidate);
+    if (acceptedByUrl) {
+      setFaviconResolved(domainKey, candidate, { cacheKey: null, cached: false });
+      faviconNegativeCache.delete(domainKey);
+      await setFaviconMeta(domainKey, {
+        cacheKey: null,
+        lastSeen: now,
+        failCount: 0,
+        lastOkAt: now
+      });
+      return { url: candidate, cacheKey: null, cached: false };
+    }
+  }
+  faviconNegativeCache.set(domainKey, Date.now());
+  await bumpFaviconFail(domainKey);
+  return null;
+}
+
+async function resolveFaviconForImageTarget({
   img,
   domainKey,
   candidates,
@@ -8150,13 +8518,62 @@ function resolveFaviconForImageTarget({
     return;
   }
 
-  const cached = faviconResolvedCache.get(domainKey);
-  if (cached) {
+  const isOffline = navigator.onLine === false;
+  const resolvedEntry = getFaviconResolvedEntry(domainKey);
+  const cacheKey = cacheKeyFor(domainKey, FAVICON_SIZE_PX);
+
+  if (resolvedEntry && resolvedEntry.url && !isOffline) {
     if (shouldAbort && shouldAbort()) {
       if (onAbort) onAbort();
       return;
     }
-    onResolved(cached, { fromCache: true, sourceAlreadySet: false });
+    onResolved(resolvedEntry.url, { fromCache: true, sourceAlreadySet: false });
+    return;
+  }
+
+  const cachedResponse = await readIconFromCache(cacheKey);
+  if (cachedResponse) {
+    const objectUrl = await responseToObjectURL(cachedResponse);
+    if (objectUrl) {
+      const loadResult = await loadFaviconObjectUrlIntoImage(img, objectUrl, shouldAbort, acceptCandidate);
+      if (loadResult.aborted) {
+        revokeFaviconObjectUrl(img);
+        if (onAbort) onAbort();
+        return;
+      }
+      if (loadResult.accepted) {
+        onResolved(objectUrl, { fromCache: true, sourceAlreadySet: true });
+        return;
+      }
+      revokeFaviconObjectUrl(img);
+    }
+  }
+
+  const meta = await getFaviconMeta(domainKey);
+  const metaIsStale = isFaviconMetaStale(meta);
+  if (meta && meta.cacheKey && meta.cacheKey !== cacheKey) {
+    const metaResponse = await readIconFromCache(meta.cacheKey);
+    if (metaResponse) {
+      const objectUrl = await responseToObjectURL(metaResponse);
+      if (objectUrl) {
+        const loadResult = await loadFaviconObjectUrlIntoImage(img, objectUrl, shouldAbort, acceptCandidate);
+        if (loadResult.aborted) {
+          revokeFaviconObjectUrl(img);
+          if (onAbort) onAbort();
+          return;
+        }
+        if (loadResult.accepted) {
+          onResolved(objectUrl, { fromCache: true, sourceAlreadySet: true });
+          return;
+        }
+        revokeFaviconObjectUrl(img);
+      }
+    }
+  }
+
+  if (isOffline) {
+    faviconNegativeCache.set(domainKey, Date.now());
+    if (onNegativeCacheHit) onNegativeCacheHit();
     return;
   }
 
@@ -8169,76 +8586,68 @@ function resolveFaviconForImageTarget({
     faviconNegativeCache.delete(domainKey);
   }
 
+  if (meta && !metaIsStale && shouldBlockFaviconMeta(meta)) {
+    if (onNegativeCacheHit) onNegativeCacheHit(meta.lastSeen || Date.now());
+    return;
+  }
+
   if (!candidates || !candidates.length) {
     onFailed();
     return;
   }
 
-  const hadInflight = faviconInflightCache.has(domainKey);
-  const inflightPromise = resolveFaviconUrlForDomain(domainKey, candidates);
-
-  if (hadInflight) {
-    Promise.resolve(inflightPromise)
-      .then((resolvedUrl) => {
-        if (!resolvedUrl) {
-          onFailed();
-          return;
-        }
-        if (shouldAbort && shouldAbort()) {
-          if (onAbort) onAbort();
-          return;
-        }
-        onResolved(resolvedUrl, { fromCache: true, sourceAlreadySet: false });
-      })
+  const existing = faviconInflightCache.get(domainKey);
+  if (existing) {
+    Promise.resolve(existing)
+      .then((resolved) => applyResolvedFaviconResult({
+        img,
+        resolved,
+        shouldAbort,
+        onResolved,
+        onFailed,
+        onAbort,
+        acceptCandidate
+      }))
       .catch(() => {
         onFailed();
       });
     return;
   }
 
-  const attemptCandidate = (index) => {
-    if (shouldAbort && shouldAbort()) {
-      notifyFaviconWaiters(domainKey, null);
-      if (onAbort) onAbort();
-      return;
-    }
+  const inflightPromise = new Promise((resolve) => {
+    const waiters = faviconWaiters.get(domainKey) || [];
+    waiters.push(resolve);
+    faviconWaiters.set(domainKey, waiters);
+  });
 
-    if (index >= candidates.length) {
-      faviconNegativeCache.set(domainKey, Date.now());
+  faviconInflightCache.set(domainKey, inflightPromise);
+
+  enqueueFaviconTask(() => resolveFaviconFromNetwork({
+    domainKey,
+    candidates,
+    acceptCandidate,
+    cacheKey
+  }))
+    .then((resolved) => {
+      notifyFaviconWaiters(domainKey, resolved);
+    })
+    .catch(() => {
       notifyFaviconWaiters(domainKey, null);
+    });
+
+  Promise.resolve(inflightPromise)
+    .then((resolved) => applyResolvedFaviconResult({
+      img,
+      resolved,
+      shouldAbort,
+      onResolved,
+      onFailed,
+      onAbort,
+      acceptCandidate
+    }))
+    .catch(() => {
       onFailed();
-      return;
-    }
-
-    const candidate = candidates[index];
-    img.onload = () => {
-      if (shouldAbort && shouldAbort()) {
-        notifyFaviconWaiters(domainKey, null);
-        if (onAbort) onAbort();
-        return;
-      }
-      const accepted = typeof acceptCandidate === 'function' ? acceptCandidate(img) : true;
-      if (!accepted) {
-        attemptCandidate(index + 1);
-        return;
-      }
-      setFaviconResolved(domainKey, candidate);
-      faviconNegativeCache.delete(domainKey);
-      notifyFaviconWaiters(domainKey, candidate);
-      onResolved(candidate, { fromCache: false, sourceAlreadySet: true });
-    };
-    img.onerror = () => {
-      if (shouldAbort && shouldAbort()) {
-        notifyFaviconWaiters(domainKey, null);
-        if (onAbort) onAbort();
-        return;
-      }
-      attemptCandidate(index + 1);
-    };
-    img.src = candidate;
-  };
-
-  attemptCandidate(0);
+    });
 }
 
 function ensureBookmarkFallback(wrapper, fallbackLetter) {
@@ -8254,7 +8663,16 @@ function ensureBookmarkFallback(wrapper, fallbackLetter) {
 
 function clearBookmarkImages(wrapper) {
   const images = wrapper.querySelectorAll('img.bookmark-img');
-  images.forEach((img) => img.remove());
+  images.forEach((img) => {
+    if (faviconIntersectionObserver) {
+      faviconIntersectionObserver.unobserve(img);
+    }
+    if (img._faviconResolve) {
+      delete img._faviconResolve;
+    }
+    revokeFaviconObjectUrl(img);
+    img.remove();
+  });
 }
 
 function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
@@ -8403,7 +8821,7 @@ function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
     return false;
   };
 
-  resolveFaviconForImageTarget({
+  const resolveTask = () => resolveFaviconForImageTarget({
     img: imgIcon,
     domainKey,
     candidates,
@@ -8447,7 +8865,7 @@ function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
           }
           showFallbackNow('favicon-error');
         };
-        imgIcon.src = resolvedUrl;
+        setFaviconImageSrc(imgIcon, resolvedUrl);
         if (imgIcon.complete) {
           if (markLoaded(imgIcon)) {
             cancelFallback();
@@ -8496,6 +8914,7 @@ function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
     },
     acceptCandidate: (img) => img.naturalWidth >= 6
   });
+  queueFaviconResolution(imgIcon, resolveTask);
 }
 
 function renderFolderIconInto(wrapper, folderNode, iconKey) {
@@ -10738,9 +11157,6 @@ async function loadBookmarks(activeFolderId = null) {
     hideBookmarksEmptyState();
     showBookmarksUI();
     processBookmarks([rootNode], activeFolderId, rootNode);
-
-    // Warm favicon cache in the background so images are instant when rendered
-    runWhenIdle(() => warmFaviconCache([rootNode]));
 
   } catch (err) {
 
@@ -16438,6 +16854,7 @@ function hydrateSearchResultFavicons(container) {
     const rawUrl = img.dataset.faviconRawUrl || '';
     const hideImg = () => {
       img.style.display = 'none';
+      revokeFaviconObjectUrl(img);
       img.removeAttribute('src');
     };
 
@@ -16467,7 +16884,7 @@ function hydrateSearchResultFavicons(container) {
       onResolved: (resolvedUrl, meta) => {
         img.style.display = '';
         if (!meta.sourceAlreadySet) {
-          img.src = resolvedUrl;
+          setFaviconImageSrc(img, resolvedUrl);
         }
       },
       onFailed: () => {
@@ -19541,6 +19958,9 @@ function logInitSettled(name, result) {
   setupHomebaseRootControls();
 
   setupHomebaseRootListeners();
+
+  ensureFaviconObserver();
+  scheduleIdleTask(() => pruneFaviconMetaIfNeeded(), 'startup:pruneFaviconMeta');
 
 
 

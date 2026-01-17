@@ -35,6 +35,8 @@
     "https://ff.search.yahoo.com/*",
     "https://api.bing.com/osjson.aspx*",
     "https://suggestqueries.google.com/*",
+    "https://t2.gstatic.com/*",
+    "https://www.google.com/*",
     "https://en.wikipedia.org/*",
     "https://completion.amazon.com/*"
   ],

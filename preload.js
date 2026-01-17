@@ -74,7 +74,7 @@
     dataUrl = '';
   }
 
-  const initial = dataUrl || url;
+  const initial = url || dataUrl;
   if (initial) {
     applyInitial(initial);
   }

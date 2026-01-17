@@ -19886,7 +19886,6 @@ function logInitSettled(name, result) {
     let markReadyCount = 0;
     performance.mark('init:start');
 
-    const dailyWallpaperP = ensureDailyWallpaper();
     setupBackgroundVideoCrossfade();
     const wallpaperTypeP = getWallpaperTypePreference();
 
@@ -19896,7 +19895,6 @@ function logInitSettled(name, result) {
     const lastFolderP = loadLastUsedFolderId();
 
     const type = await wallpaperTypeP;
-    await dailyWallpaperP;
     // allow the video to buffer without blocking UI setup
     waitForWallpaperReady(currentWallpaperSelection, type);
 
@@ -20121,6 +20119,9 @@ function logInitSettled(name, result) {
   };
 
   requestAnimationFrame(markPageReadyOnce);
+  requestAnimationFrame(() => {
+    scheduleIdleTask(() => ensureDailyWallpaper().catch(() => {}), 'startup:ensureDailyWallpaper');
+  });
 
   runWhenIdle(() => {
     scheduleStartupHydrationTasks();

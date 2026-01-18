@@ -160,6 +160,28 @@
     }
 
     // --- 5. Instant News ---
+    function formatNewsUpdated(timestamp) {
+      if (!timestamp) return '';
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) return '';
+      return `Updated: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    function formatTimeAgo(timestampMs) {
+      if (!timestampMs) return '';
+      const parsed = Number(timestampMs);
+      if (!Number.isFinite(parsed)) return '';
+      const diffMs = Math.max(0, Date.now() - parsed);
+      const diffSeconds = Math.floor(diffMs / 1000);
+      if (diffSeconds < 60) return 'just now';
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      if (diffMinutes < 60) return `${diffMinutes}m ago`;
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ago`;
+    }
+
     const nRaw = localStorage.getItem('fast-news');
     if (nRaw) {
       let newsState = null;
@@ -179,20 +201,47 @@
           }
           if (allowNewsInstant) {
             const newsList = $('news-list');
+            const newsUpdated = $('news-updated');
             const newsWidget = document.querySelector('.widget-news');
             const items = newsState.items.slice(0, 5).filter((item) => item && item.title && item.link);
             if (newsList) {
               newsList.innerHTML = '';
               items.forEach((item) => {
+                const title = String(item.title || '');
+                const link = String(item.link || '');
+                const description = String(item.description || '');
+                const image = String(item.image || '');
+                const timeAgo = formatTimeAgo(item.publishedAt);
+
                 const li = document.createElement('li');
+                li.className = 'news-item';
+                li.dataset.newsTitle = title;
+                li.dataset.newsDesc = description;
+                li.dataset.newsImage = image;
+                li.dataset.newsLink = link;
+
                 const a = document.createElement('a');
-                a.href = item.link;
+                a.className = 'news-title';
+                a.href = link;
                 a.target = '_blank';
                 a.rel = 'noreferrer noopener';
-                a.textContent = item.title;
+                a.textContent = title;
                 li.appendChild(a);
+
+                if (timeAgo) {
+                  const meta = document.createElement('div');
+                  meta.className = 'news-meta';
+                  const time = document.createElement('span');
+                  time.className = 'news-time';
+                  time.textContent = timeAgo;
+                  meta.appendChild(time);
+                  li.appendChild(meta);
+                }
                 newsList.appendChild(li);
               });
+            }
+            if (newsUpdated) {
+              setText(newsUpdated, formatNewsUpdated(newsState.__timestamp));
             }
             if (items.length) {
               showWidget(newsWidget);

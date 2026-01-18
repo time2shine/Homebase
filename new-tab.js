@@ -141,7 +141,6 @@ const STARTUP_IDLE_LABELS = new Set([
   'startup:setupWeather',
   'startup:setupAppLauncher',
   'startup:fetchQuote',
-  'startup:fetchNews',
 ]);
 
 async function processIdleTasks(deadline) {
@@ -17539,11 +17538,17 @@ const NEWS_SOURCES = [
   { id: 'espn-cricinfo', name: 'ESPN Cricinfo', url: 'https://www.espncricinfo.com/rss/content/story/feeds/0.xml' }
 ];
 
-let newsFetchInFlight = false;
-
 let newsRefreshInFlight = false;
 
 let newsFetchWarningLogged = false;
+
+let newsFetchAbortController = null;
+
+let newsIdleRefreshQueued = false;
+
+let newsVisibilityObserver = null;
+
+let newsLazyLoadTriggered = false;
 
 function resolveNewsSourceId(sourceId) {
   const match = NEWS_SOURCES.find((source) => source.id === sourceId);
@@ -17595,7 +17600,10 @@ function clampNewsText(value, maxLength) {
   const text = normalizeNewsText(value);
   if (!text) return '';
   if (text.length <= maxLength) return text;
-  return `${text.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
+  const suffix = '...';
+  const limit = Math.max(0, maxLength - suffix.length);
+  if (!limit) return suffix;
+  return `${text.slice(0, limit).trim()}${suffix}`;
 }
 
 function stripNewsHtml(value) {
@@ -17620,6 +17628,23 @@ function extractNewsImageFromHtml(value) {
   } catch (err) {
     return '';
   }
+}
+
+function parseNewsTimestamp(entry) {
+  if (!entry) return null;
+  const candidates = [
+    entry.querySelector('pubDate'),
+    entry.querySelector('published'),
+    entry.querySelector('updated'),
+    entry.querySelector('dc\\:date')
+  ];
+  for (const node of candidates) {
+    const value = node?.textContent?.trim();
+    if (!value) continue;
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return null;
 }
 
 function parseNewsItemsFromXml(xmlText) {
@@ -17680,7 +17705,9 @@ function parseNewsItemsFromXml(xmlText) {
       image = extractNewsImageFromHtml(encodedHtml || rawDescription);
     }
 
-    return { title, link, description, image };
+    const publishedAt = parseNewsTimestamp(entry);
+
+    return { title, link, description, image, publishedAt };
   }).filter((item) => item.title && item.link).slice(0, NEWS_ITEMS_LIMIT);
 }
 
@@ -17689,6 +17716,21 @@ function formatNewsUpdated(timestamp) {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return '';
   return `Updated: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function formatTimeAgo(timestampMs) {
+  if (!timestampMs) return '';
+  const parsed = Number(timestampMs);
+  if (!Number.isFinite(parsed)) return '';
+  const diffMs = Math.max(0, Date.now() - parsed);
+  const diffSeconds = Math.floor(diffMs / 1000);
+  if (diffSeconds < 60) return 'just now';
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
 }
 
 function updateNewsUpdated(timestamp) {
@@ -17711,7 +17753,9 @@ function renderNewsItems(items, options = {}) {
     const link = escapeHtml(item.link);
     const description = escapeHtml(item.description || '');
     const image = escapeHtml(item.image || '');
-    return `<li class="news-item" data-news-title="${title}" data-news-desc="${description}" data-news-image="${image}" data-news-link="${link}"><a href="${link}" target="_blank" rel="noreferrer noopener">${title}</a></li>`;
+    const timeAgo = formatTimeAgo(item.publishedAt);
+    const timeMarkup = timeAgo ? `<div class="news-meta"><span class="news-time">${escapeHtml(timeAgo)}</span></div>` : '';
+    return `<li class="news-item" data-news-title="${title}" data-news-desc="${description}" data-news-image="${image}" data-news-link="${link}"><a class="news-title" href="${link}" target="_blank" rel="noreferrer noopener">${title}</a>${timeMarkup}</li>`;
   }).join('');
 }
 
@@ -17838,9 +17882,24 @@ function readFastNewsCache(sourceId) {
   }
 }
 
+function scheduleNewsIdleRefresh() {
+  if (newsIdleRefreshQueued) return;
+  newsIdleRefreshQueued = true;
+  scheduleIdleTask(async () => {
+    try {
+      if (!newsWidget || !newsList || !appShowNewsPreference || !appShowSidebarPreference) return;
+      if (newsWidget.classList.contains('force-hidden')) return;
+      await fetchAndRenderNews({ force: true });
+    } finally {
+      newsIdleRefreshQueued = false;
+    }
+  }, 'news:idleRefresh');
+}
+
 async function fetchAndRenderNews(options = {}) {
   if (!newsWidget || !newsList) return;
-  const allowFetch = appShowNewsPreference || options.force === true;
+  const forceFetch = options.force === true;
+  const allowFetch = appShowNewsPreference || forceFetch;
   if (!allowFetch) return;
 
   const source = getNewsSourceById(appNewsSourcePreference);
@@ -17855,10 +17914,21 @@ async function fetchAndRenderNews(options = {}) {
     updateNewsUpdated(cached.__timestamp);
   }
 
-  if (newsFetchInFlight) return;
-  newsFetchInFlight = true;
+  if (cached && !forceFetch) {
+    scheduleNewsIdleRefresh();
+    return;
+  }
+
+  if (newsFetchAbortController && !forceFetch) return;
+
+  if (newsFetchAbortController) {
+    newsFetchAbortController.abort();
+  }
+  const abortController = new AbortController();
+  newsFetchAbortController = abortController;
+
   try {
-    const response = await fetch(source.url);
+    const response = await fetch(source.url, { signal: abortController.signal });
     if (!response.ok) {
       throw new Error(`News feed unavailable: ${response.status}`);
     }
@@ -17892,6 +17962,7 @@ async function fetchAndRenderNews(options = {}) {
       // Ignore; fast cache is best-effort only
     }
   } catch (err) {
+    if (err && err.name === 'AbortError') return;
     const hasCache = !!(cached && cached.items && cached.items.length);
     if (shouldRender && !hasCache) {
       renderNewsItems([]);
@@ -17903,8 +17974,30 @@ async function fetchAndRenderNews(options = {}) {
       newsFetchWarningLogged = true;
     }
   } finally {
-    newsFetchInFlight = false;
+    if (newsFetchAbortController === abortController) {
+      newsFetchAbortController = null;
+    }
   }
+}
+
+function observeNewsWidgetVisibility() {
+  if (!newsWidget || !newsList) return;
+  if (newsLazyLoadTriggered || newsVisibilityObserver) return;
+  if (!appShowNewsPreference || !appShowSidebarPreference) return;
+  if (newsWidget.classList.contains('force-hidden')) return;
+
+  newsVisibilityObserver = new IntersectionObserver((entries) => {
+    const isVisible = entries.some((entry) => entry.isIntersecting);
+    if (!isVisible) return;
+    newsLazyLoadTriggered = true;
+    if (newsVisibilityObserver) {
+      newsVisibilityObserver.disconnect();
+      newsVisibilityObserver = null;
+    }
+    fetchAndRenderNews();
+  }, { root: null, threshold: 0.1 });
+
+  newsVisibilityObserver.observe(newsWidget);
 }
 
 function setupNewsWidget() {
@@ -17974,6 +18067,8 @@ function setupNewsWidget() {
       closeNewsSettingsModal();
     });
   }
+
+  observeNewsWidgetVisibility();
 }
 
 
@@ -20679,22 +20774,6 @@ function logInitSettled(name, result) {
     }
   };
 
-  const fetchNewsSafe = () => {
-    if (!document || !document.body || !newsWidget || !newsList) return;
-    const start = performance.now();
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchNews start');
-    try {
-      fetchAndRenderNews();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:fetchNews', err);
-    } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchNews end in', Math.round(performance.now() - start), 'ms');
-    }
-    if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
-      console.warn('[startup guard] fetchNewsSafe ran during critical phase');
-    }
-  };
-
   const scheduleStartupHydrationTasks = () => {
     const scheduleLabeled = (fn, label) => {
       if (!label.startsWith('startup:')) {
@@ -20720,7 +20799,6 @@ function logInitSettled(name, result) {
     scheduleLabeled(() => setupWeatherSafe(), 'startup:setupWeather');
     scheduleLabeled(() => setupAppLauncherSafe(), 'startup:setupAppLauncher');
     scheduleLabeled(() => fetchQuoteSafe(), 'startup:fetchQuote');
-    scheduleLabeled(() => fetchNewsSafe(), 'startup:fetchNews');
   };
 
   requestAnimationFrame(markPageReadyOnce);

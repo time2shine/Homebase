@@ -2322,8 +2322,11 @@ html.news-hidden .widget-news { display: none !important; }
   min-width: 0;
   max-width: 100%;
 }
-#news-list a:hover {
-  text-decoration: underline;
+#news-list a,
+#news-list a:hover,
+#news-list a:focus,
+#news-list a:active {
+  text-decoration: none;
 }
 #news-list .news-empty {
   color: #ddd;
@@ -2355,10 +2358,17 @@ html.news-hidden .widget-news { display: none !important; }
 #settings-btn { opacity: 0; transition: opacity 0.2s ease-in-out; }
 .widget-news:hover #news-settings-btn { opacity: 1; }
 #news-settings-btn {
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+.widget-news:hover #news-refresh-btn { opacity: 1; }
+.widget-news:hover #news-refresh-btn[disabled] { opacity: 0.6; }
+#news-refresh-btn {
   margin-left: auto;
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
 }
+#news-refresh-btn[disabled] { cursor: not-allowed; }
 .widget-weather:hover #weather-refresh-btn { opacity: 1; }
 .widget-weather:hover #weather-refresh-btn[disabled] { opacity: 0.6; }
 #weather-refresh-btn { opacity: 0; transition: opacity 0.2s ease-in-out; }

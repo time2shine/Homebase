@@ -17509,6 +17509,8 @@ const newsSourceSelect = document.getElementById('news-source-select');
 
 const newsSettingsBtn = document.getElementById('news-settings-btn');
 
+const newsRefreshBtn = document.getElementById('news-refresh-btn');
+
 const newsUpdatedEl = document.getElementById('news-updated');
 
 const DEFAULT_NEWS_SOURCE_ID = 'aljazeera';
@@ -17527,6 +17529,8 @@ const NEWS_SOURCES = [
 ];
 
 let newsFetchInFlight = false;
+
+let newsRefreshInFlight = false;
 
 let newsFetchWarningLogged = false;
 
@@ -17707,6 +17711,29 @@ function setupNewsWidget() {
   if (newsSettingsBtn) {
     newsSettingsBtn.addEventListener('click', () => {
       openNewsSettingsModal(newsSettingsBtn);
+    });
+  }
+
+  if (newsRefreshBtn) {
+    newsRefreshBtn.addEventListener('click', async () => {
+      if (newsRefreshInFlight) return;
+      newsRefreshInFlight = true;
+      newsRefreshBtn.disabled = true;
+
+      try {
+        try {
+          if (window.localStorage) {
+            localStorage.removeItem('fast-news');
+          }
+        } catch (err) {
+          // Ignore; fast cache is best-effort only
+        }
+
+        await fetchAndRenderNews({ force: true });
+      } finally {
+        newsRefreshInFlight = false;
+        newsRefreshBtn.disabled = false;
+      }
     });
   }
 

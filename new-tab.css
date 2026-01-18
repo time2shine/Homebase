@@ -2129,6 +2129,7 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   flex-direction: column;
   position: relative; /* For settings buttons */
   min-height: 215px; /* Layout stability */
+  overflow: hidden;
 }
 
 html.weather-hidden .widget-weather { display: none !important; }
@@ -2277,16 +2278,25 @@ html.news-hidden .widget-news { display: none !important; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 210px;
-  overflow-y: auto;
+  min-width: 0;
+  max-width: 100%;
+  max-height: none;
+  overflow-y: visible;
 }
 #news-list li {
   font-size: 0.95em;
   line-height: 1.35;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 #news-list a {
   color: inherit;
   text-decoration: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 #news-list a:hover {
   text-decoration: underline;
@@ -2294,6 +2304,13 @@ html.news-hidden .widget-news { display: none !important; }
 #news-list .news-empty {
   color: #ddd;
   font-style: italic;
+}
+
+@media print {
+  #news-list {
+    max-height: none !important;
+    overflow: visible !important;
+  }
 }
 
 /* --- Button Styles --- */

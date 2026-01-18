@@ -437,6 +437,13 @@
 
     </div>
 
+    <div class="widget-news glass-box widget-hidden">
+      <div class="news-header">
+        <span class="news-title">News</span>
+      </div>
+      <ul id="news-list"></ul>
+    </div>
+
     <div class="widget-quote glass-box widget-hidden">
       <button id="quote-settings-btn" class="icon-btn">
         <span class="tooltip-popup tooltip-top">Settings</span>
@@ -1400,6 +1407,40 @@
                 </div>
 
                 <button id="app-configure-weather-btn" class="gallery-secondary-btn">Configure</button>
+
+              </div>
+
+              <div class="app-setting-row">
+
+                <div class="app-setting-label">
+
+                  <div class="title">News</div>
+
+                  <div class="hint">Show news widget.</div>
+
+                </div>
+
+                <label class="app-switch">
+
+                  <input type="checkbox" id="app-show-news-toggle" checked>
+
+                  <span class="app-switch-track"></span>
+
+                </label>
+
+              </div>
+
+              <div class="app-setting-row setting-sub-row" id="app-news-config-row">
+
+                <div class="app-setting-label">
+
+                  <div class="title">News Settings</div>
+
+                  <div class="hint">Select a source.</div>
+
+                </div>
+
+                <button id="app-configure-news-btn" class="gallery-secondary-btn">Configure</button>
 
               </div>
 
@@ -2740,6 +2781,23 @@
       <div class="dialog-buttons">
         <button id="quote-settings-cancel-btn" class="dialog-btn">Cancel</button>
         <button id="quote-settings-save-btn" class="dialog-btn primary-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="news-settings-modal" class="modal-overlay hidden">
+    <div id="news-settings-dialog" class="dialog-content glass-box">
+      <button id="news-settings-close-btn" class="dialog-close-btn">&times;</button>
+      <h3>News Settings</h3>
+
+      <div class="form-group">
+        <label for="news-source-select">Source</label>
+        <select id="news-source-select" class="dialog-input" style="background: rgba(255,255,255,0.2); color: inherit;"></select>
+      </div>
+
+      <div class="dialog-buttons">
+        <button id="news-settings-cancel-btn" class="dialog-btn">Cancel</button>
+        <button id="news-settings-save-btn" class="dialog-btn primary-btn">Save</button>
       </div>
     </div>
   </div>

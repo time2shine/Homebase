@@ -50,6 +50,18 @@
     // Ignore; instant mirror is best-effort only
   }
 
+  // Instant News Visibility (sync fast path)
+  let fastNewsState = '';
+  try {
+    const rawNews = (window.localStorage && localStorage.getItem('fast-show-news')) || '';
+    if (rawNews === '0' || rawNews === '1') {
+      fastNewsState = rawNews;
+      document.documentElement.classList.toggle('news-hidden', rawNews === '0');
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+
   function applyInitial(url) {
     if (!url) return;
 
@@ -109,6 +121,7 @@
   const SIDEBAR_PREF_KEY = 'appShowSidebar';
   const WEATHER_PREF_KEY = 'appShowWeather';
   const QUOTE_PREF_KEY = 'appShowQuote';
+  const NEWS_PREF_KEY = 'appShowNews';
   browserApi.storage.local
     .get([SIDEBAR_PREF_KEY])
     .then((res) => {
@@ -127,14 +140,17 @@
     .catch(() => {});
 
   browserApi.storage.local
-    .get([WEATHER_PREF_KEY, QUOTE_PREF_KEY])
+    .get([WEATHER_PREF_KEY, QUOTE_PREF_KEY, NEWS_PREF_KEY])
     .then((res) => {
       const storedWeather = res && Object.prototype.hasOwnProperty.call(res, WEATHER_PREF_KEY) ? res[WEATHER_PREF_KEY] : undefined;
       const storedQuote = res && Object.prototype.hasOwnProperty.call(res, QUOTE_PREF_KEY) ? res[QUOTE_PREF_KEY] : undefined;
+      const storedNews = res && Object.prototype.hasOwnProperty.call(res, NEWS_PREF_KEY) ? res[NEWS_PREF_KEY] : undefined;
       const shouldShowWeather = storedWeather !== false;
       const shouldShowQuote = storedQuote !== false;
+      const shouldShowNews = storedNews !== false;
       const nextFastWeatherState = shouldShowWeather ? '1' : '0';
       const nextFastQuoteState = shouldShowQuote ? '1' : '0';
+      const nextFastNewsState = shouldShowNews ? '1' : '0';
 
       if (fastWeatherState !== nextFastWeatherState) {
         document.documentElement.classList.toggle('weather-hidden', !shouldShowWeather);
@@ -150,6 +166,15 @@
         try {
           if (window.localStorage) {
             localStorage.setItem('fast-show-quote', nextFastQuoteState);
+          }
+        } catch (e) {}
+      }
+
+      if (fastNewsState !== nextFastNewsState) {
+        document.documentElement.classList.toggle('news-hidden', !shouldShowNews);
+        try {
+          if (window.localStorage) {
+            localStorage.setItem('fast-show-news', nextFastNewsState);
           }
         } catch (e) {}
       }

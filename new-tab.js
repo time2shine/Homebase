@@ -136,10 +136,12 @@ const STARTUP_IDLE_LABELS = new Set([
   'startup:loadCachedWeather',
   'startup:quoteIndex',
   'startup:setupQuoteWidget',
+  'startup:setupNewsWidget',
   'startup:setupSearch',
   'startup:setupWeather',
   'startup:setupAppLauncher',
   'startup:fetchQuote',
+  'startup:fetchNews',
 ]);
 
 async function processIdleTasks(deadline) {
@@ -3173,6 +3175,8 @@ const appWeatherToggle = document.getElementById('app-show-weather-toggle');
 
 const appQuoteToggle = document.getElementById('app-show-quote-toggle');
 
+const appNewsToggle = document.getElementById('app-show-news-toggle');
+
 const appMaxTabsSelect = document.getElementById('app-max-tabs-select');
 
 const appAutoCloseSelect = document.getElementById('app-autoclose-select');
@@ -3224,6 +3228,10 @@ const APP_SHOW_SIDEBAR_KEY = 'appShowSidebar';
 const APP_SHOW_WEATHER_KEY = 'appShowWeather';
 
 const APP_SHOW_QUOTE_KEY = 'appShowQuote';
+
+const APP_SHOW_NEWS_KEY = 'appShowNews';
+
+const APP_NEWS_SOURCE_KEY = 'appNewsSource';
 
 const APP_MAX_TABS_KEY = 'appMaxTabsCount';
 
@@ -3789,6 +3797,10 @@ let appShowSidebarPreference = true;
 let appShowWeatherPreference = true;
 
 let appShowQuotePreference = true;
+
+let appShowNewsPreference = true;
+
+let appNewsSourcePreference = 'aljazeera';
 
 let appMaxTabsPreference = 0; // 0 means unlimited
 
@@ -12207,6 +12219,39 @@ function setQuotePreference(show = true, options = {}) {
   }
 }
 
+function setNewsPreference(show = true, options = {}) {
+  const shouldShow = show !== false;
+  appShowNewsPreference = shouldShow;
+
+  if (document.documentElement) {
+    document.documentElement.classList.toggle('news-hidden', !shouldShow);
+  }
+
+  try {
+    if (window.localStorage) {
+      localStorage.setItem('fast-show-news', shouldShow ? '1' : '0');
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+
+  if (options.persist !== false && browser && browser.storage && browser.storage.local) {
+    browser.storage.local
+      .set({ [APP_SHOW_NEWS_KEY]: shouldShow })
+      .catch((err) => {
+        console.warn('Failed to save news visibility preference', err);
+      });
+  }
+
+  if (options.applyVisibility !== false) {
+    applyWidgetVisibility();
+  }
+
+  if (options.updateUI !== false) {
+    updateWidgetSettingsUI();
+  }
+}
+
 
 
 function applyWidgetVisibility() {
@@ -12215,9 +12260,13 @@ function applyWidgetVisibility() {
 
   const quoteWidget = document.querySelector('.widget-quote');
 
+  const newsWidget = document.querySelector('.widget-news');
+
   const shouldShowWeather = appShowSidebarPreference && appShowWeatherPreference;
 
   const shouldShowQuote = appShowSidebarPreference && appShowQuotePreference;
+
+  const shouldShowNews = appShowSidebarPreference && appShowNewsPreference;
 
   if (weatherWidget) {
 
@@ -12228,6 +12277,12 @@ function applyWidgetVisibility() {
   if (quoteWidget) {
 
     quoteWidget.classList.toggle('force-hidden', !shouldShowQuote);
+
+  }
+
+  if (newsWidget) {
+
+    newsWidget.classList.toggle('force-hidden', !shouldShowNews);
 
   }
 
@@ -12624,6 +12679,10 @@ async function loadAppSettingsFromStorage() {
 
       APP_SHOW_QUOTE_KEY,
 
+      APP_SHOW_NEWS_KEY,
+
+      APP_NEWS_SOURCE_KEY,
+
       APP_MAX_TABS_KEY,
 
       APP_AUTOCLOSE_KEY,
@@ -12692,9 +12751,13 @@ async function loadAppSettingsFromStorage() {
     const storedShowSidebar = stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true;
     const storedShowWeather = stored.hasOwnProperty(APP_SHOW_WEATHER_KEY) ? stored[APP_SHOW_WEATHER_KEY] !== false : true;
     const storedShowQuote = stored.hasOwnProperty(APP_SHOW_QUOTE_KEY) ? stored[APP_SHOW_QUOTE_KEY] !== false : true;
+    const storedShowNews = stored.hasOwnProperty(APP_SHOW_NEWS_KEY) ? stored[APP_SHOW_NEWS_KEY] !== false : true;
+
+    appNewsSourcePreference = resolveNewsSourceId(stored[APP_NEWS_SOURCE_KEY]);
 
     setWeatherPreference(storedShowWeather, { persist: false, applyVisibility: false, updateUI: false });
     setQuotePreference(storedShowQuote, { persist: false, applyVisibility: false, updateUI: false });
+    setNewsPreference(storedShowNews, { persist: false, applyVisibility: false, updateUI: false });
     applySidebarVisibility(storedShowSidebar);
     applyWidgetVisibility();
 
@@ -13121,9 +13184,13 @@ function updateWidgetSettingsUI() {
 
   const quoteConfigRow = document.getElementById('app-quote-config-row');
 
+  const newsConfigRow = document.getElementById('app-news-config-row');
+
   const weatherToggleEl = document.getElementById('app-show-weather-toggle');
 
   const quoteToggleEl = document.getElementById('app-show-quote-toggle');
+
+  const newsToggleEl = document.getElementById('app-show-news-toggle');
 
   if (weatherToggleEl) {
 
@@ -13137,6 +13204,12 @@ function updateWidgetSettingsUI() {
 
   }
 
+  if (newsToggleEl) {
+
+    newsToggleEl.checked = appShowNewsPreference;
+
+  }
+
   if (!appShowSidebarPreference) {
 
     if (subSettings) setSubSettingsExpanded(subSettings, false);
@@ -13144,6 +13217,8 @@ function updateWidgetSettingsUI() {
     if (weatherConfigRow) weatherConfigRow.classList.remove('visible');
 
     if (quoteConfigRow) quoteConfigRow.classList.remove('visible');
+
+    if (newsConfigRow) newsConfigRow.classList.remove('visible');
 
     return;
 
@@ -13160,6 +13235,12 @@ function updateWidgetSettingsUI() {
   if (quoteConfigRow) {
 
     quoteConfigRow.classList.toggle('visible', appShowQuotePreference);
+
+  }
+
+  if (newsConfigRow) {
+
+    newsConfigRow.classList.toggle('visible', appShowNewsPreference);
 
   }
 
@@ -13201,6 +13282,12 @@ function syncAppSettingsForm() {
   if (appQuoteToggle) {
 
     appQuoteToggle.checked = appShowQuotePreference;
+
+  }
+
+  if (appNewsToggle) {
+
+    appNewsToggle.checked = appShowNewsPreference;
 
   }
 
@@ -17402,6 +17489,237 @@ async function handleSearchInput() {
 
 
 
+// ===============================================
+// --- NEWS WIDGET & SETTINGS ---
+// ===============================================
+
+const newsWidget = document.querySelector('.widget-news');
+
+const newsList = document.getElementById('news-list');
+
+const newsSettingsModal = document.getElementById('news-settings-modal');
+
+const newsSettingsCloseBtn = document.getElementById('news-settings-close-btn');
+
+const newsSettingsCancelBtn = document.getElementById('news-settings-cancel-btn');
+
+const newsSettingsSaveBtn = document.getElementById('news-settings-save-btn');
+
+const newsSourceSelect = document.getElementById('news-source-select');
+
+const DEFAULT_NEWS_SOURCE_ID = 'aljazeera';
+
+const NEWS_CACHE_TTL_MS = 30 * 60 * 1000;
+
+const NEWS_ITEMS_LIMIT = 5;
+
+const NEWS_SOURCES = [
+  { id: 'aljazeera', name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+  { id: 'bbc', name: 'BBC World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+  { id: 'reuters', name: 'Reuters World', url: 'https://www.reuters.com/rssFeed/worldNews' },
+  { id: 'ap', name: 'Associated Press', url: 'https://apnews.com/rss' },
+  { id: 'techcrunch', name: 'TechCrunch', url: 'https://feeds.feedburner.com/TechCrunch' },
+  { id: 'espn', name: 'ESPN Top Headlines', url: 'https://www.espn.com/espn/rss/news' }
+];
+
+let newsFetchInFlight = false;
+
+let newsFetchWarningLogged = false;
+
+function resolveNewsSourceId(sourceId) {
+  const match = NEWS_SOURCES.find((source) => source.id === sourceId);
+  return match ? match.id : DEFAULT_NEWS_SOURCE_ID;
+}
+
+function getNewsSourceById(sourceId) {
+  const resolved = resolveNewsSourceId(sourceId);
+  return NEWS_SOURCES.find((source) => source.id === resolved) || NEWS_SOURCES[0];
+}
+
+function ensureNewsSourceOptions() {
+  if (!newsSourceSelect || newsSourceSelect.dataset.ready === '1') return;
+  newsSourceSelect.innerHTML = '';
+  NEWS_SOURCES.forEach((source) => {
+    const option = document.createElement('option');
+    option.value = source.id;
+    option.textContent = source.name;
+    newsSourceSelect.appendChild(option);
+  });
+  newsSourceSelect.dataset.ready = '1';
+}
+
+function closeNewsSettingsModal() {
+  closeModalWithAnimation('news-settings-modal', '.dialog-content');
+}
+
+async function openNewsSettingsModal(triggerSource) {
+  if (!newsSettingsModal) return;
+  ensureNewsSourceOptions();
+  let storedSource = appNewsSourcePreference || DEFAULT_NEWS_SOURCE_ID;
+  try {
+    const data = await browser.storage.local.get(APP_NEWS_SOURCE_KEY);
+    storedSource = resolveNewsSourceId(data[APP_NEWS_SOURCE_KEY] || storedSource);
+  } catch (err) {
+    storedSource = resolveNewsSourceId(storedSource);
+  }
+  if (newsSourceSelect) {
+    newsSourceSelect.value = storedSource;
+  }
+  openModalWithAnimation('news-settings-modal', triggerSource || null, '.dialog-content');
+}
+
+function parseNewsItemsFromXml(xmlText) {
+  if (!xmlText) return [];
+  let doc = null;
+  try {
+    doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  } catch (err) {
+    return [];
+  }
+  if (!doc) return [];
+  const items = Array.from(doc.querySelectorAll('item'));
+  const entries = items.length ? items : Array.from(doc.querySelectorAll('entry'));
+  return entries.map((entry) => {
+    const title = entry.querySelector('title')?.textContent?.trim() || '';
+    let link = '';
+    const linkEl = entry.querySelector('link');
+    if (linkEl) {
+      link = linkEl.getAttribute('href') || linkEl.textContent || '';
+    }
+    if (!link) {
+      const guidEl = entry.querySelector('guid');
+      const guid = guidEl ? guidEl.textContent.trim() : '';
+      if (/^https?:/i.test(guid)) link = guid;
+    }
+    return { title, link };
+  }).filter((item) => item.title && item.link).slice(0, NEWS_ITEMS_LIMIT);
+}
+
+function renderNewsItems(items, options = {}) {
+  if (!newsList) return;
+  const list = Array.isArray(items) ? items.filter((item) => item && item.title && item.link) : [];
+  if (list.length === 0) {
+    const message = options.emptyMessage || 'News unavailable';
+    newsList.innerHTML = `<li class="news-empty">${escapeHtml(message)}</li>`;
+    return;
+  }
+  newsList.innerHTML = list.map((item) => {
+    const title = escapeHtml(item.title);
+    const link = escapeHtml(item.link);
+    return `<li><a href="${link}" target="_blank" rel="noreferrer noopener">${title}</a></li>`;
+  }).join('');
+}
+
+function readFastNewsCache(sourceId) {
+  try {
+    if (!window.localStorage) return null;
+    const raw = localStorage.getItem('fast-news');
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !data.__timestamp || !Array.isArray(data.items)) return null;
+    if (data.source && resolveNewsSourceId(data.source) !== resolveNewsSourceId(sourceId)) return null;
+    if ((Date.now() - data.__timestamp) > NEWS_CACHE_TTL_MS) return null;
+    return data;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function fetchAndRenderNews(options = {}) {
+  if (!newsWidget || !newsList) return;
+  const allowFetch = appShowNewsPreference || options.force === true;
+  if (!allowFetch) return;
+
+  const source = getNewsSourceById(appNewsSourcePreference);
+  const cached = readFastNewsCache(source.id);
+  const shouldRender = appShowNewsPreference === true;
+
+  if (shouldRender && cached && newsList.children.length === 0) {
+    renderNewsItems(cached.items);
+    revealWidget('.widget-news');
+  }
+
+  if (newsFetchInFlight) return;
+  newsFetchInFlight = true;
+  try {
+    const response = await fetch(source.url);
+    if (!response.ok) {
+      throw new Error(`News feed unavailable: ${response.status}`);
+    }
+    const xmlText = await response.text();
+    const items = parseNewsItemsFromXml(xmlText);
+    if (!items.length) {
+      throw new Error('No news items found');
+    }
+    if (shouldRender) {
+      renderNewsItems(items);
+      revealWidget('.widget-news');
+    }
+    try {
+      if (window.localStorage) {
+        localStorage.setItem('fast-news', JSON.stringify({
+          __timestamp: Date.now(),
+          source: source.id,
+          items
+        }));
+      }
+    } catch (err) {
+      // Ignore; fast cache is best-effort only
+    }
+  } catch (err) {
+    const hasCache = !!(cached && cached.items && cached.items.length);
+    if (shouldRender && !hasCache) {
+      renderNewsItems([], { emptyMessage: 'News unavailable' });
+      revealWidget('.widget-news');
+    }
+    if (!newsFetchWarningLogged) {
+      console.warn('News fetch failed', err);
+      newsFetchWarningLogged = true;
+    }
+  } finally {
+    newsFetchInFlight = false;
+  }
+}
+
+function setupNewsWidget() {
+  if (newsSettingsCloseBtn) {
+    newsSettingsCloseBtn.addEventListener('click', closeNewsSettingsModal);
+  }
+
+  if (newsSettingsCancelBtn) {
+    newsSettingsCancelBtn.addEventListener('click', closeNewsSettingsModal);
+  }
+
+  if (newsSettingsModal) {
+    newsSettingsModal.addEventListener('click', (e) => {
+      if (e.target === newsSettingsModal) {
+        closeNewsSettingsModal();
+      }
+    });
+  }
+
+  if (newsSettingsSaveBtn) {
+    newsSettingsSaveBtn.addEventListener('click', async () => {
+      const selected = resolveNewsSourceId(newsSourceSelect?.value);
+      appNewsSourcePreference = selected;
+      try {
+        await browser.storage.local.set({ [APP_NEWS_SOURCE_KEY]: selected });
+      } catch (err) {
+        console.warn('Failed to save news source preference', err);
+      }
+      try {
+        if (window.localStorage) {
+          localStorage.removeItem('fast-news');
+        }
+      } catch (err) {
+        // Ignore; fast cache is best-effort only
+      }
+      fetchAndRenderNews({ force: true });
+      closeNewsSettingsModal();
+    });
+  }
+}
+
 
 
 // ===============================================
@@ -20031,6 +20349,19 @@ function logInitSettled(name, result) {
     }
   };
 
+  const setupNewsWidgetSafe = () => {
+    if (!document || !document.body || !newsWidget) return;
+    const start = performance.now();
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupNewsWidget start');
+    try {
+      setupNewsWidget();
+    } catch (err) {
+      console.warn('Startup task failed:', 'startup:setupNewsWidget', err);
+    } finally {
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupNewsWidget end in', Math.round(performance.now() - start), 'ms');
+    }
+  };
+
   const setupSearchSafe = async () => {
     if (!document || !document.body || !searchForm || !searchInput || !searchSelect || !searchResultsPanel || !searchWidget) return;
     const start = performance.now();
@@ -20092,6 +20423,22 @@ function logInitSettled(name, result) {
     }
   };
 
+  const fetchNewsSafe = () => {
+    if (!document || !document.body || !newsWidget || !newsList) return;
+    const start = performance.now();
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchNews start');
+    try {
+      fetchAndRenderNews();
+    } catch (err) {
+      console.warn('Startup task failed:', 'startup:fetchNews', err);
+    } finally {
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchNews end in', Math.round(performance.now() - start), 'ms');
+    }
+    if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
+      console.warn('[startup guard] fetchNewsSafe ran during critical phase');
+    }
+  };
+
   const scheduleStartupHydrationTasks = () => {
     const scheduleLabeled = (fn, label) => {
       if (!label.startsWith('startup:')) {
@@ -20112,10 +20459,12 @@ function logInitSettled(name, result) {
     scheduleLabeled(() => loadCachedWeatherSafe(), 'startup:loadCachedWeather');
     scheduleLabeled(() => buildQuoteIndexSafe(), 'startup:quoteIndex');
     scheduleLabeled(() => setupQuoteWidgetSafe(), 'startup:setupQuoteWidget');
+    scheduleLabeled(() => setupNewsWidgetSafe(), 'startup:setupNewsWidget');
     scheduleLabeled(() => setupSearchSafe(), 'startup:setupSearch');
     scheduleLabeled(() => setupWeatherSafe(), 'startup:setupWeather');
     scheduleLabeled(() => setupAppLauncherSafe(), 'startup:setupAppLauncher');
     scheduleLabeled(() => fetchQuoteSafe(), 'startup:fetchQuote');
+    scheduleLabeled(() => fetchNewsSafe(), 'startup:fetchNews');
   };
 
   requestAnimationFrame(markPageReadyOnce);

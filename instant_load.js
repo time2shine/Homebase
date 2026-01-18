@@ -159,6 +159,49 @@
       }
     }
 
+    // --- 5. Instant News ---
+    const nRaw = localStorage.getItem('fast-news');
+    if (nRaw) {
+      let newsState = null;
+      try {
+        newsState = JSON.parse(nRaw);
+      } catch (e) {
+        newsState = null;
+      }
+      if (newsState && newsState.__timestamp && Array.isArray(newsState.items)) {
+        const isFresh = (Date.now() - newsState.__timestamp) < 1800000;
+        if (isFresh) {
+          let allowNewsInstant = true;
+          try {
+            allowNewsInstant = localStorage.getItem('fast-show-news') !== '0';
+          } catch (e) {
+            allowNewsInstant = true;
+          }
+          if (allowNewsInstant) {
+            const newsList = $('news-list');
+            const newsWidget = document.querySelector('.widget-news');
+            const items = newsState.items.slice(0, 5).filter((item) => item && item.title && item.link);
+            if (newsList) {
+              newsList.innerHTML = '';
+              items.forEach((item) => {
+                const li = document.createElement('li');
+                const a = document.createElement('a');
+                a.href = item.link;
+                a.target = '_blank';
+                a.rel = 'noreferrer noopener';
+                a.textContent = item.title;
+                li.appendChild(a);
+                newsList.appendChild(li);
+              });
+            }
+            if (items.length) {
+              showWidget(newsWidget);
+            }
+          }
+        }
+      }
+    }
+
   } catch (e) {
     console.warn("Instant load error:", e);
   }

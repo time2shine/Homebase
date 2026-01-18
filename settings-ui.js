@@ -89,6 +89,11 @@ window.SettingsUI = (() => {
         setQuotePreference(e.target.checked);
       });
     }
+    if (appNewsToggle) {
+      appNewsToggle.addEventListener('change', (e) => {
+        setNewsPreference(e.target.checked);
+      });
+    }
     if (appDimSlider) {
       appDimSlider.addEventListener('input', (e) => {
         const val = parseInt(e.target.value, 10);
@@ -134,6 +139,13 @@ window.SettingsUI = (() => {
     if (appConfigureQuoteBtn) {
       appConfigureQuoteBtn.addEventListener('click', () => {
         openQuoteSettingsModal(appConfigureQuoteBtn);
+      });
+    }
+
+    const appConfigureNewsBtn = document.getElementById('app-configure-news-btn');
+    if (appConfigureNewsBtn) {
+      appConfigureNewsBtn.addEventListener('click', () => {
+        openNewsSettingsModal(appConfigureNewsBtn);
       });
     }
 
@@ -197,6 +209,7 @@ window.SettingsUI = (() => {
         const nextBookmarkTextBg = document.getElementById('app-bookmark-text-bg-toggle')?.checked || false;
         const nextShowWeather = appWeatherToggle ? appWeatherToggle.checked : true;
         const nextShowQuote = appQuoteToggle ? appQuoteToggle.checked : true;
+        const nextShowNews = appNewsToggle ? appNewsToggle.checked : true;
         const nextContainerMode = document.getElementById('app-container-mode-toggle')?.checked ?? true;
         const radioKeepBehavior = document.querySelector('input[name="container-behavior"][value="keep"]');
         const nextContainerNewTab = radioKeepBehavior ? radioKeepBehavior.checked : appContainerNewTabPreference;
@@ -238,6 +251,7 @@ window.SettingsUI = (() => {
         applyTimeFormatPreference(nextFormat);
         setWeatherPreference(nextShowWeather, { applyVisibility: false, updateUI: false });
         setQuotePreference(nextShowQuote, { applyVisibility: false, updateUI: false });
+        setNewsPreference(nextShowNews, { applyVisibility: false, updateUI: false });
         applySidebarVisibility(nextSidebarVisible);
         applyWidgetVisibility();
         appMaxTabsPreference = nextMaxTabs;

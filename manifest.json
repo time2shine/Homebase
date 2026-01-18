@@ -38,7 +38,13 @@
     "https://t2.gstatic.com/*",
     "https://www.google.com/*",
     "https://en.wikipedia.org/*",
-    "https://completion.amazon.com/*"
+    "https://completion.amazon.com/*",
+    "https://www.aljazeera.com/*",
+    "https://feeds.bbci.co.uk/*",
+    "https://www.reuters.com/*",
+    "https://apnews.com/*",
+    "https://feeds.feedburner.com/*",
+    "https://www.espn.com/*"
   ],
   "optional_permissions": []
 }

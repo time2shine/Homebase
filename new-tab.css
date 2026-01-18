@@ -2120,6 +2120,7 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 /* ======================================= */
 
 .widget-weather,
+.widget-news,
 #settings-panel,
 .widget-quote,
 #quote-settings-panel {
@@ -2132,6 +2133,7 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 
 html.weather-hidden .widget-weather { display: none !important; }
 html.quote-hidden .widget-quote { display: none !important; }
+html.news-hidden .widget-news { display: none !important; }
 
 .widget-quote {
   font-style: italic;
@@ -2256,6 +2258,44 @@ html.quote-hidden .widget-quote { display: none !important; }
 #quote-text::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.4); border-radius: 4px; }
 #quote-author { margin: 0; padding-top: 10px; text-align: right; font-size: 0.9em; }
 
+/* --- News Styles --- */
+.widget-news {
+  gap: 8px;
+}
+.news-header {
+  display: flex;
+  align-items: center;
+}
+.news-title {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+#news-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+#news-list li {
+  font-size: 0.95em;
+  line-height: 1.35;
+}
+#news-list a {
+  color: inherit;
+  text-decoration: none;
+}
+#news-list a:hover {
+  text-decoration: underline;
+}
+#news-list .news-empty {
+  color: #ddd;
+  font-style: italic;
+}
+
 /* --- Button Styles --- */
 .icon-btn {
   position: relative;
@@ -2332,13 +2372,15 @@ html.quote-hidden .widget-quote { display: none !important; }
 
 /* Ensure Weather and Quote settings pop up OVER the main settings */
 #weather-settings-modal, 
-#quote-settings-modal {
+#quote-settings-modal,
+#news-settings-modal {
   z-index: 2100; /* Higher than #app-settings-modal (2000) */
 }
 
 /* --- Force White Background for Weather & Quote Settings --- */
 #weather-settings-dialog,
-#quote-settings-dialog {
+#quote-settings-dialog,
+#news-settings-dialog {
   background-color: #ffffff !important;
   color: #0f172a !important;
   border: 1px solid rgba(0, 0, 0, 0.15) !important;
@@ -2349,7 +2391,8 @@ html.quote-hidden .widget-quote { display: none !important; }
 
 /* Fix Labels inside these specific white dialogs */
 #weather-settings-dialog label,
-#quote-settings-dialog label {
+#quote-settings-dialog label,
+#news-settings-dialog label {
   color: #334155 !important;
   font-weight: 600;
 }
@@ -2357,6 +2400,7 @@ html.quote-hidden .widget-quote { display: none !important; }
 /* Fix Inputs inside these dialogs */
 #weather-settings-dialog .dialog-input,
 #quote-settings-dialog .dialog-input,
+#news-settings-dialog .dialog-input,
 #quote-frequency-select {
   background-color: #f1f5f9 !important;
   border: 1px solid #cbd5e1 !important;
@@ -2365,25 +2409,29 @@ html.quote-hidden .widget-quote { display: none !important; }
 
 /* Fix Buttons (Secondary - Cancel) */
 #weather-settings-dialog .dialog-btn,
-#quote-settings-dialog .dialog-btn {
+#quote-settings-dialog .dialog-btn,
+#news-settings-dialog .dialog-btn {
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
   border: 1px solid #cbd5e1 !important;
 }
 #weather-settings-dialog .dialog-btn:hover,
-#quote-settings-dialog .dialog-btn:hover {
+#quote-settings-dialog .dialog-btn:hover,
+#news-settings-dialog .dialog-btn:hover {
   background-color: #e2e8f0 !important;
 }
 
 /* Fix Buttons (Primary - Save) */
 #weather-settings-dialog .dialog-btn.primary-btn,
-#quote-settings-dialog .dialog-btn.primary-btn {
+#quote-settings-dialog .dialog-btn.primary-btn,
+#news-settings-dialog .dialog-btn.primary-btn {
   background-color: #2ca5ff !important;
   color: #0b1b2e !important;
   border: none !important;
 }
 #weather-settings-dialog .dialog-btn.primary-btn:hover,
-#quote-settings-dialog .dialog-btn.primary-btn:hover {
+#quote-settings-dialog .dialog-btn.primary-btn:hover,
+#news-settings-dialog .dialog-btn.primary-btn:hover {
   background-color: #59baff !important;
 }
 
@@ -5218,6 +5266,7 @@ input:checked + .slider:before {
 /* When enabled, remove all backdrop-filters (GPU expensive) */
 body.performance-mode .glass-box,
 body.performance-mode .widget-weather, 
+body.performance-mode .widget-news,
 body.performance-mode .widget-quote,
 body.performance-mode #settings-panel,
 body.performance-mode #quote-settings-panel,

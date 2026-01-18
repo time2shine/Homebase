@@ -17507,6 +17507,10 @@ const newsSettingsSaveBtn = document.getElementById('news-settings-save-btn');
 
 const newsSourceSelect = document.getElementById('news-source-select');
 
+const newsSettingsBtn = document.getElementById('news-settings-btn');
+
+const newsUpdatedEl = document.getElementById('news-updated');
+
 const DEFAULT_NEWS_SOURCE_ID = 'aljazeera';
 
 const NEWS_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -17595,6 +17599,18 @@ function parseNewsItemsFromXml(xmlText) {
   }).filter((item) => item.title && item.link).slice(0, NEWS_ITEMS_LIMIT);
 }
 
+function formatNewsUpdated(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '';
+  return `Updated: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function updateNewsUpdated(timestamp) {
+  if (!newsUpdatedEl) return;
+  setText(newsUpdatedEl, formatNewsUpdated(timestamp));
+}
+
 function renderNewsItems(items, options = {}) {
   if (!newsList) return;
   const list = Array.isArray(items) ? items.filter((item) => item && item.title && item.link) : [];
@@ -17634,9 +17650,12 @@ async function fetchAndRenderNews(options = {}) {
   const cached = readFastNewsCache(source.id);
   const shouldRender = appShowNewsPreference === true;
 
-  if (shouldRender && cached && newsList.children.length === 0) {
-    renderNewsItems(cached.items);
-    revealWidget('.widget-news');
+  if (shouldRender && cached) {
+    if (newsList.children.length === 0) {
+      renderNewsItems(cached.items);
+      revealWidget('.widget-news');
+    }
+    updateNewsUpdated(cached.__timestamp);
   }
 
   if (newsFetchInFlight) return;
@@ -17651,14 +17670,16 @@ async function fetchAndRenderNews(options = {}) {
     if (!items.length) {
       throw new Error('No news items found');
     }
+    const fetchedAt = Date.now();
     if (shouldRender) {
       renderNewsItems(items);
       revealWidget('.widget-news');
+      updateNewsUpdated(fetchedAt);
     }
     try {
       if (window.localStorage) {
         localStorage.setItem('fast-news', JSON.stringify({
-          __timestamp: Date.now(),
+          __timestamp: fetchedAt,
           source: source.id,
           items
         }));
@@ -17671,6 +17692,7 @@ async function fetchAndRenderNews(options = {}) {
     if (shouldRender && !hasCache) {
       renderNewsItems([], { emptyMessage: 'News unavailable' });
       revealWidget('.widget-news');
+      updateNewsUpdated(null);
     }
     if (!newsFetchWarningLogged) {
       console.warn('News fetch failed', err);
@@ -17682,6 +17704,12 @@ async function fetchAndRenderNews(options = {}) {
 }
 
 function setupNewsWidget() {
+  if (newsSettingsBtn) {
+    newsSettingsBtn.addEventListener('click', () => {
+      openNewsSettingsModal(newsSettingsBtn);
+    });
+  }
+
   if (newsSettingsCloseBtn) {
     newsSettingsCloseBtn.addEventListener('click', closeNewsSettingsModal);
   }

@@ -336,6 +336,7 @@ button.dock-item {
   gap: 20px;
   height: 100vh; /* Full height */
   overflow-y: auto; /* Allow sidebar to scroll if content overflows */
+  overflow-x: visible; /* Keep tooltips visible while preserving vertical scroll */
 }
 
 /* Collapse sidebar widgets when the layout switches to compact mode */
@@ -2129,7 +2130,7 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   flex-direction: column;
   position: relative; /* For settings buttons */
   min-height: 215px; /* Layout stability */
-  overflow: hidden;
+  overflow: visible; /* Allow settings tooltips to escape widget cards */
 }
 
 html.weather-hidden .widget-weather { display: none !important; }

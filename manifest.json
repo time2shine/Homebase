@@ -41,10 +41,9 @@
     "https://completion.amazon.com/*",
     "https://www.aljazeera.com/*",
     "https://feeds.bbci.co.uk/*",
-    "https://www.reuters.com/*",
-    "https://apnews.com/*",
     "https://feeds.feedburner.com/*",
-    "https://www.espn.com/*"
+    "https://www.espn.com/*",
+    "https://www.espncricinfo.com/*"
   ],
   "optional_permissions": []
 }

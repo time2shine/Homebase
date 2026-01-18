@@ -17768,7 +17768,7 @@ function ensureNewsHoverPreview() {
   if (!document || !document.body) return null;
   const preview = document.createElement('div');
   preview.id = 'news-hover-preview';
-  preview.className = 'news-hover-preview';
+  preview.className = 'tooltip-popup tooltip-news-preview';
   preview.setAttribute('aria-hidden', 'true');
   preview.innerHTML = `
     <div class="news-preview-image-wrap">
@@ -17807,6 +17807,7 @@ function positionNewsHoverPreview(targetEl, previewEl) {
 function showNewsHoverPreview(itemEl) {
   const preview = ensureNewsHoverPreview();
   if (!preview || !itemEl) return;
+  preview.classList.remove('is-visible');
   const title = itemEl.dataset.newsTitle || '';
   if (!title) return;
   const desc = itemEl.dataset.newsDesc || '';
@@ -17833,8 +17834,11 @@ function showNewsHoverPreview(itemEl) {
   } else {
     preview.classList.add('no-desc');
   }
-  preview.classList.add('is-visible');
   positionNewsHoverPreview(itemEl, preview);
+  requestAnimationFrame(() => {
+    if (newsHoverTarget !== itemEl) return;
+    preview.classList.add('is-visible');
+  });
 }
 
 function hideNewsHoverPreview() {

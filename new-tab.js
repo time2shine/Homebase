@@ -84,9 +84,10 @@ const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
 
 const CACHED_APPLIED_POSTER_CACHE_KEY = 'cachedAppliedPoster';
 
-const WALLPAPER_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
 const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
+const PENDING_DAILY_ROTATION_KEY = 'pendingDailyRotation';
+const PENDING_DAILY_ROTATION_SINCE_KEY = 'pendingDailyRotationSince';
+const DAILY_ROTATION_SEEN_DELAY_MS = 8000;
 
 const WALLPAPER_CACHE_NAME = 'wallpaper-assets';
 const GALLERY_POSTERS_CACHE_NAME = 'gallery-posters';
@@ -105,12 +106,33 @@ const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const GALLERY_POSTERS_CACHE_KEY = 'cachedGalleryPosters';
 
 let videosManifestPromise = null;
+let pendingDailyRotationTimer = null;
 
 let tabsScrollController = null; // Manages tab strip overflow, arrows, and wheel physics
 
 const isRemoteHttpUrl = (url = '') => typeof url === 'string' && /^https?:\/\//i.test(url);
 
 const isRemoteVideoUrl = (url = '') => isRemoteHttpUrl(url) && REMOTE_VIDEO_REGEX.test(url);
+
+function getLocalDayStamp(ts) {
+
+  const date = new Date(ts || 0);
+
+  const year = date.getFullYear();
+
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+
+}
+
+function isNewLocalDay(prevTs, nowTs) {
+
+  return getLocalDayStamp(prevTs || 0) !== getLocalDayStamp(nowTs || Date.now());
+
+}
 
 const runWhenIdle = (cb, timeout = 500) => {
 
@@ -2094,11 +2116,109 @@ async function checkBatteryStatus() {
 
 
 
+function schedulePendingDailyRotationAttempt() {
+
+  if (pendingDailyRotationTimer) return;
+
+  pendingDailyRotationTimer = setTimeout(async () => {
+
+    pendingDailyRotationTimer = null;
+
+    if (document.hidden) return;
+
+    if (isPerformanceModeEnabled()) return;
+
+    try {
+
+      const stored = await browser.storage.local.get([
+
+        PENDING_DAILY_ROTATION_KEY,
+
+        PENDING_DAILY_ROTATION_SINCE_KEY,
+
+        DAILY_ROTATION_KEY,
+
+        WALLPAPER_SELECTION_KEY
+
+      ]);
+
+      const now = Date.now();
+
+      const pending = stored[PENDING_DAILY_ROTATION_KEY] === true;
+
+      const allowDailyRotation = stored[DAILY_ROTATION_KEY] !== false;
+
+      const current = stored[WALLPAPER_SELECTION_KEY];
+
+      const selectedAt = current && current.selectedAt ? current.selectedAt : 0;
+
+      if (!current || !Number.isFinite(selectedAt) || selectedAt <= 0) {
+
+        await browser.storage.local.remove([
+
+          PENDING_DAILY_ROTATION_KEY,
+
+          PENDING_DAILY_ROTATION_SINCE_KEY
+
+        ]);
+
+        return;
+
+      }
+
+      const dueByDayChange = isNewLocalDay(selectedAt, now);
+
+      if (!pending) return;
+
+      if (!allowDailyRotation || !dueByDayChange) {
+
+        await browser.storage.local.remove([
+
+          PENDING_DAILY_ROTATION_KEY,
+
+          PENDING_DAILY_ROTATION_SINCE_KEY
+
+        ]);
+
+        return;
+
+      }
+
+      await browser.storage.local.remove([
+
+        PENDING_DAILY_ROTATION_KEY,
+
+        PENDING_DAILY_ROTATION_SINCE_KEY
+
+      ]);
+
+    } catch (err) {
+
+      console.warn('Failed to clear pending daily rotation', err);
+
+      return;
+
+    }
+
+    try {
+
+      await ensureDailyWallpaper(true);
+
+    } catch (err) {
+
+      console.warn('Pending daily rotation failed', err);
+
+    }
+
+  }, DAILY_ROTATION_SEEN_DELAY_MS);
+
+}
+
 async function ensureDailyWallpaper(forceNext = false) {
 
   if (isPerformanceModeEnabled()) return;
 
-  const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY, DAILY_ROTATION_KEY, WALLPAPER_QUALITY_KEY]);
+  const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY, DAILY_ROTATION_KEY, WALLPAPER_QUALITY_KEY, PENDING_DAILY_ROTATION_KEY, PENDING_DAILY_ROTATION_SINCE_KEY]);
 
   const now = Date.now();
 
@@ -2138,37 +2258,54 @@ async function ensureDailyWallpaper(forceNext = false) {
 
 
 
-  const isFresh = current && now - (current.selectedAt || 0) < WALLPAPER_TTL_MS;
-
   const allowDailyRotation = stored[DAILY_ROTATION_KEY] !== false;
+  const pendingAlreadySet = stored[PENDING_DAILY_ROTATION_KEY] === true;
+  const pendingSince = stored[PENDING_DAILY_ROTATION_SINCE_KEY] || 0;
+  const dueByDayChange = isNewLocalDay(current ? current.selectedAt : 0, now);
 
-  const fallbackFresh = fallbackUsedAt && now - fallbackUsedAt < WALLPAPER_TTL_MS;
+  if (pendingAlreadySet && !dueByDayChange) {
 
-  const isFallbackSelection = current && current.id === 'fallback';
-
-
-
-  if (isFallbackSelection && fallbackFresh && !forceNext) {
-
-    const type = await getWallpaperTypePreference();
-
-    await ensurePlayableSelection(current);
-
-    applyWallpaperByType(current, type);
-
-    return;
+    await browser.storage.local.remove([PENDING_DAILY_ROTATION_KEY, PENDING_DAILY_ROTATION_SINCE_KEY]);
 
   }
 
+  const shouldDeferRotation = !forceNext && allowDailyRotation && dueByDayChange;
 
+  if (shouldDeferRotation) {
 
-  const manifest = await getVideosManifest();
+    if (!pendingAlreadySet) {
 
+      await browser.storage.local.set({
 
+        [PENDING_DAILY_ROTATION_KEY]: true,
 
-  const shouldPickNext = forceNext || (!isFresh && allowDailyRotation);
+        [PENDING_DAILY_ROTATION_SINCE_KEY]: now
+
+      });
+
+    } else if (!pendingSince) {
+
+      await browser.storage.local.set({
+
+        [PENDING_DAILY_ROTATION_SINCE_KEY]: now
+
+      });
+
+    }
+
+    schedulePendingDailyRotationAttempt();
+
+  } else if (forceNext && pendingAlreadySet) {
+
+    await browser.storage.local.remove([PENDING_DAILY_ROTATION_KEY, PENDING_DAILY_ROTATION_SINCE_KEY]);
+
+  }
+
+  const shouldPickNext = forceNext;
 
   if (shouldPickNext) {
+
+    const manifest = await getVideosManifest();
 
     const nextSelection = await pickNextWallpaper(manifest);
 

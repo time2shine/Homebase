@@ -18127,10 +18127,17 @@ async function fetchAndRenderNews(options = {}) {
     }
     try {
       if (window.localStorage) {
+        const cachedHeadroomItems = orderedItems.slice(0, 20).map((item) => ({
+          title: String((item && item.title) || ''),
+          link: String((item && item.link) || ''),
+          description: String((item && item.description) || ''),
+          image: String((item && item.image) || ''),
+          publishedAt: item && item.publishedAt != null ? item.publishedAt : ''
+        }));
         localStorage.setItem('fast-news', JSON.stringify({
           __timestamp: fetchedAt,
           source: source.id,
-          items: orderedItems
+          items: cachedHeadroomItems
         }));
       }
     } catch (err) {

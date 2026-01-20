@@ -232,14 +232,20 @@
             const newsUpdated = $('news-updated');
             const newsWidget = document.querySelector('.widget-news');
             const orderedItems = orderNewsItems(newsState.items, { minDatedRatio: 0.6 });
-            const items = orderedItems.slice(0, 5).filter((item) => item && item.title && item.link);
+            const items = orderedItems.slice(0, 5).map((item) => ({
+              title: String((item && item.title) || ''),
+              link: String((item && item.link) || ''),
+              description: String((item && item.description) || ''),
+              image: String((item && item.image) || ''),
+              publishedAt: item && item.publishedAt != null ? item.publishedAt : ''
+            })).filter((item) => item.title && item.link);
             if (newsList) {
               newsList.innerHTML = '';
               items.forEach((item) => {
-                const title = String(item.title || '');
-                const link = String(item.link || '');
-                const description = String(item.description || '');
-                const image = String(item.image || '');
+                const title = item.title;
+                const link = item.link;
+                const description = item.description;
+                const image = item.image;
                 const timeAgo = formatTimeAgo(item.publishedAt);
 
                 const li = document.createElement('li');

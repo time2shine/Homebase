@@ -182,6 +182,34 @@
       return `${diffDays}d ago`;
     }
 
+    function orderNewsItems(items, { minDatedRatio }) {
+      const list = Array.isArray(items) ? items.slice() : [];
+      if (!list.length) return list;
+      let datedCount = 0;
+      for (const item of list) {
+        const parsed = Number(item && item.publishedAt);
+        if (Number.isFinite(parsed)) {
+          datedCount += 1;
+        }
+      }
+      const ratio = list.length ? datedCount / list.length : 0;
+      const minRatio = typeof minDatedRatio === 'number' ? minDatedRatio : 0;
+      if (ratio < minRatio) return list;
+      const indexed = list.map((item, index) => {
+        const parsed = Number(item && item.publishedAt);
+        return {
+          item,
+          index,
+          publishedAt: Number.isFinite(parsed) ? parsed : -Infinity
+        };
+      });
+      indexed.sort((a, b) => {
+        if (b.publishedAt !== a.publishedAt) return b.publishedAt - a.publishedAt;
+        return a.index - b.index;
+      });
+      return indexed.map((entry) => entry.item);
+    }
+
     const nRaw = localStorage.getItem('fast-news');
     if (nRaw) {
       let newsState = null;
@@ -203,7 +231,8 @@
             const newsList = $('news-list');
             const newsUpdated = $('news-updated');
             const newsWidget = document.querySelector('.widget-news');
-            const items = newsState.items.slice(0, 5).filter((item) => item && item.title && item.link);
+            const orderedItems = orderNewsItems(newsState.items, { minDatedRatio: 0.6 });
+            const items = orderedItems.slice(0, 5).filter((item) => item && item.title && item.link);
             if (newsList) {
               newsList.innerHTML = '';
               items.forEach((item) => {

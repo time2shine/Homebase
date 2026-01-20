@@ -17847,7 +17847,35 @@ function parseNewsItemsFromXml(xmlText) {
     const publishedAt = parseNewsTimestamp(entry);
 
     return { title, link, description, image, publishedAt };
-  }).filter((item) => item.title && item.link).slice(0, NEWS_ITEMS_LIMIT);
+  }).filter((item) => item.title && item.link);
+}
+
+function orderNewsItems(items, { minDatedRatio }) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  if (!list.length) return list;
+  let datedCount = 0;
+  for (const item of list) {
+    const parsed = Number(item && item.publishedAt);
+    if (Number.isFinite(parsed)) {
+      datedCount += 1;
+    }
+  }
+  const ratio = list.length ? datedCount / list.length : 0;
+  const minRatio = typeof minDatedRatio === 'number' ? minDatedRatio : 0;
+  if (ratio < minRatio) return list;
+  const indexed = list.map((item, index) => {
+    const parsed = Number(item && item.publishedAt);
+    return {
+      item,
+      index,
+      publishedAt: Number.isFinite(parsed) ? parsed : -Infinity
+    };
+  });
+  indexed.sort((a, b) => {
+    if (b.publishedAt !== a.publishedAt) return b.publishedAt - a.publishedAt;
+    return a.index - b.index;
+  });
+  return indexed.map((entry) => entry.item);
 }
 
 function formatNewsUpdated(timestamp) {
@@ -18051,7 +18079,9 @@ async function fetchAndRenderNews(options = {}) {
 
   if (shouldRender && cached) {
     if (newsList.children.length === 0) {
-      renderNewsItems(cached.items);
+      const orderedCached = orderNewsItems(cached.items, { minDatedRatio: 0.6 });
+      const cachedItems = orderedCached.slice(0, NEWS_ITEMS_LIMIT);
+      renderNewsItems(cachedItems);
       revealWidget('.widget-news');
     }
     updateNewsUpdated(cached.__timestamp);
@@ -18087,9 +18117,11 @@ async function fetchAndRenderNews(options = {}) {
       }
       return;
     }
+    const orderedItems = orderNewsItems(items, { minDatedRatio: 0.6 });
+    const renderItems = orderedItems.slice(0, NEWS_ITEMS_LIMIT);
     const fetchedAt = Date.now();
     if (shouldRender) {
-      renderNewsItems(items);
+      renderNewsItems(renderItems);
       revealWidget('.widget-news');
       updateNewsUpdated(fetchedAt);
     }
@@ -18098,7 +18130,7 @@ async function fetchAndRenderNews(options = {}) {
         localStorage.setItem('fast-news', JSON.stringify({
           __timestamp: fetchedAt,
           source: source.id,
-          items
+          items: orderedItems
         }));
       }
     } catch (err) {

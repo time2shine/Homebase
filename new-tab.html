@@ -6,7 +6,7 @@
 
   <meta charset="utf-8">
 
-  <title>New Tab</title>
+  <title>Homebase</title>
 
   <script src="preload.js"></script>
 
@@ -2453,11 +2453,11 @@
 
       <div class="form-group move-folder-row">
 
-        <label>Select Folder</label>
+        <span id="move-folder-label" class="form-label">Select Folder</span>
 
         <div id="move-folder-dropdown" class="custom-dropdown">
 
-          <button id="move-folder-dropdown-btn" class="dropdown-toggle" type="button" aria-haspopup="listbox" aria-expanded="false">
+          <button id="move-folder-dropdown-btn" class="dropdown-toggle" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="move-folder-label move-folder-selected">
 
             <span id="move-folder-selected">Select folder</span>
 
@@ -2583,7 +2583,7 @@
 
         <div class="gooey-control-row">
 
-          <label>Scale</label>
+          <label for="gooey-slider-scale-input">Scale</label>
 
           <div class="gooey-slider-container" id="gooey-slider-scale"></div>
 
@@ -2593,7 +2593,7 @@
 
         <div class="gooey-control-row">
 
-          <label>Position</label>
+          <label for="gooey-slider-offset-input">Position</label>
 
           <div class="gooey-slider-container" id="gooey-slider-offset"></div>
 
@@ -2603,7 +2603,7 @@
 
         <div class="gooey-control-row">
 
-          <label>Rotation</label>
+          <label for="gooey-slider-rotate-input">Rotation</label>
 
           <div class="gooey-slider-container" id="gooey-slider-rotate"></div>
 
@@ -2748,9 +2748,9 @@
       <h3>Weather Settings</h3>
 
       <div class="form-group">
-        <label>Temperature Unit</label>
+        <span id="modal-temp-unit-label" class="form-label">Temperature Unit</span>
         <div class="toggle-switch">
-          <input type="checkbox" id="modal-temp-unit-toggle">
+          <input type="checkbox" id="modal-temp-unit-toggle" aria-labelledby="modal-temp-unit-label">
           <label for="modal-temp-unit-toggle" class="toggle-label">
             <span class="toggle-label-text" data-on="&#176;F" data-off="&#176;C"></span>
           </label>
@@ -2789,8 +2789,8 @@
       </div>
 
       <div class="form-group">
-        <label>Categories</label>
-        <div id="modal-quote-categories-list" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow-y: auto; padding: 4px;">
+        <span id="quote-categories-label" class="form-label">Categories</span>
+        <div id="modal-quote-categories-list" role="group" aria-labelledby="quote-categories-label" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow-y: auto; padding: 4px;">
           </div>
       </div>
 

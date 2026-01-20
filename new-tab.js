@@ -6519,6 +6519,7 @@ function initBubbleSlider(containerId, min, max, initialValue, step, onUpdate) {
   input.type = 'range';
 
   input.className = 'range-slider__input';
+  input.id = `${containerId}-input`;
 
   input.min = min;
 
@@ -11945,6 +11946,7 @@ async function populateQuoteCategories() {
     const allPill = document.createElement('button');
 
     allPill.className = 'quote-category-pill';
+    allPill.id = 'quote-categories-all-btn';
 
     allPill.textContent = 'All Categories';
 

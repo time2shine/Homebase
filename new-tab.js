@@ -3415,6 +3415,220 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
   const APP_GRID_ANIMATION_ENABLED_KEY = 'appGridAnimationEnabled';
   const APP_GLASS_STYLE_KEY = 'appGlassStylePref';
 
+const HOMEBASE_BACKUP_SCHEMA = 'homebase.export';
+const HOMEBASE_BACKUP_VERSION = 1;
+
+const HOMEBASE_OWNED_STORAGE_KEYS = [
+  WALLPAPER_SELECTION_KEY,
+  CACHED_APPLIED_POSTER_URL_KEY,
+  CACHED_APPLIED_POSTER_DATA_URL_KEY,
+  CACHED_APPLIED_POSTER_CACHE_KEY,
+  CACHED_APPLIED_VIDEO_URL_KEY,
+  VIDEOS_JSON_CACHE_KEY,
+  VIDEOS_JSON_FETCHED_AT_KEY,
+  GALLERY_POSTERS_CACHE_KEY,
+  WALLPAPER_POOL_KEY,
+  WALLPAPER_FALLBACK_USED_KEY,
+  PENDING_DAILY_ROTATION_KEY,
+  PENDING_DAILY_ROTATION_SINCE_KEY,
+  FAVORITES_KEY,
+  DAILY_ROTATION_KEY,
+  WALLPAPER_TYPE_KEY,
+  WALLPAPER_QUALITY_KEY,
+  APP_TIME_FORMAT_KEY,
+  APP_BACKGROUND_DIM_KEY,
+  APP_SHOW_SIDEBAR_KEY,
+  APP_SHOW_WEATHER_KEY,
+  APP_SHOW_QUOTE_KEY,
+  APP_SHOW_NEWS_KEY,
+  APP_NEWS_SOURCE_KEY,
+  APP_MAX_TABS_KEY,
+  APP_AUTOCLOSE_KEY,
+  APP_SINGLETON_MODE_KEY,
+  APP_SEARCH_OPEN_NEW_TAB_KEY,
+  APP_SEARCH_REMEMBER_ENGINE_KEY,
+  APP_SEARCH_DEFAULT_ENGINE_KEY,
+  APP_SEARCH_MATH_KEY,
+  APP_SEARCH_SHOW_HISTORY_KEY,
+  APP_BOOKMARK_OPEN_NEW_TAB_KEY,
+  APP_BOOKMARK_TEXT_BG_KEY,
+  APP_BOOKMARK_TEXT_BG_COLOR_KEY,
+  APP_BOOKMARK_TEXT_OPACITY_KEY,
+  APP_BOOKMARK_TEXT_BLUR_KEY,
+  APP_BOOKMARK_FALLBACK_COLOR_KEY,
+  APP_BOOKMARK_FOLDER_COLOR_KEY,
+  APP_PERFORMANCE_MODE_KEY,
+  APP_DEBUG_PERF_OVERLAY_KEY,
+  APP_BATTERY_OPTIMIZATION_KEY,
+  APP_CINEMA_MODE_KEY,
+  APP_CONTAINER_MODE_KEY,
+  APP_CONTAINER_NEW_TAB_KEY,
+  APP_GRID_ANIMATION_KEY,
+  APP_GRID_ANIMATION_SPEED_KEY,
+  APP_GRID_ANIMATION_ENABLED_KEY,
+  APP_GLASS_STYLE_KEY,
+  'bookmarkCustomMetadata',
+  'homebaseBookmarkRootId',
+  'folderCustomMetadata',
+  'domainIconMap',
+  'lastUsedBookmarkFolderId',
+  'quoteUpdateFrequency',
+  'quoteLastFetched',
+  'quoteBufferCache',
+  'quoteLocalIndexV1',
+  'quoteTags',
+  'searchEnginesConfig',
+  'currentSearchEngineId',
+  'cachedWeatherData',
+  'cachedCityName',
+  'cachedUnits',
+  'weatherFetchedAt',
+  'weatherLat',
+  'weatherLon',
+  'weatherCityName',
+  'weatherUnits'
+];
+
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+async function exportHomebaseState() {
+  if (!browser?.storage?.local) {
+    throw new Error('Storage is unavailable.');
+  }
+
+  const stored = await browser.storage.local.get(HOMEBASE_OWNED_STORAGE_KEYS);
+  const storageLocal = {};
+
+  HOMEBASE_OWNED_STORAGE_KEYS.forEach((key) => {
+    if (stored && stored[key] !== undefined) {
+      storageLocal[key] = stored[key];
+    }
+  });
+
+  const payload = {
+    schema: HOMEBASE_BACKUP_SCHEMA,
+    version: HOMEBASE_BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    storageLocal
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const dateTag = new Date().toISOString().slice(0, 10);
+
+  link.href = url;
+  link.download = `homebase-backup-${dateTag}.json`;
+  link.style.display = 'none';
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function importHomebaseState(file) {
+  if (!browser?.storage?.local) {
+    throw new Error('Storage is unavailable.');
+  }
+  if (!file) {
+    throw new Error('No backup file selected.');
+  }
+
+  let parsed;
+  try {
+    const text = await file.text();
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw new Error('Invalid JSON file.');
+  }
+
+  if (!parsed || parsed.schema !== HOMEBASE_BACKUP_SCHEMA) {
+    throw new Error('Invalid backup schema.');
+  }
+  if (typeof parsed.version !== 'number' || parsed.version !== HOMEBASE_BACKUP_VERSION) {
+    throw new Error('Unsupported backup version.');
+  }
+  if (!isPlainObject(parsed.storageLocal)) {
+    throw new Error('Invalid backup payload.');
+  }
+
+  const incoming = parsed.storageLocal;
+  const updates = {};
+  const removals = [];
+
+  HOMEBASE_OWNED_STORAGE_KEYS.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(incoming, key)) {
+      updates[key] = incoming[key];
+    } else {
+      removals.push(key);
+    }
+  });
+
+  if (Object.keys(updates).length) {
+    await browser.storage.local.set(updates);
+  }
+  if (removals.length) {
+    await browser.storage.local.remove(removals);
+  }
+
+  try {
+    if (window.localStorage) {
+      const dimValue = incoming[APP_BACKGROUND_DIM_KEY];
+      if (Object.prototype.hasOwnProperty.call(incoming, APP_BACKGROUND_DIM_KEY) && Number.isFinite(dimValue)) {
+        localStorage.setItem('fast-bg-dim', String(dimValue));
+      } else {
+        localStorage.removeItem('fast-bg-dim');
+      }
+
+      const sidebarValue = incoming[APP_SHOW_SIDEBAR_KEY];
+      if (Object.prototype.hasOwnProperty.call(incoming, APP_SHOW_SIDEBAR_KEY) && typeof sidebarValue === 'boolean') {
+        localStorage.setItem('fast-show-sidebar', sidebarValue ? '1' : '0');
+      } else {
+        localStorage.removeItem('fast-show-sidebar');
+      }
+
+      const weatherValue = incoming[APP_SHOW_WEATHER_KEY];
+      if (Object.prototype.hasOwnProperty.call(incoming, APP_SHOW_WEATHER_KEY) && typeof weatherValue === 'boolean') {
+        localStorage.setItem('fast-show-weather', weatherValue ? '1' : '0');
+      } else {
+        localStorage.removeItem('fast-show-weather');
+      }
+
+      const quoteValue = incoming[APP_SHOW_QUOTE_KEY];
+      if (Object.prototype.hasOwnProperty.call(incoming, APP_SHOW_QUOTE_KEY) && typeof quoteValue === 'boolean') {
+        localStorage.setItem('fast-show-quote', quoteValue ? '1' : '0');
+      } else {
+        localStorage.removeItem('fast-show-quote');
+      }
+
+      const newsValue = incoming[APP_SHOW_NEWS_KEY];
+      if (Object.prototype.hasOwnProperty.call(incoming, APP_SHOW_NEWS_KEY) && typeof newsValue === 'boolean') {
+        localStorage.setItem('fast-show-news', newsValue ? '1' : '0');
+      } else {
+        localStorage.removeItem('fast-show-news');
+      }
+    }
+  } catch (err) {
+    // Ignore; mirrors are best-effort only
+  }
+
+  if (typeof showCustomDialog === 'function') {
+    showCustomDialog('Import complete', 'Homebase settings have been restored. Reloading...');
+  }
+  window.location.reload();
+}
+
+window.HomebaseBackup = {
+  exportState: exportHomebaseState,
+  importState: importHomebaseState
+};
+
 // Animation Dictionary (Name -> CSS Keyframes)
 // Map to store per-folder customization (id -> { color, icon })
 // Map to store per-bookmark customization (id -> { icon })

@@ -149,6 +149,64 @@ window.SettingsUI = (() => {
       });
     }
 
+    const appBackupExportBtn = document.getElementById('app-backup-export-btn');
+    const appBackupImportBtn = document.getElementById('app-backup-import-btn');
+    const appBackupImportFile = document.getElementById('app-backup-import-file');
+
+    if (appBackupExportBtn) {
+      appBackupExportBtn.addEventListener('click', async () => {
+        if (!window.HomebaseBackup || typeof window.HomebaseBackup.exportState !== 'function') {
+          if (typeof window.showCustomDialog === 'function') {
+            window.showCustomDialog('Backup unavailable', 'Backup export is unavailable.');
+          }
+          return;
+        }
+        try {
+          await window.HomebaseBackup.exportState();
+          if (typeof window.showCustomDialog === 'function') {
+            window.showCustomDialog(
+              'Backup started',
+              'Homebase backup download has started.\n\nUploaded wallpapers and videos are not included.'
+            );
+          }
+        } catch (err) {
+          console.warn('Failed to export backup', err);
+          if (typeof window.showCustomDialog === 'function') {
+            window.showCustomDialog('Backup failed', 'Backup export failed. Check console for details.');
+          }
+        }
+      });
+    }
+
+    if (appBackupImportBtn && appBackupImportFile) {
+      appBackupImportBtn.addEventListener('click', () => {
+        appBackupImportFile.click();
+      });
+
+      appBackupImportFile.addEventListener('change', async () => {
+        const file = appBackupImportFile.files && appBackupImportFile.files[0];
+        appBackupImportFile.value = '';
+        if (!file) return;
+        if (!window.HomebaseBackup || typeof window.HomebaseBackup.importState !== 'function') {
+          if (typeof window.showCustomDialog === 'function') {
+            window.showCustomDialog('Import unavailable', 'Backup import is unavailable.');
+          }
+          return;
+        }
+        try {
+          await window.HomebaseBackup.importState(file);
+        } catch (err) {
+          console.warn('Failed to import backup', err);
+          if (typeof window.showCustomDialog === 'function') {
+            window.showCustomDialog(
+              'Import failed',
+              err && err.message ? err.message : 'Backup import failed. Check console for details.'
+            );
+          }
+        }
+      });
+    }
+
     const textBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
     const textBgRow = document.getElementById('app-bookmark-text-bg-color-row');
     const textBgOpacityRow = document.getElementById('app-bookmark-text-bg-opacity-row');

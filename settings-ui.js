@@ -1,5 +1,88 @@
 window.SettingsUI = (() => {
   let initialized = false;
+  const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'support', 'about']);
+  const QR_MODAL_ANIM_MS = 220;
+  const supportQrModal = document.getElementById('support-qr-modal');
+  const supportQrModalDialog = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__dialog') : null;
+  const supportQrModalImg = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__img') : null;
+  const supportQrModalClose = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__close') : null;
+  let supportQrModalTimer = null;
+  let lastSupportQrEl = null;
+
+  function setSupportQrModalVars(qrEl) {
+    if (!supportQrModal || !supportQrModalDialog || !qrEl) return;
+    const rect = qrEl.getBoundingClientRect();
+    const dialogRect = supportQrModalDialog.getBoundingClientRect();
+    const dialogWidth = dialogRect.width || 1;
+    const dialogHeight = dialogRect.height || 1;
+    const qrCenterX = rect.left + rect.width / 2;
+    const qrCenterY = rect.top + rect.height / 2;
+    const dialogCenterX = dialogRect.left + dialogRect.width / 2;
+    const dialogCenterY = dialogRect.top + dialogRect.height / 2;
+    const translateX = qrCenterX - dialogCenterX;
+    const translateY = qrCenterY - dialogCenterY;
+    const scaleX = rect.width / dialogWidth;
+    const scaleY = rect.height / dialogHeight;
+    const scale = Math.max(Math.min(scaleX, scaleY, 1), 0.1);
+
+    supportQrModal.style.setProperty('--qr-x', `${translateX}px`);
+    supportQrModal.style.setProperty('--qr-y', `${translateY}px`);
+    supportQrModal.style.setProperty('--qr-w', `${rect.width}px`);
+    supportQrModal.style.setProperty('--qr-h', `${rect.height}px`);
+    supportQrModal.style.setProperty('--qr-scale', `${scale}`);
+    supportQrModal.style.setProperty('--qr-modal-duration', `${QR_MODAL_ANIM_MS}ms`);
+  }
+
+  function openSupportQrModal(qrEl) {
+    if (!supportQrModal || !supportQrModalImg || !qrEl) return;
+    const src = qrEl.getAttribute('src');
+    if (!src) return;
+    const alt = qrEl.getAttribute('alt');
+
+    if (supportQrModalTimer) {
+      window.clearTimeout(supportQrModalTimer);
+      supportQrModalTimer = null;
+    }
+
+    lastSupportQrEl = qrEl;
+    supportQrModalImg.src = src;
+    supportQrModalImg.alt = alt || 'Support QR code';
+    supportQrModal.classList.remove('is-hidden', 'is-closing', 'is-open');
+    supportQrModal.classList.add('is-opening');
+
+    requestAnimationFrame(() => {
+      setSupportQrModalVars(qrEl);
+      requestAnimationFrame(() => {
+        supportQrModal.classList.remove('is-opening');
+        supportQrModal.classList.add('is-open');
+      });
+    });
+  }
+
+  function closeSupportQrModal() {
+    if (!supportQrModal || supportQrModal.classList.contains('is-hidden')) return;
+
+    if (supportQrModalTimer) {
+      window.clearTimeout(supportQrModalTimer);
+      supportQrModalTimer = null;
+    }
+
+    if (lastSupportQrEl) {
+      setSupportQrModalVars(lastSupportQrEl);
+    }
+
+    supportQrModal.classList.remove('is-opening', 'is-open');
+    supportQrModal.classList.add('is-closing');
+
+    supportQrModalTimer = window.setTimeout(() => {
+      supportQrModal.classList.add('is-hidden');
+      supportQrModal.classList.remove('is-closing');
+      if (supportQrModalImg) {
+        supportQrModalImg.removeAttribute('src');
+        supportQrModalImg.removeAttribute('alt');
+      }
+    }, QR_MODAL_ANIM_MS);
+  }
 
   function setActiveAppSettingsSection(section = 'general') {
     const navItems = document.querySelectorAll('.app-settings-nav-item');
@@ -12,6 +95,32 @@ window.SettingsUI = (() => {
     sections.forEach((panel) => {
       panel.classList.toggle('active', panel.dataset.section === section);
     });
+
+    const footer = document.querySelector('.app-settings-footer');
+    if (footer) {
+      footer.classList.toggle('hidden', PANELS_WITHOUT_ACTIONS.has(section));
+    }
+  }
+
+  function hydrateAboutVersion() {
+    const versionEl = document.getElementById('about-version');
+    if (!versionEl) return;
+
+    let version = versionEl.dataset.fallback || versionEl.textContent || '';
+    try {
+      if (typeof browser !== 'undefined' && browser.runtime && typeof browser.runtime.getManifest === 'function') {
+        const manifest = browser.runtime.getManifest();
+        if (manifest && manifest.version) {
+          version = manifest.version;
+        }
+      }
+    } catch (err) {
+      // Best-effort only; leave fallback in place.
+    }
+
+    if (version) {
+      versionEl.textContent = version;
+    }
   }
 
   function openAppSettingsModal(triggerSource = 'main-settings-btn') {
@@ -40,6 +149,8 @@ window.SettingsUI = (() => {
   function setupAppSettingsModal() {
     if (!appSettingsModal || !mainSettingsBtn) return;
 
+    hydrateAboutVersion();
+
     if (appSearchRememberEngineToggle) {
       appSearchRememberEngineToggle.addEventListener('change', updateDefaultEngineVisibilityControl);
     }
@@ -54,8 +165,38 @@ window.SettingsUI = (() => {
       appSettingsModal.addEventListener('click', (e) => {
         if (e.target === appSettingsModal) {
           closeAppSettingsModal();
+          return;
+        }
+
+        const qrImage = e.target.closest('.app-settings-support-qr');
+        if (qrImage) {
+          openSupportQrModal(qrImage);
+          return;
+        }
+
+        const copyButton = e.target.closest('.app-settings-support-copy');
+        if (!copyButton) return;
+
+        const copyValue = copyButton.dataset.copy;
+        if (!copyValue || !navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
+
+        navigator.clipboard.writeText(copyValue).then(() => {
+          copyButton.textContent = 'Copied';
+          window.setTimeout(() => {
+            copyButton.textContent = 'Copy';
+          }, 900);
+        }).catch(() => {});
+      });
+    }
+    if (supportQrModal) {
+      supportQrModal.addEventListener('click', (e) => {
+        if (e.target === supportQrModal) {
+          closeSupportQrModal();
         }
       });
+    }
+    if (supportQrModalClose) {
+      supportQrModalClose.addEventListener('click', closeSupportQrModal);
     }
     if (appSettingsNav) {
       appSettingsNav.addEventListener('click', (e) => {
@@ -448,7 +589,12 @@ window.SettingsUI = (() => {
     }
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !appSettingsModal.classList.contains('hidden')) {
+      if (e.key !== 'Escape') return;
+      if (supportQrModal && !supportQrModal.classList.contains('is-hidden')) {
+        closeSupportQrModal();
+        return;
+      }
+      if (!appSettingsModal.classList.contains('hidden')) {
         closeAppSettingsModal();
       }
     });

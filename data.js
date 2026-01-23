@@ -147,23 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.10.0',
-  date: '2026-01-23',
+  version: '1.11.0',
+  date: '2026-01-24',
   items: [
     {
       type: 'NEW',
-      title: "What's New page in Settings",
-      desc: 'See the latest release highlights with version and date details.'
+      title: 'Full release history',
+      desc: 'The What\'s New tab now pulls every release entry from the changelog.'
     },
     {
       type: 'IMPROVED',
-      title: 'Update cards with type badges',
-      desc: 'Each entry is labeled and summarized for quicker scanning.'
+      title: 'On-demand updates',
+      desc: 'The What\'s New feed loads only when opened to keep Settings fast.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'What\'s New placement',
+      desc: 'The What\'s New tab now sits just above Support in the Settings nav.'
     },
     {
       type: 'FIX',
-      title: 'New badge clears after viewing',
-      desc: 'The nav indicator hides once you open What\'s New.'
+      title: 'Badge remembers last seen',
+      desc: 'The New badge now compares against the last version you viewed even before updates load.'
     }
   ]
 };

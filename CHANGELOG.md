@@ -2,6 +2,23 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v1.11.0 — 2026-01-24
+### Added
+- Full release history now appears in What's New.
+### Improved
+- What's New now loads only when opened to keep Settings fast.
+- The What's New tab now sits above Support in Settings navigation.
+### Fixed
+- The New badge now remembers the last version you viewed.
+
+## v1.10.1 — 2026-01-23
+### Added
+- Full release history now appears in the What's New tab.
+### Improved
+- What's New loads on demand when opened to keep Settings fast.
+### Fixed
+- The New badge now uses the last seen version without startup fetching.
+
 ## v1.10.0 — 2026-01-23
 ### Added
 - What's New page in Settings with version/date details and the update feed.

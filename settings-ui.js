@@ -3,6 +3,7 @@ window.SettingsUI = (() => {
   const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'support', 'whats-new', 'about']);
   const WHATS_NEW_SECTION = 'whats-new';
   const WHATS_NEW_STORAGE_KEY = 'lastSeenWhatsNewVersion';
+  const WHATS_NEW_LATEST_STORAGE_KEY = 'latestKnownWhatsNewVersion';
   const QR_MODAL_ANIM_MS = 220;
   const supportQrModal = document.getElementById('support-qr-modal');
   const supportQrModalDialog = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__dialog') : null;
@@ -10,6 +11,8 @@ window.SettingsUI = (() => {
   const supportQrModalClose = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__close') : null;
   let supportQrModalTimer = null;
   let lastSupportQrEl = null;
+  let whatsNewChangelogCache = null;
+  let whatsNewChangelogPromise = null;
 
   function setSupportQrModalVars(qrEl) {
     if (!supportQrModal || !supportQrModalDialog || !qrEl) return;
@@ -102,6 +105,134 @@ window.SettingsUI = (() => {
     }
   }
 
+  function getLatestKnownWhatsNewVersion() {
+    try {
+      return localStorage.getItem(WHATS_NEW_LATEST_STORAGE_KEY) || '';
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function setLatestKnownWhatsNewVersion(version) {
+    if (!version) return;
+    try {
+      localStorage.setItem(WHATS_NEW_LATEST_STORAGE_KEY, version);
+    } catch (err) {
+      // Best-effort only; skip if storage is unavailable.
+    }
+  }
+
+  function normalizeWhatsNewType(value) {
+    const raw = typeof value === 'string' ? value.trim().toUpperCase() : '';
+    if (raw === 'IMPROVED') return 'IMPROVED';
+    if (raw === 'FIX' || raw === 'FIXED') return 'FIX';
+    if (raw === 'ADDED' || raw === 'NEW') return 'NEW';
+    return 'NEW';
+  }
+
+  function parseChangelogMarkdown(markdown) {
+    if (typeof markdown !== 'string' || !markdown.trim()) return null;
+    const lines = markdown.split(/\r?\n/);
+    const releases = [];
+    let currentRelease = null;
+    let currentSection = '';
+    const releaseHeaderRe = /^##\s+v?(\d+\.\d+\.\d+)(?:\s*(?:-|\u2013|\u2014|\u00e2\u20ac\u201d)\s*(\d{4}-\d{2}-\d{2}))?/i;
+    const sectionRe = /^###\s+(Added|Improved|Fixed)\s*$/i;
+    const bulletRe = /^-\s+(.*)$/;
+
+    function flushRelease() {
+      if (!currentRelease) return;
+      releases.push(currentRelease);
+      currentRelease = null;
+    }
+
+    lines.forEach((line) => {
+      const headerMatch = line.match(releaseHeaderRe);
+      if (headerMatch) {
+        flushRelease();
+        currentRelease = {
+          version: headerMatch[1] || '',
+          date: headerMatch[2] || '',
+          items: []
+        };
+        currentSection = '';
+        return;
+      }
+
+      if (!currentRelease) return;
+
+      const sectionMatch = line.match(sectionRe);
+      if (sectionMatch) {
+        currentSection = sectionMatch[1];
+        return;
+      }
+
+      const bulletMatch = line.match(bulletRe);
+      if (!bulletMatch) return;
+
+      let text = bulletMatch[1].trim();
+      if (!text) return;
+
+      let section = currentSection;
+      const legacyMatch = text.match(/^\*\*(Added|Improved|Fixed)\s*:\*\*\s*(.+)$/i);
+      if (legacyMatch) {
+        section = legacyMatch[1];
+        text = legacyMatch[2].trim();
+      }
+
+      if (!text) return;
+
+      currentRelease.items.push({
+        type: normalizeWhatsNewType(section),
+        title: text,
+        section: section || ''
+      });
+    });
+
+    flushRelease();
+
+    if (!releases.length) return null;
+    return { releases };
+  }
+
+  async function loadWhatsNewChangelog() {
+    if (whatsNewChangelogCache) return whatsNewChangelogCache;
+    if (whatsNewChangelogPromise) return whatsNewChangelogPromise;
+
+    const runtime = (typeof browser !== 'undefined' && browser.runtime)
+      ? browser.runtime
+      : (typeof chrome !== 'undefined' && chrome.runtime)
+        ? chrome.runtime
+        : null;
+
+    if (!runtime || typeof runtime.getURL !== 'function') {
+      return null;
+    }
+
+    whatsNewChangelogPromise = (async () => {
+      const response = await fetch(runtime.getURL('CHANGELOG.md'));
+      if (!response.ok) {
+        throw new Error('Failed to load changelog');
+      }
+      const markdown = await response.text();
+      const parsed = parseChangelogMarkdown(markdown);
+      if (!parsed || !Array.isArray(parsed.releases) || !parsed.releases.length) {
+        throw new Error('Invalid changelog data');
+      }
+      return parsed;
+    })();
+
+    try {
+      const parsed = await whatsNewChangelogPromise;
+      whatsNewChangelogCache = parsed;
+      return parsed;
+    } catch (err) {
+      return null;
+    } finally {
+      whatsNewChangelogPromise = null;
+    }
+  }
+
   function getWhatsNewBadgeClass(type) {
     switch (type) {
       case 'IMPROVED':
@@ -118,9 +249,10 @@ window.SettingsUI = (() => {
     if (!badgeEl) return;
 
     const data = getWhatsNewData();
+    const latestKnownVersion = getLatestKnownWhatsNewVersion() || (data && data.version) || '';
     const currentVersion = typeof nextVersion === 'string' && nextVersion
       ? nextVersion
-      : (data && data.version) || '';
+      : latestKnownVersion;
 
     if (!currentVersion) {
       badgeEl.classList.add('is-hidden');
@@ -131,27 +263,140 @@ window.SettingsUI = (() => {
     badgeEl.classList.toggle('is-hidden', lastSeen === currentVersion);
   }
 
-  function markWhatsNewSeen() {
+  function markWhatsNewSeen(version) {
     const data = getWhatsNewData();
-    if (!data || !data.version) return;
+    const nextVersion = typeof version === 'string' && version
+      ? version
+      : (data && data.version) || '';
+    if (!nextVersion) return;
     try {
-      localStorage.setItem(WHATS_NEW_STORAGE_KEY, data.version);
+      localStorage.setItem(WHATS_NEW_STORAGE_KEY, nextVersion);
     } catch (err) {
       // Best-effort only; skip if storage is unavailable.
     }
-    updateWhatsNewNavBadge(data.version);
+    updateWhatsNewNavBadge(nextVersion);
   }
 
-  function renderWhatsNewSection() {
-    const data = getWhatsNewData();
+  function createWhatsNewItemElement(type, title, desc) {
+    const normalizedType = normalizeWhatsNewType(type);
+    const itemTitle = title == null ? '' : String(title);
+    const itemDesc = desc == null ? '' : String(desc);
+
+    const row = document.createElement('div');
+    row.className = 'app-settings-whatsnew-item';
+
+    const badge = document.createElement('span');
+    badge.className = `app-settings-whatsnew-badge ${getWhatsNewBadgeClass(normalizedType)}`;
+    badge.textContent = normalizedType;
+
+    const content = document.createElement('div');
+    content.className = 'app-settings-whatsnew-content';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'app-settings-whatsnew-item-title';
+    titleEl.textContent = itemTitle;
+
+    content.appendChild(titleEl);
+
+    if (itemDesc) {
+      const descEl = document.createElement('div');
+      descEl.className = 'app-settings-whatsnew-item-desc';
+      descEl.textContent = itemDesc;
+      content.appendChild(descEl);
+    }
+
+    row.appendChild(badge);
+    row.appendChild(content);
+
+    return row;
+  }
+
+  function createWhatsNewReleaseHeaderElement(release) {
+    const header = document.createElement('div');
+    header.className = 'app-settings-whatsnew-header';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'app-settings-whatsnew-title';
+    titleEl.textContent = release && release.version ? release.version : '-';
+
+    const meta = document.createElement('div');
+    meta.className = 'app-settings-whatsnew-meta';
+
+    const dateLine = document.createElement('div');
+    dateLine.className = 'app-settings-whatsnew-line';
+
+    const dateLabel = document.createElement('span');
+    dateLabel.className = 'app-settings-whatsnew-label';
+    dateLabel.textContent = 'Last updated';
+
+    const dateValue = document.createElement('span');
+    dateValue.className = 'app-settings-whatsnew-value';
+    dateValue.textContent = release && release.date ? release.date : '-';
+
+    dateLine.appendChild(dateLabel);
+    dateLine.appendChild(dateValue);
+    meta.appendChild(dateLine);
+
+    header.appendChild(titleEl);
+    header.appendChild(meta);
+
+    return header;
+  }
+
+  async function renderWhatsNewSection() {
     const versionEl = document.getElementById('whats-new-version');
     const dateEl = document.getElementById('whats-new-date');
     const listEl = document.getElementById('whats-new-list');
-    if (!data || !versionEl || !dateEl || !listEl) return;
+    if (!versionEl || !dateEl || !listEl) return;
+
+    const changelog = await loadWhatsNewChangelog();
+    const releases = changelog && Array.isArray(changelog.releases) ? changelog.releases : null;
+
+    listEl.innerHTML = '';
+
+    if (releases && releases.length) {
+      const latestRelease = releases[0];
+      const latestVersion = latestRelease && latestRelease.version ? latestRelease.version : '';
+      const latestDate = latestRelease && latestRelease.date ? latestRelease.date : '';
+
+      versionEl.textContent = latestVersion || '-';
+      dateEl.textContent = latestDate || '-';
+      if (latestVersion) {
+        setLatestKnownWhatsNewVersion(latestVersion);
+      }
+
+      let totalItems = 0;
+
+      releases.forEach((release) => {
+        if (!release) return;
+        listEl.appendChild(createWhatsNewReleaseHeaderElement(release));
+
+        const items = Array.isArray(release.items) ? release.items : [];
+        items.forEach((item) => {
+          if (!item) return;
+          const row = createWhatsNewItemElement(item.type, item.title, item.desc);
+          listEl.appendChild(row);
+          totalItems += 1;
+        });
+      });
+
+      if (!totalItems) {
+        const emptyEl = document.createElement('div');
+        emptyEl.className = 'app-settings-whatsnew-empty';
+        emptyEl.textContent = 'No updates listed yet.';
+        listEl.appendChild(emptyEl);
+      }
+
+      markWhatsNewSeen(latestVersion);
+
+      return;
+    }
+
+    const data = getWhatsNewData();
+    if (!data) return;
 
     versionEl.textContent = data.version || '-';
     dateEl.textContent = data.date || '-';
-    listEl.innerHTML = '';
 
     const items = data.items.slice(0, 5);
     if (!items.length) {
@@ -164,38 +409,11 @@ window.SettingsUI = (() => {
 
     items.forEach((item) => {
       if (!item) return;
-      const rawType = typeof item.type === 'string' ? item.type.toUpperCase() : '';
-      const type = rawType === 'IMPROVED' || rawType === 'FIX' ? rawType : 'NEW';
-      const title = item.title == null ? '' : String(item.title);
-      const desc = item.desc == null ? '' : String(item.desc);
-
-      const row = document.createElement('div');
-      row.className = 'app-settings-whatsnew-item';
-
-      const badge = document.createElement('span');
-      badge.className = `app-settings-whatsnew-badge ${getWhatsNewBadgeClass(type)}`;
-      badge.textContent = type;
-
-      const content = document.createElement('div');
-      content.className = 'app-settings-whatsnew-content';
-
-      const titleEl = document.createElement('div');
-      titleEl.className = 'app-settings-whatsnew-item-title';
-      titleEl.textContent = title;
-
-      content.appendChild(titleEl);
-
-      if (desc) {
-        const descEl = document.createElement('div');
-        descEl.className = 'app-settings-whatsnew-item-desc';
-        descEl.textContent = desc;
-        content.appendChild(descEl);
-      }
-
-      row.appendChild(badge);
-      row.appendChild(content);
+      const row = createWhatsNewItemElement(item.type, item.title, item.desc);
       listEl.appendChild(row);
     });
+
+    markWhatsNewSeen(data.version);
   }
 
   function setActiveAppSettingsSection(section = 'general') {
@@ -216,8 +434,17 @@ window.SettingsUI = (() => {
     }
 
     if (section === WHATS_NEW_SECTION) {
-      markWhatsNewSeen();
+      renderWhatsNewSection();
     }
+  }
+
+  function reorderWhatsNewNavItem() {
+    if (!appSettingsNav) return;
+    const whatsNewItem = appSettingsNav.querySelector('.app-settings-nav-item[data-section="whats-new"]');
+    const supportItem = appSettingsNav.querySelector('.app-settings-nav-item[data-section="support"]');
+    if (!whatsNewItem || !supportItem) return;
+    if (supportItem.previousElementSibling === whatsNewItem) return;
+    appSettingsNav.insertBefore(whatsNewItem, supportItem);
   }
 
   function hydrateAboutVersion() {
@@ -317,6 +544,7 @@ window.SettingsUI = (() => {
       supportQrModalClose.addEventListener('click', closeSupportQrModal);
     }
     if (appSettingsNav) {
+      reorderWhatsNewNavItem();
       appSettingsNav.addEventListener('click', (e) => {
         const btn = e.target.closest('.app-settings-nav-item');
         if (!btn) return;
@@ -722,7 +950,6 @@ window.SettingsUI = (() => {
     if (initialized) return;
     initialized = true;
     setupAppSettingsModal();
-    renderWhatsNewSection();
   }
 
   function open(options = {}) {

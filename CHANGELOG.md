@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v1.11.1 — 2026-01-24
+### Added
+- None.
+### Improved
+- News hover previews use a clean light card with higher contrast.
+- GitHub search accent color is brighter.
+### Fixed
+- News hover previews now center vertically beside items.
+
 ## v1.11.0 — 2026-01-24
 ### Added
 - Full release history now appears in What's New.

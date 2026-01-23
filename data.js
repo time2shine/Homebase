@@ -147,28 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.11.0',
+  version: '1.11.1',
   date: '2026-01-24',
   items: [
     {
-      type: 'NEW',
-      title: 'Full release history',
-      desc: 'The What\'s New tab now pulls every release entry from the changelog.'
-    },
-    {
       type: 'IMPROVED',
-      title: 'On-demand updates',
-      desc: 'The What\'s New feed loads only when opened to keep Settings fast.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'What\'s New placement',
-      desc: 'The What\'s New tab now sits just above Support in the Settings nav.'
+      title: 'News preview styling',
+      desc: 'Hover previews now use a clean light card with clearer contrast.'
     },
     {
       type: 'FIX',
-      title: 'Badge remembers last seen',
-      desc: 'The New badge now compares against the last version you viewed even before updates load.'
+      title: 'Preview positioning',
+      desc: 'News hover previews now center vertically beside the item.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'GitHub accent color',
+      desc: 'GitHub search uses a brighter blue highlight.'
     }
   ]
 };

@@ -14558,7 +14558,7 @@ let searchEngines = [
 
     name: 'GitHub', 
 
-    color: '#181717',
+    color: '#0d6efd',
 
     enabled: false, 
 
@@ -18176,7 +18176,7 @@ function positionNewsHoverPreview(targetEl, previewEl) {
     left = rect.left - previewRect.width - offset;
   }
   if (left < padding) left = padding;
-  let top = rect.top;
+  let top = rect.top + (rect.height / 2) - (previewRect.height / 2);
   if (top + previewRect.height + padding > window.innerHeight) {
     top = window.innerHeight - previewRect.height - padding;
   }

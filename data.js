@@ -147,23 +147,33 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.11.1',
+  version: '1.12.0',
   date: '2026-01-24',
   items: [
     {
-      type: 'IMPROVED',
-      title: 'News preview styling',
-      desc: 'Hover previews now use a clean light card with clearer contrast.'
+      type: 'NEW',
+      title: 'Backup export/import',
+      desc: 'Export or import your Homebase backup from Settings.'
     },
     {
-      type: 'FIX',
-      title: 'Preview positioning',
-      desc: 'News hover previews now center vertically beside the item.'
+      type: 'NEW',
+      title: 'What\'s New panel',
+      desc: 'Settings now include a What\'s New panel with a new update badge.'
     },
     {
       type: 'IMPROVED',
-      title: 'GitHub accent color',
-      desc: 'GitHub search uses a brighter blue highlight.'
+      title: 'What\'s New loading',
+      desc: 'Release history loads on demand with the full update list.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Support + QR preview',
+      desc: 'Support details and the QR preview layout are refined for clarity.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'News hover previews',
+      desc: 'Hover previews use a cleaner light card and sit centered beside headlines.'
     }
   ]
 };

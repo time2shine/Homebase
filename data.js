@@ -146,6 +146,28 @@ const GLASS_STYLES = [
   }
 ];
 
+const WHATS_NEW = {
+  version: '1.10.0',
+  date: '2026-01-23',
+  items: [
+    {
+      type: 'NEW',
+      title: "What's New page in Settings",
+      desc: 'See the latest release highlights with version and date details.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Update cards with type badges',
+      desc: 'Each entry is labeled and summarized for quicker scanning.'
+    },
+    {
+      type: 'FIX',
+      title: 'New badge clears after viewing',
+      desc: 'The nav indicator hides once you open What\'s New.'
+    }
+  ]
+};
+
 const ICON_CATEGORIES = {
   'Essentials': ['home', 'star', 'heart', 'globe', 'flag', 'fire', 'bolt'],
   'Finance': ['bank', 'wallet', 'dollar', 'euro', 'bitcoin', 'piggy'],

@@ -2950,6 +2950,23 @@ body.debug-align #quick-actions-bar {
   color: #0f172a;
 }
 
+.app-settings-nav-badge {
+  margin-left: auto;
+  font-size: 0.65em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+}
+
+.app-settings-nav-badge.is-hidden {
+  display: none;
+}
+
 .app-settings-nav .nav-divider {
   width: 100%;
   height: 1px;
@@ -2979,6 +2996,120 @@ body.debug-align #quick-actions-bar {
 
 .app-settings-section[data-section="about"] {
   gap: 16px;
+}
+
+.app-settings-section[data-section="whats-new"] {
+  gap: 14px;
+}
+
+.app-settings-whatsnew-header {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-whatsnew-title {
+  font-size: 1.2em;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.app-settings-whatsnew-meta {
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9em;
+  color: #64748b;
+}
+
+.app-settings-whatsnew-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-settings-whatsnew-label {
+  font-weight: 600;
+  color: #475569;
+}
+
+.app-settings-whatsnew-value {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-whatsnew-list,
+#whats-new-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-settings-whatsnew-item {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-whatsnew-badge {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  width: 78px;
+  align-self: start;
+  line-height: 1;
+  text-align: center;
+}
+
+.app-settings-whatsnew-badge--new {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.app-settings-whatsnew-badge--improved {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.app-settings-whatsnew-badge--fix {
+  background: #ffedd5;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.app-settings-whatsnew-content {
+  min-width: 0;
+}
+
+.app-settings-whatsnew-item-title {
+  font-weight: 700;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.app-settings-whatsnew-item-desc {
+  margin-top: 4px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.app-settings-whatsnew-empty {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed #e2e8f0;
+  color: #64748b;
+  background: #f8fafc;
 }
 
 .app-settings-about-header {

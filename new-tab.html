@@ -932,6 +932,20 @@
 
           </button>
 
+          <button class="app-settings-nav-item" data-section="whats-new" id="app-settings-whatsnew-nav">
+
+            <span class="nav-icon">
+
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 8.5 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 9 8.5 12 2"></polygon></svg>
+
+            </span>
+
+            <span class="nav-label">What's New</span>
+
+            <span id="whats-new-nav-badge" class="app-settings-nav-badge is-hidden">New</span>
+
+          </button>
+
           <button class="app-settings-nav-item" data-section="about">
 
             <span class="nav-icon">
@@ -1796,6 +1810,26 @@
               </div>
 
             </div>
+
+          </section>
+
+          <section class="app-settings-section" data-section="whats-new">
+
+            <div class="app-settings-whatsnew-header">
+              <div class="app-settings-whatsnew-title">What's New</div>
+              <div class="app-settings-whatsnew-meta">
+                <div class="app-settings-whatsnew-line">
+                  <span class="app-settings-whatsnew-label">Version</span>
+                  <span id="whats-new-version" class="app-settings-whatsnew-value">-</span>
+                </div>
+                <div class="app-settings-whatsnew-line">
+                  <span class="app-settings-whatsnew-label">Last updated</span>
+                  <span id="whats-new-date" class="app-settings-whatsnew-value">-</span>
+                </div>
+              </div>
+            </div>
+
+            <div id="whats-new-list" class="app-settings-whatsnew-list" aria-live="polite"></div>
 
           </section>
 

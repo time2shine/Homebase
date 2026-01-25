@@ -62,6 +62,18 @@
     // Ignore; instant mirror is best-effort only
   }
 
+  // Instant To-Do Visibility (sync fast path)
+  let fastTodoState = '';
+  try {
+    const rawTodo = (window.localStorage && localStorage.getItem('fast-show-todo')) || '';
+    if (rawTodo === '0' || rawTodo === '1') {
+      fastTodoState = rawTodo;
+      document.documentElement.classList.toggle('todo-hidden', rawTodo === '0');
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+
   function applyInitial(url) {
     if (!url) return;
 
@@ -122,6 +134,7 @@
   const WEATHER_PREF_KEY = 'appShowWeather';
   const QUOTE_PREF_KEY = 'appShowQuote';
   const NEWS_PREF_KEY = 'appShowNews';
+  const TODO_PREF_KEY = 'appShowTodo';
   browserApi.storage.local
     .get([SIDEBAR_PREF_KEY])
     .then((res) => {
@@ -140,17 +153,20 @@
     .catch(() => {});
 
   browserApi.storage.local
-    .get([WEATHER_PREF_KEY, QUOTE_PREF_KEY, NEWS_PREF_KEY])
+    .get([WEATHER_PREF_KEY, QUOTE_PREF_KEY, NEWS_PREF_KEY, TODO_PREF_KEY])
     .then((res) => {
       const storedWeather = res && Object.prototype.hasOwnProperty.call(res, WEATHER_PREF_KEY) ? res[WEATHER_PREF_KEY] : undefined;
       const storedQuote = res && Object.prototype.hasOwnProperty.call(res, QUOTE_PREF_KEY) ? res[QUOTE_PREF_KEY] : undefined;
       const storedNews = res && Object.prototype.hasOwnProperty.call(res, NEWS_PREF_KEY) ? res[NEWS_PREF_KEY] : undefined;
+      const storedTodo = res && Object.prototype.hasOwnProperty.call(res, TODO_PREF_KEY) ? res[TODO_PREF_KEY] : undefined;
       const shouldShowWeather = storedWeather !== false;
       const shouldShowQuote = storedQuote !== false;
       const shouldShowNews = storedNews !== false;
+      const shouldShowTodo = storedTodo !== false;
       const nextFastWeatherState = shouldShowWeather ? '1' : '0';
       const nextFastQuoteState = shouldShowQuote ? '1' : '0';
       const nextFastNewsState = shouldShowNews ? '1' : '0';
+      const nextFastTodoState = shouldShowTodo ? '1' : '0';
 
       if (fastWeatherState !== nextFastWeatherState) {
         document.documentElement.classList.toggle('weather-hidden', !shouldShowWeather);
@@ -175,6 +191,15 @@
         try {
           if (window.localStorage) {
             localStorage.setItem('fast-show-news', nextFastNewsState);
+          }
+        } catch (e) {}
+      }
+
+      if (fastTodoState !== nextFastTodoState) {
+        document.documentElement.classList.toggle('todo-hidden', !shouldShowTodo);
+        try {
+          if (window.localStorage) {
+            localStorage.setItem('fast-show-todo', nextFastTodoState);
           }
         } catch (e) {}
       }

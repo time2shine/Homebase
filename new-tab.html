@@ -467,6 +467,29 @@
 
     </div>
 
+    <div id="todo-widget" class="widget-todo glass-box widget-hidden">
+      <div class="todo-header">
+        <span class="todo-title">To-Do</span>
+        <div class="todo-header-actions">
+          <label class="todo-hide-toggle">
+            <input id="todo-hide-done" type="checkbox">
+            <span>Hide done</span>
+          </label>
+          <button id="todo-clear-btn" class="icon-btn todo-clear-btn" type="button" aria-label="Clear completed">
+            <span class="tooltip-popup tooltip-top">Clear completed</span>
+            <span class="todo-clear-text">Clear</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="todo-input-row">
+        <input id="todo-input" type="text" placeholder="Add a task..." autocomplete="off">
+        <button id="todo-add-btn" class="todo-add-btn" type="button" aria-label="Add task">+</button>
+      </div>
+
+      <ul id="todo-list" class="todo-list"></ul>
+    </div>
+
     <div class="widget-news glass-box widget-hidden">
       <div class="news-header">
         <span class="news-title">News</span>
@@ -1495,6 +1518,26 @@
                 </div>
 
                 <button id="app-configure-news-btn" class="gallery-secondary-btn">Configure</button>
+
+              </div>
+
+              <div class="app-setting-row">
+
+                <div class="app-setting-label">
+
+                  <div class="title">To-Do</div>
+
+                  <div class="hint">Show to-do widget.</div>
+
+                </div>
+
+                <label class="app-switch">
+
+                  <input type="checkbox" id="app-show-todo-toggle" checked>
+
+                  <span class="app-switch-track"></span>
+
+                </label>
 
               </div>
 

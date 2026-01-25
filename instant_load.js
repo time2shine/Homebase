@@ -159,7 +159,90 @@
       }
     }
 
-    // --- 5. Instant News ---
+    // --- 5. Instant To-Do ---
+    const todoWidget = document.querySelector('.widget-todo');
+    if (todoWidget) {
+      const todoList = $('todo-list');
+      const todoHideDone = $('todo-hide-done');
+      if (todoList) {
+        const tRaw = localStorage.getItem('fast-todo');
+        if (tRaw) {
+          let todoState = null;
+          try {
+            todoState = JSON.parse(tRaw);
+          } catch (e) {
+            todoState = null;
+          }
+          if (todoState && Array.isArray(todoState.items)) {
+            const cachedTs = Number(todoState.__timestamp);
+            if (Number.isFinite(cachedTs) && (Date.now() - cachedTs > 30 * 24 * 60 * 60 * 1000)) {
+              // Stale cache; skip instant render.
+            } else {
+              const items = todoState.items.map((item) => {
+                const text = item && typeof item.text === 'string' ? item.text.trim() : '';
+                if (!text) return null;
+                return {
+                  id: item && typeof item.id === 'string' ? item.id : '',
+                  text,
+                  done: item && item.done === true
+                };
+              }).filter(Boolean);
+              const hideDone = todoState.hideDone === true;
+              const visibleItems = hideDone ? items.filter((item) => !item.done) : items;
+
+              if (todoHideDone) {
+                todoHideDone.checked = hideDone;
+              }
+
+              todoList.innerHTML = '';
+              if (visibleItems.length === 0) {
+                const empty = document.createElement('li');
+                empty.className = 'todo-empty';
+                empty.textContent = (items.length > 0 && hideDone) ? 'No active tasks' : 'No tasks yet';
+                todoList.appendChild(empty);
+              } else {
+                visibleItems.forEach((item) => {
+                  const li = document.createElement('li');
+                  li.className = 'todo-item';
+                  if (item.done) li.classList.add('done');
+
+                  const label = document.createElement('label');
+                  label.className = 'todo-item-main';
+
+                  const toggle = document.createElement('input');
+                  toggle.type = 'checkbox';
+                  toggle.className = 'todo-toggle';
+                  toggle.checked = item.done === true;
+                  toggle.dataset.todoId = item.id;
+
+                  const text = document.createElement('span');
+                  text.className = 'todo-text';
+                  text.textContent = item.text;
+
+                  label.appendChild(toggle);
+                  label.appendChild(text);
+
+                  const delBtn = document.createElement('button');
+                  delBtn.type = 'button';
+                  delBtn.className = 'todo-delete-btn';
+                  delBtn.dataset.todoId = item.id;
+                  delBtn.setAttribute('aria-label', 'Delete task');
+                  delBtn.textContent = 'Delete';
+
+                  li.appendChild(label);
+                  li.appendChild(delBtn);
+                  todoList.appendChild(li);
+                });
+              }
+
+              showWidget(todoWidget);
+            }
+          }
+        }
+      }
+    }
+
+    // --- 6. Instant News ---
     function formatNewsUpdated(timestamp) {
       if (!timestamp) return '';
       const date = new Date(timestamp);

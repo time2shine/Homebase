@@ -337,6 +337,7 @@ button.dock-item {
   height: 100vh; /* Full height */
   overflow-y: auto; /* Allow sidebar to scroll if content overflows */
   overflow-x: visible; /* Keep tooltips visible while preserving vertical scroll */
+  scrollbar-gutter: stable;
 }
 
 /* Collapse sidebar widgets when the layout switches to compact mode */
@@ -425,6 +426,7 @@ body.sidebar-collapsed .collapsed-clock-slot {
   gap: 20px;
   height: 100vh; /* Full height */
   overflow-y: auto; /* Allow main content to scroll */
+  scrollbar-gutter: stable;
   will-change: scroll-position;
 }
 
@@ -2124,7 +2126,8 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 .widget-news,
 #settings-panel,
 .widget-quote,
-#quote-settings-panel {
+#quote-settings-panel,
+.widget-todo {
   padding: 15px;
   display: flex;
   flex-direction: column;
@@ -2136,6 +2139,7 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 html.weather-hidden .widget-weather { display: none !important; }
 html.quote-hidden .widget-quote { display: none !important; }
 html.news-hidden .widget-news { display: none !important; }
+html.todo-hidden .widget-todo { display: none !important; }
 
 .widget-quote {
   font-style: italic;
@@ -2260,9 +2264,132 @@ html.news-hidden .widget-news { display: none !important; }
 #quote-text::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.4); border-radius: 4px; }
 #quote-author { margin: 0; padding-top: 10px; text-align: right; font-size: 0.9em; }
 
+/* --- To-Do Styles --- */
+.widget-todo {
+  gap: 10px;
+}
+.todo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.todo-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.todo-title {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+.widget-todo .todo-clear-btn {
+  font-size: 0.8em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  opacity: 0.85;
+}
+.todo-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#todo-input {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  outline: none;
+}
+#todo-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+.todo-add-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 1.2em;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.todo-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.todo-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.todo-toggle {
+  margin: 0;
+}
+.todo-text {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.todo-item.done .todo-text {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.todo-delete-btn {
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.8em;
+}
+.todo-delete-btn:hover {
+  opacity: 1;
+}
+.todo-empty {
+  text-align: center;
+  font-size: 0.9em;
+  opacity: 0.7;
+  padding: 10px 0;
+}
+.todo-hide-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
 /* --- News Styles --- */
 .widget-news {
   gap: 6px;
+  overflow: hidden;
 }
 .news-header {
   display: flex;
@@ -2321,13 +2448,8 @@ html.news-hidden .widget-news { display: none !important; }
   max-width: 100%;
 }
 #news-list .news-title {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  text-overflow: ellipsis;
   line-height: 1.35;
-  max-height: calc(1.35em * 2);
+  white-space: normal;
   font-weight: 400;
   overflow-wrap: anywhere;
   word-break: break-word;

@@ -304,11 +304,11 @@
       if (newsState && newsState.__timestamp && Array.isArray(newsState.items)) {
         const isFresh = (Date.now() - newsState.__timestamp) < 1800000;
         if (isFresh) {
-          let allowNewsInstant = true;
+          let allowNewsInstant = false;
           try {
-            allowNewsInstant = localStorage.getItem('fast-show-news') !== '0';
+            allowNewsInstant = localStorage.getItem('fast-show-news') === '1';
           } catch (e) {
-            allowNewsInstant = true;
+            allowNewsInstant = false;
           }
           if (allowNewsInstant) {
             const newsList = $('news-list');

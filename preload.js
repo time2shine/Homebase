@@ -57,9 +57,13 @@
     if (rawNews === '0' || rawNews === '1') {
       fastNewsState = rawNews;
       document.documentElement.classList.toggle('news-hidden', rawNews === '0');
+    } else {
+      fastNewsState = '0';
+      document.documentElement.classList.add('news-hidden');
     }
   } catch (e) {
-    // Ignore; instant mirror is best-effort only
+    fastNewsState = '0';
+    document.documentElement.classList.add('news-hidden');
   }
 
   // Instant To-Do Visibility (sync fast path)
@@ -161,7 +165,7 @@
       const storedTodo = res && Object.prototype.hasOwnProperty.call(res, TODO_PREF_KEY) ? res[TODO_PREF_KEY] : undefined;
       const shouldShowWeather = storedWeather !== false;
       const shouldShowQuote = storedQuote !== false;
-      const shouldShowNews = storedNews !== false;
+      const shouldShowNews = storedNews === true;
       const shouldShowTodo = storedTodo !== false;
       const nextFastWeatherState = shouldShowWeather ? '1' : '0';
       const nextFastQuoteState = shouldShowQuote ? '1' : '0';

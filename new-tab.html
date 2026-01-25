@@ -1453,7 +1453,9 @@
 
             <div id="widget-sub-settings" class="sub-settings-container">
 
-              <div class="app-setting-row">
+              <div class="app-setting-row widget-setting-row" data-widget-id="weather">
+
+                <span class="widget-drag-handle" draggable="true" aria-hidden="true"></span>
 
                 <div class="app-setting-label">
 
@@ -1463,85 +1465,23 @@
 
                 </div>
 
-                <label class="app-switch">
+                <div class="widget-setting-controls">
+                  <button id="app-configure-weather-btn" class="gallery-secondary-btn">Configure</button>
 
-                  <input type="checkbox" id="app-show-weather-toggle" checked>
+                  <label class="app-switch">
 
-                  <span class="app-switch-track"></span>
+                    <input type="checkbox" id="app-show-weather-toggle" checked>
 
-                </label>
+                    <span class="app-switch-track"></span>
 
-              </div>
-
-              <div class="app-setting-row setting-sub-row" id="app-weather-config-row">
-
-                <div class="app-setting-label">
-
-                  <div class="title">Weather Settings</div>
-
-                  <div class="hint">Location and units.</div>
-
+                  </label>
                 </div>
 
-                <button id="app-configure-weather-btn" class="gallery-secondary-btn">Configure</button>
-
               </div>
 
-              <div class="app-setting-row">
+              <div class="app-setting-row widget-setting-row" data-widget-id="quote">
 
-                <div class="app-setting-label">
-
-                  <div class="title">News</div>
-
-                  <div class="hint">Show news widget.</div>
-
-                </div>
-
-                <label class="app-switch">
-
-                  <input type="checkbox" id="app-show-news-toggle" checked>
-
-                  <span class="app-switch-track"></span>
-
-                </label>
-
-              </div>
-
-              <div class="app-setting-row setting-sub-row" id="app-news-config-row">
-
-                <div class="app-setting-label">
-
-                  <div class="title">News Settings</div>
-
-                  <div class="hint">Select a source.</div>
-
-                </div>
-
-                <button id="app-configure-news-btn" class="gallery-secondary-btn">Configure</button>
-
-              </div>
-
-              <div class="app-setting-row">
-
-                <div class="app-setting-label">
-
-                  <div class="title">To-Do</div>
-
-                  <div class="hint">Show to-do widget.</div>
-
-                </div>
-
-                <label class="app-switch">
-
-                  <input type="checkbox" id="app-show-todo-toggle" checked>
-
-                  <span class="app-switch-track"></span>
-
-                </label>
-
-              </div>
-
-              <div class="app-setting-row">
+                <span class="widget-drag-handle" draggable="true" aria-hidden="true"></span>
 
                 <div class="app-setting-label">
 
@@ -1551,27 +1491,67 @@
 
                 </div>
 
-                <label class="app-switch">
+                <div class="widget-setting-controls">
+                  <button id="app-configure-quote-btn" class="gallery-secondary-btn">Configure</button>
 
-                  <input type="checkbox" id="app-show-quote-toggle" checked>
+                  <label class="app-switch">
 
-                  <span class="app-switch-track"></span>
+                    <input type="checkbox" id="app-show-quote-toggle" checked>
 
-                </label>
+                    <span class="app-switch-track"></span>
+
+                  </label>
+                </div>
 
               </div>
 
-              <div class="app-setting-row setting-sub-row" id="app-quote-config-row">
+              <div class="app-setting-row widget-setting-row" data-widget-id="todo">
+
+                <span class="widget-drag-handle" draggable="true" aria-hidden="true"></span>
 
                 <div class="app-setting-label">
 
-                  <div class="title">Quote Settings</div>
+                  <div class="title">To-Do</div>
 
-                  <div class="hint">Select categories.</div>
+                  <div class="hint">Show to-do widget.</div>
 
                 </div>
 
-                <button id="app-configure-quote-btn" class="gallery-secondary-btn">Configure</button>
+                <div class="widget-setting-controls">
+                  <label class="app-switch">
+
+                    <input type="checkbox" id="app-show-todo-toggle" checked>
+
+                    <span class="app-switch-track"></span>
+
+                  </label>
+                </div>
+
+              </div>
+
+              <div class="app-setting-row widget-setting-row" data-widget-id="news">
+
+                <span class="widget-drag-handle" draggable="true" aria-hidden="true"></span>
+
+                <div class="app-setting-label">
+
+                  <div class="title">News</div>
+
+                  <div class="hint">Show news widget.</div>
+
+                </div>
+
+                <div class="widget-setting-controls">
+                  <button id="app-configure-news-btn" class="gallery-secondary-btn">Configure</button>
+
+                  <label class="app-switch">
+
+                    <input type="checkbox" id="app-show-news-toggle">
+
+                    <span class="app-switch-track"></span>
+
+                  </label>
+                </div>
 
               </div>
 

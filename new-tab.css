@@ -3677,6 +3677,61 @@ body.debug-align #quick-actions-bar {
   border-bottom: none;
 }
 
+.app-setting-row.widget-setting-row {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.widget-setting-row .app-setting-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.widget-setting-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.widget-drag-handle {
+  width: 18px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+}
+
+.widget-drag-handle::before {
+  content: "";
+  width: 10px;
+  height: 14px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(15, 23, 42, 0.45),
+    rgba(15, 23, 42, 0.45) 2px,
+    transparent 2px,
+    transparent 4px
+  );
+}
+
+.widget-setting-row.is-dragging {
+  opacity: 0.6;
+}
+
+.widget-setting-row.is-drop-target {
+  box-shadow: 0 -1px 0 #cbd5f5;
+}
+
+.gallery-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .app-setting-label {
   display: flex;
   flex-direction: column;

@@ -447,6 +447,96 @@ window.SettingsUI = (() => {
     appSettingsNav.insertBefore(whatsNewItem, supportItem);
   }
 
+  function setupWidgetOrderDrag() {
+    const widgetList = document.getElementById('widget-sub-settings');
+    if (!widgetList || widgetList.dataset.dragReady === '1') return;
+    if (typeof ensureSubSettingsInner === 'function') {
+      ensureSubSettingsInner(widgetList);
+    }
+    const widgetInner = widgetList.querySelector('.sub-settings-inner') || widgetList;
+
+    let draggingRow = null;
+    let dropTarget = null;
+
+    const getWidgetOrderFromList = () => {
+      return Array.from(widgetInner.querySelectorAll('.widget-setting-row'))
+        .map((row) => row.dataset.widgetId)
+        .filter(Boolean);
+    };
+
+    const clearDropTarget = () => {
+      if (!dropTarget) return;
+      dropTarget.classList.remove('is-drop-target');
+      dropTarget = null;
+    };
+
+    const commitWidgetOrder = () => {
+      if (!draggingRow) return;
+      draggingRow.classList.remove('is-dragging');
+      clearDropTarget();
+      const order = getWidgetOrderFromList();
+      draggingRow = null;
+      if (typeof setWidgetOrderPreference === 'function') {
+        setWidgetOrderPreference(order, { persist: true });
+        return;
+      }
+      if (browser?.storage?.local) {
+        browser.storage.local
+          .set({ widgetOrder: order })
+          .catch((err) => console.warn('Failed to save widget order', err));
+      }
+    };
+
+    widgetList.addEventListener('dragstart', (event) => {
+      const handle = event.target.closest('.widget-drag-handle');
+      if (!handle || !widgetList.contains(handle)) return;
+      const row = handle.closest('.widget-setting-row');
+      if (!row || !widgetList.contains(row)) return;
+      draggingRow = row;
+      draggingRow.classList.add('is-dragging');
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', row.dataset.widgetId || '');
+        try {
+          event.dataTransfer.setDragImage(row, 20, 20);
+        } catch (err) {
+          // Ignore drag image failures.
+        }
+      }
+    });
+
+    widgetList.addEventListener('dragover', (event) => {
+      if (!draggingRow) return;
+      event.preventDefault();
+      const row = event.target.closest('.widget-setting-row');
+      if (!row || row === draggingRow || !widgetList.contains(row)) return;
+      const rect = row.getBoundingClientRect();
+      const shouldInsertBefore = event.clientY < rect.top + rect.height / 2;
+      const insertTarget = shouldInsertBefore ? row : row.nextElementSibling;
+      if (insertTarget !== draggingRow) {
+        widgetInner.insertBefore(draggingRow, insertTarget);
+      }
+      if (dropTarget && dropTarget !== row) {
+        dropTarget.classList.remove('is-drop-target');
+      }
+      row.classList.add('is-drop-target');
+      dropTarget = row;
+    });
+
+    widgetList.addEventListener('drop', (event) => {
+      if (!draggingRow) return;
+      event.preventDefault();
+      commitWidgetOrder();
+    });
+
+    widgetList.addEventListener('dragend', () => {
+      if (!draggingRow) return;
+      commitWidgetOrder();
+    });
+
+    widgetList.dataset.dragReady = '1';
+  }
+
   function hydrateAboutVersion() {
     const versionEl = document.getElementById('about-version');
     if (!versionEl) return;
@@ -495,6 +585,7 @@ window.SettingsUI = (() => {
     if (!appSettingsModal || !mainSettingsBtn) return;
 
     hydrateAboutVersion();
+    setupWidgetOrderDrag();
 
     if (appSearchRememberEngineToggle) {
       appSearchRememberEngineToggle.addEventListener('change', updateDefaultEngineVisibilityControl);
@@ -754,7 +845,7 @@ window.SettingsUI = (() => {
         const nextBookmarkTextBg = document.getElementById('app-bookmark-text-bg-toggle')?.checked || false;
         const nextShowWeather = appWeatherToggle ? appWeatherToggle.checked : true;
         const nextShowQuote = appQuoteToggle ? appQuoteToggle.checked : true;
-        const nextShowNews = appNewsToggle ? appNewsToggle.checked : true;
+        const nextShowNews = appNewsToggle ? appNewsToggle.checked : false;
         const nextContainerMode = document.getElementById('app-container-mode-toggle')?.checked ?? true;
         const radioKeepBehavior = document.querySelector('input[name="container-behavior"][value="keep"]');
         const nextContainerNewTab = radioKeepBehavior ? radioKeepBehavior.checked : appContainerNewTabPreference;

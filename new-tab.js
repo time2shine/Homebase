@@ -3372,6 +3372,12 @@ const APP_SHOW_NEWS_KEY = 'appShowNews';
 
 const APP_SHOW_TODO_KEY = 'appShowTodo';
 
+const WIDGET_ORDER_KEY = 'widgetOrder';
+
+const DEFAULT_WIDGET_ORDER = ['weather', 'quote', 'todo', 'news'];
+
+const WIDGET_ORDER_SET = new Set(DEFAULT_WIDGET_ORDER);
+
 const APP_NEWS_SOURCE_KEY = 'appNewsSource';
 
 const APP_MAX_TABS_KEY = 'appMaxTabsCount';
@@ -3447,6 +3453,7 @@ const HOMEBASE_OWNED_STORAGE_KEYS = [
   APP_SHOW_QUOTE_KEY,
   APP_SHOW_NEWS_KEY,
   APP_SHOW_TODO_KEY,
+  WIDGET_ORDER_KEY,
   APP_NEWS_SOURCE_KEY,
   APP_MAX_TABS_KEY,
   APP_AUTOCLOSE_KEY,
@@ -4161,9 +4168,11 @@ let appShowWeatherPreference = true;
 
 let appShowQuotePreference = true;
 
-let appShowNewsPreference = true;
+let appShowNewsPreference = false;
 
 let appShowTodoPreference = true;
+
+let widgetOrderPreference = DEFAULT_WIDGET_ORDER.slice();
 
 let appNewsSourcePreference = 'aljazeera';
 
@@ -12894,6 +12903,104 @@ function setTodoPreference(show = true, options = {}) {
   }
 }
 
+function normalizeWidgetOrder(order) {
+  const normalized = [];
+  const seen = new Set();
+
+  if (Array.isArray(order)) {
+    order.forEach((value) => {
+      if (typeof value !== 'string') return;
+      const key = value.trim();
+      if (!WIDGET_ORDER_SET.has(key) || seen.has(key)) return;
+      seen.add(key);
+      normalized.push(key);
+    });
+  }
+
+  DEFAULT_WIDGET_ORDER.forEach((key) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    normalized.push(key);
+  });
+
+  return normalized;
+}
+
+function areWidgetOrdersEqual(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) return false;
+  }
+  return true;
+}
+
+function applyWidgetOrderToSidebar(order = widgetOrderPreference) {
+  const sidebarEl = sidebar || document.querySelector('.sidebar');
+  if (!sidebarEl) return;
+
+  const widgets = {
+    weather: document.querySelector('.widget-weather'),
+    quote: document.querySelector('.widget-quote'),
+    todo: document.querySelector('.widget-todo'),
+    news: document.querySelector('.widget-news')
+  };
+
+  const fragment = document.createDocumentFragment();
+  order.forEach((key) => {
+    const widget = widgets[key];
+    if (widget) fragment.appendChild(widget);
+  });
+  sidebarEl.appendChild(fragment);
+}
+
+function applyWidgetOrderToSettings(order = widgetOrderPreference) {
+  const widgetList = document.getElementById('widget-sub-settings');
+  if (!widgetList) return;
+
+  ensureSubSettingsInner(widgetList);
+  const widgetInner = widgetList.querySelector('.sub-settings-inner') || widgetList;
+  const rows = Array.from(widgetInner.querySelectorAll('.widget-setting-row'));
+  if (!rows.length) return;
+
+  const rowMap = new Map(rows.map((row) => [row.dataset.widgetId, row]));
+  const fragment = document.createDocumentFragment();
+
+  order.forEach((key) => {
+    const row = rowMap.get(key);
+    if (row) fragment.appendChild(row);
+  });
+
+  widgetInner.appendChild(fragment);
+}
+
+function setWidgetOrderPreference(order, options = {}) {
+  const normalized = normalizeWidgetOrder(order);
+  const shouldPersist = options.persist !== false;
+  const shouldApply = options.apply !== false;
+  const shouldUpdateSettings = options.updateSettings !== false;
+
+  widgetOrderPreference = normalized;
+
+  if (shouldApply) {
+    applyWidgetOrderToSidebar(normalized);
+  }
+
+  if (shouldUpdateSettings) {
+    applyWidgetOrderToSettings(normalized);
+  }
+
+  if (shouldPersist && browser && browser.storage && browser.storage.local) {
+    browser.storage.local
+      .set({ [WIDGET_ORDER_KEY]: normalized })
+      .catch((err) => {
+        console.warn('Failed to save widget order', err);
+      });
+  }
+
+  return normalized;
+}
+
 
 
 function applyWidgetVisibility() {
@@ -13335,6 +13442,8 @@ async function loadAppSettingsFromStorage() {
 
       APP_SHOW_TODO_KEY,
 
+      WIDGET_ORDER_KEY,
+
       APP_NEWS_SOURCE_KEY,
 
       APP_MAX_TABS_KEY,
@@ -13405,14 +13514,20 @@ async function loadAppSettingsFromStorage() {
     const storedShowSidebar = stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true;
     const storedShowWeather = stored.hasOwnProperty(APP_SHOW_WEATHER_KEY) ? stored[APP_SHOW_WEATHER_KEY] !== false : true;
     const storedShowQuote = stored.hasOwnProperty(APP_SHOW_QUOTE_KEY) ? stored[APP_SHOW_QUOTE_KEY] !== false : true;
-    const storedShowNews = stored.hasOwnProperty(APP_SHOW_NEWS_KEY) ? stored[APP_SHOW_NEWS_KEY] !== false : true;
+    const hasStoredNews = stored.hasOwnProperty(APP_SHOW_NEWS_KEY);
+    const storedShowNews = hasStoredNews ? stored[APP_SHOW_NEWS_KEY] === true : false;
     const storedShowTodo = stored.hasOwnProperty(APP_SHOW_TODO_KEY) ? stored[APP_SHOW_TODO_KEY] !== false : true;
 
     appNewsSourcePreference = resolveNewsSourceId(stored[APP_NEWS_SOURCE_KEY]);
 
+    const storedWidgetOrder = stored[WIDGET_ORDER_KEY];
+    const normalizedWidgetOrder = normalizeWidgetOrder(storedWidgetOrder);
+    const shouldPersistWidgetOrder = !areWidgetOrdersEqual(storedWidgetOrder, normalizedWidgetOrder);
+    setWidgetOrderPreference(normalizedWidgetOrder, { persist: shouldPersistWidgetOrder });
+
     setWeatherPreference(storedShowWeather, { persist: false, applyVisibility: false, updateUI: false });
     setQuotePreference(storedShowQuote, { persist: false, applyVisibility: false, updateUI: false });
-    setNewsPreference(storedShowNews, { persist: false, applyVisibility: false, updateUI: false });
+    setNewsPreference(storedShowNews, { persist: !hasStoredNews, applyVisibility: false, updateUI: false });
     setTodoPreference(storedShowTodo, { persist: false, applyVisibility: false, updateUI: false });
     applySidebarVisibility(storedShowSidebar);
     applyWidgetVisibility();
@@ -13836,12 +13951,6 @@ function updateWidgetSettingsUI() {
 
   const subSettings = document.getElementById('widget-sub-settings');
 
-  const weatherConfigRow = document.getElementById('app-weather-config-row');
-
-  const quoteConfigRow = document.getElementById('app-quote-config-row');
-
-  const newsConfigRow = document.getElementById('app-news-config-row');
-
   const weatherToggleEl = document.getElementById('app-show-weather-toggle');
 
   const quoteToggleEl = document.getElementById('app-show-quote-toggle');
@@ -13849,6 +13958,12 @@ function updateWidgetSettingsUI() {
   const newsToggleEl = document.getElementById('app-show-news-toggle');
 
   const todoToggleEl = document.getElementById('app-show-todo-toggle');
+
+  const weatherConfigureBtn = document.getElementById('app-configure-weather-btn');
+
+  const quoteConfigureBtn = document.getElementById('app-configure-quote-btn');
+
+  const newsConfigureBtn = document.getElementById('app-configure-news-btn');
 
   if (weatherToggleEl) {
 
@@ -13878,11 +13993,11 @@ function updateWidgetSettingsUI() {
 
     if (subSettings) setSubSettingsExpanded(subSettings, false);
 
-    if (weatherConfigRow) weatherConfigRow.classList.remove('visible');
+    if (weatherConfigureBtn) weatherConfigureBtn.disabled = true;
 
-    if (quoteConfigRow) quoteConfigRow.classList.remove('visible');
+    if (quoteConfigureBtn) quoteConfigureBtn.disabled = true;
 
-    if (newsConfigRow) newsConfigRow.classList.remove('visible');
+    if (newsConfigureBtn) newsConfigureBtn.disabled = true;
 
     return;
 
@@ -13890,21 +14005,21 @@ function updateWidgetSettingsUI() {
 
   if (subSettings) setSubSettingsExpanded(subSettings, true);
 
-  if (weatherConfigRow) {
+  if (weatherConfigureBtn) {
 
-    weatherConfigRow.classList.toggle('visible', appShowWeatherPreference);
-
-  }
-
-  if (quoteConfigRow) {
-
-    quoteConfigRow.classList.toggle('visible', appShowQuotePreference);
+    weatherConfigureBtn.disabled = !appShowWeatherPreference;
 
   }
 
-  if (newsConfigRow) {
+  if (quoteConfigureBtn) {
 
-    newsConfigRow.classList.toggle('visible', appShowNewsPreference);
+    quoteConfigureBtn.disabled = !appShowQuotePreference;
+
+  }
+
+  if (newsConfigureBtn) {
+
+    newsConfigureBtn.disabled = !appShowNewsPreference;
 
   }
 

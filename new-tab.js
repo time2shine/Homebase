@@ -4174,6 +4174,8 @@ let appShowTodoPreference = true;
 
 let widgetOrderPreference = DEFAULT_WIDGET_ORDER.slice();
 
+let widgetSettingsSortable = null;
+
 let appNewsSourcePreference = 'aljazeera';
 
 let appMaxTabsPreference = 0; // 0 means unlimited
@@ -13002,6 +13004,53 @@ function setWidgetOrderPreference(order, options = {}) {
 }
 
 
+function setupWidgetOrderSortable() {
+  const widgetList = document.getElementById('widget-sub-settings');
+  if (!widgetList) return;
+
+  ensureSubSettingsInner(widgetList);
+  const widgetInner = widgetList.querySelector('.sub-settings-inner') || widgetList;
+
+  if (widgetSettingsSortable) {
+    widgetSettingsSortable.destroy();
+    widgetSettingsSortable = null;
+  }
+
+  const commitWidgetOrder = () => {
+    const order = Array.from(widgetInner.querySelectorAll('.widget-setting-row'))
+      .map((row) => row.dataset.widgetId)
+      .filter(Boolean);
+
+    if (!order.length) return;
+
+    if (typeof setWidgetOrderPreference === 'function') {
+      setWidgetOrderPreference(order, { persist: true });
+      return;
+    }
+
+    if (browser && browser.storage && browser.storage.local) {
+      browser.storage.local
+        .set({ [WIDGET_ORDER_KEY]: order })
+        .catch((err) => {
+          console.warn('Failed to save widget order', err);
+        });
+    }
+  };
+
+  widgetInner.querySelectorAll('.widget-drag-handle[draggable="true"]').forEach((handle) => {
+    handle.removeAttribute('draggable');
+  });
+
+  widgetSettingsSortable = initUnifiedSortable(widgetInner, () => {
+    commitWidgetOrder();
+  }, {
+    handle: '.widget-drag-handle'
+  });
+
+  widgetList.dataset.dragReady = '1';
+}
+
+
 
 function applyWidgetVisibility() {
 
@@ -14589,6 +14638,23 @@ function setupGlassSettings() {
 }
 
 
+function initUnifiedSortable(containerEl, onEnd, overrides = {}) {
+  if (!containerEl || typeof Sortable === 'undefined') return null;
+
+  const options = Object.assign({
+    animation: 150,
+    handle: '.engine-toggle-main',
+    ghostClass: 'sortable-ghost-engine'
+  }, overrides || {});
+
+  if (typeof onEnd === 'function') {
+    options.onEnd = onEnd;
+  }
+
+  return Sortable.create(containerEl, options);
+}
+
+
 function setupSearchEnginesModal() {
 
   const modal = document.getElementById('search-engines-modal');
@@ -14641,7 +14707,7 @@ function setupSearchEnginesModal() {
 
         <div class="engine-toggle-main">
 
-          <span class="engine-drag-handle">â˜°</span>
+          <span class="engine-drag-handle" aria-hidden="true">&#9776;</span>
 
           <span class="engine-toggle-icon" aria-hidden="true">${engine.symbolId ? useSvgIcon(engine.symbolId) : `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`}</span>
 
@@ -14703,15 +14769,7 @@ function setupSearchEnginesModal() {
 
     if (engineSortable) engineSortable.destroy();
 
-    engineSortable = Sortable.create(listContainer, {
-
-      animation: 150,
-
-      handle: '.engine-toggle-main',
-
-      ghostClass: 'sortable-ghost-engine'
-
-    });
+    engineSortable = initUnifiedSortable(listContainer);
 
   };
 
@@ -20095,8 +20153,13 @@ function setupLazySettingsButton() {
   mainSettingsBtn.addEventListener('click', async () => {
     try {
       await loadScriptOnce('settings-ui.js');
+      const widgetList = document.getElementById('widget-sub-settings');
+      if (widgetList && widgetList.dataset.dragReady !== '1') {
+        widgetList.dataset.dragReady = '1';
+      }
       if (window.SettingsUI && typeof window.SettingsUI.open === 'function') {
         await window.SettingsUI.open({ triggerSource: 'main-settings-btn' });
+        setupWidgetOrderSortable();
       }
     } catch (err) {
       console.warn('Failed to open settings UI', err);

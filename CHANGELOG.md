@@ -2,7 +2,34 @@
 
 All notable changes to Homebase will be documented in this file.
 
-## v1.12.0 â€” 2026-01-24
+## v0.1.56 — 2026-01-28
+### Added
+- None.
+### Improved
+- Widget order uses the unified sortable list for smoother drag-and-drop.
+- Widget settings list styling now matches other settings toggles and drag handles.
+- Drag handle icons are marked as decorative for cleaner screen reader output.
+### Fixed
+- None.
+
+## v0.1.55 — 2026-01-24
+### Added
+- None.
+### Improved
+- What's New data, settings nav/section UI, styles, and changelog
+### Fixed
+- None.
+
+## v0.1.54 — 2026-01-24
+### Added
+- Restructured Support sections and cards.
+- Added QR assets.
+### Improved
+- Restructured Support sections.
+### Fixed
+- Hid Save/Cancel on backup/support/about.
+
+## v0.1.53 — 2026-01-24
 ### Added
 - Backup export/import in Settings.
 - What's New panel and badge in Settings.

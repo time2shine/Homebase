@@ -147,33 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.12.0',
-  date: '2026-01-24',
+  version: '0.1.56',
+  date: '2026-01-28',
   items: [
     {
-      type: 'NEW',
-      title: 'Backup export/import',
-      desc: 'Export or import your Homebase backup from Settings.'
-    },
-    {
-      type: 'NEW',
-      title: 'What\'s New panel',
-      desc: 'Settings now include a What\'s New panel with a new update badge.'
+      type: 'IMPROVED',
+      title: 'Widget reorder drag',
+      desc: 'Widget order now uses the unified sortable list for smoother drag-and-drop.'
     },
     {
       type: 'IMPROVED',
-      title: 'What\'s New loading',
-      desc: 'Release history loads on demand with the full update list.'
+      title: 'Widget settings layout',
+      desc: 'Widget toggles now match the settings list styling and drag handle layout.'
     },
     {
       type: 'IMPROVED',
-      title: 'Support + QR preview',
-      desc: 'Support details and the QR preview layout are refined for clarity.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'News hover previews',
-      desc: 'Hover previews use a cleaner light card and sit centered beside headlines.'
+      title: 'Drag handle accessibility',
+      desc: 'Drag handle icons are marked as decorative to reduce screen reader noise.'
     }
   ]
 };

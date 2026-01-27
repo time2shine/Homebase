@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Homebase",
-  "version": "1.12.0",
+  "version": "0.1.56",
   "description": "Replaces the default new tab with a fast, customizable dashboard for search, weather, news, bookmarks, and focused daily use.",
 
   "icons": {

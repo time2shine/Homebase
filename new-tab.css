@@ -1094,6 +1094,19 @@ body.bookmarks-booting .bookmark-folder-tabs-container {
   cursor: pointer;
 }
 
+#bookmarks-grid .bookmark-item,
+#bookmarks-grid .bookmark-item * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#bookmarks-grid .bookmark-item img,
+#bookmarks-grid .bookmark-item svg {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 .bookmark-item.is-loading {
   opacity: 0.7;
 }
@@ -1416,6 +1429,12 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   
   resize: none; 
   overflow: hidden; 
+}
+
+#bookmarks-grid .grid-item-rename-input {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 
 .grid-item-rename-input:focus {
@@ -3138,7 +3157,7 @@ body.debug-align #quick-actions-bar {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .app-settings-section {
@@ -3151,6 +3170,10 @@ body.debug-align #quick-actions-bar {
 
 .app-settings-section.active {
   display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .app-settings-section[data-section="about"] {

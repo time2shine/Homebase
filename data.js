@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.1.58',
-  date: '2026-01-29',
+  version: '0.1.59',
+  date: '2026-01-30',
   items: [
     {
-      type: 'IMPROVED',
-      title: 'Folder add controls',
-      desc: 'New folder tabs now use clear save/cancel icons with accessible labels.'
+      type: 'FIX',
+      title: 'Bookmark selection',
+      desc: 'Bookmark tiles no longer allow long-press text selection in the grid.'
     },
     {
       type: 'FIX',
-      title: 'Duplicate folder saves',
-      desc: 'Folder creation is guarded to prevent double saves or repeated modal setup.'
+      title: 'Bookmark icon dragging',
+      desc: 'Bookmark icons are no longer draggable, preventing accidental drags.'
     },
     {
       type: 'FIX',
-      title: 'Accidental folder actions',
-      desc: 'New folder inputs no longer auto-save on blur to reduce unintended saves.'
+      title: 'Settings footer stability',
+      desc: 'The settings footer stays pinned while only the active section scrolls.'
     }
   ]
 };

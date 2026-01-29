@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.1.59 — 2026-01-30
+### Added
+- None.
+### Improved
+- None.
+### Fixed
+- Prevent long-press selection inside bookmark tiles.
+- Stop bookmark icons from being draggable in the grid.
+- Keep the Settings footer pinned while only the active section scrolls.
+
 ## v0.1.58 — 2026-01-29
 ### Added
 - None.
@@ -667,3 +677,5 @@ All notable changes to Homebase will be documented in this file.
 - None.
 ### Fixed
 - None.
+
+

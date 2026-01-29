@@ -12469,7 +12469,9 @@ const todoList = document.getElementById('todo-list');
 
 const todoClearBtn = document.getElementById('todo-clear-btn');
 
-const todoHideDoneToggle = document.getElementById('todo-hide-done');
+const todoFilterAllBtn = document.getElementById('todo-filter-all');
+
+const todoFilterActiveBtn = document.getElementById('todo-filter-active');
 
 const TODO_ITEMS_KEY = 'todoItems';
 
@@ -12508,6 +12510,18 @@ function normalizeTodoItems(items) {
 function getVisibleTodoItems() {
   if (!todoHideDone) return todoItems.slice();
   return todoItems.filter((item) => !item.done);
+}
+
+function syncTodoFilterUI() {
+  const showActiveOnly = todoHideDone === true;
+  if (todoFilterAllBtn) {
+    todoFilterAllBtn.classList.toggle('is-selected', !showActiveOnly);
+    todoFilterAllBtn.setAttribute('aria-pressed', (!showActiveOnly).toString());
+  }
+  if (todoFilterActiveBtn) {
+    todoFilterActiveBtn.classList.toggle('is-selected', showActiveOnly);
+    todoFilterActiveBtn.setAttribute('aria-pressed', showActiveOnly.toString());
+  }
 }
 
 function renderTodoList() {
@@ -12554,9 +12568,7 @@ function renderTodoList() {
     });
   }
 
-  if (todoHideDoneToggle) {
-    todoHideDoneToggle.checked = todoHideDone;
-  }
+  syncTodoFilterUI();
 
   revealWidget('.widget-todo');
 }
@@ -12656,6 +12668,16 @@ function handleTodoDelete(event) {
   commitTodoState();
 }
 
+function setTodoHideDone(nextHideDone) {
+  const nextValue = nextHideDone === true;
+  if (todoHideDone === nextValue) {
+    syncTodoFilterUI();
+    return;
+  }
+  todoHideDone = nextValue;
+  commitTodoState();
+}
+
 async function setupTodoWidget() {
   if (!todoWidget || !todoList || !todoInput) return;
   if (todoWidget.dataset.ready === '1') return;
@@ -12683,10 +12705,15 @@ async function setupTodoWidget() {
     todoClearBtn.addEventListener('click', clearCompletedTodos);
   }
 
-  if (todoHideDoneToggle) {
-    todoHideDoneToggle.addEventListener('change', () => {
-      todoHideDone = todoHideDoneToggle.checked;
-      commitTodoState();
+  if (todoFilterAllBtn) {
+    todoFilterAllBtn.addEventListener('click', () => {
+      setTodoHideDone(false);
+    });
+  }
+
+  if (todoFilterActiveBtn) {
+    todoFilterActiveBtn.addEventListener('click', () => {
+      setTodoHideDone(true);
     });
   }
 

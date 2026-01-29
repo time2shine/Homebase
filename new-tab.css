@@ -2279,6 +2279,20 @@ html.todo-hidden .widget-todo { display: none !important; }
   align-items: center;
   gap: 8px;
 }
+/* --- To-Do: Hover-only controls (All / Active / Clear) --- */
+.widget-todo .todo-header-actions {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.widget-todo:hover .todo-header-actions {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
 .todo-title {
   font-size: 1.2em;
   font-weight: 600;
@@ -2290,6 +2304,32 @@ html.todo-hidden .widget-todo { display: none !important; }
   background-color: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.2);
   opacity: 0.85;
+}
+.todo-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.widget-todo .todo-filter-btn {
+  position: relative;
+  font-size: 0.8em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  opacity: 0.85;
+}
+.widget-todo .todo-filter-btn.is-selected {
+  background-color: #fff;
+  color: #1b1b1b;
+}
+.todo-filter-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background-color: rgba(255, 255, 255, 0.35);
+  align-self: center;
 }
 .todo-input-row {
   display: flex;
@@ -2377,13 +2417,6 @@ html.todo-hidden .widget-todo { display: none !important; }
   font-size: 0.9em;
   opacity: 0.7;
   padding: 10px 0;
-}
-.todo-hide-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85em;
-  cursor: pointer;
 }
 
 /* --- News Styles --- */

@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.1.56',
-  date: '2026-01-28',
+  version: '0.1.57',
+  date: '2026-01-29',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Widget reorder drag',
-      desc: 'Widget order now uses the unified sortable list for smoother drag-and-drop.'
+      title: 'To-Do filters',
+      desc: 'Switch between All and Active tasks with the new filter buttons.'
     },
     {
       type: 'IMPROVED',
-      title: 'Widget settings layout',
-      desc: 'Widget toggles now match the settings list styling and drag handle layout.'
+      title: 'To-Do header actions',
+      desc: 'Filter and clear controls now appear on hover to keep the header clean.'
     },
     {
       type: 'IMPROVED',
-      title: 'Drag handle accessibility',
-      desc: 'Drag handle icons are marked as decorative to reduce screen reader noise.'
+      title: 'Privacy policy clarity',
+      desc: 'The policy now details cached media, favicon requests, local backups, and contact info.'
     }
   ]
 };

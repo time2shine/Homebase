@@ -471,10 +471,11 @@
       <div class="todo-header">
         <span class="todo-title">To-Do</span>
         <div class="todo-header-actions">
-          <label class="todo-hide-toggle">
-            <input id="todo-hide-done" type="checkbox">
-            <span>Hide done</span>
-          </label>
+          <div id="todo-filter-toggle" class="todo-filter-toggle" role="group" aria-label="To-do filter">
+            <button id="todo-filter-all" class="icon-btn todo-filter-btn" type="button" aria-pressed="true">All<span class="tooltip-popup tooltip-top">Show all tasks</span></button>
+            <button id="todo-filter-active" class="icon-btn todo-filter-btn" type="button" aria-pressed="false">Active<span class="tooltip-popup tooltip-top">Show active tasks</span></button>
+          </div>
+          <span class="todo-filter-divider" aria-hidden="true"></span>
           <button id="todo-clear-btn" class="icon-btn todo-clear-btn" type="button" aria-label="Clear completed">
             <span class="tooltip-popup tooltip-top">Clear completed</span>
             <span class="todo-clear-text">Clear</span>

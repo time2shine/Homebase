@@ -163,7 +163,8 @@
     const todoWidget = document.querySelector('.widget-todo');
     if (todoWidget) {
       const todoList = $('todo-list');
-      const todoHideDone = $('todo-hide-done');
+      const todoFilterAllBtn = $('todo-filter-all');
+      const todoFilterActiveBtn = $('todo-filter-active');
       if (todoList) {
         const tRaw = localStorage.getItem('fast-todo');
         if (tRaw) {
@@ -190,8 +191,13 @@
               const hideDone = todoState.hideDone === true;
               const visibleItems = hideDone ? items.filter((item) => !item.done) : items;
 
-              if (todoHideDone) {
-                todoHideDone.checked = hideDone;
+              if (todoFilterAllBtn) {
+                todoFilterAllBtn.classList.toggle('is-selected', !hideDone);
+                todoFilterAllBtn.setAttribute('aria-pressed', (!hideDone).toString());
+              }
+              if (todoFilterActiveBtn) {
+                todoFilterActiveBtn.classList.toggle('is-selected', hideDone);
+                todoFilterActiveBtn.setAttribute('aria-pressed', hideDone.toString());
               }
 
               todoList.innerHTML = '';

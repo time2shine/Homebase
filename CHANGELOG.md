@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.1.57 — 2026-01-29
+### Added
+- None.
+### Improved
+- Added All/Active filter buttons for the To-Do list.
+- To-Do header actions now appear on hover to reduce visual clutter.
+- Updated the privacy policy with clearer data handling, backups, and contact info.
+### Fixed
+- None.
+
 ## v0.1.56 — 2026-01-28
 ### Added
 - None.

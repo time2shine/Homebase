@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.1.57',
+  version: '0.1.58',
   date: '2026-01-29',
   items: [
     {
       type: 'IMPROVED',
-      title: 'To-Do filters',
-      desc: 'Switch between All and Active tasks with the new filter buttons.'
+      title: 'Folder add controls',
+      desc: 'New folder tabs now use clear save/cancel icons with accessible labels.'
     },
     {
-      type: 'IMPROVED',
-      title: 'To-Do header actions',
-      desc: 'Filter and clear controls now appear on hover to keep the header clean.'
+      type: 'FIX',
+      title: 'Duplicate folder saves',
+      desc: 'Folder creation is guarded to prevent double saves or repeated modal setup.'
     },
     {
-      type: 'IMPROVED',
-      title: 'Privacy policy clarity',
-      desc: 'The policy now details cached media, favicon requests, local backups, and contact info.'
+      type: 'FIX',
+      title: 'Accidental folder actions',
+      desc: 'New folder inputs no longer auto-save on blur to reduce unintended saves.'
     }
   ]
 };

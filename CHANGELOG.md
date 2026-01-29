@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.1.58 — 2026-01-29
+### Added
+- None.
+### Improved
+- Folder tab add controls now use clear save/cancel icons with accessible labels.
+### Fixed
+- Prevent duplicate folder creation by guarding modal setup and in-flight saves.
+- Save/Cancel actions now run once and no longer auto-save on blur to avoid accidental folders.
+- Folder dialog buttons are explicit action buttons to prevent unintended form submissions.
+
 ## v0.1.57 — 2026-01-29
 ### Added
 - None.

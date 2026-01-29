@@ -4428,6 +4428,9 @@ let folderSaveBtn;
 
 let folderCancelBtn;
 
+let folderModalInitialized = false;
+let folderCreateInFlight = false;
+
 
 
 // ===============================================
@@ -5777,6 +5780,12 @@ async function saveNewFolder() {
 
   }
 
+  if (folderCreateInFlight) {
+    return;
+  }
+
+  folderCreateInFlight = true;
+
 
 
   // Determine correct parent: Use the currently open grid folder
@@ -5832,6 +5841,8 @@ async function saveNewFolder() {
 
     alert("Error: Could not save folder.");
 
+  } finally {
+    folderCreateInFlight = false;
   }
 
 }
@@ -5845,6 +5856,7 @@ async function saveNewFolder() {
  */
 
 function setupFolderModal() {
+  if (folderModalInitialized) return;
 
   // 1. Assign global variables to DOM elements
 
@@ -5859,6 +5871,8 @@ function setupFolderModal() {
   folderCancelBtn = document.getElementById('folder-cancel-btn');
 
 
+
+  folderModalInitialized = true;
 
   // 2. Attach button listeners
 
@@ -10899,9 +10913,10 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     saveButton.className = 'bookmark-folder-save-btn';
 
-    saveButton.textContent = '?';
+    saveButton.textContent = '✓';
 
     saveButton.title = 'Save Folder';
+    saveButton.setAttribute('aria-label', 'Save folder');
 
 
 
@@ -10909,9 +10924,10 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     cancelButton.className = 'bookmark-folder-cancel-btn';
 
-    cancelButton.textContent = '?';
+    cancelButton.textContent = '✕';
 
     cancelButton.title = 'Cancel';
+    cancelButton.setAttribute('aria-label', 'Cancel');
 
 
 
@@ -10927,9 +10943,15 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     }
 
-    
+    let actionCompleted = false;
+    const markActionComplete = () => {
+      if (actionCompleted) return false;
+      actionCompleted = true;
+      return true;
+    };
 
     const saveAction = () => {
+      if (!markActionComplete()) return;
 
       const folderName = input.value.trim();
 
@@ -10945,6 +10967,11 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     };
 
+    const cancelAction = () => {
+      if (!markActionComplete()) return;
+      cleanup();
+    };
+
 
 
     saveButton.addEventListener('mousedown', (e) => e.preventDefault());
@@ -10953,7 +10980,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     saveButton.addEventListener('click', saveAction);
 
-    cancelButton.addEventListener('click', cleanup);
+    cancelButton.addEventListener('click', cancelAction);
 
 
 
@@ -10969,15 +10996,13 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
         e.preventDefault();
 
-        cancelButton.click();
+        cancelAction();
 
       }
 
     });
 
-
-
-    input.addEventListener('blur', saveAction);
+    
 
     bookmarkFolderTabsContainer.appendChild(input);
 

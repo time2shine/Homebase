@@ -3151,9 +3151,21 @@
     </div>
   </div>
 
+  <div id="tip-card" hidden>
+    <div id="tip-label">Tip of the day</div>
+    <div id="tip-title"></div>
+    <div id="tip-body"></div>
+    <div id="tip-actions">
+      <button id="tip-btn-close" type="button" aria-label="Hide tip for today"><span class="tooltip-popup tooltip-top">Hide for today</span>Hide</button>
+      <button id="tip-btn-next" type="button"><span class="tooltip-popup tooltip-top">Show another tip</span>Next</button>
+      <button id="tip-btn-disable" type="button"><span class="tooltip-popup tooltip-top">Turn off tips</span>Disable</button>
+    </div>
+  </div>
+
   <script src="instant_load.js" defer></script>
   <script src="Sortable.min.js" defer></script>
   <script src="data.js" defer></script>
+  <script src="tips.js"></script>
   <script src="new-tab.js" defer></script>
 </body>
 

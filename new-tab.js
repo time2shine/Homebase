@@ -134,6 +134,183 @@ function isNewLocalDay(prevTs, nowTs) {
 
 }
 
+function getLocalDateKey() {
+
+  return getLocalDayStamp(Date.now());
+
+}
+
+function hashStringToUint32(str) {
+
+  let hash = 2166136261;
+
+  for (let i = 0; i < str.length; i++) {
+
+    hash ^= str.charCodeAt(i);
+
+    hash = Math.imul(hash, 16777619);
+
+  }
+
+  return hash >>> 0;
+
+}
+
+function pickTipOfDay(tips, dateKey) {
+
+  if (!Array.isArray(tips) || tips.length === 0 || !dateKey) return null;
+
+  const idx = hashStringToUint32(dateKey) % tips.length;
+
+  return tips[idx] || null;
+
+}
+
+let tipPreviewIndex = null;
+let tipListenersBound = false;
+
+function renderTipOfDay() {
+
+  const tips = Array.isArray(window.HOMEBASE_TIPS) ? window.HOMEBASE_TIPS : null;
+
+  if (!tips || tips.length === 0) return;
+
+  const tipCard = document.getElementById('tip-card');
+
+  const tipLabel = document.getElementById('tip-label');
+
+  const tipTitle = document.getElementById('tip-title');
+
+  const tipBody = document.getElementById('tip-body');
+
+  const tipActions = document.getElementById('tip-actions');
+
+  const tipBtnClose = document.getElementById('tip-btn-close');
+
+  const tipBtnNext = document.getElementById('tip-btn-next');
+
+  const tipBtnDisable = document.getElementById('tip-btn-disable');
+
+  if (!tipCard || !tipLabel || !tipTitle || !tipBody || !tipActions || !tipBtnClose || !tipBtnNext || !tipBtnDisable) return;
+
+  const renderTipAtIndex = (index) => {
+
+    const tip = tips[index];
+
+    if (!tip) return;
+
+    tipTitle.textContent = tip.title || '';
+
+    tipBody.textContent = tip.body || '';
+
+    tipCard.removeAttribute('hidden');
+
+  };
+
+  const showTipIfEnabled = (lastViewed) => {
+
+    if (tipPreviewIndex === null) {
+
+      const dateKey = getLocalDateKey();
+
+      if (lastViewed && lastViewed.dateKey === dateKey && lastViewed.tipId) {
+
+        const restoredIndex = tips.findIndex((tip) => tip && tip.id != null && String(tip.id) === lastViewed.tipId);
+
+        if (restoredIndex >= 0) {
+
+          tipPreviewIndex = restoredIndex;
+
+        }
+
+      }
+
+      if (tipPreviewIndex === null) {
+
+        const tip = pickTipOfDay(tips, dateKey);
+
+        if (!tip) return;
+
+        const initialIndex = tips.indexOf(tip);
+
+        tipPreviewIndex = initialIndex >= 0 ? initialIndex : 0;
+
+      }
+
+    }
+
+    renderTipAtIndex(tipPreviewIndex);
+
+    if (!tipListenersBound) {
+
+      tipListenersBound = true;
+
+      tipBtnClose.addEventListener('click', () => {
+
+        if (window.chrome && chrome.storage && chrome.storage.local) {
+
+          chrome.storage.local.set({ tipsHiddenDateKey: getLocalDateKey() });
+
+        }
+
+        tipCard.setAttribute('hidden', '');
+
+      });
+
+      tipBtnNext.addEventListener('click', () => {
+
+        if (!tips.length) return;
+
+        tipPreviewIndex = (tipPreviewIndex + 1) % tips.length;
+
+        renderTipAtIndex(tipPreviewIndex);
+
+        const nextTip = tips[tipPreviewIndex];
+
+        if (nextTip && nextTip.id != null && window.chrome && chrome.storage && chrome.storage.local) {
+
+          chrome.storage.local.set({ tipsLastViewed: { dateKey: getLocalDateKey(), tipId: String(nextTip.id) } });
+
+        }
+
+      });
+
+      tipBtnDisable.addEventListener('click', () => {
+
+        if (window.chrome && chrome.storage && chrome.storage.local) {
+
+          chrome.storage.local.set({ tipsEnabled: false });
+
+        }
+
+        tipCard.setAttribute('hidden', '');
+
+      });
+
+    }
+
+  };
+
+  if (window.chrome && chrome.storage && chrome.storage.local) {
+
+    chrome.storage.local.get(['tipsEnabled', 'tipsHiddenDateKey', 'tipsLastViewed'], (result) => {
+
+      if (result && result.tipsEnabled === false) return;
+
+      if (result && result.tipsHiddenDateKey === getLocalDateKey()) return;
+
+      showTipIfEnabled(result ? result.tipsLastViewed : null);
+
+    });
+
+  } else {
+
+    showTipIfEnabled(null);
+
+  }
+
+}
+
 const runWhenIdle = (cb, timeout = 500) => {
 
   if ('requestIdleCallback' in window) {
@@ -22481,6 +22658,7 @@ if (browser?.storage?.onChanged) {
 
 
 document.addEventListener('DOMContentLoaded', () => {
+  renderTipOfDay();
   initAddonStoreDockLink();
 });
 

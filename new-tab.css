@@ -7981,3 +7981,91 @@ body:not(.performance-mode) .gs-card {
   background-color: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
 }
+
+#tip-card {
+  position: fixed;
+  right: calc(16px + 40px);
+  bottom: 12px;
+  z-index: 9999;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(240px, calc(100vh - 32px));
+  overflow: visible;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #111;
+  box-shadow: 0 18px 40px rgba(6, 12, 24, 0.35);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+#tip-card:hover {
+  transform: none;
+  box-shadow: 0 22px 48px rgba(6, 12, 24, 0.45);
+}
+
+#tip-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.55);
+  margin-bottom: 6px;
+}
+
+#tip-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #000;
+}
+
+#tip-body {
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: rgba(0, 0, 0, 0.8);
+  max-height: 140px;
+  overflow: auto;
+}
+
+#tip-btn-close,
+#tip-btn-next,
+#tip-btn-disable {
+  position: relative;
+}
+
+#tip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+#tip-actions button {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.04);
+  color: #111;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#tip-actions button:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tip-card {
+    transition: none;
+  }
+
+  #tip-card:hover {
+    transform: none;
+  }
+
+  #tip-actions {
+    transition: none;
+  }
+}

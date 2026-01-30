@@ -147,23 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.2.1',
+  version: '0.3.0',
   date: '2026-01-30',
   items: [
     {
-      type: 'FIX',
-      title: 'Bookmark drag ghost',
-      desc: 'Transparent favicons no longer show the fallback letter behind the drag preview.'
+      type: 'NEW',
+      title: 'Tip of the Day',
+      desc: 'A daily tip toast now appears on the new tab with a deterministic tip each day.'
     },
     {
-      type: 'FIX',
-      title: 'News preview position',
-      desc: 'Hover previews now stay fully visible near the edges of the window.'
+      type: 'NEW',
+      title: 'Tip controls',
+      desc: 'Hide tips for today, preview the next tip, or disable tips directly from the toast.'
     },
     {
       type: 'IMPROVED',
-      title: 'News header tooltips',
-      desc: 'Settings and Refresh tooltips now animate and remain visible at the top of the sidebar.'
+      title: 'Remember last tip',
+      desc: 'Your last viewed tip is restored on new tabs for the same day.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Tip toast layout',
+      desc: 'The tip card now avoids dock overlap and keeps actions visible in the card.'
     }
   ]
 };

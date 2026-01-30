@@ -1,8 +1,18 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to Homebase will be documented in this file.
 
-## v0.2.1 — 2026-01-30
+## v0.3.0 — 2026-01-30
+### Added
+- Tip of the Day toast with daily tips on the new tab.
+- Tip actions to hide for today, preview the next tip, or disable tips.
+### Improved
+- Tip toast now remembers the last viewed tip for the current day.
+- Tip toast layout avoids the dock and keeps actions visible within the card.
+### Fixed
+- None.
+
+## v0.2.1 â€” 2026-01-30
 ### Added
 - None.
 ### Improved
@@ -11,7 +21,7 @@ All notable changes to Homebase will be documented in this file.
 - Dragging bookmarks with transparent icons no longer shows a fallback letter in the drag preview.
 - News hover previews stay fully visible near the edges of the window.
 
-## v0.2.0 — 2026-01-30
+## v0.2.0 â€” 2026-01-30
 ### Added
 - Added a Privacy panel in Settings with an inline policy viewer toggle.
 ### Improved
@@ -20,7 +30,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Bookmark grid drag is more deliberate on touch and folder clicks open reliably.
 
-## v0.1.59 — 2026-01-30
+## v0.1.59 â€” 2026-01-30
 ### Added
 - None.
 ### Improved
@@ -30,7 +40,7 @@ All notable changes to Homebase will be documented in this file.
 - Stop bookmark icons from being draggable in the grid.
 - Keep the Settings footer pinned while only the active section scrolls.
 
-## v0.1.58 — 2026-01-29
+## v0.1.58 â€” 2026-01-29
 ### Added
 - None.
 ### Improved
@@ -40,7 +50,7 @@ All notable changes to Homebase will be documented in this file.
 - Save/Cancel actions now run once and no longer auto-save on blur to avoid accidental folders.
 - Folder dialog buttons are explicit action buttons to prevent unintended form submissions.
 
-## v0.1.57 — 2026-01-29
+## v0.1.57 â€” 2026-01-29
 ### Added
 - None.
 ### Improved
@@ -50,7 +60,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.56 — 2026-01-28
+## v0.1.56 â€” 2026-01-28
 ### Added
 - None.
 ### Improved
@@ -60,7 +70,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.55 — 2026-01-24
+## v0.1.55 â€” 2026-01-24
 ### Added
 - None.
 ### Improved
@@ -68,7 +78,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.54 — 2026-01-24
+## v0.1.54 â€” 2026-01-24
 ### Added
 - Restructured Support sections and cards.
 - Added QR assets.
@@ -77,7 +87,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Hid Save/Cancel on backup/support/about.
 
-## v0.1.53 — 2026-01-24
+## v0.1.53 â€” 2026-01-24
 ### Added
 - Backup export/import in Settings.
 - What's New panel and badge in Settings.
@@ -88,7 +98,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.52 — 2026-01-24
+## v0.1.52 â€” 2026-01-24
 ### Added
 - None.
 ### Improved
@@ -97,7 +107,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.51 — 2026-01-23
+## v0.1.51 â€” 2026-01-23
 ### Added
 - add backup export/import
 - add what's new panel and badge
@@ -106,7 +116,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.50 — 2026-01-21
+## v0.1.50 â€” 2026-01-21
 ### Added
 - None.
 ### Improved
@@ -114,7 +124,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - order items before slicing
 
-## v0.1.49 — 2026-01-20
+## v0.1.49 â€” 2026-01-20
 ### Added
 - add privacy policy and accessibility labels
 ### Improved
@@ -122,7 +132,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.48 — 2026-01-19
+## v0.1.48 â€” 2026-01-19
 ### Added
 - None.
 ### Improved
@@ -132,7 +142,7 @@ All notable changes to Homebase will be documented in this file.
 - align hover preview with tooltip animation
 - defer daily rotation by calendar day
 
-## v0.1.47 — 2026-01-18
+## v0.1.47 â€” 2026-01-18
 ### Added
 - add configurable news widget
 - add updated timestamp and settings button
@@ -144,7 +154,7 @@ All notable changes to Homebase will be documented in this file.
 - contain headlines within widget
 - prevent widget tooltips from clipping
 
-## v0.1.46 — 2026-01-17
+## v0.1.46 â€” 2026-01-17
 ### Added
 - None.
 ### Improved
@@ -153,7 +163,7 @@ All notable changes to Homebase will be documented in this file.
 - remove bookmark icon fade transitions
 - persist icons and use xhr blob fetch
 
-## v0.1.45 — 2026-01-16
+## v0.1.45 â€” 2026-01-16
 ### Added
 - None.
 ### Improved
@@ -161,7 +171,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.44 — 2026-01-12
+## v0.1.44 â€” 2026-01-12
 ### Added
 - None.
 ### Improved
@@ -175,7 +185,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix bookmark modal overlay click handling
 
-## v0.1.43 — 2026-01-11
+## v0.1.43 â€” 2026-01-11
 ### Added
 - None.
 ### Improved
@@ -183,7 +193,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.42 — 2026-01-10
+## v0.1.42 â€” 2026-01-10
 ### Added
 - None.
 ### Improved
@@ -191,7 +201,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.41 — 2026-01-08
+## v0.1.41 â€” 2026-01-08
 ### Added
 - None.
 ### Improved
@@ -199,7 +209,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.40 — 2026-01-06
+## v0.1.40 â€” 2026-01-06
 ### Added
 - None.
 ### Improved
@@ -207,7 +217,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.39 — 2026-01-05
+## v0.1.39 â€” 2026-01-05
 ### Added
 - None.
 ### Improved
@@ -217,7 +227,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.38 — 2026-01-04
+## v0.1.38 â€” 2026-01-04
 ### Added
 - None.
 ### Improved
@@ -229,7 +239,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.37 — 2026-01-03
+## v0.1.37 â€” 2026-01-03
 ### Added
 - Add performance debug overlay and idle task scheduler
 ### Improved
@@ -239,7 +249,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.36 — 2026-01-02
+## v0.1.36 â€” 2026-01-02
 ### Added
 - Add modal folder picker for Homebase root
 ### Improved
@@ -254,7 +264,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix cursor feedback for bookmark tab dragging
 
-## v0.1.35 — 2026-01-01
+## v0.1.35 â€” 2026-01-01
 ### Added
 - Make dock add-on shortcut browser-aware
 - Add Homebase bookmark root setup and empty state
@@ -265,7 +275,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.34 — 2025-12-30
+## v0.1.34 â€” 2025-12-30
 ### Added
 - None.
 ### Improved
@@ -273,7 +283,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.33 — 2025-12-29
+## v0.1.33 â€” 2025-12-29
 ### Added
 - None.
 ### Improved
@@ -281,7 +291,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.32 — 2025-12-28
+## v0.1.32 â€” 2025-12-28
 ### Added
 - None.
 ### Improved
@@ -291,7 +301,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.31 — 2025-12-27
+## v0.1.31 â€” 2025-12-27
 ### Added
 - None.
 ### Improved
@@ -299,7 +309,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.30 — 2025-12-26
+## v0.1.30 â€” 2025-12-26
 ### Added
 - Add user-controlled background dimming
 - Add gallery wallpaper controls to app settings
@@ -312,7 +322,7 @@ All notable changes to Homebase will be documented in this file.
 - Fix gallery layout when switching sections
 - Fix My Wallpapers preview sizing
 
-## v0.1.29 — 2025-12-25
+## v0.1.29 â€” 2025-12-25
 ### Added
 - Add gallery cleanup and virtual grid
 ### Improved
@@ -322,7 +332,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix gallery virtual scroll target
 
-## v0.1.28 — 2025-12-20
+## v0.1.28 â€” 2025-12-20
 ### Added
 - Add new glass style presets
 ### Improved
@@ -331,7 +341,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.27 — 2025-12-19
+## v0.1.27 â€” 2025-12-19
 ### Added
 - Add 100MB cap for My Wallpapers video uploads
 ### Improved
@@ -346,7 +356,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.26 — 2025-12-18
+## v0.1.26 â€” 2025-12-18
 ### Added
 - None.
 ### Improved
@@ -355,7 +365,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix bookmark prompt positioning
 
-## v0.1.25 — 2025-12-17
+## v0.1.25 â€” 2025-12-17
 ### Added
 - None.
 ### Improved
@@ -364,7 +374,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.24 — 2025-12-16
+## v0.1.24 â€” 2025-12-16
 ### Added
 - None.
 ### Improved
@@ -373,7 +383,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.23 — 2025-12-15
+## v0.1.23 â€” 2025-12-15
 ### Added
 - Add smart paste and sorting to blank grid menu
 ### Improved
@@ -382,7 +392,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.22 — 2025-12-14
+## v0.1.22 â€” 2025-12-14
 ### Added
 - None.
 ### Improved
@@ -394,7 +404,7 @@ All notable changes to Homebase will be documented in this file.
 - Fix virtualizer bookmark drag
 - Fix wallpaper load deadlocks and storage bloat
 
-## v0.1.21 — 2025-12-13
+## v0.1.21 â€” 2025-12-13
 ### Added
 - Add first-render animation for virtualized folders
 - Add grid animation toggle with configurable speed
@@ -411,7 +421,7 @@ All notable changes to Homebase will be documented in this file.
 - Fix drag virtualization guard and wallpaper caching
 - Fix bookmark creation parent selection
 
-## v0.1.20 — 2025-12-12
+## v0.1.20 â€” 2025-12-12
 ### Added
 - Add battery saver preference and idle video start
 - Add weather caching and adjust preload state
@@ -435,7 +445,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix performance-mode dialogs
 
-## v0.1.19 — 2025-12-11
+## v0.1.19 â€” 2025-12-11
 ### Added
 - None.
 ### Improved
@@ -446,7 +456,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix background video crossfade to remove black flash
 
-## v0.1.18 — 2025-12-09
+## v0.1.18 â€” 2025-12-09
 ### Added
 - Add rotation slider and live color preview
 ### Improved
@@ -462,7 +472,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.17 — 2025-12-08
+## v0.1.17 â€” 2025-12-08
 ### Added
 - None.
 ### Improved
@@ -470,7 +480,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.16 — 2025-12-07
+## v0.1.16 â€” 2025-12-07
 ### Added
 - None.
 ### Improved
@@ -478,7 +488,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.15 — 2025-12-06
+## v0.1.15 â€” 2025-12-06
 ### Added
 - Add folder glyph catalog to icons module
 - Add folder icon scaling controls and recursive color apply
@@ -490,7 +500,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix edit folder icon preview rendering
 
-## v0.1.14 — 2025-12-03
+## v0.1.14 â€” 2025-12-03
 ### Added
 - Add dev Firefox task and gecko id
 ### Improved
@@ -498,7 +508,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix folder color refresh and slim UI elements
 
-## v0.1.13 — 2025-11-29
+## v0.1.13 â€” 2025-11-29
 ### Added
 - Add folder customization UI and metadata
 ### Improved
@@ -510,7 +520,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.12 — 2025-11-28
+## v0.1.12 â€” 2025-11-28
 ### Added
 - Add hybrid color swatches for bookmark icons
 - Add performance mode and pointer optimizations
@@ -536,7 +546,7 @@ All notable changes to Homebase will be documented in this file.
 - Fix favicon flicker when rebuilding bookmarks
 - Fix bookmark visibility in performance mode
 
-## v0.1.11 — 2025-11-27
+## v0.1.11 â€” 2025-11-27
 ### Added
 - Add solid custom alert modal and guard search engine toggles
 ### Improved
@@ -548,7 +558,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.10 — 2025-11-26
+## v0.1.10 â€” 2025-11-26
 ### Added
 - Add search engine management modal and update search settings
 - Add default search engine preference when remembering is disabled
@@ -569,7 +579,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix calculator suggestion ordering and styling
 
-## v0.1.9 — 2025-11-25
+## v0.1.9 â€” 2025-11-25
 ### Added
 - None.
 ### Improved
@@ -578,7 +588,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.8 — 2025-11-24
+## v0.1.8 â€” 2025-11-24
 ### Added
 - Add gallery-style app settings modal
 - Add tab management section and singleton handling
@@ -593,7 +603,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix search result new-tab handling
 
-## v0.1.7 — 2025-11-23
+## v0.1.7 â€” 2025-11-23
 ### Added
 - Add interactive tag filtering to gallery
 ### Improved
@@ -609,7 +619,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.6 — 2025-11-22
+## v0.1.6 â€” 2025-11-22
 ### Added
 - Add close button styling and enhance gallery settings toggle with lamp-style design
 - Add loading state for next wallpaper button
@@ -631,7 +641,7 @@ All notable changes to Homebase will be documented in this file.
 - Fix gallery like button positioning and isolate confetti animation
 - Fix live wallpaper uploads using cache key normalization
 
-## v0.1.5 — 2025-11-21
+## v0.1.5 â€” 2025-11-21
 ### Added
 - Implement daily wallpaper management and background video crossfade
 - Enhance bookmark item loading state and add loading spinner
@@ -643,7 +653,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Improve daily wallpaper selection logic and ensure fallback display during cold starts
 
-## v0.1.4 — 2025-11-20
+## v0.1.4 â€” 2025-11-20
 ### Added
 - None.
 ### Improved
@@ -651,7 +661,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - None.
 
-## v0.1.3 — 2025-11-18
+## v0.1.3 â€” 2025-11-18
 ### Added
 - enhance bookmark grid with drag-and-drop functionality and improved animations
 - add fade-in animation for grid items and enhance drag-and-drop visuals
@@ -662,7 +672,7 @@ All notable changes to Homebase will be documented in this file.
 - update favicon size to 64px for better visibility and adjust bookmark tab overflow logic
 - remove invisible characters from the beginning of new-tab.js
 
-## v0.1.2 — 2025-11-17
+## v0.1.2 â€” 2025-11-17
 ### Added
 - Add edit modal for subfolder context actions
 - Add files via upload
@@ -677,7 +687,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Fix bookmark grid alignment and layout consistency
 
-## v0.1.1 — 2025-11-16
+## v0.1.1 â€” 2025-11-16
 ### Added
 - Add move dialog for bookmarks, align modal styling, and center dropdown
 - Add custom move-folder dropdown and center list
@@ -687,7 +697,7 @@ All notable changes to Homebase will be documented in this file.
 ### Fixed
 - Resize grid rename box to fit content
 
-## v0.1.0 — 2025-11-15
+## v0.1.0 â€” 2025-11-15
 ### Added
 - Add files via upload
 - Add files via upload
@@ -695,5 +705,6 @@ All notable changes to Homebase will be documented in this file.
 - None.
 ### Fixed
 - None.
+
 
 

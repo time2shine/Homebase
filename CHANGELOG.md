@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.2.0 — 2026-01-30
+### Added
+- Added a Privacy panel in Settings with an inline policy viewer toggle.
+### Improved
+- Settings sections now follow the order: Backup, What's New, Support, Privacy, About.
+- Sort by name now keeps folders first and sorts folders and bookmarks A-Z.
+### Fixed
+- Bookmark grid drag is more deliberate on touch and folder clicks open reliably.
+
 ## v0.1.59 — 2026-01-30
 ### Added
 - None.

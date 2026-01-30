@@ -1,6 +1,6 @@
 window.SettingsUI = (() => {
   let initialized = false;
-  const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'support', 'whats-new', 'about']);
+  const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'support', 'whats-new', 'about', 'privacy']);
   const WHATS_NEW_SECTION = 'whats-new';
   const WHATS_NEW_STORAGE_KEY = 'lastSeenWhatsNewVersion';
   const WHATS_NEW_LATEST_STORAGE_KEY = 'latestKnownWhatsNewVersion';
@@ -13,6 +13,8 @@ window.SettingsUI = (() => {
   let lastSupportQrEl = null;
   let whatsNewChangelogCache = null;
   let whatsNewChangelogPromise = null;
+  let privacyPolicyCache = null;
+  let privacyPolicyFetchPromise = null;
 
   function setSupportQrModalVars(qrEl) {
     if (!supportQrModal || !supportQrModalDialog || !qrEl) return;
@@ -438,13 +440,231 @@ window.SettingsUI = (() => {
     }
   }
 
-  function reorderWhatsNewNavItem() {
-    if (!appSettingsNav) return;
-    const whatsNewItem = appSettingsNav.querySelector('.app-settings-nav-item[data-section="whats-new"]');
-    const supportItem = appSettingsNav.querySelector('.app-settings-nav-item[data-section="support"]');
-    if (!whatsNewItem || !supportItem) return;
-    if (supportItem.previousElementSibling === whatsNewItem) return;
-    appSettingsNav.insertBefore(whatsNewItem, supportItem);
+  function createPrivacyNavItem() {
+    const navItem = document.createElement('button');
+    navItem.className = 'app-settings-nav-item';
+    navItem.dataset.section = 'privacy';
+    navItem.innerHTML = `
+      <span class="nav-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+      </span>
+      <span class="nav-label">Privacy</span>
+    `;
+    return navItem;
+  }
+
+  function createPrivacySection() {
+    const section = document.createElement('section');
+    section.className = 'app-settings-section';
+    section.dataset.section = 'privacy';
+
+    const header = document.createElement('div');
+    header.className = 'app-settings-about-header';
+    const title = document.createElement('div');
+    title.className = 'app-settings-about-title';
+    title.textContent = 'Privacy';
+    header.appendChild(title);
+    section.appendChild(header);
+
+    const summaryBlock = document.createElement('div');
+    summaryBlock.className = 'app-settings-about-block';
+    const summaryHeading = document.createElement('div');
+    summaryHeading.className = 'app-settings-about-heading';
+    summaryHeading.textContent = 'Summary';
+    const summaryList = document.createElement('ul');
+    summaryList.className = 'app-settings-about-list';
+    ['Homebase does not sell personal data.', 'No analytics or tracking.', 'Most data stays on your device.']
+      .forEach((text) => {
+        const item = document.createElement('li');
+        item.textContent = text;
+        summaryList.appendChild(item);
+      });
+    summaryBlock.appendChild(summaryHeading);
+    summaryBlock.appendChild(summaryList);
+    section.appendChild(summaryBlock);
+
+    const storageBlock = document.createElement('div');
+    storageBlock.className = 'app-settings-about-block';
+    const storageHeading = document.createElement('div');
+    storageHeading.className = 'app-settings-about-heading';
+    storageHeading.textContent = 'What Homebase stores locally';
+    const storageList = document.createElement('ul');
+    storageList.className = 'app-settings-about-list';
+    [
+      'Your settings (enabled widgets, preferences, UI configuration)',
+      'Cached content for faster loading (e.g., recently fetched news items)',
+      'Wallpaper selections and cached wallpaper assets',
+      'Cached media files (images and videos) stored locally to support wallpapers and fast loading'
+    ].forEach((text) => {
+      const item = document.createElement('li');
+      item.textContent = text;
+      storageList.appendChild(item);
+    });
+    storageBlock.appendChild(storageHeading);
+    storageBlock.appendChild(storageList);
+    section.appendChild(storageBlock);
+
+    const networkBlock = document.createElement('div');
+    networkBlock.className = 'app-settings-about-block';
+    const networkHeading = document.createElement('div');
+    networkHeading.className = 'app-settings-about-heading';
+    networkHeading.textContent = 'Network requests';
+    const networkText = document.createElement('p');
+    networkText.textContent = 'Network requests occur only to provide enabled features (news feeds, weather, wallpaper media, search suggestions).';
+    networkBlock.appendChild(networkHeading);
+    networkBlock.appendChild(networkText);
+    section.appendChild(networkBlock);
+
+    const policyBlock = document.createElement('div');
+    policyBlock.className = 'app-settings-about-block';
+    const policyHeading = document.createElement('div');
+    policyHeading.className = 'app-settings-about-heading';
+    policyHeading.textContent = 'Full policy';
+    const policyText = document.createElement('p');
+    const policyButton = document.createElement('button');
+    policyButton.type = 'button';
+    policyButton.className = 'app-settings-about-link app-settings-privacy-policy-toggle';
+    policyButton.textContent = 'Show';
+    policyText.appendChild(policyButton);
+    const policyContent = document.createElement('pre');
+    policyContent.className = 'app-settings-privacy-policy-text';
+    policyContent.style.whiteSpace = 'pre-wrap';
+    policyContent.style.maxHeight = '260px';
+    policyContent.style.overflow = 'auto';
+    policyContent.style.marginTop = '10px';
+    policyContent.style.display = 'none';
+    policyBlock.appendChild(policyHeading);
+    policyBlock.appendChild(policyText);
+    policyBlock.appendChild(policyContent);
+    section.appendChild(policyBlock);
+
+    return section;
+  }
+
+  function loadPrivacyPolicyInto(contentEl) {
+    if (!contentEl) return;
+
+    if (privacyPolicyCache !== null) {
+      contentEl.textContent = privacyPolicyCache;
+      contentEl.dataset.loaded = '1';
+      return;
+    }
+
+    if (privacyPolicyFetchPromise) {
+      privacyPolicyFetchPromise
+        .then((text) => {
+          contentEl.textContent = text;
+          contentEl.dataset.loaded = '1';
+        })
+        .catch(() => {
+          contentEl.textContent = 'Unable to load privacy policy.';
+        });
+      return;
+    }
+
+    const runtime = (typeof browser !== 'undefined' && browser.runtime && typeof browser.runtime.getURL === 'function')
+      ? browser.runtime
+      : (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome.runtime.getURL === 'function')
+        ? chrome.runtime
+        : null;
+
+    if (!runtime) {
+      contentEl.textContent = 'Unable to load privacy policy.';
+      return;
+    }
+
+    const policyUrl = runtime.getURL('PRIVACY.md');
+    contentEl.textContent = 'Loading...';
+
+    privacyPolicyFetchPromise = fetch(policyUrl)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch privacy policy');
+        return res.text();
+      })
+      .then((text) => {
+        privacyPolicyCache = text;
+        return text;
+      })
+      .finally(() => {
+        privacyPolicyFetchPromise = null;
+      });
+
+    privacyPolicyFetchPromise
+      .then((text) => {
+        contentEl.textContent = text;
+        contentEl.dataset.loaded = '1';
+      })
+      .catch(() => {
+        contentEl.textContent = 'Unable to load privacy policy.';
+      });
+  }
+
+  function handlePrivacyPolicyClick(btn) {
+    const section = btn.closest('.app-settings-section');
+    if (!section) return;
+    const contentEl = section.querySelector('.app-settings-privacy-policy-text');
+    if (!contentEl) return;
+
+    const isHidden = contentEl.style.display === 'none';
+    if (isHidden) {
+      contentEl.style.display = 'block';
+      btn.textContent = 'Hide';
+      if (contentEl.dataset.loaded !== '1') {
+        loadPrivacyPolicyInto(contentEl);
+      }
+      return;
+    }
+
+    contentEl.style.display = 'none';
+    btn.textContent = 'Show';
+  }
+
+  function ensureSettingsSectionOrder() {
+    const appSettingsContent = document.querySelector('.app-settings-content');
+    if (!appSettingsNav || !appSettingsContent) return;
+
+    const navOrder = ['backup', 'whats-new', 'support', 'privacy', 'about'];
+    const navItems = new Map();
+
+    navOrder.forEach((section) => {
+      let item = appSettingsNav.querySelector(`.app-settings-nav-item[data-section="${section}"]`);
+      if (!item && section === 'privacy') {
+        item = createPrivacyNavItem();
+      }
+      if (item) {
+        navItems.set(section, item);
+      }
+    });
+
+    const navFragment = document.createDocumentFragment();
+    navOrder.forEach((section) => {
+      const item = navItems.get(section);
+      if (item) navFragment.appendChild(item);
+    });
+
+    const navDivider = appSettingsNav.querySelector('.nav-divider');
+    appSettingsNav.insertBefore(navFragment, navDivider ? navDivider.nextSibling : null);
+
+    const panelOrder = ['backup', 'whats-new', 'support', 'privacy', 'about'];
+    const panelItems = new Map();
+
+    panelOrder.forEach((section) => {
+      let panel = appSettingsContent.querySelector(`.app-settings-section[data-section="${section}"]`);
+      if (!panel && section === 'privacy') {
+        panel = createPrivacySection();
+      }
+      if (panel) {
+        panelItems.set(section, panel);
+      }
+    });
+
+    const panelFragment = document.createDocumentFragment();
+    panelOrder.forEach((section) => {
+      const panel = panelItems.get(section);
+      if (panel) panelFragment.appendChild(panel);
+    });
+
+    appSettingsContent.insertBefore(panelFragment, null);
   }
 
   function setupWidgetOrderSortable() {
@@ -567,6 +787,12 @@ window.SettingsUI = (() => {
           return;
         }
 
+        const privacyPolicyBtn = e.target.closest('.app-settings-privacy-policy-toggle');
+        if (privacyPolicyBtn) {
+          handlePrivacyPolicyClick(privacyPolicyBtn);
+          return;
+        }
+
         const qrImage = e.target.closest('.app-settings-support-qr');
         if (qrImage) {
           openSupportQrModal(qrImage);
@@ -598,7 +824,7 @@ window.SettingsUI = (() => {
       supportQrModalClose.addEventListener('click', closeSupportQrModal);
     }
     if (appSettingsNav) {
-      reorderWhatsNewNavItem();
+      ensureSettingsSectionOrder();
       appSettingsNav.addEventListener('click', (e) => {
         const btn = e.target.closest('.app-settings-nav-item');
         if (!btn) return;

@@ -147,23 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.1.59',
+  version: '0.2.0',
   date: '2026-01-30',
   items: [
     {
-      type: 'FIX',
-      title: 'Bookmark selection',
-      desc: 'Bookmark tiles no longer allow long-press text selection in the grid.'
+      type: 'NEW',
+      title: 'Privacy settings',
+      desc: 'A new Privacy panel includes an inline policy viewer with a show/hide toggle.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Settings order',
+      desc: 'Backup, What\'s New, Support, Privacy, and About now follow a consistent order.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Sort by name',
+      desc: 'Bookmark sorting now groups folders first and sorts both folders and bookmarks A-Z.'
     },
     {
       type: 'FIX',
-      title: 'Bookmark icon dragging',
-      desc: 'Bookmark icons are no longer draggable, preventing accidental drags.'
-    },
-    {
-      type: 'FIX',
-      title: 'Settings footer stability',
-      desc: 'The settings footer stays pinned while only the active section scrolls.'
+      title: 'Bookmark dragging',
+      desc: 'Folder clicks are more reliable and drag-and-drop starts more intentionally on touch.'
     }
   ]
 };

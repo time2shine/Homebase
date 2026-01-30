@@ -2892,6 +2892,8 @@ let folderHoverTarget = null;
 
 let folderHoverStart = 0;
 
+let lastGridDragOverItem = null;
+
 const FOLDER_HOVER_DELAY_MS = 250; // tweak this (200-400ms) to taste
 
 // --- VIRTUALIZATION GLOBALS ---
@@ -8199,8 +8201,9 @@ function setupGridSortable(gridElement) {
     dataIdAttr: 'data-bookmark-id',
 
     // Performance Settings
-    delay: 0,
-    touchStartThreshold: 3,
+    delay: 150, // Touch-only delay keeps mouse drag responsive; tolerance reduces micro-drag.
+    delayOnTouchOnly: true,
+    touchStartThreshold: 6,
 
     ghostClass: 'bookmark-placeholder',
     chosenClass: 'sortable-chosen',
@@ -8209,6 +8212,7 @@ function setupGridSortable(gridElement) {
     forceFallback: true,
     fallbackClass: 'bookmark-fallback-ghost',
     fallbackOnBody: true,
+    fallbackTolerance: 6,
 
     onStart: () => {
       isGridDragging = true;
@@ -8260,20 +8264,6 @@ function handleGridMove(evt) {
 
 
 
-  // Clear drag-over from all but the current target
-
-  grid.querySelectorAll('.bookmark-item.drag-over').forEach(item => {
-
-    if (item !== targetItem) {
-
-      item.classList.remove('drag-over');
-
-    }
-
-  });
-
-
-
   // Only care about folder targets (not the dragged item itself)
 
   if (targetItem && targetItem.dataset.isFolder === 'true' && targetItem !== draggedItem) {
@@ -8306,6 +8296,18 @@ function handleGridMove(evt) {
 
       //  - return false to "lock" the layout in place
 
+      if (lastGridDragOverItem && lastGridDragOverItem !== targetItem) {
+
+        lastGridDragOverItem.classList.remove('drag-over');
+
+      }
+
+      if (lastGridDragOverItem !== targetItem) {
+
+        lastGridDragOverItem = targetItem;
+
+      }
+
       targetItem.classList.add('drag-over');
 
       return false; // prevent Sortable from reordering while over this folder
@@ -8313,6 +8315,14 @@ function handleGridMove(evt) {
     } else {
 
       // Still in the "passing through" phase ? allow normal reordering
+
+      if (lastGridDragOverItem) {
+
+        lastGridDragOverItem.classList.remove('drag-over');
+
+        lastGridDragOverItem = null;
+
+      }
 
       targetItem.classList.remove('drag-over');
 
@@ -8329,6 +8339,14 @@ function handleGridMove(evt) {
   folderHoverTarget = null;
 
   folderHoverStart = 0;
+
+  if (lastGridDragOverItem) {
+
+    lastGridDragOverItem.classList.remove('drag-over');
+
+    lastGridDragOverItem = null;
+
+  }
 
   return true;
 
@@ -10393,6 +10411,16 @@ async function handlePasteBookmark() {
 /**
  * Sorts the current folder alphabetically and refreshes the grid.
  */
+function isBookmarkFolderNode(node) {
+  return !!(node && (Array.isArray(node.children) || !node.url));
+}
+
+function compareBookmarkNodeTitles(a, b) {
+  const titleA = String((a && a.title) || '');
+  const titleB = String((b && b.title) || '');
+  return titleA.localeCompare(titleB, undefined, { sensitivity: 'base', numeric: true });
+}
+
 async function sortCurrentFolderByName() {
   const folderId = currentGridFolderNode ? currentGridFolderNode.id : activeHomebaseFolderId;
   if (!folderId) return;
@@ -10402,10 +10430,15 @@ async function sortCurrentFolderByName() {
   if (!folderNode || !folderNode.children) return;
 
   const children = [...folderNode.children];
-  children.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+  // Folders first, then bookmarks, both sorted A-Z.
+  const folders = children.filter((node) => isBookmarkFolderNode(node));
+  const bookmarks = children.filter((node) => !isBookmarkFolderNode(node));
+  folders.sort(compareBookmarkNodeTitles);
+  bookmarks.sort(compareBookmarkNodeTitles);
+  const sortedChildren = [...folders, ...bookmarks];
 
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
+  for (let i = 0; i < sortedChildren.length; i++) {
+    const child = sortedChildren[i];
     if (child.index !== i) {
       await browser.bookmarks.move(child.id, { index: i });
     }

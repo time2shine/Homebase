@@ -2,6 +2,19 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.4.0 — 2026-01-30
+### Added
+- Added a Game Over icon to the Gaming picker.
+- Added mosque, prayer, and crescent icons to the Religion category.
+### Improved
+- Updated shopping and finance icons, including bag, tag, store, gift, cart, bank card, and bitcoin.
+- Refreshed brand logos for Apple, Android, Windows, Chrome, Twitter, and Facebook.
+- Updated nature icons (dog, cat, paw, bird, fish, leaf) with consistent outlines.
+- Refreshed Gaming icons (gamepad, controller, pacman, dice, puzzle) for consistency.
+- Refined the Moods category by removing the Cool icon.
+### Fixed
+- None.
+
 ## v0.3.0 — 2026-01-30
 ### Added
 - Tip of the Day toast with daily tips on the new tab.

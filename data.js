@@ -147,40 +147,45 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.3.0',
+  version: '0.4.0',
   date: '2026-01-30',
   items: [
     {
       type: 'NEW',
-      title: 'Tip of the Day',
-      desc: 'A daily tip toast now appears on the new tab with a deterministic tip each day.'
+      title: 'Game Over icon',
+      desc: 'Added a Game Over icon to the Gaming picker.'
     },
     {
       type: 'NEW',
-      title: 'Tip controls',
-      desc: 'Hide tips for today, preview the next tip, or disable tips directly from the toast.'
+      title: 'Religion icons expanded',
+      desc: 'Added mosque, prayer, and crescent icons to the Religion category.'
     },
     {
       type: 'IMPROVED',
-      title: 'Remember last tip',
-      desc: 'Your last viewed tip is restored on new tabs for the same day.'
+      title: 'Shopping & finance icons',
+      desc: 'Updated shopping and finance icons, including bag, tag, store, gift, cart, bank card, and bitcoin.'
     },
     {
       type: 'IMPROVED',
-      title: 'Tip toast layout',
-      desc: 'The tip card now avoids dock overlap and keeps actions visible in the card.'
+      title: 'Brand logos refreshed',
+      desc: 'Updated Apple, Android, Windows, Chrome, Twitter, and Facebook icons in the picker.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Nature icon set',
+      desc: 'Refreshed animal and nature icons with consistent outline styling.'
     }
   ]
 };
 
 const ICON_CATEGORIES = {
   'Essentials': ['home', 'star', 'heart', 'globe', 'flag', 'fire', 'bolt'],
-  'Finance': ['bank', 'wallet', 'dollar', 'euro', 'bitcoin', 'piggy'],
+  'Finance': ['bank', 'wallet', 'dollar', 'euro', 'bitcoin', 'bank_card'],
   'Shopping': ['cart', 'bag', 'tag', 'store', 'gift'],
-  'Gaming': ['gamepad', 'controller', 'pacman', 'dice', 'puzzle'],
-  'Religion': ['cross', 'moon_star', 'star_david', 'om', 'yin_yang', 'peace'],
-  'Moods': ['smile', 'sad', 'wink', 'cool', 'neutral'],
-  'Nature': ['paw', 'dog', 'cat', 'bird', 'fish', 'leaf'],
+  'Gaming': ['gamepad', 'controller', 'pacman', 'dice', 'puzzle', 'game_over'],
+  'Religion': ['islamic_moon', 'building_mosque', 'pray', 'cross'],
+  'Moods': ['smile', 'sad', 'wink', 'neutral'],
+  'Nature': ['dog', 'cat', 'paw', 'bird', 'fish', 'leaf'],
   'Brands': ['apple', 'android', 'windows', 'chrome', 'google', 'twitter', 'facebook', 'instagram', 'youtube', 'amazon'],
   'Work': ['briefcase', 'mail', 'calendar', 'chart', 'document'],
   'Education': ['school', 'book', 'microscope', 'lightbulb'],

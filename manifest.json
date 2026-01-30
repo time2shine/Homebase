@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "Homebase",
+  "version": "0.3.0",
+  "description": "Replaces the default new tab with a fast, customizable dashboard for search, weather, news, bookmarks, and focused daily use.",
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+
+  "action": {
+  "default_title": "Homebase"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "rokonmagura@gmail.com"
+    }
+  },
+
+  "chrome_url_overrides": {
+    "newtab": "new-tab.html"
+  },
+
+  "permissions": [
+    "tabs",
+    "storage",
+    "history",
+    "bookmarks",
+    "clipboardRead",
+    "contextualIdentities"
+  ],
+
+  "host_permissions": [
+    "https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/*",
+    "https://api.open-meteo.com/*",
+    "https://geocoding-api.open-meteo.com/*",
+    "https://duckduckgo.com/ac/*",
+    "https://suggest.yandex.com/*",
+    "https://ff.search.yahoo.com/*",
+    "https://api.bing.com/osjson.aspx*",
+    "https://suggestqueries.google.com/*",
+    "https://t2.gstatic.com/*",
+    "https://www.google.com/*",
+    "https://en.wikipedia.org/*",
+    "https://completion.amazon.com/*",
+    "https://www.aljazeera.com/*",
+    "https://feeds.bbci.co.uk/*",
+    "https://feeds.feedburner.com/*",
+    "https://www.espn.com/*",
+    "https://www.espncricinfo.com/*"
+  ],
+  "optional_permissions": []
+}

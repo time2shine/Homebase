@@ -1,0 +1,8071 @@
+﻿/* Apply border-box to all elements so padding doesn't break layouts */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* --- Global Styles --- */
+html {
+  /* Black canvas ensures we never see white during load */
+  background-color: #000000;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+  color: rgb(255, 255, 255);
+  background-color: transparent;
+
+  height: 100vh;
+  box-sizing: border-box;
+
+  /* --- NEW LAYOUT: Use Flexbox row on the body --- */
+  display: flex;
+  flex-direction: row;
+  overflow: hidden; /* Prevent full-page scroll */
+  position: relative; /* Context for absolute positioning */
+}
+
+/* Stable wallpaper layer to avoid repaints when classes change */
+#wallpaper-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+
+  /* Layer Ordering:
+     -4: Wallpaper (Bottom)
+     -3: Video
+      0: Content
+  */
+  z-index: -4;
+
+  background-color: #2B2A33;
+  background-image: var(--initial-wallpaper, url("assets/fallback.webp"));
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: filter 0.4s ease, transform 0.4s ease;
+
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* Ensure body::before is not used */
+body::before {
+  display: none !important;
+}
+
+/* Full-bleed video background */
+.background-video {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -3;
+  pointer-events: none;
+  opacity: 0;
+  background-color: transparent; /* Keep render buffer from flashing black */
+
+  /* Keep transform/filter transitions if you use effects like blur on search */
+  transition: filter 0.4s ease, transform 0.4s ease;
+}
+
+.background-video.on-top {
+  z-index: -2;
+}
+
+/* Add this only when we want the crossfade */
+.background-video.with-transition {
+  transition: opacity 1.4s ease, filter 0.4s ease, transform 0.4s ease;
+}
+.background-video.is-active {
+  opacity: 1;
+}
+
+/* Dark overlay for user-controlled dimming */
+#background-dim-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+
+  /* Placed above video (-3) and wallpaper (-4), but below content */
+  z-index: -1;
+
+  /* Controlled by JS variable, default to 0 (invisible) */
+  opacity: var(--bg-dim-opacity, 0);
+  pointer-events: none;
+  transition: opacity 0.2s ease-out;
+}
+
+body:has(.search-area-wrapper.search-focused) .background-video,
+body.search-focus-active .background-video,
+body:has(.search-area-wrapper.search-focused) #wallpaper-layer,
+body.search-focus-active #wallpaper-layer {
+  filter: blur(8px) brightness(0.8);
+  transform: scale(1.02);
+}
+
+.widget-hidden {
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+}
+
+.widget-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+body.preload .sidebar,
+body.preload .main-content,
+body.preload .dock {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.ready .sidebar,
+body.ready .main-content,
+body.ready .dock {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.25s ease;
+}
+
+:root {
+  --glass-blur: 12px;
+  --glass-bg: rgba(255, 255, 255, 0.14);
+  --overlay-blur: 6px;
+  --main-col-width: 88%;
+  --main-col-left: 10px;
+  --main-col-max: none;
+  --main-col-pad: 0px;
+  --tabs-arrow-size: 30px;
+  --tabs-arrow-reserve: 30px;
+}
+
+
+/* --- Shared "Glass" Style --- */
+.glass-box {
+  background-color: var(--glass-bg); /* Light, semi-transparent background */
+  backdrop-filter: blur(var(--glass-blur));                /* The blur effect */
+  -webkit-backdrop-filter: blur(var(--glass-blur));        /* For Safari browser compatibility */
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Faint border to catch the light */
+  border-radius: 20px;
+  box-sizing: border-box;
+}
+
+/* Make the right-click context menus white with black text */
+.context-menu.glass-box {
+  background-color: #ffffff;           /* white background */
+  color: #000000;                      /* default text color */
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+/* Buttons inside the menu */
+.context-menu.glass-box .menu-item {
+  color: #000000;                      /* black text on buttons */
+}
+
+/* Hover state on menu items */
+.context-menu.glass-box .menu-item:hover {
+  background-color: rgba(0, 0, 0, 0.06);  /* light gray hover */
+}
+
+/* --- 1. Right Dock --- */
+.dock {
+  flex: 0 0 40px;
+  height: 100vh;
+  padding: 64px 6px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  z-index: 100;
+
+  /* --- Glass Style Defaults --- */
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+
+  /* --- BORDER FIX --- */
+  /* We allow the left border to exist (so it can change color with themes), */
+  /* but we strictly force the others to be zero using !important. */
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  
+  border-right: 0 !important;
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+  border-radius: 0 !important;
+  
+  /* Prevent box-shadows from glass themes affecting the dock edge */
+  box-shadow: none !important; 
+}
+
+body.dock-collapsed .dock {
+  display: none;
+}
+
+.dock-item {
+  position: relative; /* Added for tooltip positioning */
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background-color: transparent;
+  color: #ffffff;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.dock-item.is-loading,
+.dock-item:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.dock-item.is-loading:hover,
+.dock-item:disabled:hover {
+  background-color: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: none;
+  color: #ffffff;
+}
+.dock-item:hover {
+  background-color: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  color: #111;
+}
+.dock-item img {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+.dock-item svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+}
+#dock-history-btn svg {
+  fill: currentColor;
+  stroke: none;
+}
+.dock-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.dock-icon svg {
+  display: block;
+  opacity: 0.85;
+}
+.dock-icon svg[viewBox="0 -0.5 25 25"] {
+  transform: translateY(0.5px);
+}
+/* Ensure bottom dock buttons span full width while keeping box style */
+.dock-bottom .dock-item,
+.dock-group-bottom .dock-item {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px;
+  border-radius: 9px;
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.dock-bottom .dock-item:hover,
+.dock-group-bottom .dock-item:hover {
+  background-color: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  color: #111;
+}
+/* Ensure buttons keep the same box styling as anchors */
+button.dock-item {
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: inherit;
+  padding: 5px;
+  width: 100%;
+  color: inherit;
+  padding: inherit;
+}
+.dock-divider {
+  width: 50%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.25);
+  margin: 4px 0;
+}
+.dock-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.dock-bottom,
+.dock-group-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+/* --- 2. Sidebar (Left Column) --- */
+.sidebar {
+  flex: 0 0 360px; /* Do not grow, do not shrink, base width 360px */
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100vh; /* Full height */
+  overflow-y: auto; /* Allow sidebar to scroll if content overflows */
+  overflow-x: visible; /* Keep tooltips visible while preserving vertical scroll */
+  scrollbar-gutter: stable;
+}
+
+/* Collapse sidebar widgets when the layout switches to compact mode */
+body.sidebar-collapsed .sidebar {
+  display: none;
+}
+
+body.sidebar-collapsed {
+  --main-col-width: 100%;
+  --main-col-left: 0px;
+  --main-col-max: none;
+  --main-col-pad: 0px;
+}
+
+body.sidebar-collapsed .main-content {
+  padding: 20px;
+  width: 100%;
+}
+
+body.sidebar-hidden,
+html.sidebar-hidden {
+  justify-content: center;
+}
+
+body.sidebar-hidden .sidebar,
+html.sidebar-hidden .sidebar {
+  display: none;
+}
+
+body.sidebar-hidden,
+html.sidebar-hidden {
+  --main-col-width: 100%;
+  --main-col-left: auto;
+  --main-col-max: 1160px;
+  --main-col-pad: 12px;
+}
+
+body.sidebar-hidden .main-content,
+html.sidebar-hidden .main-content {
+  width: 100%;
+  max-width: 1240px;
+  padding: 20px 32px;
+  margin: 0 auto;
+}
+
+body.sidebar-hidden .collapsed-clock-slot,
+html.sidebar-hidden .collapsed-clock-slot {
+  display: none !important;
+}
+
+body.sidebar-hidden .widget-time,
+html.sidebar-hidden .widget-time {
+  display: none !important;
+}
+
+.collapsed-clock-slot {
+  display: none;
+  margin: 10px 0 0;
+  padding: 4px 15px;
+  border-radius: 12px;
+  background: transparent;
+}
+
+body.sidebar-collapsed .collapsed-clock-slot {
+  display: block;
+}
+
+/* Time Widget (Not a glass box) */
+.widget-time h1 {
+  margin: 0;
+  font-size: 4em;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+}
+.widget-time p {
+  margin: 0;
+  font-size: 1.2em;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+}
+
+/* --- 3. Main Content (Middle Column) --- */
+.main-content {
+  flex: 1; /* Grow to fill remaining space */
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 20px;
+  height: 100vh; /* Full height */
+  overflow-y: auto; /* Allow main content to scroll */
+  scrollbar-gutter: stable;
+  will-change: scroll-position;
+}
+
+/* ======================================= */
+/* --- UNIFIED SEARCH WIDGET STYLES --- */
+/* ======================================= */
+
+/* Content rail contract: search row sets the horizontal edges. Folder tabs, the grid, and the empty state must reuse these vars and never add their own margins/padding for alignment. Adjust --main-col-* here, not in individual components. */
+.search-area-wrapper,
+.bookmark-bar-wrapper,
+#bookmarks-grid,
+#bookmarks-empty-state {
+  width: var(--main-col-width);
+  margin-left: var(--main-col-left);
+  margin-right: auto;
+  max-width: var(--main-col-max);
+  padding-left: var(--main-col-pad);
+  padding-right: var(--main-col-pad);
+  box-sizing: border-box;
+}
+
+.search-area-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 30px; /* Push down from the top */
+}
+
+/* This new container holds the search bar AND the results panel */
+.search-widget-container {
+  position: relative; /* So the panel can be positioned absolutely */
+  flex: 1; /* This now grows and shrinks */
+  min-width: 0;
+  /* This container gets the transition, not the search bar */
+  transition: margin-right 0.3s ease-out;
+}
+
+.widget-search {
+  width: 100%;
+  height: 46px; /* Fixed height for stability */
+  display: flex;
+  align-items: center;
+  
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0; /* Subtle modern gray */
+  border-radius: 12px;       /* Professional rounding */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* Soft lift */
+  
+  padding: 0; /* Padding is handled by children */
+  position: relative; /* Context for the grid expansion */
+  box-sizing: border-box;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, border-radius 0.2s ease;
+  z-index: 150;
+}
+
+/* Hover state for the whole bar */
+.widget-search:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.widget-search.results-open {
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: #f0f0f0;
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.search-container.non-default-engine {
+  background-color: rgba(14, 165, 233, 0.04);
+}
+
+/* ======================================= */
+/* --- INLINE EXPANDING SEARCH SELECTOR --- */
+/* ======================================= */
+
+/* --- 1. The Selector Area --- */
+.search-engine-selector {
+  /* Define spacing variables */
+  --icon-size: 36px;
+  --icon-gap: 6px;
+  --visible-count: 1; /* CHANGED: Show only 1 icon */
+  
+  /* Calculate collapsed width dynamically */
+  --collapsed-width: calc((var(--icon-size) * var(--visible-count)) + (var(--icon-gap) * (var(--visible-count) - 1)));
+  
+  height: var(--icon-size);
+  width: var(--collapsed-width);
+  
+  /* === CHANGE START: Add Left Margin === */
+  margin-left: 8px;   /* Adds padding from the left edge */
+  margin-right: 10px; 
+  /* === CHANGE END === */
+  position: relative;
+  overflow: hidden; /* Default: Mask content */
+  flex-shrink: 0;   /* Prevent shrinking */
+  
+  /* Smoothly animate width to push the search text */
+  /* When collapsing: Hide overflow IMMEDIATELY (0s delay) so content doesn't bleed out */
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), overflow 0s linear 0s;
+  
+  /* Fix for z-index to ensure tooltips (if any) work, though overflow:hidden clips them usually. 
+     For an inline sliding list, clipping tooltips is standard behavior unless we use a very complex portal. 
+     The expansion usually reveals enough context. */
+  z-index: 10;
+}
+/* Instant-load classes: used by instant_load.js to avoid inline styles */
+.search-engine-selector.is-instant-fixed {
+  --collapsed-width: 42px;
+  --expanded-width: 42px;
+}
+
+/* --- Inner Sliding List --- */
+.search-engine-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--icon-gap);
+  height: 100%;
+  width: max-content; /* Allow list to be as wide as needed */
+  
+  /* Logic to center the active item */
+  transform: translateX(0);
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  will-change: transform;
+}
+
+/* --- Expanded State (Hover or Keyboard) --- */
+/* Only expand on hover if NOT suppressed */
+.search-engine-selector:not(.suppress-hover):hover,
+.search-engine-selector.expanded {
+  /* Expand to show ALL items. Variable is set by JS. */
+  width: var(--expanded-width, 200px);
+  overflow: visible; /* ALLOW TOOLTIPS TO POP OUT */
+  /* When expanding: Wait 0.3s (duration of width anim) before showing overflow */
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), overflow 0s linear 0.3s;
+}
+
+/* When expanded, reset the slide so we see 1, 2, 3, 4... in order */
+.search-engine-selector:not(.suppress-hover):hover .search-engine-list,
+.search-engine-selector.expanded .search-engine-list {
+  transform: translateX(0) !important;
+}
+
+/* --- Icon Button Styles --- */
+/* Define the fade-in keyframes */
+@keyframes icon-load-fade {
+  0% { 
+    opacity: 0; 
+    transform: scale(0.8); /* Starts slightly smaller */
+  }
+  100% { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
+.engine-icon-btn {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+  filter: grayscale(100%);
+  flex-shrink: 0;
+}
+
+.engine-icon-btn svg, 
+.engine-icon-btn img {
+  width: 20px;
+  height: 20px;
+  display: block;
+  pointer-events: none;
+  
+  /* --- ADD THIS LINE: --- */
+  animation: icon-load-fade 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Hover State */
+.engine-icon-btn:hover {
+  opacity: 1;
+  filter: grayscale(0%);
+  background-color: #f1f5f9;
+}
+
+/* Active/Selected State */
+.engine-icon-btn.active {
+  opacity: 1;
+  filter: grayscale(0%);
+  background-color: #e0f2fe;
+  color: #0ea5e9;
+}
+
+/* --- 2. The Vertical Divider --- */
+.search-input-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #e2e8f0;
+  margin: 0 4px;
+}
+
+/* --- 3. The Input Field --- */
+#search-form {
+  flex: 1;
+  height: 100%;
+  display: flex;
+}
+
+#search-input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  padding: 0 16px;
+  font-size: 16px;
+  color: #1e293b;
+  border-radius: 0 12px 12px 0;
+  outline: none;
+}
+
+#search-input::placeholder {
+  color: #94a3b8;
+}
+
+#search-select {
+  background: #f0f0f0;
+  border-radius: 5px;
+  align-self: stretch;
+  border: none;
+  color: #333;
+  font-size: 14px;
+  padding: 0 10px 0 15px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+#search-select:focus {
+  outline: none;
+}
+
+/* ================================================= */
+/* --- UNIFIED TOOLTIP STYLES (Single System) --- */
+/* ================================================= */
+
+/* 1. Base Tooltip Style */
+.tooltip-popup {
+  position: absolute;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  
+  /* Default Color: Gray */
+  background: #5b5d63; 
+  color: #fff;
+  
+  padding: 5px 8px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  
+  /* Hidden State */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  
+  transition: all 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  z-index: 1000;
+  text-shadow: none;
+}
+
+/* 2. The Arrow (Pseudo-element) */
+.tooltip-popup::before {
+  position: absolute;
+  content: "";
+  height: 8px;
+  width: 8px;
+  background: #5b5d63; /* Match default gray */
+  transform: rotate(45deg);
+  z-index: -1;
+}
+
+/* 3. Hover Trigger (Show tooltip when parent is hovered) */
+*:hover > .tooltip-popup {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* --- POSITIONING VARIANTS --- */
+
+/* TOP (Default / Used for Search Engine) */
+.tooltip-top {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  margin-bottom: 10px;
+}
+.tooltip-top::before {
+  top: 100%; /* Arrow at bottom */
+  left: 50%;
+  margin-left: -4px;
+  margin-top: -4px;
+}
+*:hover > .tooltip-top {
+  transform: translateX(-50%) translateY(-6px);
+}
+
+/* BOTTOM (For Chat, Google Apps, Quick Actions) */
+.tooltip-bottom {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  margin-top: 10px;
+}
+.tooltip-bottom::before {
+  bottom: 100%; /* Arrow at top */
+  left: 50%;
+  margin-left: -4px;
+  margin-bottom: -4px;
+}
+*:hover > .tooltip-bottom {
+  transform: translateX(-50%) translateY(6px);
+}
+.news-header-tooltip-fixed {
+  position: fixed;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.news-header-tooltip-fixed.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+.news-header-tooltip-fixed.is-visible.tooltip-top {
+  transform: translateX(-50%) translateY(-6px);
+}
+.news-header-tooltip-fixed.is-visible.tooltip-bottom {
+  transform: translateX(-50%) translateY(6px);
+}
+
+/* LEFT (For Dock) */
+.tooltip-left {
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%) translateX(0);
+  margin-right: 10px;
+}
+.tooltip-left::before {
+  left: 100%; /* Arrow at right */
+  top: 50%;
+  margin-top: -4px;
+  margin-left: -4px;
+}
+*:hover > .tooltip-left {
+  transform: translateY(-50%) translateX(-6px);
+}
+
+/* RIGHT (New) */
+.tooltip-right {
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%) translateX(0);
+  margin-left: 10px;
+}
+.tooltip-right::before {
+  right: 100%; /* Arrow at left */
+  top: 50%;
+  margin-top: -4px;
+  margin-right: -4px; 
+}
+*:hover > .tooltip-right {
+  transform: translateY(-50%) translateX(6px);
+}
+
+/* --- SEARCH ENGINE SPECIFIC OVERRIDES (Dynamic Color) --- */
+
+/* Apply dynamic variable color only to engine buttons */
+.engine-icon-btn .tooltip-popup {
+  background: var(--engine-color, #333);
+}
+.engine-icon-btn .tooltip-popup::before {
+  background: var(--engine-color, #333);
+}
+
+/* Keep the Search Selector 'expanded' logic for keyboard nav */
+.search-engine-selector.expanded .engine-icon-btn.active .tooltip-popup {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-6px); /* Trigger animation position */
+}
+
+.calculator-result {
+  background-color: rgba(44, 165, 255, 0.08);
+  border-bottom: 1px solid rgba(44, 165, 255, 0.2);
+  padding-right: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.calculator-result .result-item-info {
+  margin-right: 80px;
+}
+
+.calculator-result .copy-btn {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.8em;
+  cursor: pointer;
+  color: #333;
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-shrink: 0;
+}
+
+.calculator-result .copy-btn:hover {
+  background: #f0f0f0;
+  border-color: #ccc;
+}
+
+/* --- Search Engine Reordering Styles --- */
+
+/* Style the drag handle (hamburger menu icon) */
+.engine-drag-handle {
+  cursor: grab;
+  color: #94a3b8; /* Slate-400 */
+  font-size: 1.2em;
+  margin-right: 10px;
+  line-height: 1;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.engine-toggle-item:hover .engine-drag-handle {
+  color: #475569; /* Darker on hover */
+}
+
+.engine-toggle-item:active .engine-drag-handle {
+  cursor: grabbing;
+}
+
+/* Ghost class applied by Sortable.js while dragging */
+.sortable-ghost-engine {
+  background-color: #e2e8f0 !important; /* Light gray background */
+  border: 1px dashed #94a3b8 !important;
+  opacity: 0.5;
+}
+
+/* Ensure the row looks clickable for dragging */
+.engine-toggle-main {
+  cursor: grab;
+  flex: 1; /* Take up remaining space so you can drag from anywhere in the text area */
+}
+/* Styles for Search Toolbar Buttons */
+.search-toolbar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  transition: opacity 0.3s ease-out, max-width 0.3s ease-out;
+  opacity: 1;
+  max-width: 100px; /* Needs a max-width for transition */
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.search-area-wrapper.search-focused .search-toolbar-buttons {
+  opacity: 0;
+  max-width: 0;
+}
+
+
+.icon-button {
+  position: relative; /* Added for tooltip positioning */
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  
+  border-radius: 50%;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+.icon-button img {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+.icon-button svg {
+  width: 20px;
+  height: 20px;
+  fill: white;
+}
+
+
+/* --- Around line 308 --- */
+
+/* --- NEW: Grid Item Fade-in Animation --- */
+@keyframes item-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(-25px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* --- Grid Animation Logic --- */
+
+/* 1. ENABLED: Use the variable duration (defaulting to 0.3s) */
+body.grid-animation-enabled .bookmark-item.newly-rendered {
+  opacity: 0; 
+  animation: item-fade-in var(--grid-animation-duration, 0.3s) cubic-bezier(0.25, 0.8, 0.4, 1) forwards;
+}
+
+/* 2. DISABLED: Force instant appearance (no animation) */
+body:not(.grid-animation-enabled) .bookmark-item.newly-rendered {
+  opacity: 1 !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Hide animations entirely in Performance Mode (Redundant but safe) */
+body.performance-mode .bookmark-item.newly-rendered {
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+/* ======================================= */
+/* --- BOOKMARKS GRID (FINAL FIX) --- */
+/* ======================================= */
+
+#bookmarks-grid {
+  /* Virtualization helpers */
+  box-sizing: border-box;
+  position: relative;
+  min-height: 0;
+  display: grid;
+  
+  /* Keep your column settings */
+  grid-template-columns: repeat(auto-fill, 100px);
+  
+  /* Standard gap between items */
+  gap: 5px; 
+  
+  /* Center sparse rows within the rail while preserving the grid track layout */
+  justify-content: center; 
+  justify-items: center;
+  align-content: start;
+  
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+#bookmarks-empty-state {
+  margin-top: 12px;
+  padding-top: 22px;
+  padding-bottom: 22px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+body.bookmarks-booting #bookmarks-empty-state {
+  display: none !important;
+}
+
+body.bookmarks-booting #bookmarks-grid,
+body.bookmarks-booting .bookmark-bar-wrapper,
+body.bookmarks-booting #bookmark-folder-tabs,
+body.bookmarks-booting .bookmark-folder-tabs-container {
+  display: none !important;
+}
+
+.bookmarks-empty-inner {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.bookmarks-empty-title {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.bookmarks-empty-description {
+  margin: 0;
+  opacity: 0.85;
+  line-height: 1.5;
+}
+
+.bookmarks-empty-note {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.72;
+  line-height: 1.4;
+}
+
+.bookmarks-empty-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.bookmarks-empty-primary,
+.bookmarks-empty-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.bookmarks-empty-primary {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.1));
+}
+
+.bookmarks-empty-primary:hover,
+.bookmarks-empty-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.bookmarks-empty-primary:active,
+.bookmarks-empty-secondary:active {
+  transform: translateY(0);
+}
+
+
+.bookmark-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0px;
+  text-decoration: none;
+  color: white;
+  text-align: center;
+  height: 110px;
+  gap: 8px;
+  transition: opacity 0.2s ease;
+  background-color: transparent;
+  border-radius: 10px;
+  width: 100px; 
+  cursor: pointer;
+}
+
+#bookmarks-grid .bookmark-item,
+#bookmarks-grid .bookmark-item * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#bookmarks-grid .bookmark-item img,
+#bookmarks-grid .bookmark-item svg {
+  -webkit-user-drag: none;
+}
+
+.bookmark-item.is-loading {
+  opacity: 0.7;
+}
+
+.bookmark-item.is-loading .bookmark-icon-wrapper {
+  filter: grayscale(0.1) brightness(0.85);
+}
+
+.bookmark-loading-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  border-radius: 50%;
+
+  mask: radial-gradient(farthest-side, #0000 42%, #000 43%);
+  -webkit-mask: radial-gradient(farthest-side, #0000 42%, #000 43%);
+
+  background:
+    linear-gradient(0deg, rgba(255, 255, 255, 0.45) 50%, #ffffff 0) center/4px 100%,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.25) 50%, rgba(255, 255, 255, 0.8) 0) center/100% 4px;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.35));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  animation: bookmark-spin 1s infinite steps(12);
+}
+
+.bookmark-loading-spinner::before,
+.bookmark-loading-spinner::after {
+  content: "";
+  grid-area: 1/1;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.92;
+  transform: rotate(30deg);
+}
+
+.bookmark-loading-spinner::after {
+  opacity: 0.82;
+  transform: rotate(60deg);
+}
+
+.bookmark-item.is-loading .bookmark-loading-spinner {
+  opacity: 1;
+}
+
+@keyframes bookmark-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* === New Toggle Option: Text Background (Dynamic Color) === */
+body.bookmark-text-bg-enabled .bookmark-item span {
+  /* Use variable for opacity, default to 0.65 */
+  background-color: rgba(var(--bookmark-text-bg-rgb, 44, 165, 255), var(--bookmark-text-bg-opacity, 0.65)); 
+  
+  backdrop-filter: blur(var(--bookmark-text-bg-blur, 4px));
+  -webkit-backdrop-filter: blur(var(--bookmark-text-bg-blur, 4px));
+  
+  border-radius: 8px;
+  
+  color: var(--bookmark-text-color, white);
+  text-shadow: var(--bookmark-text-shadow, 0 1px 2px rgba(0,0,0,0.3));
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+  
+  padding: 4px 8px;
+  width: auto;
+  max-width: 96%;
+  margin-top: 4px;
+  
+  height: auto;
+  min-height: 0;
+  line-height: 1.3;
+  
+  /* Added border for better definition on low opacity */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  transition: background-color 0.2s ease, transform 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+}
+
+/* OPTIMIZATION: Make it solid/more opaque on hover for better readability */
+body.bookmark-text-bg-enabled .bookmark-item:hover span {
+  background-color: rgba(var(--bookmark-text-bg-rgb, 44, 165, 255), 0.95);
+  border-color: rgba(255, 255, 255, 0.3);
+  z-index: 2; /* Ensure it sits on top */
+}
+
+/* Ensure the rename input matches this color (slightly more opaque: 0.9) */
+body.bookmark-text-bg-enabled .grid-item-rename-input {
+  background-color: rgba(var(--bookmark-text-bg-rgb, 44, 165, 255), 0.9);
+  color: var(--bookmark-text-color, white);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: none;
+  text-shadow: none;
+}
+
+/* === ADD THIS NEW RULE === */
+/* When renaming, let the item grow to fit the text box */
+.bookmark-item.is-renaming {
+  height: auto; /* Override the fixed 110px height */
+  min-height: 110px; /* Ensure it doesn't shrink */
+  justify-content: flex-start; /* Align icon to the top */
+}
+
+/* Glow around the item while it's a drop target */
+.bookmark-item.drag-over {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* Make the folder icon larger while it's a drop target */
+.bookmark-item.drag-over[data-is-folder="true"] .bookmark-icon-wrapper {
+  transform: scale(1.15);
+}
+
+/* Dim the folder SVG so text stands out */
+.bookmark-item.drag-over[data-is-folder="true"] .bookmark-folder-icon {
+  opacity: 0.7;
+  position: relative;
+  z-index: 1;
+}
+
+.bookmark-item.drag-over[data-is-folder="true"] .bookmark-icon-wrapper::after {
+  content: "DROP\A HERE";
+  position: absolute;
+
+  /* Center a small pill instead of covering the whole icon */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  white-space: pre;
+  text-align: center;
+  z-index: 5;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 2px 6px;                 /* controls background size */
+  background: rgba(78, 78, 78, 0.85);  /* medium gray */
+  color: #ffffff;                    /* white text */
+  font-size: 9px;                    /* adjust to taste */
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  border-radius: 4px;
+
+  pointer-events: none;
+}
+
+.back-button {
+  position: relative;
+}
+
+.back-button .back-button-label {
+  transition: color 0.2s ease;
+}
+
+.back-icon-wrapper {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.bookmark-item .back-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+.back-button.drag-over {
+  background-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.55);
+}
+
+.back-button.drag-over .back-button-label {
+  color: #ffffff;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.back-button.drag-over::after {
+  content: "Drop Here";
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 2px 6px;
+  background: rgba(78, 78, 78, 0.85);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+
+
+
+.bookmark-placeholder {
+  height: 110px;
+  background-color: transparent;
+  border-radius: 10px;
+}
+
+.bookmark-item.sortable-chosen {
+  opacity: 0 !important;
+  cursor: pointer !important;
+}
+
+.bookmark-item.sortable-drag {
+  pointer-events: none;
+  opacity: 1 !important;
+  filter: none !important;
+  mix-blend-mode: normal;
+  cursor: pointer !important;
+}
+
+/* Make the item being dragged visually larger for emphasis */
+.bookmark-item.sortable-drag .bookmark-icon-wrapper {
+  transform: scale(1.15);
+  opacity: 1;
+}
+
+.bookmark-fallback-ghost {
+  pointer-events: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+
+  background-color: transparent !important;
+  background: none !important;
+
+  border-radius: 12px;
+  box-shadow: none !important;
+  z-index: 10000 !important;
+}
+
+.bookmark-fallback-ghost .bookmark-icon-wrapper {
+  transform: scale(0.85);
+}
+
+/* Ensure folder wrapper sizing/centering applies during drag + fallback ghost */
+#bookmarks-grid .bookmark-item[data-is-folder="true"] .bookmark-icon-wrapper,
+.bookmark-item.sortable-drag[data-is-folder="true"] .bookmark-icon-wrapper,
+.bookmark-fallback-ghost[data-is-folder="true"] .bookmark-icon-wrapper {
+  width: 84px;   /* same as .bookmark-folder-icon */
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* center SVG inside wrapper */
+}
+
+/* Keep folder SVG sizing consistent during drag + fallback ghost */
+.bookmark-item.sortable-drag[data-is-folder="true"] .bookmark-icon-wrapper svg,
+.bookmark-fallback-ghost[data-is-folder="true"] .bookmark-icon-wrapper svg {
+  width: 100%;
+  height: 100%;
+}
+
+
+/* === End new D&D styles === */
+
+
+.bookmark-item span {
+  font-size: 0.8em;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+
+  width: calc(100% - 4px);
+  line-height: 1.3;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  line-clamp: 2;          /* standard (newer spec) */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;  /* webkit */
+  -webkit-box-orient: vertical;
+
+  overflow-wrap: break-word;
+
+  height: 2.6em;
+  width: 100%;
+  padding: 0 2px 4px 2px;
+  text-align: center;
+}
+
+
+/* * === NEW CSS FOR GRID RENAME ===
+ * This is the input that replaces the <span>
+ * when renaming a grid item.
+ */
+.grid-item-rename-input {
+  font-family: inherit;
+  font-size: 0.8em;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+  color: white;
+  text-align: center;
+  
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  
+  width: 100%; 
+  box-sizing: border-box; 
+  padding: 2px;
+  
+  /* === MODIFIED === */
+  /* min-height: 2.4em;  <-- REMOVED THIS LINE */
+  height: auto;      
+  line-height: 1.3;
+  
+  resize: none; 
+  overflow: hidden; 
+}
+
+#bookmarks-grid .grid-item-rename-input {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+.grid-item-rename-input:focus {
+  outline: 2px solid white;
+  outline-offset: -1px;
+  border-color: white;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+/* === END NEW CSS === */
+
+
+/* (Optional) make the folder tile itself this wide so text lines up nicely */
+#bookmarks-grid .bookmark-item[data-is-folder="true"] {
+  width: 84px;
+}
+
+
+/* --- Bookmark Folder Tabs --- */
+#bookmark-folder-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  width: max-content;
+  /* Removed padding, parent has it now */
+}
+
+.bookmark-folder-tab {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+
+  /* Thinner pill */
+  padding: 0 12px;
+  height: 26px;
+
+  font-size: 0.8em;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.85);
+  background-color: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease,
+              border-color 0.2s ease, opacity 0.2s ease,
+              box-shadow 0.2s ease;
+  box-shadow: none;
+}
+
+.bookmark-folder-tab:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #111;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.bookmark-folder-tab.active {
+  background-color: #ffffff;
+  color: #1a1a1a;
+  font-weight: 500;
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+.bookmark-folder-tab.drop-target {
+  background-color: #ffffff;
+  color: #111;
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.75), 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: rgba(0, 0, 0, 0.2);
+  font-weight: 500;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* === MODIFIED: Styles for Tab D&D (Using Sortable.js) === */
+
+/* This is the tab being dragged (following cursor) */
+.bookmark-folder-tab.sortable-drag-tab {
+  pointer-events: none;
+  opacity: 1 !important; /* Keep the dragged element visible even if Chromium adds chosen */
+}
+
+/* This is the "ghost" placeholder for the tab */
+.sortable-ghost-tab {
+  background-color: white !important;
+  color: #333 !important;
+  opacity: 0.5;
+}
+
+/* Hide only the in-place tab; Chromium can put chosen on the dragged clone */
+.bookmark-folder-tab.sortable-chosen-tab:not(.sortable-drag-tab) {
+  opacity: 0 !important; /* Hide the original tab */
+}
+
+/* Ghost element used when fallback dragging is active */
+.bookmark-fallback-ghost-tab {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* fallbackOnBody moves drag clone under <body>; enforce grabbing cursor globally while dragging */
+body.is-tab-dragging {
+  cursor: grabbing !important;
+}
+
+body.is-tab-dragging * {
+  cursor: grabbing !important;
+}
+
+body.is-tab-dragging > .bookmark-folder-tab,
+body.is-tab-dragging .bookmark-folder-tab.sortable-drag-tab,
+body.is-tab-dragging .bookmark-fallback-ghost-tab {
+  cursor: grabbing !important;
+}
+
+/* === End new Tab D&D styles === */
+
+
+.bookmark-folder-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+
+  width: 26px;
+  height: 26px;
+
+  padding: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  background-color: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  color: #ffffff;
+}
+.bookmark-folder-add-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.bookmark-folder-add-btn svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bookmark-folder-add-btn:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+  color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.26);
+}
+
+.bookmark-folder-input {
+  padding: 4px 12px; 
+  font-size: 0.85em; 
+  font-weight: 500;
+  color: #333; /* Dark text */
+  background-color: white; /* White background */
+  border: 1px solid white;
+  border-radius: 20px;
+  width: 120px; /* Give it a default width */
+  transition: all 0.2s ease;
+  outline: none;
+  box-sizing: border-box; /* Ensure padding doesn't break layout */
+}
+.bookmark-folder-input::placeholder {
+  color: #777;
+}
+
+.bookmark-folder-save-btn,
+.bookmark-folder-cancel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; 
+  height: 26px; 
+  font-size: 1.1em; 
+  font-weight: bold;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.bookmark-folder-save-btn:hover,
+.bookmark-folder-cancel-btn:hover {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+.bookmark-folder-save-btn {
+  color: #8f8; /* Greenish */
+}
+.bookmark-folder-cancel-btn {
+  color: #f88; /* Reddish */
+}
+
+
+/* --- NEW WRAPPER STYLE --- */
+.bookmark-bar-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  overflow: visible;
+
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 10px; /* Optional: Adds a tiny bit of breathing room */
+}
+
+.bookmark-tabs-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: visible;
+}
+
+.bookmark-actions-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.search-actions-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.bookmarks-change-root-btn {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.24);
+  color: inherit;
+  border-radius: 12px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.bookmarks-change-root-btn:hover,
+.bookmarks-change-root-btn:focus-visible {
+  background: rgba(0, 0, 0, 0.32);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: inherit;
+  outline: none;
+}
+
+.bookmarks-change-root-btn:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.16);
+}
+
+.bookmark-tabs-track {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-left: 0;
+  padding-right: 0;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
+  touch-action: pan-y;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.bookmark-tabs-track::-webkit-scrollbar {
+  display: none;
+}
+
+.bookmark-tabs-wrapper::before,
+.bookmark-tabs-wrapper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.bookmark-tabs-wrapper::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.35), transparent);
+}
+
+.bookmark-tabs-wrapper::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.35), transparent);
+}
+
+.bookmark-tabs-wrapper.tabs-fade-left::before {
+  opacity: 1;
+}
+
+.bookmark-tabs-wrapper.tabs-fade-right::after {
+  opacity: 1;
+}
+
+.bookmark-tabs-wrapper:has(#tab-scroll-left.visible)::before {
+  opacity: 1;
+}
+
+.bookmark-tabs-wrapper:has(#tab-scroll-right.visible)::after {
+  opacity: 1;
+}
+
+.tabs-edge-sentinel {
+  width: 1px;
+  height: 1px;
+  flex: 0 0 1px;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.tab-scroll-btn {
+  width: var(--tabs-arrow-size);
+  height: var(--tabs-arrow-size);
+  border-radius: 50%;
+  border: none;
+  background-color: rgba(0, 0, 0, 0.3);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  opacity: 0;
+  pointer-events: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2em;
+  transition: background-color 0.2s ease, opacity 0.15s ease;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+}
+
+#tab-scroll-left {
+  left: calc(-1 * (var(--tabs-arrow-size) + 6px));
+}
+
+#tab-scroll-right {
+  right: calc(-1 * (var(--tabs-arrow-size) + 6px));
+}
+
+.tab-scroll-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tab-scroll-btn:hover {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+#tab-scroll-left {
+  left: 0;
+}
+
+#tab-scroll-right {
+  right: 0;
+}
+
+
+/* --- Search Results Panel --- */
+#search-results-panel {
+  position: absolute; 
+  z-index: 199;
+  
+  top: 100%; 
+  margin-top: -1px;
+  left: 0;
+  right: 0;
+  width: 100%; 
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  
+  padding: 0;
+  background-color: #ffffff; 
+  color: #333;
+  
+  border: 1px solid #ddd;
+  border-top: none;
+  box-shadow: none; 
+  
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  
+  box-sizing: border-box; 
+}
+
+#bookmark-results-container,
+#suggestion-results-container {
+  overflow-y: auto;
+  max-height: none;
+}
+
+
+.result-header {
+  font-size: 0.9em;
+  font-weight: normal;
+  text-transform: capitalize;
+  color: #666;
+  padding: 10px 16px 5px;
+  margin-top: 0;
+  background-color: var(--panel-bg, rgba(255, 255, 255, 0.9));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid #eee;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.result-header:first-child {
+  margin-top: 0;
+}
+
+
+.result-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  width: 100%;
+  max-width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 0;
+  text-decoration: none;
+  color: #333;
+  gap: 15px;
+  border-bottom: 1px solid #eee;
+  transition: background 180ms ease, color 180ms ease;
+  position: relative;
+  background-size: 200% 100%;
+  background-position: left center;
+  overflow: hidden;
+}
+.result-item:last-of-type {
+  border-bottom: none;
+}
+.result-item:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.06)
+  );
+}
+.result-item.selected {
+  background: linear-gradient(
+    90deg,
+    rgba(220, 220, 220, 0.55),
+    rgba(240, 240, 240, 0.25)
+  );
+  background-position: right center;
+}
+.result-item img {
+  width: 24px;
+  height: 24px;
+}
+
+.result-item .suggestion-icon {
+  width: 20px;
+  height: 20px;
+  fill: #555;
+  flex-shrink: 0;
+}
+
+.result-item-info {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+.result-item-info strong {
+  font-size: 1em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #333;
+  font-weight: normal;
+}
+
+.calculator-result .result-item-info span {
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* ============================= */
+/*   CALCULATOR BLOCK (Animated) */
+/* ============================= */
+
+.calc-item {
+  --calc-accent: var(--dynamic-accent, #2ca5ff);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.65),
+    rgba(255, 255, 255, 0.35)
+  );
+  backdrop-filter: blur(6px);
+
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+
+  animation: calcFadeIn 0.3s ease-out;
+}
+
+@keyframes calcFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.calc-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.calc-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+  animation: popIn 0.25s ease-out;
+  transition: transform 0.18s ease;
+}
+
+.calc-item:hover .calc-icon {
+  transform: scale(1.14) rotate(-3deg);
+}
+
+@keyframes popIn {
+  0%   { transform: scale(0.2); opacity: 0; }
+  80%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.calc-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.calc-answer {
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--calc-accent);
+  margin-bottom: 3px;
+  animation: answerFlash 0.35s ease-out;
+}
+
+@keyframes answerFlash {
+  from { color: white; text-shadow: 0 0 18px var(--calc-accent); }
+  to   { color: var(--calc-accent); }
+}
+
+.calc-expression {
+  font-size: 14px;
+  color: #444;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.calc-copy {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.22s ease;
+}
+
+.calc-copy:hover {
+  background: var(--calc-accent);
+  border-color: var(--calc-accent);
+  color: white;
+  transform: scale(1.06);
+}
+
+.calc-copy:active {
+  animation: pulseCopy 0.35s ease-out;
+}
+
+@keyframes pulseCopy {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+.result-item-suggestion .result-item-info strong {
+  font-weight: bold;
+}
+
+
+#google-apps-panel.open {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+#google-apps-panel h3 {
+  margin: 0 0 15px 0;
+  text-align: center;
+  font-weight: 500;
+}
+#google-apps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+.app-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: white;
+  padding: 10px;
+  border-radius: 10px;
+  transition: background-color 0.2s ease;
+}
+.app-item:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+.app-item img {
+  width: 40px;
+  height: 40px;
+}
+.app-item span {
+  font-size: 0.85em;
+}
+
+
+/* --- Google Apps Panel --- */
+/* 1. Make the Google Apps panel itself white and solid */
+#google-apps-panel {
+  position: absolute; 
+  width: 320px;
+  max-height: 440px; 
+  padding: 15px;
+  z-index: 200;
+  overflow-y: auto;
+
+  opacity: 0;
+  transform: scale(0.95) translateY(-10px);
+  transform-origin: top;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+
+  background-color: #ffffff;         /* Solid white background */
+  color: #333;                      /* Dark text for heading */
+  backdrop-filter: none;           /* Remove the glass blur effect */
+  -webkit-backdrop-filter: none;   /* For Safari */
+  border: 1px solid #ddd;          /* Light grey border */
+}
+
+/* 2. Make the app items inside have dark text */
+#google-apps-panel .app-item {
+  color: #333; /* Override the default 'color: white' */
+}
+
+/* 3. Give the app items a new hover effect for the white background */
+#google-apps-panel .app-item:hover {
+  background-color: #f0f0f0; /* Light grey hover */
+}
+
+
+/* ======================================= */
+/* --- WIDGET-SPECIFIC & SETTINGS STYLES --- */
+/* ======================================= */
+
+.widget-weather,
+.widget-news,
+#settings-panel,
+.widget-quote,
+#quote-settings-panel,
+.widget-todo {
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  position: relative; /* For settings buttons */
+  min-height: 215px; /* Layout stability */
+  overflow: visible; /* Allow settings tooltips to escape widget cards */
+}
+
+html.weather-hidden .widget-weather { display: none !important; }
+html.quote-hidden .widget-quote { display: none !important; }
+html.news-hidden .widget-news { display: none !important; }
+html.todo-hidden .widget-todo { display: none !important; }
+
+.widget-quote {
+  font-style: italic;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+  justify-content: center;
+  position: relative;
+  padding-bottom: 40px;
+}
+
+/* --- Weather Styles --- */
+.weather-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.weather-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.weather-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 10px;
+}
+.weather-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+#weather-city { font-size: 1.5em; font-weight: bold; }
+#weather-desc { font-size: 1em; font-style: italic; color: #ddd; margin-top: 5px; }
+#weather-temp { font-size: 2.8em; line-height: 1; margin-top: 5px; }
+/* Instant-load classes: used by instant_load.js to avoid inline styles */
+#weather-icon.is-instant-icon {
+  font-size: 3.5em;
+  line-height: 1;
+}
+.weather-stats {
+  display: flex;
+  flex-direction: column;
+  margin-left: 5px;
+  align-items: flex-start;
+}
+.weather-stats span { font-size: 0.85em; line-height: 1.5; }
+.weather-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 0.8em;
+  color: #ddd;
+  opacity: 0.9;
+}
+#weather-updated { font-style: italic; }
+
+/* --- Quote Styles --- */
+.widget-quote:hover #quote-settings-btn { opacity: 1.0; }
+#quote-settings-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+/* Container for quote actions */
+.quote-actions {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  z-index: 5;
+}
+.widget-quote:hover .quote-actions {
+  opacity: 1;
+}
+.quote-action-btn {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  padding: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: transform 0.1s ease, background-color 0.2s ease;
+}
+.quote-action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+  opacity: 1 !important;
+}
+.quote-action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+/* Reset old copy button positioning */
+#quote-copy-btn {
+  position: relative !important;
+  opacity: 1 !important;
+  transform: none;
+}
+#quote-text {
+  margin: 0 0 10px;
+  max-height: 250px;
+  overflow-y: auto;
+  font-size: 1.1em;
+  scrollbar-width: thin;
+  scrollbar-color: #fff rgba(255,255,255,0.2);
+}
+#quote-text::-webkit-scrollbar { width: 8px; }
+#quote-text::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 4px; }
+#quote-text::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.4); border-radius: 4px; }
+#quote-author { margin: 0; padding-top: 10px; text-align: right; font-size: 0.9em; }
+
+/* --- To-Do Styles --- */
+.widget-todo {
+  gap: 10px;
+}
+.todo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.todo-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* --- To-Do: Hover-only controls (All / Active / Clear) --- */
+.widget-todo .todo-header-actions {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.widget-todo:hover .todo-header-actions {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.todo-title {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+.widget-todo .todo-clear-btn {
+  font-size: 0.8em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  opacity: 0.85;
+}
+.todo-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.widget-todo .todo-filter-btn {
+  position: relative;
+  font-size: 0.8em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  opacity: 0.85;
+}
+.widget-todo .todo-filter-btn.is-selected {
+  background-color: #fff;
+  color: #1b1b1b;
+}
+.todo-filter-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background-color: rgba(255, 255, 255, 0.35);
+  align-self: center;
+}
+.todo-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#todo-input {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  outline: none;
+}
+#todo-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+.todo-add-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 1.2em;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.todo-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.todo-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.todo-toggle {
+  margin: 0;
+}
+.todo-text {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.todo-item.done .todo-text {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.todo-delete-btn {
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.8em;
+}
+.todo-delete-btn:hover {
+  opacity: 1;
+}
+.todo-empty {
+  text-align: center;
+  font-size: 0.9em;
+  opacity: 0.7;
+  padding: 10px 0;
+}
+
+/* --- News Styles --- */
+.widget-news {
+  gap: 6px;
+  overflow: hidden;
+}
+.news-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.news-header .news-title {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+.news-updated {
+  font-size: 0.8em;
+  color: #ddd;
+  opacity: 0.85;
+  font-style: italic;
+  white-space: nowrap;
+}
+#news-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  max-width: 100%;
+  max-height: none;
+  overflow-y: visible;
+}
+#news-list li {
+  font-size: 0.95em;
+  line-height: 1.35;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: start;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+#news-list li:last-child {
+  border-bottom: none;
+}
+#news-list li:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+#news-list a {
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+  max-width: 100%;
+}
+#news-list .news-title {
+  line-height: 1.35;
+  white-space: normal;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+#news-list .news-meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 2;
+}
+#news-list a,
+#news-list a:hover,
+#news-list a:focus,
+#news-list a:active {
+  text-decoration: none;
+}
+#news-list .news-time {
+  display: inline-block;
+  font-size: 0.78em;
+  color: #ddd;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+#news-list .news-empty {
+  color: #ddd;
+  font-style: italic;
+}
+#news-list .news-empty-hint {
+  display: block;
+  font-size: 0.85em;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+.tooltip-popup.tooltip-news-preview {
+  position: fixed;
+  z-index: 999;
+  max-width: min(360px, calc(100vw - 24px));
+  border-radius: 18px;
+  padding: 12px;
+  font-size: inherit;
+  font-weight: 400;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(8px, 8px) scale(0.98);
+  transition: all 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+#news-hover-preview.tooltip-news-preview {
+  background: #ffffff;
+  color: #222;
+  border: 1px solid #e3e3e3;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.tooltip-popup.tooltip-news-preview.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(8px, 0) scale(1);
+}
+.tooltip-popup.tooltip-news-preview::before,
+.tooltip-popup.tooltip-news-preview::after {
+  display: none;
+}
+.news-preview-image-wrap {
+  width: 100%;
+  height: 140px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  margin-bottom: 10px;
+}
+.news-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.news-preview-title {
+  font-size: 1em;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.news-preview-desc {
+  font-size: 0.9em;
+  overflow: hidden;
+
+  line-clamp: 3;          /* standard */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;  /* webkit */
+  -webkit-box-orient: vertical;
+}
+
+#news-hover-preview .news-preview-desc {
+  color: #555;
+}
+.tooltip-popup.tooltip-news-preview.no-desc .news-preview-desc {
+  display: none;
+}
+.tooltip-popup.tooltip-news-preview.no-image .news-preview-image-wrap {
+  display: none;
+}
+
+@media print {
+  #news-list {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+/* --- Button Styles --- */
+.icon-btn {
+  position: relative;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5em;
+  cursor: pointer;
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-btn:hover { opacity: 1; }
+.widget-weather:hover #settings-btn { opacity: 1; }
+#settings-btn { opacity: 0; transition: opacity 0.2s ease-in-out; }
+.widget-news:hover #news-settings-btn { opacity: 1; }
+#news-settings-btn {
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+.widget-news:hover #news-refresh-btn { opacity: 1; }
+.widget-news:hover #news-refresh-btn[disabled] { opacity: 0.6; }
+#news-refresh-btn {
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+#news-refresh-btn[disabled] { cursor: not-allowed; }
+.widget-weather:hover #weather-refresh-btn { opacity: 1; }
+.widget-weather:hover #weather-refresh-btn[disabled] { opacity: 0.6; }
+#weather-refresh-btn { opacity: 0; transition: opacity 0.2s ease-in-out; }
+#weather-refresh-btn[disabled] { cursor: not-allowed; }
+
+/* --- Settings Panel Styles --- */
+.hidden { display: none !important; } 
+.force-hidden { display: none !important; }
+.settings-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+/* Nested widget settings */
+.sub-settings-container {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+  margin-left: 24px;
+  padding-left: 20px;
+  border-left: 2px solid #e2e8f0;
+  transition: grid-template-rows 200ms ease, opacity 200ms ease, transform 200ms ease;
+}
+
+.sub-settings-container.expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  margin-top: 10px;
+  padding-bottom: 10px;
+}
+
+.sub-settings-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.setting-sub-row {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  transition: all 0.25s ease;
+}
+
+.setting-sub-row.visible {
+  max-height: 100px;
+  opacity: 1;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+/* Ensure Weather and Quote settings pop up OVER the main settings */
+#weather-settings-modal, 
+#quote-settings-modal,
+#news-settings-modal {
+  z-index: 2100; /* Higher than #app-settings-modal (2000) */
+}
+
+/* --- Force White Background for Weather & Quote Settings --- */
+#weather-settings-dialog,
+#quote-settings-dialog,
+#news-settings-dialog {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Fix Labels inside these specific white dialogs */
+#weather-settings-dialog label,
+#quote-settings-dialog label,
+#news-settings-dialog label {
+  color: #334155 !important;
+  font-weight: 600;
+}
+
+/* Fix Inputs inside these dialogs */
+#weather-settings-dialog .dialog-input,
+#quote-settings-dialog .dialog-input,
+#news-settings-dialog .dialog-input,
+#quote-frequency-select {
+  background-color: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* Fix Buttons (Secondary - Cancel) */
+#weather-settings-dialog .dialog-btn,
+#quote-settings-dialog .dialog-btn,
+#news-settings-dialog .dialog-btn {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+#weather-settings-dialog .dialog-btn:hover,
+#quote-settings-dialog .dialog-btn:hover,
+#news-settings-dialog .dialog-btn:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Fix Buttons (Primary - Save) */
+#weather-settings-dialog .dialog-btn.primary-btn,
+#quote-settings-dialog .dialog-btn.primary-btn,
+#news-settings-dialog .dialog-btn.primary-btn {
+  background-color: #2ca5ff !important;
+  color: #0b1b2e !important;
+  border: none !important;
+}
+#weather-settings-dialog .dialog-btn.primary-btn:hover,
+#quote-settings-dialog .dialog-btn.primary-btn:hover,
+#news-settings-dialog .dialog-btn.primary-btn:hover {
+  background-color: #59baff !important;
+}
+
+/* Quote Category Pills in White Mode */
+#quote-settings-dialog .quote-category-pill {
+  background-color: #ffffff !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+#quote-settings-dialog .quote-category-pill:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+}
+#quote-settings-dialog .quote-category-pill.selected {
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
+  border-color: #3b82f6 !important;
+}
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #555;
+  padding-bottom: 4px;
+  margin-bottom: 3px;
+}
+.settings-header h2 { margin: 0; }
+#close-settings-btn { font-size: 1.2em; }
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.setting-item-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+.setting-item-column label { font-weight: bold; margin-bottom: 5px; }
+
+/* Quote Category Pills */
+#quote-categories-list {
+  width: 100%;
+  max-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 5px;
+}
+.quote-category-pill {
+  background-color: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.2s;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.quote-category-pill:not(.selected):hover { background-color: rgba(255, 255, 255, 0.2); }
+.quote-category-pill.selected {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+  font-weight: bold;
+}
+
+/* Location Search */
+.location-search-wrapper { position: relative; width: 65%; }
+#location-search-input,
+#modal-location-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #777;
+  background-color: #f0f0f0;
+  color: #333;
+  box-sizing: border-box;
+}
+#location-results,
+#modal-location-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background-color: #fff;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 0 0 5px 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 101;
+}
+.location-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+.location-result-item:hover { background-color: #f0f0f0; }
+.location-result-item span { font-size: 0.9em; color: #555; }
+
+/* Temp Toggle Switch */
+.toggle-switch { position: relative; display: inline-block; width: 60px; height: 30px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-label {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #333;
+  border-radius: 30px;
+  transition: .4s;
+  border: 1px solid #888;
+}
+.toggle-label:before {
+  position: absolute;
+  content: "";
+  height: 22px; width: 22px;
+  left: 4px; bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: .4s;
+}
+.toggle-label-text {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: white;
+  font-size: 0.8em;
+  font-weight: bold;
+}
+.toggle-label-text::after { content: attr(data-off); }
+input:checked + .toggle-label { background-color: #f0f0f0; }
+input:checked + .toggle-label:before { transform: translateX(30px); background-color: #333; }
+input:checked + .toggle-label .toggle-label-text { left: 8px; color: #333; }
+input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on); }
+
+/* Save Buttons */
+#set-location-btn,
+#save-settings-btn,
+#save-quote-settings-btn {
+  background-color: #f0f0f0;
+  color: #333;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  width: 100%;
+  font-size: 1em;
+  margin-top: 15px;
+}
+#set-location-btn {
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  padding: 8px 12px;
+  margin-top: auto; /* Push to bottom */
+}
+#set-location-btn:hover,
+#save-settings-btn:hover,
+#save-quote-settings-btn:hover {
+  background-color: #fff;
+}
+#save-quote-settings-btn {
+  margin-top: auto; /* Pushes to bottom of flex container */
+}
+
+/* ======================================= */
+/* --- WHITE BACKGROUND OVERRIDES --- */
+/* ======================================= */
+
+/* --- Style for the new app divider --- */
+.app-divider {
+  grid-column: 1 / -1; /* Makes the divider span all 3 columns */
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.3); /* Faint white line for glass bg */
+  margin: 8px 0;
+}
+
+/* Override for the white panel background */
+#google-apps-panel .app-divider {
+  background-color: #ddd; /* Faint grey line for white bg */
+}
+
+.search-toolbar-divider {
+  width: 2px;
+  height: 28px; /* You can adjust this height */
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ======================================= */
+/* --- CUSTOM TOOLTIPS (with Animation) --- */
+/* ======================================= */
+
+.search-toolbar-buttons:hover {
+  overflow: visible; /* Allow Cooltipz tooltips to escape the toolbar */
+}
+
+/* ======================================= */
+/* --- MODIFIED: QUICK ACTIONS BAR --- */
+/* ======================================= */
+
+#quick-actions-bar {
+  /* Removed position: fixed, bottom, right, z-index */
+  display: flex;
+  align-items: center;
+
+  /* Thinner bar */
+  height: 26px;
+  gap: 4px;
+  padding: 0 4px;
+  border-radius: 18px;
+
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.quick-action-btn {
+  position: relative;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 0.85em;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  line-height: 1; /* Aligns emojis better */
+}
+.quick-action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.quick-action-divider {
+  width: 1px;
+  height: 14px; /* was 16px */
+  background-color: rgba(255, 255, 255, 0.3);
+  margin: 0 4px;
+}
+
+/* DEBUG: alignment outlines (toggle by adding body.debug-align) */
+body.debug-align .search-area-wrapper,
+body.debug-align .bookmark-bar-wrapper,
+body.debug-align #bookmarks-grid {
+  outline: 1px dashed rgba(255, 255, 255, 0.6);
+}
+
+body.debug-align #google-apps-btn {
+  outline: 1px solid rgba(0, 255, 0, 0.8);
+}
+
+body.debug-align #quick-actions-bar {
+  outline: 1px solid rgba(255, 0, 0, 0.8);
+}
+
+
+/* ======================================= */
+/* --- CUSTOM CONTEXT MENU --- */
+/* ======================================= */
+
+.modal-open {
+  overflow: hidden;
+}
+
+#gallery-modal,
+#app-settings-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+#gallery-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  max-height: calc(80vh - 140px);
+  overflow: hidden;
+  margin-top: 0;
+}
+
+.gallery-dialog {
+  width: min(1100px, 92vw);
+  height: 85vh;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  border-radius: 20px;
+}
+
+.app-settings-dialog {
+  width: min(960px, 92vw);
+  height: 72vh;
+  min-height: 520px;
+  border-radius: 20px;
+}
+
+.app-settings-body {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+}
+
+.app-settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-right: 1px solid #e5e7eb;
+  padding-right: 10px;
+}
+
+.app-settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #111827;
+  font-weight: 600;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.app-settings-nav-item .nav-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+}
+
+.app-settings-nav-item.is-active {
+  background: #f1f5f9;
+  color: #0f172a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.app-settings-nav-item.is-active .nav-icon {
+  color: #0f172a;
+}
+
+.app-settings-nav-badge {
+  margin-left: auto;
+  font-size: 0.65em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+}
+
+.app-settings-nav-badge.is-hidden {
+  display: none;
+}
+
+.app-settings-nav .nav-divider {
+  width: 100%;
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+.app-settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-settings-section {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  color: #0f172a;
+  min-height: 0;
+}
+
+.app-settings-section.active {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.app-settings-section[data-section="about"] {
+  gap: 16px;
+}
+
+.app-settings-section[data-section="whats-new"] {
+  gap: 14px;
+}
+
+.app-settings-whatsnew-header {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-whatsnew-title {
+  font-size: 1.2em;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.app-settings-whatsnew-meta {
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9em;
+  color: #64748b;
+}
+
+.app-settings-whatsnew-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-settings-whatsnew-label {
+  font-weight: 600;
+  color: #475569;
+}
+
+.app-settings-whatsnew-value {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-whatsnew-list,
+#whats-new-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-settings-whatsnew-item {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-whatsnew-badge {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  width: 78px;
+  align-self: start;
+  line-height: 1;
+  text-align: center;
+}
+
+.app-settings-whatsnew-badge--new {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.app-settings-whatsnew-badge--improved {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.app-settings-whatsnew-badge--fix {
+  background: #ffedd5;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.app-settings-whatsnew-content {
+  min-width: 0;
+}
+
+.app-settings-whatsnew-item-title {
+  font-weight: 700;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.app-settings-whatsnew-item-desc {
+  margin-top: 4px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.app-settings-whatsnew-empty {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed #e2e8f0;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.app-settings-about-header {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-about-title {
+  font-size: 1.2em;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.app-settings-about-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.9em;
+}
+
+.app-settings-about-version {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-about-tagline {
+  margin-top: 6px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.app-settings-about-block {
+  padding: 4px 0 10px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.app-settings-about-block:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.app-settings-about-heading {
+  margin-bottom: 6px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-about-block p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.app-settings-about-block p + p {
+  margin-top: 8px;
+}
+
+.app-settings-about-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+  display: grid;
+  gap: 6px;
+}
+
+.app-settings-about-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.app-settings-about-link {
+  color: #2ca5ff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-settings-about-link:hover {
+  text-decoration: underline;
+}
+
+.app-settings-support-block {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.app-settings-support-title {
+  font-size: 1.1em;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.app-settings-support-intro {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.app-settings-support-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eef1f5;
+}
+
+.app-settings-support-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.app-settings-support-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-settings-support-section-title {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-support-section-sub {
+  color: #64748b;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.app-settings-support-cards {
+  display: grid;
+  gap: 12px;
+}
+
+.app-settings-support-cards--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app-settings-support-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-support-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.app-settings-support-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.app-settings-support-card-title {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-support-badge {
+  font-size: 0.72em;
+  font-weight: 600;
+  color: #475569;
+  background: #e2e8f0;
+  border: 1px solid transparent;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.app-settings-support-badge--bd {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.app-settings-support-badge--trc {
+  background: #ffe4e6;
+  border-color: #fda4af;
+  color: #9f1239;
+}
+
+.app-settings-support-badge--bep {
+  background: #fef9c3;
+  border-color: #fde047;
+  color: #854d0e;
+}
+
+.app-settings-support-badge--btc {
+  background: #ffedd5;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.app-settings-support-card-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.app-settings-support-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.app-settings-support-card--local .app-settings-support-local-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.app-settings-support-card--local .app-settings-support-local-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.app-settings-support-card--local .app-settings-support-local-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.app-settings-support-address {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+  line-height: 1.4;
+  min-height: calc(1.4em * 2);
+  color: #0f172a;
+  word-break: break-all;
+}
+
+.app-settings-support-hint {
+  font-size: 0.85em;
+  color: #9a3412;
+}
+
+.app-settings-support-copy {
+  margin-left: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 0.8em;
+  cursor: pointer;
+}
+
+.app-settings-support-copy:hover {
+  background: #f8fafc;
+}
+
+.app-settings-support-qr {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 4px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.app-settings-support-qr:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+}
+
+.support-qr-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 2300;
+  padding: 24px;
+  opacity: 0;
+  transition: opacity var(--qr-modal-duration, 220ms) ease-out;
+}
+
+.support-qr-modal.is-hidden {
+  display: none;
+}
+
+.support-qr-modal__dialog {
+  position: relative;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.25);
+  max-width: min(80vw, 520px);
+  max-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(var(--qr-x, 0px), var(--qr-y, 0px)) scale(var(--qr-scale, 1));
+  opacity: 0;
+  transition: transform var(--qr-modal-duration, 220ms) ease-out, opacity var(--qr-modal-duration, 220ms) ease-out;
+  will-change: transform, opacity;
+}
+
+.support-qr-modal__img {
+  max-width: min(70vw, 460px);
+  max-height: 70vh;
+  width: 100%;
+  height: auto;
+}
+
+.support-qr-modal__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: none;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.support-qr-modal__close:hover {
+  background: #e2e8f0;
+}
+
+.support-qr-modal.is-opening,
+.support-qr-modal.is-closing {
+  opacity: 0;
+}
+
+.support-qr-modal.is-open {
+  opacity: 1;
+}
+
+.support-qr-modal.is-open .support-qr-modal__dialog {
+  transform: translate(0px, 0px) scale(1);
+  opacity: 1;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.support-qr-modal.is-closing .support-qr-modal__dialog {
+  transition-timing-function: ease-in;
+}
+
+@media (max-width: 720px) {
+  .app-settings-support-cards--two {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.settings-group:last-child {
+  border-bottom: none;
+}
+
+.settings-group-header {
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 1em;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.setting-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #0f172a;
+}
+
+.setting-sub {
+  color: #6b7280;
+  font-size: 0.9em;
+}
+
+.settings-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  min-width: 150px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.app-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.app-setting-row:last-child {
+  border-bottom: none;
+}
+
+.widget-setting-row .app-setting-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.widget-setting-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.gallery-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.app-setting-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-setting-label .title {
+  font-weight: 700;
+  font-size: 1em;
+  color: #0f172a;
+}
+
+.app-setting-label .hint {
+  color: #6b7280;
+  font-size: 0.9em;
+}
+
+.app-setting-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  min-width: 150px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.app-switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+}
+
+.app-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.app-switch-track {
+  position: absolute;
+  inset: 0;
+  background: #e5e7eb;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.app-switch-track::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  left: 3px;
+  top: 3px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.app-switch input:checked + .app-switch-track {
+  background: #2ca5ff;
+}
+
+.app-switch input:checked + .app-switch-track::after {
+  transform: translateX(20px);
+}
+
+.app-settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #eef1f5;
+}
+
+.app-link-btn {
+  background: transparent;
+  border: none;
+  color: #2ca5ff;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.app-save-btn {
+  min-width: 90px;
+}
+
+.app-settings-placeholder {
+  color: #6b7280;
+  font-size: 0.95em;
+  padding: 8px 0;
+}
+
+.settings-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.engine-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.engine-toggle-item:hover {
+  background: #f9fafb;
+}
+
+.engine-toggle-item span {
+  font-weight: 500;
+  color: #333;
+}
+
+.engine-toggle-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.engine-toggle-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* --- Fix for Search Engines Modal --- */
+
+/* 1. Ensure it sits ON TOP of the main Settings modal (which is z-index 2000) */
+#search-engines-modal {
+  z-index: 2100;
+}
+
+/* 2. Make the dialog white (like the other settings dialogs) */
+#search-engines-dialog {
+  background-color: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+/* 3. Style the buttons for a white background (Dark Text) */
+#search-engines-dialog .dialog-btn {
+  background-color: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #0f172a;
+}
+
+#search-engines-dialog .dialog-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* 4. Style the Primary (Save) button */
+#search-engines-dialog .dialog-btn.primary-btn {
+  background-color: #2ca5ff;
+  border: none;
+  color: #0b1b2e;
+}
+
+#search-engines-dialog .dialog-btn.primary-btn:hover {
+  background-color: #59baff;
+  border-color: transparent;
+}
+
+/* 5. Tweak the list container inside the modal */
+#search-engines-modal-list {
+  background-color: #f8fafc !important; /* Light gray background */
+  border-color: #e2e8f0 !important;
+}
+
+.settings-list-grid .engine-toggle-item {
+  background-color: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.gallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gallery-header .close-btn {
+  font-size: 22px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 8px;
+}
+.gallery-header .close-btn:hover {
+  color: #0f172a;
+}
+
+#gallery-grid {
+  overflow: visible;
+  display: block;
+}
+
+.gallery-scroll-container {
+  height: 70vh;
+  max-height: 800px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  will-change: scroll-position;
+}
+
+.gallery-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gallery-filter {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #dbe4f3;
+  background: #f4f7fb;
+  color: #0f172a;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.gallery-filter.active {
+  background: #2ca5ff;
+  border-color: #2ca5ff;
+  color: #ffffff;
+}
+
+.gallery-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gallery-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gallery-actions h4 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.gallery-secondary-btn {
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: #f8fafc;
+  color: #0f172a;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.gallery-secondary-btn:hover {
+  background: #e8eefb;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.gallery-primary-btn {
+  padding: 8px 14px;
+  border-radius: 16px;
+  border: none;
+  background: #2ca5ff;
+  color: #0b1b2e;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.gallery-primary-btn:hover {
+  background: #59baff;
+  transform: translateY(-1px);
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  grid-auto-rows: minmax(235px, auto);
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 6px;
+  align-items: start;
+}
+
+.gallery-card {
+  background: rgb(245, 245, 245);
+  border-radius: 12px;
+  overflow: visible;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  min-height: 235px;
+  height: auto;
+  position: relative;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  z-index: 0;
+  isolation: isolate;
+}
+.gallery-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  border-color: #cfd8e3;
+  z-index: 5;
+}
+
+.gallery-card-image {
+  width: 100%;
+  height: 165px;
+  min-height: 165px;
+  max-height: 165px;
+  object-fit: cover;
+  display: block;
+  background: #f4f6fb;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+  border-radius: 12px 12px 0 0;
+}
+
+.gallery-fav-btn {
+  position: absolute;
+  /* Pull the container up and right so the centered heart sits in the corner */
+  top: -25px;   
+  right: -25px;
+  
+  width: 100px; 
+  height: 100px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 5;
+  cursor: pointer;
+}
+
+.gallery-card .gallery-fav-btn {
+  position: absolute;
+  top: -25px;
+  right: -25px;
+  width: 100px;
+  height: 100px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 5;
+}
+
+.gallery-card:hover .gallery-fav-btn,
+.gallery-fav-btn.is-active {
+  opacity: 1;
+}
+
+/* --- Twitter Heart Animation --- */
+.gallery-fav-btn .heart {
+  width: 100%;
+  height: 100%;
+  /* External Image from CSSAnimation.rocks */
+  background: url("https://cssanimation.rocks/images/posts/steps/heart.png") no-repeat;
+  background-position: 0 0;
+  
+  /* Scale Logic: The sprite is 29 frames wide. 
+     2900% width ensures one frame fits the container exactly.
+  */
+  background-size: 2900% 100%;
+  
+  cursor: pointer;
+  transition: background-position 1s steps(28);
+  transition-duration: 0s; /* Instant reset when un-liking */
+}
+
+.gallery-fav-btn.is-active .heart {
+  transition-duration: 1s; /* Animate over 1s when liking */
+  background-position: 100% 0; /* Move to the last frame */
+}
+
+.gallery-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.gallery-card-title {
+  font-size: 0.9em;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  display: inline-block;
+}
+
+.gallery-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 10px;
+  margin-top: 0;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.15s ease, max-height 0.2s ease, padding 0.2s ease, margin-top 0.2s ease;
+  pointer-events: none;
+}
+
+.gallery-card:hover .gallery-card-tags {
+  opacity: 1;
+  max-height: 320px;
+  padding: 6px 10px 12px;
+  margin-top: 6px;
+  pointer-events: auto;
+}
+
+.gallery-card-tag {
+  background: #e8eefb;
+  color: #0f172a;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+}
+
+.gallery-card-title.gallery-marquee span {
+  display: inline-block;
+  padding-right: 32px;
+  animation: mw-title-marquee var(--gallery-marquee-duration, 10s) linear infinite;
+}
+
+.gallery-card:not(:hover) .gallery-card-title.gallery-marquee span {
+  animation: none;
+  transform: translateX(0);
+}
+
+.gallery-card:hover .gallery-card-title.gallery-marquee span {
+  animation-play-state: running;
+}
+
+.gallery-footer {
+  padding-top: 6px;
+}
+
+.gallery-footer-nav {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin-top: auto;
+}
+
+.gallery-footer-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  transition: color 0.15s ease;
+}
+
+.gallery-footer-btn.is-active {
+  color: #2ca5ff;
+}
+
+.gallery-footer-icon {
+  font-size: 18px;
+}
+
+.gallery-footer-label {
+  font-size: 0.9em;
+}
+
+#gallery-settings-panel {
+  flex: 1;
+}
+
+.gallery-mywallpapers {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: stretch;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 16px 18px 20px;
+  box-sizing: border-box;
+  color: #0f172a;
+  min-height: 260px;
+  background: linear-gradient(135deg, rgba(44,165,255,0.04), rgba(14,116,144,0.04));
+  border-radius: 14px;
+}
+
+.mywallpapers-hero {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mw-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8em;
+  background: rgba(44, 165, 255, 0.12);
+  color: #0f172a;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.mywallpapers-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.mw-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+}
+
+.mw-upload-input {
+  display: none;
+}
+
+.mw-btn {
+  background: #2ca5ff;
+  color: #fff;
+  border: none;
+  border-radius: 16px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+
+.mw-btn.primary {
+  background: #1c8cd6;
+}
+
+.mw-btn.ghost {
+  background: transparent;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  color: #0f172a;
+  box-shadow: none;
+}
+
+.mw-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* My Wallpapers upload buttons (Documents style) */
+.Documents-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: fit-content;
+  height: 45px;
+  border: none;
+  padding: 0 15px;
+  border-radius: 5px;
+  background-color: rgb(49, 49, 83);
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.Documents-btn .folderContainer {
+  width: 40px;
+  height: fit-content;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+}
+.Documents-btn .fileBack {
+  z-index: 1;
+  width: 80%;
+  height: auto;
+}
+.Documents-btn .filePage {
+  width: 50%;
+  height: auto;
+  position: absolute;
+  z-index: 2;
+  transition: all 0.3s ease-out;
+}
+.Documents-btn .fileFront {
+  width: 85%;
+  height: auto;
+  position: absolute;
+  z-index: 3;
+  opacity: 0.95;
+  transform-origin: bottom;
+  transition: all 0.3s ease-out;
+}
+.Documents-btn .text {
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+.Documents-btn:hover .filePage {
+  transform: translateY(-5px);
+}
+.Documents-btn:hover {
+  background-color: rgb(58, 58, 94);
+}
+.Documents-btn:active {
+  transform: scale(0.95);
+}
+.Documents-btn:hover .fileFront {
+  transform: rotateX(30deg);
+}
+
+.mw-hint-block {
+  color: #475569;
+  font-size: 0.8em;
+  padding-left: 4px;
+}
+
+.mw-tag {
+  background: #f97316;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 0.75em;
+}
+
+.mw-hint {
+  font-size: 0.75em;
+  opacity: 0.85;
+}
+
+.mywallpapers-title {
+  font-size: 1.3em;
+  margin: 0;
+  text-align: center;
+}
+
+.mywallpapers-subtitle {
+  margin: 0;
+  color: #475569;
+  font-size: 0.95em;
+}
+
+.mywallpapers-empty-card {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 16px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px dashed rgba(15, 23, 42, 0.14);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.mw-empty-visual {
+  position: relative;
+  width: 100%;
+  min-height: 120px;
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.04), rgba(44, 165, 255, 0.1));
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mw-empty-circle {
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: rgba(44, 165, 255, 0.25);
+  top: 14px;
+  left: 14px;
+}
+
+.mw-empty-rect {
+  position: absolute;
+  width: 120px;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.08);
+  bottom: 18px;
+  left: 18px;
+}
+
+.mw-empty-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mw-empty-title {
+  margin: 0;
+  font-size: 1.1em;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mw-empty-desc {
+  margin: 0;
+  color: #475569;
+  font-size: 0.95em;
+}
+
+.mywallpapers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  grid-auto-rows: minmax(235px, auto);
+  gap: 10px;
+  justify-items: stretch;
+  align-items: start;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 4px 6px 12px 0;
+}
+
+.mw-card {
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+  min-height: 180px;
+  height: auto;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.mw-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  border-color: #cfd8e3;
+}
+
+.mw-card.muted {
+  opacity: 0.65;
+}
+
+.gallery-mywallpapers .mw-card-media {
+  width: 100%;
+  padding: 10px;
+  background: #f4f6fb;
+  overflow: hidden;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.gallery-mywallpapers .mw-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: #e2e8f0;
+}
+
+.gallery-mywallpapers .mw-preview-blur {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(8px);
+  opacity: 0.6;
+  z-index: 1;
+}
+
+.gallery-mywallpapers .mw-preview-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+}
+
+.gallery-mywallpapers .mw-live-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  background: transparent;
+}
+
+.gallery-mywallpapers .mw-live-preview.is-playing {
+  opacity: 1;
+}
+
+body.performance-mode .gallery-mywallpapers .mw-preview-blur {
+  filter: blur(12px) brightness(0.9);
+}
+
+.mw-card-media.skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: mw-shimmer 1.4s ease infinite;
+}
+
+@keyframes mw-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.mw-card-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.mw-card-text {
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mw-card-title {
+  margin: 0;
+  font-weight: 400; /* match metadata weight */
+  color: #0f172a;
+  font-size: 0.9em; /* match gallery title size */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mw-card-meta {
+  margin: 2px 0 0 0;
+  color: #6b7280;
+  font-size: 0.85em;
+}
+
+.mw-card-title.mw-marquee span {
+  display: inline-block;
+  padding-right: 32px;
+  animation: mw-title-marquee var(--mw-marquee-duration, 10s) linear infinite;
+}
+
+.mw-card:not(:hover) .mw-card-title.mw-marquee span {
+  animation: none;
+  transform: translateX(0);
+}
+.mw-card:hover .mw-card-title.mw-marquee span { animation-play-state: running; }
+.mw-card:hover .mw-card-title.mw-marquee { text-overflow: clip; }
+
+.mw-card-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.mw-card:hover .mw-card-remove {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+
+/* Fix for My Wallpapers Delete Button Position */
+.mw-card-remove.bin-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+
+/* My Wallpapers delete button (bin) */
+.bin-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: rgb(255, 95, 95);
+  cursor: pointer;
+  border: 1px solid rgb(255, 201, 201);
+  transition-duration: 0.3s;
+  position: relative;
+  overflow: hidden;
+  transform-origin: right center;
+  z-index: 10;
+}
+.bin-bottom {
+  width: 10px;
+  z-index: 2;
+}
+.bin-top {
+  width: 12px;
+  transform-origin: right;
+  transition-duration: 0.3s;
+  z-index: 2;
+}
+.bin-button:hover .bin-top {
+  transform: rotate(45deg);
+}
+.bin-button:hover {
+  background-color: rgb(255, 0, 0);
+}
+.bin-button:active {
+  transform: scale(0.9);
+}
+.garbage {
+  position: absolute;
+  width: 9px;
+  height: auto;
+  z-index: 1;
+  opacity: 0;
+  transition: all 0.3s;
+}
+.bin-button:hover .garbage {
+  animation: throw 0.4s linear;
+}
+@keyframes throw {
+  from {
+    transform: translate(-400%, -700%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(0%, 0%);
+    opacity: 1;
+  }
+}
+
+/* Shared apply button (gallery + my wallpapers) */
+.apply-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+  cursor: pointer;
+  width: 55px;
+  height: 25px;
+  background-image: linear-gradient(to top, #d8d9db 0%, #ffffff 80%, #fdfdfd 100%);
+  border-radius: 15px;
+  border: 1px solid #8f9092;
+  transition: all 0.2s ease;
+  font-family: "Source Sans Pro", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #606060;
+  text-shadow: 0 1px #fff;
+}
+
+.apply-button:hover {
+  box-shadow: 0 4px 3px 1px #fcfcfc, 0 6px 8px #d6d7d9, 0 -4px 4px #cecfd1, 0 -6px 4px #fefefe, inset 0 0 3px 3px #cecfd1;
+}
+
+.apply-button:active,
+.apply-button:focus {
+  box-shadow: 0 4px 3px 1px #fcfcfc, 0 6px 8px #d6d7d9, 0 -4px 4px #cecfd1, 0 -6px 4px #fefefe, inset 0 0 5px 3px #999, inset 0 0 30px #aaa;
+}
+
+@keyframes mw-title-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+.gallery-settings-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.gallery-settings-preview {
+  display: flex;
+  justify-content: center;
+}
+
+.settings-preview-box {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  max-width: 360px;
+}
+
+.settings-preview-media {
+  width: 100%;
+  max-width: 360px;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+  background: #f4f6fb;
+  border: 1px solid #e5e7eb;
+}
+
+.settings-preview-caption {
+  text-align: center;
+  color: #4b5563;
+}
+
+.settings-preview-title {
+  font-weight: 600;
+  color: #0f172a;
+  text-align: center;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.settings-row-toggle {
+  align-items: center;
+}
+
+.settings-radio-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.settings-radio-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Toggle switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 22px;
+}
+
+.switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #cbd5e1;
+  transition: .2s;
+  border-radius: 22px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .2s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #2ca5ff;
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
+
+.wallpaper-type-switch {
+  --_label-padding: 6px 12px;
+  background: transparent;
+  border: none;
+  min-height: 48px;
+}
+/* CodePen toggle style */
+.checkbox-wrapper-25 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.checkbox-wrapper-25 input[type="checkbox"] {
+  background-image: -webkit-linear-gradient(hsla(0,0%,0%,.1), hsla(0,0%,100%,.1)),
+                    -webkit-linear-gradient(left, #f66 50%, #6cf 50%);
+  background-size: 100% 100%, 200% 100%;
+  background-position: 0 0, 15px 0;
+  border-radius: 25px;
+  box-shadow: inset 0 1px 4px hsla(0,0%,0%,.5),
+              inset 0 0 10px hsla(0,0%,0%,.5),
+              0 0 0 1px hsla(0,0%,0%,.1),
+              0 -1px 2px 2px hsla(0,0%,0%,.25),
+              0 2px 2px 2px hsla(0,0%,100%,.75);
+  cursor: pointer;
+  height: 25px;
+  padding-right: 25px;
+  width: 75px;
+
+  appearance: none;
+  -webkit-appearance: none;
+
+  transition: 0.25s;        /* standard */
+  -webkit-transition: 0.25s; /* webkit */
+}
+
+
+.checkbox-wrapper-25 input[type="checkbox"]:after {
+  background-color: #eee;
+  background-image: -webkit-linear-gradient(hsla(0,0%,100%,.1), hsla(0,0%,0%,.1));
+  border-radius: 25px;
+  box-shadow: inset 0 1px 1px 1px hsla(0,0%,100%,1),
+              inset 0 -1px 1px 1px hsla(0,0%,0%,.25),
+              0 1px 3px 1px hsla(0,0%,0%,.5),
+              0 0 2px hsla(0,0%,0%,.25);
+  content: '';
+  display: block;
+  height: 25px;
+  width: 50px;
+}
+
+.checkbox-wrapper-25 input[type="checkbox"]:checked {
+  background-position: 0 0, 35px 0;
+  padding-left: 25px;
+  padding-right: 0;
+}
+.context-menu {
+  position: absolute; /* Positioned by JS */
+  z-index: 1000;
+  padding: 8px;
+  border-radius: 12px; /* Softer radius for a menu */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.menu-item {
+  background-color: transparent;
+  border: none;
+  color: white;            /* or black, your override handles this */
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+
+  font-family: inherit;    /* <- make buttons use the same font as body/subfolders */
+}
+
+.menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.context-menu .menu-divider {
+  height: 1px;
+  margin: 4px 0;
+  background-color: rgba(0, 0, 0, 0.12); /* nice on white background */
+}
+
+#confirm-delete-message {
+  margin: 10px 0 20px;
+}
+
+/* Make delete/edit/move dialogs look like the right-click menu */
+#confirm-delete-modal .dialog-content.glass-box,
+#edit-folder-dialog,
+#move-bookmark-dialog,
+#add-bookmark-dialog,
+#add-folder-dialog {
+  background-color: #ffffff;              /* same as .context-menu.glass-box */
+  color: #000000;                         /* black text so it's readable */
+  border: 1px solid rgba(0, 0, 0, 0.15);  /* same border as menu */
+
+  width: 520px;
+  max-width: 90vw;
+  min-height: 230px;
+}
+
+/* Gray circle behind delete dialog icon (works for favicon, folder, fallback) */
+#confirm-delete-icon,
+#edit-folder-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background-color: #e5e7eb;   /* light gray circle */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+
+/* Allow larger SVG wrapper so it matches grid folders */
+#confirm-delete-icon .bookmark-icon-wrapper,
+#edit-folder-icon .bookmark-icon-wrapper {
+  width: 72px;
+  height: 58px;
+}
+
+#confirm-delete-icon .bookmark-icon-wrapper.folder-preview,
+#edit-folder-icon .bookmark-icon-wrapper.folder-preview {
+  width: 84px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: scale(0.8571428571);
+  transform-origin: center center;
+}
+
+/* Override fallback "letter" icon inside dialog so it doesn't draw its own box */
+#confirm-delete-icon .bookmark-fallback-icon,
+#edit-folder-icon .bookmark-fallback-icon {
+  background-color: transparent; /* remove its usual blue square */
+  color: #111827;                /* dark text on gray circle */
+  border-radius: 0;              /* let the circle be from the parent */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;                    /* always visible in dialogs */
+}
+
+#edit-folder-dialog .dialog-input {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111827;
+  width: 100%;
+}
+
+#edit-folder-dialog .dialog-input:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
+#edit-folder-dialog label {
+  color: #000000;
+  font-weight: 500;
+}
+
+#edit-folder-dialog .dialog-btn {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111827;
+}
+
+#edit-folder-dialog .dialog-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+#edit-folder-dialog .dialog-btn.primary-btn {
+  background-color: #2ca5ff;
+  border: none;
+  color: #0b1b2e;
+}
+
+#edit-folder-dialog .dialog-btn.primary-btn:hover {
+  background-color: #59baff;
+  border-color: transparent;
+}
+
+
+#move-bookmark-dialog .dialog-input,
+#add-bookmark-dialog .dialog-input,
+#add-folder-dialog .dialog-input {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111827;
+}
+
+#move-bookmark-dialog .dialog-input:focus,
+#add-bookmark-dialog .dialog-input:focus,
+#add-folder-dialog .dialog-input:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
+#move-bookmark-dialog .move-folder-row label,
+#add-bookmark-dialog .form-group label,
+#add-folder-dialog .form-group label {
+  color: #000000;
+}
+
+.move-folder-row {
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.move-folder-row label {
+  color: #000000;
+  font-weight: 500;
+  margin: 0;
+}
+
+.move-folder-row .custom-dropdown {
+  position: relative;
+  width: 320px;
+  max-width: 100%;
+}
+
+.dropdown-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1f2937;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dropdown-toggle:hover,
+.custom-dropdown.open .dropdown-toggle {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.dropdown-caret {
+  margin-left: 12px;
+  font-size: 0.9rem;
+}
+
+.dropdown-menu {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, 95vw);
+  max-height: 800px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+  padding: 6px 0;
+  display: none;
+  z-index: 1200;
+}
+
+.custom-dropdown.open .dropdown-menu {
+  display: block;
+}
+
+.dropdown-item {
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: #1f2937;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.dropdown-item:hover,
+.dropdown-item.active {
+  background: rgba(59, 130, 246, 0.18);
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+
+#move-bookmark-dialog .dialog-btn,
+#add-bookmark-dialog .dialog-btn,
+#add-folder-dialog .dialog-btn {
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111827;
+}
+
+#move-bookmark-dialog .dialog-btn:hover,
+#add-bookmark-dialog .dialog-btn:hover,
+#add-folder-dialog .dialog-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+#move-bookmark-dialog .dialog-btn.primary-btn,
+#add-bookmark-dialog .dialog-btn.primary-btn,
+#add-folder-dialog .dialog-btn.primary-btn {
+  background-color: #2ca5ff;
+  border: none;
+  color: #0b1b2e;
+}
+
+#move-bookmark-dialog .dialog-btn.primary-btn:hover,
+#add-bookmark-dialog .dialog-btn.primary-btn:hover,
+#add-folder-dialog .dialog-btn.primary-btn:hover {
+  background-color: #59baff;
+  border-color: transparent;
+}
+
+
+/* ======================================= */
+/* --- ADD BOOKMARK MODAL (MODIFIED) --- */
+/* ======================================= */
+
+/* The full-screen background overlay */
+.modal-overlay {
+  display: none; /* IMPORTANT: This makes it hidden by default */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  
+  /* MODIFIED: Increased blur */
+  backdrop-filter: blur(var(--overlay-blur)); 
+  -webkit-backdrop-filter: blur(var(--overlay-blur));
+  
+  z-index: 1000;
+  
+  /* These rules center the dialog box when display is set to 'flex' */
+  justify-content: center;
+  align-items: center;
+
+  /* Default state for overlay fade animation */
+  opacity: 0;
+}
+
+/* Fix: Ensure Animation Modal sits ABOVE the main settings modal */
+#animation-settings-modal {
+  z-index: 2100 !important;
+}
+
+/* Opening Animation (fade in overlay/blur) */
+.modal-overlay:not(.hidden):not(.closing) {
+  animation: overlayFadeIn 0.3s ease-out forwards;
+}
+
+/* Closing Animation (fade out overlay/blur) */
+.modal-overlay.closing {
+  animation: overlayFadeOut 0.2s ease-in forwards;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* This is the pop-up box itself */
+.dialog-content {
+  /* It already uses your .glass-box style! */
+  width: 400px;
+  padding: 20px 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Adds spacing between elements */
+  z-index: 1001;
+  position: relative;
+}
+
+.dialog-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;          /* same color as dialog text */
+}
+
+.dialog-close-btn:hover {
+  opacity: 0.7;            /* or set a specific color here if you prefer */
+}
+
+/* Delete dialog icon + text layout */
+.confirm-delete-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Icon size inside delete dialog */
+#confirm-delete-icon .bookmark-icon-wrapper:not(.folder-preview) img,
+#confirm-delete-icon .bookmark-icon-wrapper:not(.folder-preview) .bookmark-fallback-icon,
+#confirm-delete-icon .bookmark-icon-wrapper:not(.folder-preview) svg {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+}
+
+#confirm-delete-icon .bookmark-icon-wrapper.folder-preview svg,
+#edit-folder-icon .bookmark-icon-wrapper.folder-preview svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Let the text take remaining width */
+#confirm-delete-text {
+  flex: 1;
+}
+
+
+
+.dialog-content h3 {
+  margin: 0;
+  margin-bottom: 5px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-group label {
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.dialog-input {
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 1em;
+  color: white;
+  outline: none;
+}
+.dialog-input:focus {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end; /* Aligns buttons to the right */
+  gap: 10px;
+  margin-top: auto;
+}
+
+.dialog-btn {
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.dialog-btn:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* A primary button style for 'Save' */
+.dialog-btn.primary-btn {
+  /* Match Settings "Save" Button Style */
+  background: #2ca5ff;
+  color: #0b1b2e;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+  
+  /* Ensure it overrides previous specific styles */
+  min-width: 80px; 
+}
+
+.dialog-btn.primary-btn:hover {
+  background: #59baff;
+  transform: translateY(-1px);
+  border-color: transparent; /* Reset any legacy borders */
+}
+
+/* ========================================= */
+/* --- HOMEBASE FOLDER PICKER --- */
+/* ========================================= */
+
+#folder-picker-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.folder-picker-search {
+  position: relative;
+}
+
+#folder-picker-search {
+  width: 100%;
+}
+
+#folder-picker-error {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: inherit;
+}
+
+#folder-picker-list {
+  margin: 0;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+}
+
+.folder-picker-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+}
+
+.folder-picker-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.folder-picker-item.selected {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25);
+}
+
+.folder-picker-title {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.folder-picker-path {
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.78);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-picker-breadcrumb {
+  font-size: 0.95em;
+  color: rgba(255, 255, 255, 0.88);
+  min-height: 1.4em;
+  padding: 2px 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-picker-list .folder-picker-empty {
+  padding: 12px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.folder-picker-actions {
+  margin-top: 6px;
+}
+
+#folder-picker-list::-webkit-scrollbar { width: 8px; }
+#folder-picker-list::-webkit-scrollbar-track { background: transparent; }
+#folder-picker-list::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.3); border-radius: 4px; }
+
+/* ========================================= */
+/* --- FOLDER PICKER — SOLID WHITE --- */
+/* ========================================= */
+
+/* Overlay: keep dark scrim but scoped to this modal */
+#folder-picker-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* Panel overrides glass with solid white */
+#folder-picker-panel {
+  background: #ffffff;
+  color: #111111;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  width: min(720px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+/* Inputs on white */
+#folder-picker-panel input[type="search"] {
+  background: #ffffff;
+  color: #111111;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+#folder-picker-panel input[type="search"]::placeholder {
+  color: #6b7280;
+}
+
+#folder-picker-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecdd3;
+}
+
+#folder-picker-list {
+  background: #f8fafc;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.folder-picker-item {
+  color: #0f172a;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.folder-picker-item:hover {
+  background: #f1f5f9;
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+.folder-picker-item.selected {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  box-shadow: 0 8px 20px rgba(56, 189, 248, 0.25);
+}
+
+.folder-picker-title {
+  color: #0f172a;
+}
+
+.folder-picker-path {
+  color: #64748b;
+}
+
+.folder-picker-breadcrumb {
+  color: #475569;
+}
+
+.folder-picker-actions .dialog-btn {
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+#folder-picker-confirm {
+  background: #3b82f6;
+  color: #ffffff;
+  border: 1px solid #3b82f6;
+}
+
+#folder-picker-confirm:disabled {
+  background: #cbd5e1;
+  border-color: #cbd5e1;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+#folder-picker-cancel {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+#folder-picker-cancel:hover {
+  background: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* ========================================= */
+/* --- UNIVERSAL POPUP ANIMATIONS --- */
+/* ========================================= */
+
+/* 1. Initial State for ALL dialogs */
+.dialog-content,
+.gallery-dialog,
+.app-settings-dialog {
+  opacity: 0;
+  transform: scale(0);
+  transform-origin: center center; /* Default origin */
+}
+
+/* 2. Opening Animation (Grow) */
+.modal-overlay:not(.hidden):not(.closing) .dialog-content,
+.modal-overlay:not(.hidden):not(.closing) .gallery-dialog,
+.modal-overlay:not(.hidden):not(.closing) .app-settings-dialog {
+  animation: pickerIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* 3. Closing Animation (Shrink) */
+.modal-overlay.closing .dialog-content,
+.modal-overlay.closing .gallery-dialog,
+.modal-overlay.closing .app-settings-dialog {
+  animation: pickerOut 0.2s ease-in forwards;
+}
+
+/* DELETE DIALOG - Cancel button */
+#confirm-delete-cancel-btn {
+  background-color: rgba(0, 0, 0, 0.04);   /* light gray chip */
+  color: #000000;                          /* black text */
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+#confirm-delete-cancel-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+
+/* ======================================= */
+/* --- BOOKMARK FALLBACK ICON (MODIFIED) --- */
+/* ======================================= */
+
+/* Wrapper stacks fallback + favicon in one cell */
+.bookmark-icon-wrapper {
+  width: 48px;
+  height: 48px;
+
+  display: grid;
+  place-items: center;
+
+  position: relative;          /* so ::after can sit on top */
+  z-index: 0;
+  overflow: visible;           /* allow shadows to render fully */
+
+  transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;
+}
+
+.bookmark-item[data-is-folder="false"]:not(.back-button) .bookmark-icon-wrapper {
+  background-color: rgba(128, 128, 128, 0.15); /* subtle loader */
+  border-radius: 12px;
+}
+
+.bookmark-icon-wrapper .bookmark-fallback-icon,
+.bookmark-icon-wrapper .bookmark-img {
+  grid-area: 1 / 1;
+}
+
+/* Real favicons */
+.bookmark-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  opacity: 0;
+  transition: none;
+  z-index: 2;
+}
+
+.bookmark-img.loaded {
+  opacity: 1;
+}
+
+/* This is the fallback "F" icon */
+.bookmark-fallback-icon {
+  width: 48px; 
+  height: 48px; 
+  border-radius: 12px; 
+  z-index: 1;
+  opacity: 0;
+  transition: none;
+
+  /* 1. Base Color (Set by JS from the Color Picker) */
+  background-color: var(--bookmark-fallback-color, #00b8d4); 
+
+  /* 2. Gradient Overlay (Creates the depth effect on ANY color) */
+  /* Top is 10% white (light), Bottom is 20% black (shadow) */
+  background-image: linear-gradient(
+    to bottom, 
+    rgba(255, 255, 255, 0.1) 0%, 
+    rgba(0, 0, 0, 0.02) 40%, 
+    rgba(0, 0, 0, 0.25) 100%
+  );
+
+  color: var(--bookmark-fallback-text-color, #FFFFFF); 
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 20px;
+  font-weight: 400;
+  font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  
+/* Ensure the background doesn't bleed outside the radius */
+  overflow: hidden; 
+}
+
+.bookmark-fallback-icon.show-fallback {
+  opacity: 1;
+}
+
+.bookmark-fallback-ghost.bookmark-fallback-ghost-hide-fallback .bookmark-fallback-icon {
+  display: none;
+}
+
+
+/* ======================================= */
+/* --- BOOKMARK FOLDER ICON (MODIFIED) --- */
+/* ======================================= */
+
+.bookmark-folder-icon {
+  width: 84px;
+  height: 58px;
+  /* Remove basic fill here, we target children below */
+  opacity: 0.9;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+}
+
+/* Force inner SVG shapes to use the variable */
+.bookmark-folder-icon path,
+.bookmark-folder-icon rect {
+  fill: var(--bookmark-folder-color, #FFFFFF) !important;
+  transition: fill 0.2s ease;
+}
+
+/* Make the back tab (path) slightly darker/transparent to create depth */
+.bookmark-folder-icon path {
+  filter: brightness(0.85); 
+}
+
+/* ======================================= */
+/* --- CUSTOM ALERT MODAL (Solid White) --- */
+/* ======================================= */
+
+/* 1. Ensure it sits on top of everything (Search Engines modal is 2100) */
+#custom-alert-modal {
+  z-index: 2300;
+  background-color: rgba(0, 0, 0, 0.4); /* Dim the background slightly */
+}
+
+/* 2. Override Glass Box to be Solid White, matching Settings Page */
+#custom-alert-dialog {
+  background-color: #ffffff;     /* Solid White */
+  color: #0f172a;                /* Dark Slate Text */
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); /* Strong shadow for depth */
+  border-radius: 20px;           /* Round edges */
+  
+  /* Disable glass effects */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* 3. Style the OK button to match Settings 'Save' button */
+#custom-alert-dialog .dialog-btn.primary-btn {
+  background-color: #2ca5ff;
+  border: none;
+  color: #0b1b2e;
+  min-width: 80px;
+  font-weight: 600;
+}
+
+#custom-alert-dialog .dialog-btn.primary-btn:hover {
+  background-color: #59baff;
+  border-color: transparent;
+}
+
+/* 4. Restore the accessibility media query (Optional, keeps existing logic for other elements) */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-blur: 0px;
+    --glass-bg: rgba(255, 255, 255, 0.25);
+    --overlay-blur: 0px;
+  }
+
+  .glass-box,
+  .modal-overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* ======================================= */
+
+/* --- Bang Autocomplete Styles (Inverted) --- */
+
+.bang-badge {
+  display: inline-block;
+
+  background-color: transparent;
+  color: #64748b;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.85em;
+  font-weight: 600;
+  margin-right: 8px;
+  min-width: 30px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.result-item:hover .bang-badge,
+.result-item.selected .bang-badge {
+  background-color: #e0f2fe;
+  color: #0284c7;
+  border-color: rgba(2, 132, 199, 0.2);
+}
+
+/* Prevent engine icons from exploding in size */
+.result-item svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+
+/* Ensure specific suggestion icons keep intended size */
+.result-item .suggestion-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* --- Custom Material Color Picker --- */
+
+/* The button that opens the picker */
+.color-picker-trigger {
+  width: 46px;       /* Matches the toggle switch width */
+  height: 26px;      /* Matches the toggle switch height */
+  border-radius: 999px; /* Capsule/Pill shape */
+  
+  /* Ring color now driven by a CSS variable */
+  border: 2px solid var(--color-picker-ring, #ffffff); 
+  
+  /* Shadow for depth */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); 
+  
+  cursor: pointer;
+  transition: transform 0.1s;
+  box-sizing: border-box;
+}
+.color-picker-trigger:hover {
+  transform: scale(1.05);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* The Picker Modal Overlay */
+#material-picker-modal {
+  z-index: 2500;
+  
+  /* Transparent overlay */
+  background-color: transparent; 
+  backdrop-filter: none;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; 
+}
+
+/* The Dialog Box Container */
+.material-picker-dialog {
+  background: transparent; 
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  
+  width: 380px; 
+  max-width: 90vw; 
+  max-height: 80vh;
+  
+  display: flex;
+  flex-direction: column;
+  color: white;
+  box-sizing: border-box;
+}
+
+/* HIDE the header */
+.material-picker-header {
+  display: none; 
+}
+
+/* The Color Grid Container */
+.material-color-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  
+  /* Glass Background */
+  background: rgba(0, 0, 0, 0.75); 
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); 
+  
+  overflow-y: auto; 
+  overflow-x: hidden; 
+  
+  flex: 1;
+  width: 100%;
+  padding: 8px 0; 
+  
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.3) transparent; 
+}
+
+/* Webkit Scrollbar Styling */
+.material-color-grid::-webkit-scrollbar {
+  width: 8px; 
+}
+.material-color-grid::-webkit-scrollbar-track {
+  background: transparent; 
+}
+.material-color-grid::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3); 
+  border-radius: 4px; 
+  border: 2px solid transparent; 
+  background-clip: content-box; 
+}
+.material-color-grid::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+/* --- Row Styles --- */
+.material-color-row {
+  display: flex;
+  height: 24px;
+  width: 100%;
+  flex-shrink: 0;
+  padding: 0 8px; 
+  box-sizing: border-box;
+  margin-bottom: 1px;
+}
+
+.material-color-label {
+  width: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Center Text */
+  text-align: center;
+  
+  font-size: 0.65rem;
+  font-weight: bold;
+  text-transform: capitalize;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  flex-shrink: 0;
+  margin-right: 6px; 
+  border-radius: 4px;
+  
+  /* --- NEW: Interactive Cursor & Transition --- */
+  cursor: pointer;
+  transition: transform 0.1s ease, filter 0.1s ease;
+
+  /* --- NEW: Prevent Text Selection --- */
+  user-select: none;
+  -webkit-user-select: none; /* Safari/Chrome */
+}
+
+/* --- NEW: Hover Effect for Labels --- */
+.material-color-label:hover {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+  z-index: 5;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.material-color-swatch {
+  flex: 1; 
+  cursor: pointer;
+  transition: transform 0.1s, z-index 0.1s;
+  position: relative;
+  min-width: 0;
+  border-radius: 3px;
+}
+
+.material-color-swatch:hover {
+  transform: scale(1.3); 
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  border: 1px solid white;
+}
+
+/* Add a gap before the first Accent color (A100) to separate it from the Dark 900 shade */
+.material-color-swatch:nth-child(12) {
+  margin-left: 6px; /* Creates a visual break */
+  position: relative; /* Context for the separator line */
+}
+
+/* Optional: Add a subtle divider line in the gap */
+.material-color-swatch:nth-child(12)::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* --- Footer Layout (Split B/W) --- */
+.material-picker-footer {
+  display: flex;
+  width: 100%;
+  /* Padding matches .material-color-row padding to align outer edges */
+  padding: 0 8px; 
+  box-sizing: border-box;
+  gap: 4px; /* Space between the rows block and the BW block */
+}
+
+/* Left Column: Contains Grey/BlueGrey/Brown rows */
+.material-footer-rows {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Since rows are inside .material-footer-rows, we remove their default horizontal padding
+   so they flush with the container, otherwise double padding happens. */
+.material-footer-rows .material-color-row {
+  padding: 0; 
+}
+
+/* Right Column: Contains White/Black boxes */
+.material-footer-bw {
+  width: 80px; /* Fixed width for the B/W column */
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* White/Black Buttons */
+.bw-swatch {
+  flex: 1; /* Stretch to fill half height each */
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: lowercase;
+  transition: transform 0.1s, z-index 0.1s;
+  /* Add subtle border for contrast if background matches */
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1); 
+
+  /* --- NEW: Prevent Text Selection --- */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bw-swatch:hover {
+  transform: scale(1.08);
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  border: 1px solid #999;
+}
+
+/* --- Animations --- */
+
+/* Keyframes for appearing (Grow from Button) */
+@keyframes pickerIn {
+  from {
+    opacity: 0;
+    transform: scale(0); /* Starts effectively invisible at the button location */
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Keyframes for disappearing (Shrink to Button) */
+@keyframes pickerOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0); /* Shrinks back into the button */
+  }
+}
+
+/* 1. Opening Animation:
+   Runs automatically when the 'hidden' class is removed. */
+#material-picker-modal:not(.hidden) .material-color-grid {
+  animation: pickerIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* 2. Closing Animation:
+   Triggered when JS adds the 'closing' class. */
+#material-picker-modal.closing .material-color-grid {
+  animation: pickerOut 0.2s ease-in forwards;
+}
+
+/* ======================================= */
+/* --- OPTIMIZATION 1: PERFORMANCE MODE --- */
+/* ======================================= */
+
+/* When enabled, remove all backdrop-filters (GPU expensive) */
+body.performance-mode .glass-box,
+body.performance-mode .widget-weather, 
+body.performance-mode .widget-news,
+body.performance-mode .widget-quote,
+body.performance-mode #settings-panel,
+body.performance-mode #quote-settings-panel,
+body.performance-mode #google-apps-panel,
+body.performance-mode .dock,
+body.performance-mode .context-menu,
+body.performance-mode .result-header,
+body.performance-mode .calc-item,
+body.performance-mode .dialog-content,
+body.performance-mode .gallery-dialog, 
+body.performance-mode .app-settings-dialog,
+body.performance-mode .bookmark-item span {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Hide video backgrounds to save decode/battery when in performance mode */
+body.performance-mode .background-video {
+  display: none !important;
+}
+
+/* Strip heavy shadows for cheaper paints */
+body.performance-mode * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Disable transitions/animations for instant interactions */
+body.performance-mode * {
+  transition: none !important;
+  animation: none !important;
+}
+
+body.performance-mode .dialog-content,
+body.performance-mode .gallery-dialog,
+body.performance-mode .app-settings-dialog,
+body.performance-mode .popover-dialog {
+  opacity: 1 !important;
+  transform: scale(1) !important;
+}
+
+/* Fallback backgrounds for readability when blur is gone */
+body.performance-mode .glass-box,
+body.performance-mode #quick-actions-bar {
+  /* 40% transparent black for lighter performance-mode glass */
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Force Context Menus to be solid white in Performance Mode */
+body.performance-mode .context-menu {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #999 !important;
+}
+
+/* Ensure text inside the menu is black */
+body.performance-mode .context-menu .menu-item {
+  color: #000000 !important;
+}
+
+/* Ensure hover effect is visible (light gray) */
+body.performance-mode .context-menu .menu-item:hover {
+  background-color: #eee !important;
+}
+
+/* Re-add borders so elements keep definition without shadows */
+body.performance-mode .dock-item, 
+body.performance-mode .widget-search,
+body.performance-mode .bookmark-folder-tab,
+body.performance-mode .gallery-card,
+body.performance-mode .mw-card {
+  border: 1px solid #555 !important;
+}
+
+/* 1. Default Performance Mode (Setting is OFF): Subtle Gray Background */
+body.performance-mode .bookmark-item span {
+  /* 40% opacity black creates a "Little Bit Gray" look */
+  background-color: rgba(0, 0, 0, 0.4) !important; 
+  color: white !important;
+  
+  /* Sizing fixes */
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 2px 6px !important;
+  border-radius: 6px !important;
+  width: auto !important;
+  max-width: 90% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* 2. Performance Mode (Setting is ON): Use User's Custom Color */
+body.performance-mode.bookmark-text-bg-enabled .bookmark-item span {
+  /* Use the custom color variable, solid/opaque */
+  background-color: rgba(var(--bookmark-text-bg-rgb, 44, 165, 255), 0.85) !important;
+  
+  /* Use correct text color (black or white) based on contrast */
+  color: var(--bookmark-text-color, white) !important;
+  
+  /* Add border for definition */
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Hide Animation settings in Performance Mode */
+body.performance-mode #app-grid-animation-row,
+body.performance-mode #app-glass-style-row,
+body.performance-mode #app-cinema-mode-row,
+body.performance-mode #grid-animation-sub-settings {
+  display: none !important;
+}
+
+body.performance-mode .dock {
+  /* Match other glass elements at 40% transparency */
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+body.performance-mode .result-header {
+  background-color: #f0f0f0; /* Solid header */
+}
+
+/* ======================================= */
+/* --- OPTIMIZATION 2: MARQUEE TWEAKS --- */
+/* ======================================= */
+
+/* Ensure the scrolling text is on its own GPU layer to prevent layout thrashing */
+.gallery-card-title.gallery-marquee span,
+.mw-card-title.mw-marquee span {
+  will-change: transform;
+  /* Ensure it's strictly paused when not hovering */
+  animation-play-state: paused; 
+}
+
+.gallery-card:hover .gallery-card-title.gallery-marquee span,
+.mw-card:hover .mw-card-title.mw-marquee span {
+  animation-play-state: running;
+}
+
+/* --- Selected State for Color Swatches --- */
+.material-color-swatch.selected {
+  transform: scale(1.15);
+  z-index: 20;
+  /* Thick white border to indicate selection */
+  box-shadow: 0 0 0 2px #ffffff, 0 4px 12px rgba(0,0,0,0.5); 
+  border-radius: 4px;
+}
+
+/* Selected state for Black/White buttons in footer */
+.bw-swatch.selected {
+  transform: scale(1.1);
+  z-index: 20;
+  box-shadow: 0 0 0 2px #2ca5ff, 0 4px 12px rgba(0,0,0,0.3); /* Blue ring for high contrast */
+  border-color: transparent;
+}
+
+/* --- Interaction Update: Hide Selection on Hover --- */
+
+/* When mouse enters the grid, reset the 'selected' Color Swatch to look normal */
+.material-color-grid:hover .material-color-swatch.selected {
+  transform: none;
+  box-shadow: none;
+  z-index: 0;
+  border-radius: 3px; /* Returns to default radius */
+}
+
+/* When mouse enters the grid, reset the 'selected' Black/White Swatch */
+.material-color-grid:hover .bw-swatch.selected {
+  transform: none;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1); /* Returns to default inset shadow */
+  z-index: 0;
+}
+
+/* Ensure the specific item being hovered still gets its hover effect */
+.material-color-swatch.selected:hover {
+  transform: scale(1.3);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  border: 1px solid white;
+}
+
+.bw-swatch.selected:hover {
+  transform: scale(1.08);
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  border: 1px solid #999;
+}
+
+/* --- Context Menu Submenus (Containers) --- */
+.menu-item-group {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+/* Arrow indicator for submenu */
+.menu-item.has-submenu {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.menu-item.has-submenu::after {
+  content: '▸';
+  font-size: 1.2em;
+  margin-left: 8px;
+  line-height: 1;
+}
+
+/* The actual submenu container */
+.context-submenu {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  min-width: 160px;
+  margin-left: 8px; /* Gap between parent and submenu */
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  
+  /* === STYLE UPDATE: Match Context Menu (Solid White) === */
+  background-color: #ffffff;
+  color: #000000;
+  
+  /* Remove glass blur */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  
+  /* Match context menu border and shadow */
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 1005;
+}
+
+/* Creates an invisible bridge so the menu doesn't close when crossing the gap */
+.context-submenu::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -10px;
+  width: 12px;
+  background: transparent;
+  z-index: 1;
+}
+
+/* Show submenu on hover */
+.menu-item-group:hover .context-submenu {
+  display: flex;
+}
+
+/* Container items inside the submenu */
+.container-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9em;
+  transition: background-color 0.2s ease;
+}
+
+.container-item:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+/* The little colored circle for the container identity */
+.container-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Performance mode overrides */
+body.performance-mode .context-submenu {
+  backdrop-filter: none !important;
+  background-color: #ffffff;
+  box-shadow: none;
+  border: 1px solid #999;
+}
+
+/* === EDIT FOLDER PREVIEW - REBUILT === */
+
+.edit-folder-preview-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin: 65px 0 55px;
+  height: 100px;
+}
+
+/* === EDIT FOLDER PREVIEW - STRUCTURAL FIX === */
+
+/* The outer gray circle (96x96) */
+#edit-folder-icon-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background-color: #e5e7eb;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+
+/* CRITICAL FIX: Match the Grid's Folder Wrapper Dimensions (84x58).
+   Set position: relative so the icon inside positions itself against THIS box,
+   not the outer circle.
+*/
+.edit-folder-base-wrapper {
+  width: 84px;
+  height: 58px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-folder-base-wrapper svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* The glyph / icon inside the folder */
+.edit-folder-custom-icon-preview {
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  /* Transform is handled by JS */
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  z-index: 10;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  will-change: transform;
+}
+
+.edit-folder-custom-icon-preview svg {
+  width: 100%;
+  height: 100%;
+  fill: rgba(148, 163, 184, 0.95);
+}
+
+/* 4. Action Buttons Container */
+.edit-folder-actions {
+  position: absolute;
+  /* Define the center point exactly */
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* 5. Shared Button Positioning */
+.edit-folder-actions .edit-action-btn {
+  position: absolute;
+  /* Start centered */
+  left: 0;
+  top: 0;
+  /* Offset by half the button size (38px / 2 = 19px) to center it perfectly */
+  margin-left: -19px; 
+  margin-top: -19px;
+  
+  pointer-events: auto;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              background-color 0.2s ease, 
+              box-shadow 0.2s ease;
+}
+
+/* 6. Specific Directions (Unified Radius: 82px) */
+
+/* TOP: Built-in Icons */
+#edit-folder-builtin-btn {
+  transform: translateY(-82px);
+}
+#edit-folder-builtin-btn:hover {
+  transform: translateY(-82px) scale(1.15);
+}
+
+/* BOTTOM: Upload */
+#edit-folder-upload-btn {
+  transform: translateY(82px);
+}
+#edit-folder-upload-btn:hover {
+  transform: translateY(82px) scale(1.15);
+}
+
+/* LEFT: Color */
+#edit-folder-color-btn {
+  transform: translateX(-82px);
+}
+#edit-folder-color-btn:hover {
+  transform: translateX(-82px) scale(1.15);
+}
+
+/* RIGHT: Reset */
+#edit-folder-reset-btn {
+  transform: translateX(82px);
+}
+#edit-folder-reset-btn:hover {
+  transform: translateX(82px) scale(1.15);
+}
+
+/* 7. Button Base Styles (Keep existing) */
+.edit-action-btn {
+  /* position: relative is handled above */
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #4b5563;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.edit-action-btn:hover {
+  background-color: #2ca5ff;
+  color: white;
+  border-color: #2ca5ff;
+  box-shadow: 0 6px 12px rgba(44, 165, 255, 0.25);
+  z-index: 10;
+}
+
+/* --- Edit Folder Tooltip Colors --- */
+.edit-action-btn .tooltip-popup {
+  background-color: #2ca5ff !important;
+  color: #ffffff !important;
+}
+
+.edit-action-btn .tooltip-popup::before {
+  background-color: #2ca5ff !important;
+}
+
+/* --- Fix Edit Folder Input Alignment --- */
+#edit-folder-dialog .form-group label {
+  text-align: center;
+  width: 100%;
+  display: block;
+}
+
+#edit-folder-name-input {
+  text-align: center;
+  font-weight: 600;
+}
+
+/* --- Fix Input Box Sizing & Alignment --- */
+#edit-folder-dialog .dialog-input {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  text-align: center;
+}
+
+/* ======================================= */
+/* --- BUILT-IN ICON POPOVER STYLES --- */
+/* ======================================= */
+
+/* 1. Transparent Overlay */
+.popover-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2200;
+  background-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.popover-overlay.hidden {
+  display: none;
+  pointer-events: none;
+}
+
+/* 2. The Popover Box (Rebuilt for Animation) */
+.popover-dialog {
+  position: relative;
+  top: auto;
+  left: auto;
+  
+  /* Taller and shifted right */
+  width: 380px;
+  height: 700px;
+  max-height: 90vh;
+  left: 305px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  /* --- ANIMATION SETUP --- */
+  /* 1. Origin: Set dynamically by JS to match the trigger button position */
+  transform-origin: var(--popover-origin, center center);
+  
+  /* 2. Initial State: Invisible and Scaled Down completely */
+  opacity: 0;
+  transform: scale(0);
+}
+
+/* 3. Opening State */
+/* When the overlay is visible (not hidden, not closing), run the 'Grow' animation */
+.popover-overlay:not(.hidden):not(.closing) .popover-dialog {
+  animation: pickerIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* 4. Closing State */
+/* When JS adds the .closing class, run the 'Shrink' animation */
+.popover-overlay.closing .popover-dialog {
+  animation: pickerOut 0.2s ease-in forwards;
+}
+
+/* 3. Scroll Area */
+#builtin-icon-list.builtin-icon-scroll-area {
+  padding: 12px;
+  overflow-y: auto;
+  background-color: #ffffff;
+  
+  /* Fill the fixed-height container */
+  flex: 1;
+  height: 100%;
+  max-height: none;
+}
+
+/* 4. Category Headers */
+#builtin-icon-picker-modal .icon-picker-category-title {
+  color: #0f172a;
+  font-size: 0.75em;
+  margin: 10px 0 8px 4px;
+  border-bottom: 1px solid #e2e8f0;
+
+  /* stop text selection */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+}
+
+#builtin-icon-picker-modal .icon-picker-category:first-child .icon-picker-category-title {
+  margin-top: 0;
+}
+
+/* 5. Icons in Grid */
+#builtin-icon-picker-modal .icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  gap: 4px;
+}
+
+#builtin-icon-picker-modal .icon-picker-item {
+  width: 42px;
+  height: 42px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+#builtin-icon-picker-modal .icon-picker-item .tooltip-popup {
+  background-color: #2ca5ff;
+  color: #ffffff;
+}
+
+#builtin-icon-picker-modal .icon-picker-item .tooltip-popup::before {
+  background-color: #2ca5ff;
+}
+
+#builtin-icon-picker-modal .icon-picker-item svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+  pointer-events: none;
+}
+
+#builtin-icon-picker-modal .icon-picker-item:hover {
+  background-color: #2ca5ff;
+  color: #ffffff;
+  border-color: #2ca5ff;
+  box-shadow: 0 4px 12px rgba(44, 165, 255, 0.3);
+  transform: scale(1.1);
+  z-index: 5;
+}
+
+/* --- Shared Icon Alignment (Matches Main Grid) --- */
+
+/* 1. Main Grid Folder Icons */
+.bookmark-folder-custom-icon {
+  position: absolute;
+  top: 60%; /* Centered vertically in the folder body */
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  width: 32px !important;
+  height: 32px !important;
+  object-fit: contain;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+}
+
+.bookmark-folder-custom-icon svg {
+  width: 100%;
+  height: 100%;
+  /* neutral gray that works on most folder colors */
+  fill: rgba(148, 163, 184, 0.95);
+}
+/* --- Elastic Gooey Slider Styles --- */
+
+.edit-folder-controls {
+  display: flex;
+  flex-direction: row;
+  gap: 15px;
+  justify-content: center;
+  padding: 0; 
+  margin-top: 20px;
+
+  /* --- OPTIMIZATION START --- */
+  /* 1. Layout State: Collapsed */
+  max-height: 0;
+  margin-bottom: 0;
+  overflow: hidden; 
+  
+  /* 2. Visual State: Collapsed & Scaled Down */
+  opacity: 0;
+  transform: scaleY(0);
+  transform-origin: top; /* Animate from top down */
+  
+  pointer-events: none;
+  
+  /* 3. Performant Transition */
+  transition: 
+    max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),      /* Layout expansion */
+    margin-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1),   /* Layout spacing */
+    margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1),      /* Layout spacing */
+    opacity 0.2s ease,                                 /* Visual fade */
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);  /* Visual pop (ScaleY) */
+  /* --- OPTIMIZATION END --- */
+}
+
+.edit-folder-controls.visible {
+  /* 1. Layout State: Expanded (Enough height for 3 sliders) */
+  max-height: 240px; /* Increased from 160px to fit 3rd slider */
+  margin-bottom: 0; 
+  
+  /* 2. Visual State: Visible & Scaled Up */
+  opacity: 1;
+  transform: scaleY(1);
+  
+  pointer-events: auto;
+  
+  /* IMPORTANT: Allow bubble to bounce outside after animation completes */
+  overflow: visible; 
+  transition-delay: 0s; 
+}
+
+.gooey-control-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 300px;
+  position: relative;
+  margin-bottom: 5px !important;
+}
+
+.gooey-control-row label {
+  order: 2;
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #94a3b8;
+  margin-top: 1px;
+  margin-bottom: 0;
+  z-index: 1;
+  user-select: none;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.gooey-control-row.is-dragging label {
+  opacity: 0.1;
+}
+
+.gooey-slider-container {
+  width: 100%;
+  height: 50px; /* Reduced from 80px */
+  position: relative;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  margin-top: 5px;
+}
+
+.gooey-slider-container:active {
+  cursor: grabbing;
+}
+
+/* The SVG itself */
+.elastic-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  display: block;
+}
+
+/* The Text inside the bubble */
+.elastic-text {
+  fill: #2ca5ff; /* Blue text */
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 20px; /* Increased to match larger bubble */
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0; /* Hidden by default */
+  transition: opacity 0.2s ease;
+}
+
+.elastic-svg.active .elastic-text {
+  opacity: 1;
+  fill: white; /* White text when active (inside blue bubble) */
+}
+
+/* Checkbox Row */
+.form-group.checkbox-row {
+  align-items: center;
+  margin-top: -5px;
+  margin-bottom: 10px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.9em;
+  color: #333;
+}
+
+.checkbox-label input {
+  accent-color: #2ca5ff;
+  width: 16px;
+  height: 16px;
+}
+
+/* ======================================= */
+/* --- NEW CUSTOM RANGE SLIDER (REPLACEMENT) --- */
+/* ======================================= */
+
+.range-slider {
+  position: relative;
+  width: 100%;
+  height: 40px; /* Adjust height to fit container */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The visual bar (track) */
+.range-slider__bar {
+  position: absolute;
+  width: 100%;
+  height: 6px;
+  background-color: #e2e8f0;
+  border-radius: 999px;
+  pointer-events: none; /* Let clicks pass to input */
+}
+
+/* The filled part of the bar */
+.range-slider__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background-color: #2ca5ff; /* Primary Blue */
+  border-radius: 999px;
+  width: 50%; /* JS will update this */
+  transition: width 0.1s linear;
+}
+
+/* The visual thumb */
+.range-slider__thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;  /* Changed from 24px */
+  height: 12px; /* Changed from 24px */
+  transform: translate(-50%, -50%);
+  background-color: #ffffff;
+  border: 2px solid #2ca5ff;
+  border-radius: 50%;
+  cursor: grab;
+  pointer-events: none; /* Let clicks pass to input */
+  transition: left 0.1s linear, transform 0.15s ease;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Active State (Scale up) */
+.range-slider__input:active + .range-slider__thumb,
+.range-slider__input:focus + .range-slider__thumb,
+.range-slider:hover .range-slider__thumb {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+/* The Value Display (Tooltip inside/above thumb) */
+.range-slider__value {
+  position: absolute;
+  bottom: 26px; /* Reduced from 34px to keep it close to the smaller thumb */
+  left: 50%;
+  transform: translateX(-50%) translateY(5px) scale(0.9);
+  
+  background-color: #2ca5ff;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  font-feature-settings: "tnum";      /* For wider support */
+  font-variant-numeric: tabular-nums; /* Ensures numbers stay aligned */
+  padding: 3px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  pointer-events: none;
+}
+
+.range-slider__value::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -4px;
+  border-width: 4px;
+  border-style: solid;
+  border-color: #2ca5ff transparent transparent transparent;
+}
+
+/* Show Value on Hover/Active */
+.range-slider:hover .range-slider__value,
+.range-slider__input:active ~ .range-slider__thumb .range-slider__value {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* The Native Input (Invisible but Clickable) */
+.range-slider__input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 100%; /* Cover full height for easier grabbing */
+  position: absolute;
+  z-index: 3;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+}
+
+/* Update Control Rows to fit new height */
+.gooey-control-row {
+  margin-bottom: 5px !important;
+}
+.gooey-slider-container {
+  height: 45px !important; /* Reduced from 50px */
+}
+
+/* Animation Preview Box */
+.animation-preview-container {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+
+.animation-preview-item {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+/* Animation List Items */
+.animation-option {
+  padding: 10px 12px;
+  border-radius: 8px;
+  
+  /* NEW: Default background for visibility */
+  background: rgba(255, 255, 255, 0.08); 
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.95em;
+  font-weight: 500;
+}
+
+.animation-option:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.animation-option.selected {
+  background: #2ca5ff !important; /* Force Blue */
+  border-color: #2ca5ff !important;
+  color: white !important;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(44, 165, 255, 0.3);
+}
+
+/* === WHITE THEME OVERRIDES (Performance Mode / Light Dialogs) === */
+#animation-settings-dialog .animation-option {
+  background: #f8fafc; /* Light Gray */
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+#animation-settings-dialog .animation-option:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+#animation-settings-dialog .animation-option.selected {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+}
+
+/* White Theme Support for Animation Modal */
+#animation-settings-dialog {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#animation-settings-dialog .animation-preview-container {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+#animation-settings-dialog .animation-option:hover {
+  background: #f1f5f9;
+}
+
+#animation-settings-dialog .animation-option.selected {
+  background: #3b82f6; /* Blue */
+  color: white;
+}
+
+/* --- Glass Settings Preview --- */
+.glass-preview-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  width: 100%;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  /* Colorful gradient to demonstrate blur/transparency */
+  background: linear-gradient(135deg, #FF9A9E 0%, #FECFEF 50%, #999999 100%),
+              url('assets/fallback.webp'); /* Fallback texture */
+  background-blend-mode: overlay;
+  background-size: cover;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.glass-preview-item {
+  width: 90px;
+  height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2em;
+  font-weight: bold;
+  color: white;
+  border-radius: 20px; /* Ensure default radius matches */
+  
+  /* Reset margin/transforms that might come from other .glass-box contexts */
+  margin: 0 !important; 
+  transform: none !important; 
+}
+
+/* Ensure the Glass Settings Modal stays clean (White Theme) */
+#glass-settings-dialog {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Style the list options inside the white modal */
+#glass-style-list .animation-option {
+  background: #f8fafc; 
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+#glass-style-list .animation-option:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+#glass-style-list .animation-option.selected {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+}
+
+/* Fix for invisible modals in Performance Mode */
+body.performance-mode .modal-overlay:not(.hidden) {
+  opacity: 1 !important;
+  display: flex !important; /* Ensure flex layout is enforced */
+}
+
+/* ========================================================= */
+/* --- PERFORMANCE MODE: FORCE SOLID WHITE DIALOGS --- */
+/* ========================================================= */
+
+body.performance-mode .dialog-content,
+body.performance-mode .gallery-dialog,
+body.performance-mode .app-settings-dialog,
+body.performance-mode .popover-dialog,
+body.performance-mode #search-engines-dialog,
+body.performance-mode #custom-alert-dialog {
+  background-color: #ffffff !important;
+  color: #0f172a !important; /* Dark Slate Text */
+  border: 1px solid #cbd5e1 !important; /* Light Gray Border */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Fix Labels inside white dialogs */
+body.performance-mode .dialog-content label,
+body.performance-mode .form-group label,
+body.performance-mode .move-folder-row label {
+  color: #334155 !important; /* Dark Gray for labels */
+}
+
+/* Fix Input Fields inside white dialogs */
+body.performance-mode .dialog-input,
+body.performance-mode #location-search-input {
+  background-color: #f1f5f9 !important; /* Light Gray Background */
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important; /* Dark Text */
+}
+
+body.performance-mode .dialog-input:focus {
+  background-color: #ffffff !important;
+  border-color: #3b82f6 !important; /* Blue Focus Ring */
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Fix Secondary Buttons (Cancel, etc.) */
+body.performance-mode .dialog-btn,
+body.performance-mode .gallery-secondary-btn {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+body.performance-mode .dialog-btn:hover,
+body.performance-mode .gallery-secondary-btn:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Fix Primary Buttons (Save, OK) - Keep Blue */
+body.performance-mode .dialog-btn.primary-btn,
+body.performance-mode .gallery-primary-btn {
+  background-color: #2ca5ff !important;
+  color: #0b1b2e !important;
+  border: none !important;
+}
+
+body.performance-mode .dialog-btn.primary-btn:hover,
+body.performance-mode .gallery-primary-btn:hover {
+  background-color: #59baff !important;
+}
+
+/* Fix Close 'X' Buttons */
+body.performance-mode .dialog-close-btn,
+body.performance-mode .gallery-header .close-btn {
+  color: #64748b !important;
+}
+body.performance-mode .dialog-close-btn:hover,
+body.performance-mode .gallery-header .close-btn:hover {
+  color: #0f172a !important;
+}
+
+/* --- Cinema Mode (Auto-Hide UI) --- */
+
+/* 1. Base Transition State (Applies when Cinema Mode is OFF too, for smooth restore) */
+/* We target body.ready to ensure we don't slow down the initial page load animation */
+body.ready .search-area-wrapper,
+body.ready .bookmark-bar-wrapper,
+body.ready #bookmarks-grid,
+body.ready .sidebar,
+body.ready .dock {
+  transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 2. Active Cinema Mode (Hidden State) */
+body.cinema-mode {
+  cursor: none;
+}
+
+body.cinema-mode .search-area-wrapper,
+body.cinema-mode .bookmark-bar-wrapper,
+body.cinema-mode #bookmarks-grid,
+body.cinema-mode .sidebar,
+body.cinema-mode .dock {
+  opacity: 0;
+  pointer-events: none; /* Let clicks pass through to wallpaper */
+}
+
+/* Ensure wallpaper stays visible */
+body.cinema-mode #wallpaper-layer {
+  opacity: 1;
+}
+
+/* --- Bookmark Modal Icon Editor --- */
+.bookmark-icon-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.bookmark-icon-preview-box {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.bookmark-icon-preview-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bookmark-icon-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.bookmark-icon-controls .icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #555; /* Darker for white theme visibility */
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.bookmark-icon-controls .icon-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* --- Centered Bookmark Icon Editor --- */
+.bookmark-icon-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.icon-preview-wrapper {
+  position: relative;
+}
+
+.icon-preview-box {
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.icon-preview-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.icon-preview-box .placeholder {
+  font-size: 32px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 600;
+}
+
+/* === Edit Bookmark: reuse Edit Folder action ring === */
+.bookmark-icon-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.bookmark-icon-row .edit-action-btn,
+#bookmark-get-btn.edit-action-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* === Edit Bookmark: reuse Edit Folder radial actions === */
+#add-bookmark-dialog .bookmark-preview-container{
+  margin: 40px 0 25px;
+  height: 110px;
+}
+
+#bookmark-get-btn{
+  transform: translateY(-82px);
+}
+#bookmark-get-btn:hover{
+  transform: translateY(-82px) scale(1.15);
+}
+
+#bookmark-upload-btn{
+  transform: translateX(-82px);
+}
+#bookmark-upload-btn:hover{
+  transform: translateX(-82px) scale(1.15);
+}
+
+#bookmark-clear-btn{
+  transform: translateX(82px);
+}
+#bookmark-clear-btn:hover{
+  transform: translateX(82px) scale(1.15);
+}
+
+
+.field-error {
+  color: #ef9a9a;
+  font-size: 12px;
+  min-height: 16px;
+  margin-top: 4px;
+}
+
+.icon-preview-wrapper {
+  position: relative;
+}
+
+#add-bookmark-dialog {
+  position: relative;
+}
+
+.icon-suggestion-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15);
+}
+
+.icon-suggestion-chip.overlay {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+}
+
+.icon-suggestion-chip.banner {
+  position: relative;
+  margin: 0 0 10px;
+  align-self: center;
+}
+
+#bookmark-domain-icon-prompt {
+  position: fixed;
+  left: 50%;
+  top: auto;
+  transform: translate(-50%, -8px);
+  z-index: 2500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  max-width: min(520px, calc(100vw - 24px));
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15), 0 2px 8px rgba(15, 23, 42, 0.08);
+  line-height: 1.2;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  opacity: 0;
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+#bookmark-domain-icon-prompt.hidden {
+  display: none;
+  opacity: 0;
+}
+
+#bookmark-domain-icon-prompt.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 12px);
+}
+
+#bookmark-domain-icon-prompt button {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: rgba(15, 23, 42, 0.04);
+  color: #0f172a;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+#bookmark-domain-icon-ignore {
+  width: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+#bookmark-domain-icon-prompt button:hover {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+#bookmark-domain-icon-prompt button:focus-visible {
+  outline: 2px solid rgba(44, 165, 255, 0.65);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #bookmark-domain-icon-prompt {
+    transition: none;
+  }
+}
+
+.icon-suggestion-chip::before {
+  content: "ℹ";
+  font-size: 13px;
+  color: #4f46e5;
+}
+
+.icon-suggestion-chip span {
+  white-space: nowrap;
+}
+
+.icon-suggestion-chip button {
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid rgba(79, 70, 229, 0.35);
+  padding: 6px 12px;
+  font-weight: 700;
+  font-size: 12.5px;
+  background: transparent;
+  color: #1e293b;
+}
+
+#bookmark-domain-icon-use,
+#edit-folder-icon-use {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #f8fafc;
+  border-color: rgba(79, 70, 229, 0.8);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+}
+
+#bookmark-domain-icon-ignore,
+#edit-folder-icon-ignore {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  border-color: rgba(148, 163, 184, 0.6);
+  color: #334155;
+  background: transparent;
+}
+
+.icon-suggestion-chip button:hover {
+  filter: brightness(0.97);
+}
+
+.icon-suggestion-chip button:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, 0.7);
+  outline-offset: 2px;
+}
+
+#edit-folder-icon-prompt.icon-suggestion-chip {
+  margin: 10px 0 12px;
+  width: 100%;
+  justify-content: space-between;
+}
+
+#edit-folder-icon-prompt span {
+  flex: 1;
+}
+
+.edit-action-btn.loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.edit-action-btn.loading::after {
+  content: "Getting...";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 0.2px;
+}
+
+/* ========================================= */
+/* --- GALLERY SETTINGS TOGGLES (FINAL FIX) --- */
+/* ========================================= */
+
+.gallery-settings-group {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.gallery-settings-group:last-child {
+  border-bottom: none;
+}
+
+.gallery-settings-group > label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 12px;
+}
+
+.toggle-switch-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 5px;
+}
+
+.toggle-label {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+  cursor: default;
+  user-select: none;
+}
+
+.settings-hint {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.switch {
+  position: relative;
+  display: inline-block !important;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  background: transparent;
+  margin: 0;
+  border-radius: 34px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #cbd5e1;
+  transition: .3s;
+  border-radius: 34px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+input:checked + .slider {
+  background-color: #2ca5ff;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+/* ========================================= */
+/* --- FORCE FIX: UNIQUE TOGGLE CLASSES --- */
+/* ========================================= */
+
+.hb-toggle-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  margin-top: 5px !important;
+  width: 100% !important;
+}
+
+.hb-toggle-wrapper .toggle-label {
+  font-size: 0.85rem !important;
+  color: #94a3b8 !important;
+  font-weight: 500 !important;
+  cursor: default !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.hb-switch {
+  position: relative !important;
+  display: inline-block !important;
+  width: 44px !important;
+  height: 24px !important;
+  flex-shrink: 0 !important;
+  background: transparent !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.hb-switch input {
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+}
+
+.hb-slider {
+  position: absolute !important;
+  cursor: pointer !important;
+  inset: 0 !important;
+  background-color: #cbd5e1 !important;
+  transition: .3s !important;
+  border-radius: 34px !important;
+}
+
+.hb-slider:before {
+  position: absolute !important;
+  content: "" !important;
+  height: 18px !important;
+  width: 18px !important;
+  left: 3px !important;
+  bottom: 3px !important;
+  background-color: white !important;
+  transition: .3s !important;
+  border-radius: 50% !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15) !important;
+}
+
+.hb-switch input:checked + .hb-slider {
+  background-color: #2ca5ff !important;
+}
+
+.hb-switch input:checked + .hb-slider:before {
+  transform: translateX(20px) !important;
+}
+
+/* ================================================= */
+/* --- NEW GALLERY SETTINGS STRUCTURE (gs-) --- */
+/* ================================================= */
+
+.gs-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1.3fr; /* Preview Left, Settings Right */
+  gap: 30px;
+  align-items: start;
+}
+
+.gs-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.gs-section-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: 12px;
+  margin-bottom: -10px;
+}
+
+.gs-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.gs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  gap: 15px;
+}
+
+.gs-row:last-child {
+  border-bottom: none;
+}
+
+.gs-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gs-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.gs-sub {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.gs-control {
+  flex-shrink: 0;
+}
+
+.gs-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f8fafc;
+  padding: 6px 10px;
+  border-radius: 99px;
+  border: 1px solid #e2e8f0;
+}
+
+.gs-value-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: default;
+  user-select: none;
+}
+
+.gs-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 28px;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.gs-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.gs-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #cbd5e1;
+  transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 34px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);
+}
+
+.gs-slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.gs-switch input:checked + .gs-slider {
+  background-color: #2ca5ff;
+}
+
+.gs-switch input:checked + .gs-slider:before {
+  transform: translateX(20px);
+}
+
+.gs-preview-box {
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+}
+
+body:not(.performance-mode) .gs-card {
+  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+}
+
+#tip-card {
+  position: fixed;
+  right: calc(16px + 40px);
+  bottom: 12px;
+  z-index: 9999;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(240px, calc(100vh - 32px));
+  overflow: visible;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #111;
+  box-shadow: 0 18px 40px rgba(6, 12, 24, 0.35);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+#tip-card:hover {
+  transform: none;
+  box-shadow: 0 22px 48px rgba(6, 12, 24, 0.45);
+}
+
+#tip-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.55);
+  margin-bottom: 6px;
+}
+
+#tip-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #000;
+}
+
+#tip-body {
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: rgba(0, 0, 0, 0.8);
+  max-height: 140px;
+  overflow: auto;
+}
+
+#tip-btn-close,
+#tip-btn-next,
+#tip-btn-disable {
+  position: relative;
+}
+
+#tip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+#tip-actions button {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.04);
+  color: #111;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#tip-actions button:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tip-card {
+    transition: none;
+  }
+
+  #tip-card:hover {
+    transform: none;
+  }
+
+  #tip-actions {
+    transition: none;
+  }
+}

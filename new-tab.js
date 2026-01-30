@@ -8214,6 +8214,20 @@ function setupGridSortable(gridElement) {
     fallbackOnBody: true,
     fallbackTolerance: 6,
 
+    onClone: (evt) => {
+      const clone = evt.clone;
+      if (!clone) {
+        return;
+      }
+
+      clone.classList.add('bookmark-fallback-ghost');
+
+      const fallbackIcon = clone.querySelector('.bookmark-fallback-icon');
+      if (fallbackIcon && !fallbackIcon.classList.contains('show-fallback')) {
+        clone.classList.add('bookmark-fallback-ghost-hide-fallback');
+      }
+    },
+
     onStart: () => {
       isGridDragging = true;
       document.body.classList.add('is-dragging-active');
@@ -18491,6 +18505,8 @@ let newsVisibilityObserver = null;
 
 let newsLazyLoadTriggered = false;
 
+const newsHeaderTooltipMap = new WeakMap();
+
 function resolveNewsSourceId(sourceId) {
   const match = NEWS_SOURCES.find((source) => source.id === sourceId);
   return match ? match.id : DEFAULT_NEWS_SOURCE_ID;
@@ -18984,6 +19000,81 @@ function observeNewsWidgetVisibility() {
   newsVisibilityObserver.observe(newsWidget);
 }
 
+function ensureNewsHeaderTooltipPortal() {
+  if (!document || !document.body) return null;
+  let portal = document.getElementById('news-tooltip-portal');
+  if (!portal) {
+    portal = document.createElement('div');
+    portal.id = 'news-tooltip-portal';
+    document.body.appendChild(portal);
+  }
+  return portal;
+}
+
+function showNewsHeaderTooltip(buttonEl) {
+  if (!buttonEl) return;
+  let tooltip = newsHeaderTooltipMap.get(buttonEl);
+  if (!tooltip) {
+    tooltip = buttonEl.querySelector('.tooltip-popup');
+    if (tooltip) {
+      newsHeaderTooltipMap.set(buttonEl, tooltip);
+    }
+  }
+  if (!tooltip) return;
+  const portal = ensureNewsHeaderTooltipPortal();
+  if (!portal) return;
+  portal.appendChild(tooltip);
+  tooltip.classList.add('news-header-tooltip-fixed');
+  tooltip.style.position = 'fixed';
+  tooltip.style.pointerEvents = 'none';
+
+  const buttonRect = buttonEl.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const gap = 10;
+  const spaceAbove = buttonRect.top;
+  let top = buttonRect.top - tooltipRect.height - gap;
+  let placeTop = true;
+  if (spaceAbove < tooltipRect.height + gap) {
+    placeTop = false;
+    top = buttonRect.bottom + gap;
+  }
+  const left = Math.round(buttonRect.left + (buttonRect.width / 2));
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+  tooltip.classList.toggle('tooltip-top', placeTop);
+  tooltip.classList.toggle('tooltip-bottom', !placeTop);
+  requestAnimationFrame(() => {
+    tooltip.classList.add('is-visible');
+  });
+}
+
+function hideNewsHeaderTooltip(buttonEl) {
+  if (!buttonEl) return;
+  const tooltip = newsHeaderTooltipMap.get(buttonEl) || buttonEl.querySelector('.tooltip-popup');
+  if (!tooltip) return;
+  tooltip.classList.remove('is-visible');
+  buttonEl.appendChild(tooltip);
+  tooltip.classList.remove('news-header-tooltip-fixed');
+  tooltip.classList.add('tooltip-top');
+  tooltip.classList.remove('tooltip-bottom');
+  tooltip.style.position = '';
+  tooltip.style.left = '';
+  tooltip.style.top = '';
+  tooltip.style.pointerEvents = '';
+}
+
+function attachNewsHeaderTooltip(buttonEl) {
+  if (!buttonEl || buttonEl.dataset.newsTooltipReady === '1') return;
+  const tooltip = buttonEl.querySelector('.tooltip-popup');
+  if (!tooltip) return;
+  newsHeaderTooltipMap.set(buttonEl, tooltip);
+  buttonEl.dataset.newsTooltipReady = '1';
+  buttonEl.addEventListener('mouseenter', () => showNewsHeaderTooltip(buttonEl));
+  buttonEl.addEventListener('focus', () => showNewsHeaderTooltip(buttonEl));
+  buttonEl.addEventListener('mouseleave', () => hideNewsHeaderTooltip(buttonEl));
+  buttonEl.addEventListener('blur', () => hideNewsHeaderTooltip(buttonEl));
+}
+
 function setupNewsWidget() {
   setupNewsHoverPreview();
   if (newsSettingsBtn) {
@@ -19014,6 +19105,9 @@ function setupNewsWidget() {
       }
     });
   }
+
+  attachNewsHeaderTooltip(newsSettingsBtn);
+  attachNewsHeaderTooltip(newsRefreshBtn);
 
   if (newsSettingsCloseBtn) {
     newsSettingsCloseBtn.addEventListener('click', closeNewsSettingsModal);

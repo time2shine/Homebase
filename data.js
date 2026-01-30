@@ -147,28 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.2.0',
+  version: '0.2.1',
   date: '2026-01-30',
   items: [
     {
-      type: 'NEW',
-      title: 'Privacy settings',
-      desc: 'A new Privacy panel includes an inline policy viewer with a show/hide toggle.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Settings order',
-      desc: 'Backup, What\'s New, Support, Privacy, and About now follow a consistent order.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Sort by name',
-      desc: 'Bookmark sorting now groups folders first and sorts both folders and bookmarks A-Z.'
+      type: 'FIX',
+      title: 'Bookmark drag ghost',
+      desc: 'Transparent favicons no longer show the fallback letter behind the drag preview.'
     },
     {
       type: 'FIX',
-      title: 'Bookmark dragging',
-      desc: 'Folder clicks are more reliable and drag-and-drop starts more intentionally on touch.'
+      title: 'News preview position',
+      desc: 'Hover previews now stay fully visible near the edges of the window.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'News header tooltips',
+      desc: 'Settings and Refresh tooltips now animate and remain visible at the top of the sidebar.'
     }
   ]
 };

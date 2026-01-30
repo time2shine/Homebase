@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.2.1 — 2026-01-30
+### Added
+- None.
+### Improved
+- News header tooltips now animate consistently while staying visible at the top of the sidebar.
+### Fixed
+- Dragging bookmarks with transparent icons no longer shows a fallback letter in the drag preview.
+- News hover previews stay fully visible near the edges of the window.
+
 ## v0.2.0 — 2026-01-30
 ### Added
 - Added a Privacy panel in Settings with an inline policy viewer toggle.

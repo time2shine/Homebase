@@ -147,33 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.4.0',
-  date: '2026-01-30',
+  version: '0.4.1',
+  date: '2026-01-31',
   items: [
     {
-      type: 'NEW',
-      title: 'Game Over icon',
-      desc: 'Added a Game Over icon to the Gaming picker.'
+      type: 'FIX',
+      title: 'Google Apps icons',
+      desc: 'Google Apps shortcuts now load icons from the new icon pack location.'
     },
     {
-      type: 'NEW',
-      title: 'Religion icons expanded',
-      desc: 'Added mosque, prayer, and crescent icons to the Religion category.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Shopping & finance icons',
-      desc: 'Updated shopping and finance icons, including bag, tag, store, gift, cart, bank card, and bitcoin.'
+      type: 'FIX',
+      title: 'Bookmark drag-and-drop',
+      desc: 'Sortable now loads from the bundled assets path to keep drag-and-drop working.'
     },
     {
       type: 'IMPROVED',
-      title: 'Brand logos refreshed',
-      desc: 'Updated Apple, Android, Windows, Chrome, Twitter, and Facebook icons in the picker.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Nature icon set',
-      desc: 'Refreshed animal and nature icons with consistent outline styling.'
+      title: 'Google icon pack',
+      desc: 'Google Apps assets are organized under a dedicated icon folder for consistent loading.'
     }
   ]
 };

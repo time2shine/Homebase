@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.4.1 — 2026-01-31
+### Added
+- None.
+### Improved
+- Google Apps assets are organized under a dedicated icon pack for consistent loading.
+### Fixed
+- Google Apps shortcuts now load icons from the new icon pack location.
+- Bookmark drag-and-drop loads Sortable from the bundled assets path.
+
 ## v0.4.0 — 2026-01-30
 ### Added
 - Added a Game Over icon to the Gaming picker.

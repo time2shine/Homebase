@@ -14,7 +14,6 @@ Homebase stores the following locally in your browser (via browser storage and/o
 - Wallpaper selections and cached wallpaper assets
 - Cached media files (images and videos) stored locally to support wallpapers and fast loading
 
-
 ## Browsing data access (bookmarks/history/tabs/containers)
 If you enable related features, Homebase may access:
 - Bookmarks (to display and manage your bookmark grid)
@@ -39,9 +38,11 @@ Homebase makes network requests only to provide enabled features:
 
 ### Wallpaper media (videos/images)
 Homebase downloads wallpaper content and a remote manifest from:
-- [Wallpaper CDN](https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/) (manifest + media)
+- https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/ (manifest + media)
 
-This remote content is used only as wallpaper media and metadata. Homebase does not download or execute remote code.
+This remote content is used only as wallpaper media and metadata.
+Homebase does not download or execute remote code.
+Homebase does not load JavaScript from remote servers.
 
 ### Favicons
 Homebase fetches website icons (favicons) for your bookmarks and history items using
@@ -55,10 +56,13 @@ such as Al Jazeera, BBC RSS, Feedburner feeds, ESPN, and Cricinfo feeds.
 ### Weather
 When the Weather widget is enabled, Homebase fetches weather and geocoding data
 from Open-Meteo endpoints.
+This may send the location you search (city name) and/or coordinates (latitude/longitude)
+to Open-Meteo.
 
 ### Search suggestions
 If search suggestions are enabled, Homebase requests suggestions from your selected provider
-(Google, Bing, DuckDuckGo, or Yandex) as you type.
+(Google, Bing, DuckDuckGo, Yahoo, Yandex, or Amazon) as you type.
+This may send the text you type into the search box to the selected provider.
 
 ## What servers may receive
 Like any web request, the servers you contact may receive standard network information,
@@ -67,7 +71,8 @@ such as your IP address, user agent, and request metadata. This is controlled by
 ## Backup and restore (local only)
 Homebase includes optional local backup and restore features that allow you to export and re-import your settings and data manually.
 
-Backups are created locally by the browser at your request and are saved as files on your device. Homebase does not upload backups, does not provide cloud sync, and does not require accounts or login.
+Backups are created locally by the browser at your request and are saved as files on your device.
+Homebase does not upload backups, does not provide cloud sync, and does not require accounts or login.
 
 ## Data deletion
 You can remove Homebase data at any time by:

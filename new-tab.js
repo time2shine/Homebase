@@ -156,34 +156,170 @@ function hashStringToUint32(str) {
 
 }
 
-function pickTipOfDay(tips, dateKey) {
+const TIPS_FIRST_RUN_SHOWN_KEY = 'tipsFirstRunShown';
+const TIPS_OPENS_COUNT_KEY = 'tipsOpensCount';
+const TIPS_INSTALL_SALT_KEY = 'tipsInstallSalt';
+const TIPS_LAST_VIEWED_KEY = 'tipsLastViewed';
+const TIPS_HIDDEN_DATE_KEY = 'tipsHiddenDateKey';
+const TIPS_ENABLED_KEY = 'tipsEnabled';
+const WELCOME_TIP_ID = 'welcome-tip';
+let cachedTipsInstallSalt = null;
 
-  if (!Array.isArray(tips) || tips.length === 0 || !dateKey) return null;
+async function getOrCreateInstallSalt() {
 
-  const idx = hashStringToUint32(dateKey) % tips.length;
+  if (cachedTipsInstallSalt) return cachedTipsInstallSalt;
 
-  return tips[idx] || null;
+  const storage = getStorageLocal();
+  if (!storage) {
+    cachedTipsInstallSalt = 'local';
+    return cachedTipsInstallSalt;
+  }
+
+  const result = await storageLocalGetAsync([TIPS_INSTALL_SALT_KEY]);
+  const stored = result ? result[TIPS_INSTALL_SALT_KEY] : null;
+  if (stored && typeof stored === 'string') {
+    cachedTipsInstallSalt = stored;
+    return stored;
+  }
+
+  let salt = '';
+  if (window.crypto && window.crypto.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    salt = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  } else {
+    salt = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  cachedTipsInstallSalt = salt;
+  await storageLocalSetAsync({ [TIPS_INSTALL_SALT_KEY]: salt });
+  return salt;
+
+}
+
+async function incrementTipsOpensCount() {
+
+  if (!getStorageLocal()) return 0;
+
+  const result = await storageLocalGetAsync([TIPS_OPENS_COUNT_KEY]);
+  const current = result && Number.isFinite(result[TIPS_OPENS_COUNT_KEY])
+    ? result[TIPS_OPENS_COUNT_KEY]
+    : 0;
+  const next = current + 1;
+  await storageLocalSetAsync({ [TIPS_OPENS_COUNT_KEY]: next });
+  return next;
+
+}
+
+function getSortedTips() {
+
+  const tips = Array.isArray(window.HOMEBASE_TIPS) ? window.HOMEBASE_TIPS : [];
+  if (!tips.length) return [];
+  return tips
+    .filter((tip) => tip && tip.id != null)
+    .slice()
+    .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+}
+
+function pickDailyTipId(dateKey, salt, sortedTips) {
+
+  if (!dateKey || !salt || !Array.isArray(sortedTips) || sortedTips.length === 0) return '';
+  const idx = hashStringToUint32(`${dateKey}:${salt}`) % sortedTips.length;
+  const tip = sortedTips[idx];
+  if (!tip || tip.id == null) return '';
+  return String(tip.id);
+
+}
+
+function getStorageLocal() {
+
+  if (window.browser && browser.storage && browser.storage.local) return browser.storage.local;
+  if (window.chrome && chrome.storage && chrome.storage.local) return chrome.storage.local;
+  return null;
+
+}
+
+function storageLocalGetAsync(keys) {
+
+  const storage = getStorageLocal();
+  if (!storage || !storage.get) return Promise.resolve({});
+  const usePromise = window.browser && browser.storage && browser.storage.local === storage;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result || {});
+    };
+    try {
+      if (usePromise) {
+        const maybePromise = storage.get(keys);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(done).catch(() => done({}));
+        } else {
+          done({});
+        }
+      } else {
+        storage.get(keys, (result) => done(result));
+      }
+    } catch (e) {
+      done({});
+    }
+  });
+
+}
+
+function storageLocalSetAsync(items) {
+
+  const storage = getStorageLocal();
+  if (!storage || !storage.set) return Promise.resolve();
+  const usePromise = window.browser && browser.storage && browser.storage.local === storage;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    try {
+      if (usePromise) {
+        const maybePromise = storage.set(items);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(done).catch(done);
+        } else {
+          done();
+        }
+      } else {
+        storage.set(items, () => done());
+      }
+    } catch (e) {
+      done();
+    }
+  });
 
 }
 
 let tipPreviewIndex = null;
 let tipListenersBound = false;
 
-function renderTipOfDay() {
+async function renderTipOfDay() {
 
-  const tips = Array.isArray(window.HOMEBASE_TIPS) ? window.HOMEBASE_TIPS : null;
+  const tipsOriginal = Array.isArray(window.HOMEBASE_TIPS) ? window.HOMEBASE_TIPS : null;
 
-  if (!tips || tips.length === 0) return;
+  if (!tipsOriginal || tipsOriginal.length === 0) return;
+
+  const sortedTips = getSortedTips();
+
+  if (!sortedTips.length) return;
 
   const tipCard = document.getElementById('tip-card');
-
-  const tipLabel = document.getElementById('tip-label');
 
   const tipTitle = document.getElementById('tip-title');
 
   const tipBody = document.getElementById('tip-body');
-
-  const tipActions = document.getElementById('tip-actions');
 
   const tipBtnClose = document.getElementById('tip-btn-close');
 
@@ -191,11 +327,51 @@ function renderTipOfDay() {
 
   const tipBtnDisable = document.getElementById('tip-btn-disable');
 
-  if (!tipCard || !tipLabel || !tipTitle || !tipBody || !tipActions || !tipBtnClose || !tipBtnNext || !tipBtnDisable) return;
+  const storage = getStorageLocal();
+  const storageAvailable = !!storage;
+
+  if (!tipCard || !tipTitle || !tipBody || !tipBtnClose || !tipBtnNext || !tipBtnDisable) return;
+
+  if (tipCard.hasAttribute('hidden')) {
+    tipCard.classList.remove('is-open');
+  }
+
+  const animateHideTipCard = () => {
+
+    tipCard.classList.remove('is-open');
+
+    if (tipCard.hasAttribute('hidden')) return;
+
+    let finished = false;
+    let fallbackId = null;
+    let onTransitionEnd = null;
+
+    const cleanup = () => {
+      if (finished) return;
+      finished = true;
+      if (onTransitionEnd) {
+        tipCard.removeEventListener('transitionend', onTransitionEnd);
+      }
+      if (fallbackId !== null) {
+        clearTimeout(fallbackId);
+      }
+      tipCard.setAttribute('hidden', '');
+    };
+
+    onTransitionEnd = (event) => {
+      if (event.target !== tipCard) return;
+      cleanup();
+    };
+
+    tipCard.addEventListener('transitionend', onTransitionEnd);
+    // Keep in sync with --tip-card-motion-ms.
+    fallbackId = setTimeout(cleanup, 620);
+
+  };
 
   const renderTipAtIndex = (index) => {
 
-    const tip = tips[index];
+    const tip = sortedTips[index];
 
     if (!tip) return;
 
@@ -204,109 +380,214 @@ function renderTipOfDay() {
     tipBody.textContent = tip.body || '';
 
     tipCard.removeAttribute('hidden');
+    tipCard.classList.remove('is-open');
+    requestAnimationFrame(() => {
+      tipCard.classList.add('is-open');
+    });
+
+    return true;
 
   };
 
-  const showTipIfEnabled = (lastViewed) => {
+  const setPreviewIndexById = (tipId) => {
 
-    if (tipPreviewIndex === null) {
-
-      const dateKey = getLocalDateKey();
-
-      if (lastViewed && lastViewed.dateKey === dateKey && lastViewed.tipId) {
-
-        const restoredIndex = tips.findIndex((tip) => tip && tip.id != null && String(tip.id) === lastViewed.tipId);
-
-        if (restoredIndex >= 0) {
-
-          tipPreviewIndex = restoredIndex;
-
-        }
-
-      }
-
-      if (tipPreviewIndex === null) {
-
-        const tip = pickTipOfDay(tips, dateKey);
-
-        if (!tip) return;
-
-        const initialIndex = tips.indexOf(tip);
-
-        tipPreviewIndex = initialIndex >= 0 ? initialIndex : 0;
-
-      }
-
-    }
-
-    renderTipAtIndex(tipPreviewIndex);
-
-    if (!tipListenersBound) {
-
-      tipListenersBound = true;
-
-      tipBtnClose.addEventListener('click', () => {
-
-        if (window.chrome && chrome.storage && chrome.storage.local) {
-
-          chrome.storage.local.set({ tipsHiddenDateKey: getLocalDateKey() });
-
-        }
-
-        tipCard.setAttribute('hidden', '');
-
-      });
-
-      tipBtnNext.addEventListener('click', () => {
-
-        if (!tips.length) return;
-
-        tipPreviewIndex = (tipPreviewIndex + 1) % tips.length;
-
-        renderTipAtIndex(tipPreviewIndex);
-
-        const nextTip = tips[tipPreviewIndex];
-
-        if (nextTip && nextTip.id != null && window.chrome && chrome.storage && chrome.storage.local) {
-
-          chrome.storage.local.set({ tipsLastViewed: { dateKey: getLocalDateKey(), tipId: String(nextTip.id) } });
-
-        }
-
-      });
-
-      tipBtnDisable.addEventListener('click', () => {
-
-        if (window.chrome && chrome.storage && chrome.storage.local) {
-
-          chrome.storage.local.set({ tipsEnabled: false });
-
-        }
-
-        tipCard.setAttribute('hidden', '');
-
-      });
-
-    }
+    if (tipId == null) return false;
+    const targetId = String(tipId);
+    const index = sortedTips.findIndex((tip) => tip && tip.id != null && String(tip.id) === targetId);
+    if (index < 0) return false;
+    tipPreviewIndex = index;
+    return true;
 
   };
 
-  if (window.chrome && chrome.storage && chrome.storage.local) {
+  const coerceFirstRunShown = (value) => {
+    if (value === true || value === 'true' || value === 1 || value === '1') return true;
+    return false;
+  };
 
-    chrome.storage.local.get(['tipsEnabled', 'tipsHiddenDateKey', 'tipsLastViewed'], (result) => {
+  const normalizeLastViewed = (lastViewed, dateKey, storageAvailable) => {
 
-      if (result && result.tipsEnabled === false) return;
+    if (!lastViewed) return null;
 
-      if (result && result.tipsHiddenDateKey === getLocalDateKey()) return;
+    let storedDateKey = dateKey;
+    let legacyIndex = null;
 
-      showTipIfEnabled(result ? result.tipsLastViewed : null);
+    if (typeof lastViewed === 'number' && Number.isFinite(lastViewed)) {
+      legacyIndex = lastViewed;
+    } else if (typeof lastViewed === 'object') {
+      if (typeof lastViewed.dateKey === 'string') {
+        storedDateKey = lastViewed.dateKey;
+      }
+      if (lastViewed.tipId != null) {
+        return { dateKey: storedDateKey, tipId: String(lastViewed.tipId) };
+      }
+      if (Number.isFinite(lastViewed.index)) {
+        legacyIndex = lastViewed.index;
+      } else if (Number.isFinite(lastViewed.tipIndex)) {
+        legacyIndex = lastViewed.tipIndex;
+      }
+    }
+
+    if (legacyIndex !== null) {
+      const legacyTip = tipsOriginal[legacyIndex];
+      if (legacyTip && legacyTip.id != null) {
+        const migrated = { dateKey: storedDateKey, tipId: String(legacyTip.id) };
+        if (storageAvailable) {
+          storageLocalSetAsync({ [TIPS_LAST_VIEWED_KEY]: migrated });
+        }
+        return migrated;
+      }
+    }
+
+    return null;
+
+  };
+
+  const bindTipListeners = () => {
+
+    if (tipListenersBound) return;
+    tipListenersBound = true;
+
+    tipBtnClose.addEventListener('click', () => {
+
+      if (storageAvailable) {
+        storageLocalSetAsync({ [TIPS_HIDDEN_DATE_KEY]: getLocalDateKey() });
+      }
+
+      animateHideTipCard();
 
     });
 
-  } else {
+    tipBtnNext.addEventListener('click', () => {
 
-    showTipIfEnabled(null);
+      if (!sortedTips.length) return;
 
+      if (tipPreviewIndex === null || tipPreviewIndex < 0 || tipPreviewIndex >= sortedTips.length) {
+        tipPreviewIndex = 0;
+      } else {
+        tipPreviewIndex = (tipPreviewIndex + 1) % sortedTips.length;
+      }
+
+      renderTipAtIndex(tipPreviewIndex);
+
+      const nextTip = sortedTips[tipPreviewIndex];
+
+      if (nextTip && nextTip.id != null && storageAvailable) {
+        storageLocalSetAsync({ [TIPS_LAST_VIEWED_KEY]: { dateKey: getLocalDateKey(), tipId: String(nextTip.id) } });
+      }
+
+    });
+
+    tipBtnDisable.addEventListener('click', () => {
+
+      if (storageAvailable) {
+        storageLocalSetAsync({ [TIPS_ENABLED_KEY]: false });
+      }
+
+      animateHideTipCard();
+
+    });
+
+  };
+
+  const dateKey = getLocalDateKey();
+  const rotationTips = sortedTips.filter((tip) => tip && String(tip.id) !== WELCOME_TIP_ID);
+  const dailyTips = rotationTips.length ? rotationTips : sortedTips;
+
+  if (tipPreviewIndex !== null && (tipPreviewIndex < 0 || tipPreviewIndex >= sortedTips.length)) {
+    tipPreviewIndex = null;
+  }
+
+  if (!storageAvailable) {
+    if (tipPreviewIndex === null) {
+      const dailyTipId = pickDailyTipId(dateKey, 'local', dailyTips);
+      if (!setPreviewIndexById(dailyTipId)) {
+        tipPreviewIndex = 0;
+      }
+    }
+    if (renderTipAtIndex(tipPreviewIndex)) {
+      bindTipListeners();
+    }
+    return;
+  }
+
+  const opensCount = await incrementTipsOpensCount();
+
+  const result = await storageLocalGetAsync([
+    TIPS_ENABLED_KEY,
+    TIPS_HIDDEN_DATE_KEY,
+    TIPS_LAST_VIEWED_KEY,
+    TIPS_FIRST_RUN_SHOWN_KEY
+  ]);
+
+  if (result && result[TIPS_ENABLED_KEY] === false) return;
+  if (result && result[TIPS_HIDDEN_DATE_KEY] === dateKey) return;
+
+  const storedFirstRunShown = result ? result[TIPS_FIRST_RUN_SHOWN_KEY] : null;
+  let firstRunShown = coerceFirstRunShown(storedFirstRunShown);
+  if (firstRunShown && storedFirstRunShown !== true) {
+    await storageLocalSetAsync({ [TIPS_FIRST_RUN_SHOWN_KEY]: true });
+  }
+  if (!firstRunShown && result && result[TIPS_LAST_VIEWED_KEY]) {
+    const lastViewed = result[TIPS_LAST_VIEWED_KEY];
+    if (lastViewed && typeof lastViewed === 'object' && lastViewed.tipId != null && String(lastViewed.tipId) === WELCOME_TIP_ID) {
+      firstRunShown = true;
+      await storageLocalSetAsync({ [TIPS_FIRST_RUN_SHOWN_KEY]: true });
+    }
+  }
+  if (result && result[TIPS_LAST_VIEWED_KEY]) {
+    const lastViewed = result[TIPS_LAST_VIEWED_KEY];
+    if (
+      lastViewed
+      && typeof lastViewed === 'object'
+      && lastViewed.tipId != null
+      && String(lastViewed.tipId) === WELCOME_TIP_ID
+      && lastViewed.dateKey === dateKey
+    ) {
+      await storageLocalSetAsync({ [TIPS_LAST_VIEWED_KEY]: { dateKey: '', tipId: '' } });
+    }
+  }
+
+  if (!firstRunShown) {
+    if (setPreviewIndexById(WELCOME_TIP_ID) && renderTipAtIndex(tipPreviewIndex)) {
+      await storageLocalSetAsync({
+        [TIPS_FIRST_RUN_SHOWN_KEY]: true
+      });
+      const verify = await storageLocalGetAsync([TIPS_FIRST_RUN_SHOWN_KEY]);
+      if (!verify || !verify[TIPS_FIRST_RUN_SHOWN_KEY]) {
+        await storageLocalSetAsync({ [TIPS_FIRST_RUN_SHOWN_KEY]: true });
+      }
+      bindTipListeners();
+    }
+    return;
+  }
+
+  if (opensCount < 2) return;
+
+  const normalizedLastViewed = normalizeLastViewed(
+    result ? result[TIPS_LAST_VIEWED_KEY] : null,
+    dateKey,
+    storageAvailable
+  );
+
+  if (tipPreviewIndex === null) {
+
+    if (normalizedLastViewed && normalizedLastViewed.dateKey === dateKey && normalizedLastViewed.tipId) {
+      setPreviewIndexById(normalizedLastViewed.tipId);
+    }
+
+    if (tipPreviewIndex === null) {
+      const salt = await getOrCreateInstallSalt();
+      const dailyTipId = pickDailyTipId(dateKey, salt, dailyTips);
+      if (!setPreviewIndexById(dailyTipId)) {
+        tipPreviewIndex = 0;
+      }
+    }
+
+  }
+
+  if (renderTipAtIndex(tipPreviewIndex)) {
+    bindTipListeners();
   }
 
 }
@@ -681,19 +962,26 @@ function showFirefoxShortcutInfo(feature) {
 
   const plainMessage = `Firefox blocks extensions from opening built-in pages like ${info.label}.\n\nUse ${info.shortcut} to open it.`;
 
-  const htmlMessage = `Firefox blocks extensions from opening built-in pages like ${info.label}.<br><br>Use <span style="color: #4da3ff; font-weight: 600;">${info.shortcut}</span> to open it.`;
-
   const hasCustomAlert = document.getElementById('custom-alert-modal') && document.getElementById('custom-alert-ok-btn');
 
   if (hasCustomAlert && typeof showCustomDialog === 'function') {
 
-    showCustomDialog(`${info.label} shortcut`, htmlMessage);
+    showCustomDialog(`${info.label} shortcut`, plainMessage);
 
     const msgEl = document.getElementById('custom-alert-message');
 
     if (msgEl) {
-
-      msgEl.innerHTML = htmlMessage;
+      msgEl.replaceChildren();
+      msgEl.appendChild(document.createTextNode(`Firefox blocks extensions from opening built-in pages like ${info.label}.`));
+      msgEl.appendChild(document.createElement('br'));
+      msgEl.appendChild(document.createElement('br'));
+      msgEl.appendChild(document.createTextNode('Use '));
+      const shortcut = document.createElement('span');
+      shortcut.style.color = '#4da3ff';
+      shortcut.style.fontWeight = '600';
+      shortcut.textContent = info.shortcut;
+      msgEl.appendChild(shortcut);
+      msgEl.appendChild(document.createTextNode(' to open it.'));
 
     }
 
@@ -3417,6 +3705,12 @@ const gridMenuPasteBtn = document.getElementById('grid-menu-paste');
 
 const gridMenuSortNameBtn = document.getElementById('grid-menu-sort-name');
 
+const ensureMenuMountedToBody = (menuEl) => {
+  if (!menuEl || !(menuEl instanceof HTMLElement)) return;
+  if (menuEl.parentElement !== document.body) {
+    document.body.appendChild(menuEl);
+  }
+};
 
 
 // NEW: simple state so you know what was right-clicked
@@ -3551,6 +3845,10 @@ const APP_SHOW_NEWS_KEY = 'appShowNews';
 
 const APP_SHOW_TODO_KEY = 'appShowTodo';
 
+const TODO_ITEMS_KEY = 'todoItems';
+
+const TODO_HIDE_DONE_KEY = 'todoHideDone';
+
 const WIDGET_ORDER_KEY = 'widgetOrder';
 
 const DEFAULT_WIDGET_ORDER = ['weather', 'quote', 'todo', 'news'];
@@ -3632,6 +3930,8 @@ const HOMEBASE_OWNED_STORAGE_KEYS = [
   APP_SHOW_QUOTE_KEY,
   APP_SHOW_NEWS_KEY,
   APP_SHOW_TODO_KEY,
+  TODO_ITEMS_KEY,
+  TODO_HIDE_DONE_KEY,
   WIDGET_ORDER_KEY,
   APP_NEWS_SOURCE_KEY,
   APP_MAX_TABS_KEY,
@@ -3756,10 +4056,25 @@ async function importHomebaseState(file) {
 
   HOMEBASE_OWNED_STORAGE_KEYS.forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(incoming, key)) {
+      if (key === TODO_ITEMS_KEY) {
+        if (Array.isArray(incoming[key])) {
+          updates[key] = normalizeTodoItems(incoming[key]);
+        }
+        return;
+      }
+      if (key === TODO_HIDE_DONE_KEY) {
+        if (typeof incoming[key] === 'boolean') {
+          updates[key] = incoming[key];
+        }
+        return;
+      }
       updates[key] = incoming[key];
-    } else {
-      removals.push(key);
+      return;
     }
+    if (key === TODO_ITEMS_KEY || key === TODO_HIDE_DONE_KEY) {
+      return;
+    }
+    removals.push(key);
   });
 
   if (Object.keys(updates).length) {
@@ -6727,13 +7042,16 @@ function updateEditPreview(iconOverride) {
 
   if (!baseWrapper) {
 
-    previewContainer.innerHTML = '';
+    previewContainer.replaceChildren();
 
     baseWrapper = document.createElement('div');
 
     baseWrapper.className = 'edit-folder-base-wrapper';
 
-    baseWrapper.innerHTML = useSvgIcon('bookmarkFolderLarge');
+    const baseIcon = createSvgIconElement('bookmarkFolderLarge');
+    if (baseIcon) {
+      baseWrapper.appendChild(baseIcon);
+    }
 
     previewContainer.appendChild(baseWrapper);
 
@@ -6841,9 +7159,8 @@ function updateEditPreview(iconOverride) {
 
     const key = effectiveIcon.slice('builtin:'.length);
 
-    const svgString = useSvgIcon(key);
-
-    if (!svgString) return;
+    const svgEl = createSvgIconElement(key);
+    if (!svgEl) return;
 
 
 
@@ -6851,7 +7168,7 @@ function updateEditPreview(iconOverride) {
 
     iconEl.className = 'edit-folder-custom-icon-preview';
 
-    iconEl.innerHTML = svgString;
+    iconEl.appendChild(svgEl);
 
     iconEl.dataset.iconKey = effectiveIcon;
 
@@ -6903,7 +7220,7 @@ function initBubbleSlider(containerId, min, max, initialValue, step, onUpdate) {
 
 
 
-  container.innerHTML = '';
+  container.replaceChildren();
 
   container.className = 'range-slider-wrapper gooey-slider-container'; // Keep existing class for layout
 
@@ -7204,7 +7521,7 @@ function setupBuiltInIconPicker() {
 
 
 
-    builtinIconList.innerHTML = '';
+    builtinIconList.replaceChildren();
 
     
 
@@ -7234,9 +7551,9 @@ function setupBuiltInIconPicker() {
 
       iconKeys.forEach(key => {
 
-        const svgString = useSvgIcon(key);
+        const svgEl = createSvgIconElement(key);
 
-        if (!svgString) return;
+        if (!svgEl) return;
 
 
 
@@ -7248,7 +7565,11 @@ function setupBuiltInIconPicker() {
 
         // Use custom tooltip markup instead of native title
 
-        btn.innerHTML = `<span class="tooltip-popup tooltip-top">${key}</span>${svgString}`;
+        const tooltip = document.createElement('span');
+        tooltip.className = 'tooltip-popup tooltip-top';
+        tooltip.textContent = key;
+        btn.appendChild(tooltip);
+        btn.appendChild(svgEl);
 
         
 
@@ -9549,7 +9870,11 @@ function renderFolderIconInto(wrapper, folderNode, iconKey) {
 
   // 1. ALWAYS render the Base Folder SVG
 
-  wrapper.innerHTML = useSvgIcon('bookmarkFolderLarge');
+  wrapper.replaceChildren();
+  const baseIcon = createSvgIconElement('bookmarkFolderLarge');
+  if (baseIcon) {
+    wrapper.appendChild(baseIcon);
+  }
 
   
 
@@ -9587,17 +9912,15 @@ function renderFolderIconInto(wrapper, folderNode, iconKey) {
 
       const key = customIcon.replace('builtin:', '');
 
-      const svgString = useSvgIcon(key);
+      const svgEl = createSvgIconElement(key);
 
-
-
-      if (svgString) {
+      if (svgEl) {
 
         const iconDiv = document.createElement('div');
 
         iconDiv.className = 'bookmark-folder-custom-icon';
 
-        iconDiv.innerHTML = svgString;
+        iconDiv.appendChild(svgEl);
 
         iconDiv.setAttribute('style', transformStyle);
 
@@ -10955,7 +11278,7 @@ function showGridItemRenameInput(gridItem, bookmarkNode) {
 
 function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
-  bookmarkFolderTabsContainer.innerHTML = '';
+  bookmarkFolderTabsContainer.replaceChildren();
 
   if (bookmarkTabsTrack) {
 
@@ -11105,7 +11428,10 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
   addButton.title = 'Create New Folder';
 
-  addButton.innerHTML = useSvgIcon('bookmarkTabsPlus');
+  const addIcon = createSvgIconElement('bookmarkTabsPlus');
+  if (addIcon) {
+    addButton.appendChild(addIcon);
+  }
 
   
 
@@ -12606,13 +12932,24 @@ function setupQuoteWidget() {
 
       navigator.clipboard.writeText(fullQuote).then(() => {
 
-        const originalIcon = quoteCopyBtn.innerHTML;
+        const originalNodes = Array.from(quoteCopyBtn.childNodes).map(node => node.cloneNode(true));
 
-        quoteCopyBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '24');
+        svg.setAttribute('height', '24');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', '#4ade80');
+        svg.setAttribute('stroke-width', '2');
+        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        polyline.setAttribute('points', '20 6 9 17 4 12');
+        svg.appendChild(polyline);
+
+        quoteCopyBtn.replaceChildren(svg);
 
         setTimeout(() => {
 
-          quoteCopyBtn.innerHTML = originalIcon;
+          quoteCopyBtn.replaceChildren(...originalNodes);
 
         }, 1500);
 
@@ -12721,10 +13058,6 @@ const todoClearBtn = document.getElementById('todo-clear-btn');
 const todoFilterAllBtn = document.getElementById('todo-filter-all');
 
 const todoFilterActiveBtn = document.getElementById('todo-filter-active');
-
-const TODO_ITEMS_KEY = 'todoItems';
-
-const TODO_HIDE_DONE_KEY = 'todoHideDone';
 
 let todoItems = [];
 
@@ -13507,7 +13840,7 @@ function applyGlassStyle(styleId) {
   }
 
   // We override the .glass-box class directly
-  styleEl.innerHTML = `
+  styleEl.textContent = `
     .glass-box {
       ${styleData.css}
       transition: all 0.3s ease, transform 0.2s ease, opacity 0.2s ease !important;
@@ -13543,7 +13876,7 @@ function applyGridAnimation(animationKey) {
     document.head.appendChild(styleEl);
   }
 
-  styleEl.innerHTML = `
+  styleEl.textContent = `
     @keyframes item-fade-in {
       ${animData.css}
     }
@@ -14965,7 +15298,7 @@ function setupSearchEnginesModal() {
 
   const renderList = () => {
 
-    listContainer.innerHTML = '';
+    listContainer.replaceChildren();
 
     
 
@@ -14979,33 +15312,58 @@ function setupSearchEnginesModal() {
 
       div.className = 'engine-toggle-item';
 
-      div.innerHTML = `
+      const main = document.createElement('div');
+      main.className = 'engine-toggle-main';
 
-        <div class="engine-toggle-main">
+      const dragHandle = document.createElement('span');
+      dragHandle.className = 'engine-drag-handle';
+      dragHandle.setAttribute('aria-hidden', 'true');
+      dragHandle.textContent = String.fromCharCode(9776);
 
-          <span class="engine-drag-handle" aria-hidden="true">&#9776;</span>
+      const iconWrap = document.createElement('span');
+      iconWrap.className = 'engine-toggle-icon';
+      iconWrap.setAttribute('aria-hidden', 'true');
+      const iconEl = engine.symbolId ? createSvgIconElement(engine.symbolId) : null;
+      if (iconEl) {
+        iconWrap.appendChild(iconEl);
+      } else {
+        const fallback = document.createElement('span');
+        fallback.style.fontWeight = 'bold';
+        fallback.style.fontSize = '12px';
+        fallback.style.color = '#555';
+        fallback.textContent = (engine.name || '').charAt(0);
+        iconWrap.appendChild(fallback);
+      }
 
-          <span class="engine-toggle-icon" aria-hidden="true">${engine.symbolId ? useSvgIcon(engine.symbolId) : `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`}</span>
+      const name = document.createElement('span');
+      name.className = 'engine-toggle-name';
+      name.textContent = engine.name;
 
-          <span class="engine-toggle-name">${engine.name}</span>
+      main.appendChild(dragHandle);
+      main.appendChild(iconWrap);
+      main.appendChild(name);
 
-        </div>
+      const label = document.createElement('label');
+      label.className = 'app-switch';
 
-        <label class="app-switch">
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'engine-toggle-checkbox';
+      checkbox.dataset.id = engine.id;
+      checkbox.checked = engine.enabled === true;
 
-          <input type="checkbox" class="engine-toggle-checkbox" data-id="${engine.id}" ${engine.enabled ? 'checked' : ''}>
+      const track = document.createElement('span');
+      track.className = 'app-switch-track';
 
-          <span class="app-switch-track"></span>
+      label.appendChild(checkbox);
+      label.appendChild(track);
 
-        </label>
-
-      `;
+      div.appendChild(main);
+      div.appendChild(label);
 
 
 
       // --- NEW FEATURE: Prevent Disabling Last Engine ---
-
-      const checkbox = div.querySelector('.engine-toggle-checkbox');
 
       checkbox.addEventListener('change', (e) => {
 
@@ -15425,7 +15783,7 @@ let currentSelectionIndex = -1;
 
 let currentSectionIndex = 0; // 0 = bookmarks, 1 = suggestions
 
-let selectionWasAuto = false;
+let selectionExplicit = false;
 
 let lastSelectedText = '';
 
@@ -15757,6 +16115,29 @@ function escapeHtml(unsafe) {
 
 
 
+function buildSearchEngineIconContent(targetEl, engine) {
+  if (!targetEl || !engine) return;
+  targetEl.replaceChildren();
+
+  const tooltip = document.createElement('span');
+  tooltip.className = 'tooltip-popup tooltip-top';
+  tooltip.textContent = engine.name || '';
+  targetEl.appendChild(tooltip);
+
+  const svgEl = engine.symbolId ? createSvgIconElement(engine.symbolId) : null;
+  if (svgEl) {
+    targetEl.appendChild(svgEl);
+    return;
+  }
+
+  const fallback = document.createElement('span');
+  fallback.style.fontWeight = 'bold';
+  fallback.style.fontSize = '12px';
+  fallback.style.color = '#555';
+  fallback.textContent = (engine.name || '').charAt(0);
+  targetEl.appendChild(fallback);
+}
+
 function ensureEngineIconExists(engine) {
 
   const container = document.getElementById('search-engine-selector');
@@ -15785,9 +16166,7 @@ function ensureEngineIconExists(engine) {
 
 
 
-  const iconHtml = engine.symbolId ? useSvgIcon(engine.symbolId) : `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
-
-  btn.innerHTML = `<span class="tooltip-popup tooltip-top">${engine.name}</span>${iconHtml}`;
+  buildSearchEngineIconContent(btn, engine);
 
 
 
@@ -15889,7 +16268,7 @@ function renderSearchEngineSelector() {
 
   
 
-  container.innerHTML = '';
+  container.replaceChildren();
 
   
 
@@ -15959,11 +16338,8 @@ function renderSearchEngineSelector() {
 
     
 
-    // Insert Tooltip HTML + Icon
-
-    const iconHtml = engine.symbolId ? useSvgIcon(engine.symbolId) : `<span style="font-weight:bold; font-size:12px; color:#555;">${engine.name.charAt(0)}</span>`;
-
-    btn.innerHTML = `<span class="tooltip-popup tooltip-top">${engine.name}</span>${iconHtml}`;
+    // Insert Tooltip + Icon
+    buildSearchEngineIconContent(btn, engine);
 
     
 
@@ -16153,20 +16529,14 @@ function updateSearchUI(engineId) {
 
   // --- Cache Search State for Instant Load ---
   try {
-    const iconHtml = currentSearchEngine.icon || `<span style="font-weight:bold; font-size:12px; color:#555;">${currentSearchEngine.name.charAt(0)}</span>`;
-
-    const activeBtnHtml = `
-      <div class="search-engine-list" style="transform: translateX(0px);">
-        <div class="engine-icon-btn active" style="--engine-color: ${currentSearchEngine.color || '#333'};">
-          <span class="tooltip-popup tooltip-top">${currentSearchEngine.name}</span>
-          ${iconHtml}
-        </div>
-      </div>
-    `;
-
     const fastSearch = {
       placeholder: searchInput.placeholder,
-      selectorHtml: activeBtnHtml,
+      selectorData: {
+        name: currentSearchEngine.name,
+        color: currentSearchEngine.color || '#333',
+        symbolId: currentSearchEngine.symbolId || null,
+        fallback: currentSearchEngine.name.charAt(0)
+      },
       engineId: currentSearchEngine.id
     };
 
@@ -16249,7 +16619,7 @@ function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken 
 
   lastSelectedText = '';
 
-  selectionWasAuto = false;
+  selectionExplicit = false;
 
   searchAreaWrapper.classList.remove('search-focused');
 
@@ -16285,7 +16655,7 @@ function hideSearchResultsPanel() {
 
   lastSelectedText = '';
 
-  selectionWasAuto = false;
+  selectionExplicit = false;
 
 }
 
@@ -16405,6 +16775,7 @@ async function setupSearch() {
   searchInput.addEventListener('input', e => {
 
     userIsTyping = true;
+    selectionExplicit = false;
 
     // Hide full list if user types
 
@@ -16434,6 +16805,7 @@ async function setupSearch() {
 
   
 
+  searchResultsPanel.addEventListener('mousedown', handleSearchResultMouseDown, true);
   searchResultsPanel.addEventListener('click', handleSearchResultClick, true);
 
   searchResultsPanel.addEventListener('click', e => e.stopPropagation());
@@ -16758,7 +17130,7 @@ function clearAllSelections() {
 
   currentSelectionIndex = -1;
 
-  selectionWasAuto = false;
+  selectionExplicit = false;
 
 }
 
@@ -16766,7 +17138,7 @@ function clearAllSelections() {
 
 function syncSearchInputWithItem(item) {
 
-  if (!item || userIsTyping) return;
+  if (!item || userIsTyping || !selectionExplicit) return;
 
   const label = item.querySelector('.result-label');
 
@@ -16818,8 +17190,6 @@ function selectItem(items, index) {
 
   currentSelectionIndex = nextIndex;
 
-  selectionWasAuto = false;
-
   lastSelectedText = getResultLabelText(items[nextIndex]);
 
   syncSearchInputWithItem(items[nextIndex]);
@@ -16848,7 +17218,7 @@ function attachHoverSync() {
 
         removeSelectionClasses();
 
-        selectionWasAuto = false;
+        selectionExplicit = false;
 
         item.classList.add('selected');
 
@@ -16910,7 +17280,7 @@ function getSelectedResult() {
 
   if (!selected) return null;
 
-  if (selectionWasAuto) return null;
+  if (!selectionExplicit) return null;
 
   return selected;
 
@@ -16996,6 +17366,20 @@ function handleSearch(event) {
 
 
 
+function handleSearchResultMouseDown(e) {
+
+  const target = e.target.closest('.result-item');
+
+  if (!target) return;
+
+  if (target.classList.contains('result-item-suggestion')) {
+
+    selectionExplicit = true;
+
+  }
+
+}
+
 function handleSearchResultClick(e) {
 
   if (e.target.classList.contains('copy-btn') || e.target.classList.contains('calc-copy')) {
@@ -17041,6 +17425,12 @@ function handleSearchResultClick(e) {
   if (!target) return;
 
   e.preventDefault();
+
+  if (target.classList.contains('result-item-suggestion')) {
+
+    selectionExplicit = true;
+
+  }
 
 
 
@@ -17190,6 +17580,7 @@ function handleSearchKeydown(e) {
 
           }
 
+          selectionExplicit = true;
           selectItem(nextItems, 0);
 
           return;
@@ -17206,6 +17597,7 @@ function handleSearchKeydown(e) {
 
         e.preventDefault();
 
+        selectionExplicit = true;
         selectItem(items, currentSelectionIndex + 1);
 
       }
@@ -17256,6 +17648,7 @@ function handleSearchKeydown(e) {
 
           }
 
+          selectionExplicit = true;
           selectItem(prevItems, prevItems.length - 1);
 
           return;
@@ -17272,6 +17665,7 @@ function handleSearchKeydown(e) {
 
         e.preventDefault();
 
+        selectionExplicit = true;
         selectItem(items, currentSelectionIndex - 1);
 
       }
@@ -17292,6 +17686,7 @@ function handleSearchKeydown(e) {
 
       e.preventDefault();
 
+      selectionExplicit = false;
       moveSection(e.shiftKey ? -1 : 1);
 
       break;
@@ -17414,8 +17809,6 @@ function restoreSelectionAfterFilter() {
 
         currentSelectionIndex = Array.from(resultSections[sectionIndex].querySelectorAll('.result-item')).indexOf(items[i]);
 
-        selectionWasAuto = false;
-
         lastSelectedText = text;
 
         items[i].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
@@ -17470,7 +17863,7 @@ function maybeAutoSelectSuggestion(query) {
 
   currentSelectionIndex = 0;
 
-  selectionWasAuto = true;
+  selectionExplicit = false;
 
 
 
@@ -17558,8 +17951,6 @@ function applySelectionToCurrentResults(snapshot = null, query = '') {
 
         currentSelectionIndex = matchIndex;
 
-        selectionWasAuto = false;
-
         lastSelectedText = getResultLabelText(list[matchIndex]);
 
         restored = true;
@@ -17590,13 +17981,6 @@ function applySelectionToCurrentResults(snapshot = null, query = '') {
 
   }
 
-
-
-  if (!restored) {
-
-    selectionWasAuto = false;
-
-  }
 
 
 
@@ -18235,211 +18619,190 @@ async function handleSearchInput() {
 
 
 
-  // --- A. Generate Calculator HTML ---
-
-  let calcHtml = '';
+  // --- A. Generate Calculator + Bookmark UI ---
+  const topFragment = document.createDocumentFragment();
+  const shownUrls = new Set();
+  let calcResultValue = null;
+  let bookmarkResults = [];
 
   if (appSearchMathPreference && !isBangSearch) {
-
     const mathResult = evaluateMath(queryLower.trim());
-
     const unitResult = mathResult === null ? evaluateUnits(queryLower.trim()) : null;
+    calcResultValue = mathResult !== null ? mathResult : unitResult;
 
-    const finalResult = mathResult !== null ? mathResult : unitResult;
+    if (calcResultValue !== null) {
+      const displayResult = String(calcResultValue);
+      const header = document.createElement('div');
+      header.className = 'result-header';
+      header.textContent = 'Calculator';
 
+      const item = document.createElement('div');
+      item.className = 'result-item calc-item';
+      item.dataset.copy = displayResult;
 
+      const left = document.createElement('div');
+      left.className = 'calc-left';
 
-    if (finalResult !== null) {
+      const icon = document.createElement('div');
+      icon.className = 'calc-icon';
+      icon.textContent = String.fromCodePoint(129518);
 
-      const displayResult = escapeHtml(String(finalResult));
+      const textWrap = document.createElement('div');
+      textWrap.className = 'calc-text';
 
-      calcHtml = `
+      const answer = document.createElement('div');
+      answer.className = 'calc-answer';
+      answer.textContent = displayResult;
 
-        <div class="result-header">Calculator</div>
+      const expression = document.createElement('div');
+      expression.className = 'calc-expression';
+      expression.textContent = query;
 
-        <div class="result-item calc-item" data-copy="${displayResult}">
+      textWrap.appendChild(answer);
+      textWrap.appendChild(expression);
+      left.appendChild(icon);
+      left.appendChild(textWrap);
 
-          <div class="calc-left">
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'calc-copy';
+      copyBtn.dataset.copy = displayResult;
+      copyBtn.textContent = 'Copy';
 
-            <div class="calc-icon">&#129518;</div>
+      item.appendChild(left);
+      item.appendChild(copyBtn);
 
-            <div class="calc-text">
-
-              <div class="calc-answer">${displayResult}</div>
-
-              <div class="calc-expression">${escapeHtml(query)}</div>
-
-            </div>
-
-          </div>
-
-          <button class="calc-copy" data-copy="${displayResult}">Copy</button>
-
-        </div>
-
-      `;
-
+      topFragment.appendChild(header);
+      topFragment.appendChild(item);
     }
-
   }
-
-
-
-  // --- B. Generate Bookmark HTML ---
-
-  let bookmarkHtml = '';
-
-  const shownUrls = new Set();
-
-  
 
   if (!isBangSearch) {
-
     const queryTerms = queryLower.trim().split(/\s+/).filter(Boolean);
-
-    const bookmarkResults = allBookmarks
-
+    bookmarkResults = allBookmarks
       .filter(b => {
-
         const title = (b.title || '').toLowerCase();
-
         const url = (b.url || '').toLowerCase();
-
         return queryTerms.every(term => title.includes(term) || url.includes(term));
-
       })
-
       .slice(0, 5);
 
-
-
     if (bookmarkResults.length > 0) {
-
-      bookmarkHtml += '<div class="result-header">Bookmarks</div>';
+      const header = document.createElement('div');
+      header.className = 'result-header';
+      header.textContent = 'Bookmarks';
+      topFragment.appendChild(header);
 
       bookmarkResults.forEach(bookmark => {
-
         const bookmarkUrl = bookmark.url || '';
-
         if (!bookmarkUrl) return;
-
         shownUrls.add(bookmarkUrl);
 
-        const safeTitle = escapeHtml(bookmark.title || 'No Title');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'result-item';
+        button.dataset.url = bookmarkUrl;
 
-        const safeUrl = escapeHtml(bookmarkUrl);
+        const favicon = document.createElement('img');
+        favicon.className = 'result-favicon';
+        favicon.dataset.faviconRawUrl = bookmarkUrl;
+        favicon.loading = 'lazy';
+        favicon.decoding = 'async';
+        favicon.alt = '';
 
-        bookmarkHtml += `
+        const info = document.createElement('div');
+        info.className = 'result-item-info';
 
-          <button type="button" class="result-item" data-url="${safeUrl}">
+        const label = document.createElement('strong');
+        label.className = 'result-label';
+        label.textContent = bookmark.title || 'No Title';
 
-            <img class="result-favicon" data-favicon-raw-url="${safeUrl}" loading="lazy" decoding="async" alt="">
-
-            <div class="result-item-info">
-
-              <strong class="result-label">${safeTitle}</strong>
-
-            </div>
-
-          </button>
-
-        `;
-
+        info.appendChild(label);
+        button.appendChild(favicon);
+        button.appendChild(info);
+        topFragment.appendChild(button);
       });
-
     }
-
   }
 
-
-
-  // --- C. Handle Bang Autocomplete Dropdown ---
-
+  // --- B. Handle Bang Autocomplete Dropdown ---
   if (isBangSearch) {
-
     const bangSuggestions = getBangSuggestions(queryLower);
-
-    
-
-    suggestionResultsContainer.innerHTML = '';
-
-    
-
-    let bangHtml = `<div class="result-header">Bang Shortcuts</div>`;
-
-    
+    const bangFragment = document.createDocumentFragment();
+    const header = document.createElement('div');
+    header.className = 'result-header';
+    header.textContent = 'Bang Shortcuts';
+    bangFragment.appendChild(header);
 
     if (bangSuggestions.length === 0) {
-
-      bangHtml += `<div class="result-item"><div class="result-item-info" style="justify-content:center; color:#888;">No matching bangs</div></div>`;
-
+      const item = document.createElement('div');
+      item.className = 'result-item';
+      const info = document.createElement('div');
+      info.className = 'result-item-info';
+      info.style.justifyContent = 'center';
+      info.style.color = '#888';
+      info.textContent = 'No matching bangs';
+      item.appendChild(info);
+      bangFragment.appendChild(item);
     } else {
-
       bangSuggestions.forEach(item => {
-
-        const safeName = escapeHtml(item.engine.name);
-
         const bangCode = `!${item.bang}`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'result-item';
+        button.dataset.bangInsert = `${bangCode} `;
 
-        bangHtml += `
+        const badge = document.createElement('span');
+        badge.className = 'bang-badge';
+        badge.textContent = bangCode;
+        button.appendChild(badge);
 
-          <button type="button" class="result-item" data-bang-insert="${bangCode} ">
+        if (item.engine && item.engine.symbolId) {
+          const engineIcon = createSvgIconElement(item.engine.symbolId);
+          if (engineIcon) {
+            button.appendChild(engineIcon);
+          }
+        }
 
-            <span class="bang-badge">${bangCode}</span>
-
-            ${item.engine.symbolId ? useSvgIcon(item.engine.symbolId) : ''}
-
-            <div class="result-item-info">
-
-              <strong class="result-label">${safeName}</strong>
-
-            </div>
-
-          </button>
-
-        `;
-
+        const info = document.createElement('div');
+        info.className = 'result-item-info';
+        const label = document.createElement('strong');
+        label.className = 'result-label';
+        label.textContent = item.engine?.name || '';
+        info.appendChild(label);
+        button.appendChild(info);
+        bangFragment.appendChild(button);
       });
-
     }
 
-    
-
-    suggestionResultsContainer.innerHTML = bangHtml;
-
-    
-
-    bookmarkResultsContainer.innerHTML = ''; 
-
+    suggestionResultsContainer.replaceChildren(bangFragment);
+    bookmarkResultsContainer.replaceChildren();
     lastBookmarkHtml = '';
+    lastSuggestionHtml = JSON.stringify(bangSuggestions.map(item => ({
+      bang: item.bang,
+      engineId: item.engine?.id || '',
+      name: item.engine?.name || '',
+      symbolId: item.engine?.symbolId || ''
+    })));
 
-    lastSuggestionHtml = bangHtml;
-
-    
-
-    applySelectionToCurrentResults(null, query); 
-
+    applySelectionToCurrentResults(null, query);
     updatePanelVisibility();
-
     return;
-
   }
-
-
 
   if (isStaleSearch(currentToken, queryLower)) return;
 
+  const topSignature = JSON.stringify({
+    calc: calcResultValue !== null ? { value: String(calcResultValue), query } : null,
+    bookmarks: bookmarkResults.map(bookmark => ({
+      url: bookmark.url || '',
+      title: bookmark.title || ''
+    }))
+  });
 
-
-  const topSectionHtml = calcHtml + bookmarkHtml;
-
-  if (topSectionHtml !== lastBookmarkHtml) {
-
-    bookmarkResultsContainer.innerHTML = topSectionHtml;
-
-    lastBookmarkHtml = topSectionHtml;
+  if (topSignature !== lastBookmarkHtml) {
+    bookmarkResultsContainer.replaceChildren(topFragment);
+    lastBookmarkHtml = topSignature;
     hydrateSearchResultFavicons(bookmarkResultsContainer);
-
   }
 
 
@@ -18484,128 +18847,110 @@ async function handleSearchInput() {
 
 
 
-  // --- F. Build Bottom Section HTML ---
-
-  let bottomHtml = '';
-
-  const searchIcon = useSvgIcon('search');
-
-  const clockIcon = useSvgIcon('historyClock');
-
-
+  // --- F. Build Bottom Section UI ---
+  const bottomFragment = document.createDocumentFragment();
 
   if (historyResults.length > 0) {
-
     const uniqueHistory = historyResults.filter(item => !shownUrls.has(item.url));
-
     if (uniqueHistory.length > 0) {
-
-      bottomHtml += `<div class="result-header">Recent History</div>`;
+      const header = document.createElement('div');
+      header.className = 'result-header';
+      header.textContent = 'Recent History';
+      bottomFragment.appendChild(header);
 
       uniqueHistory.forEach(item => {
-
         const url = item.url;
-
         const title = item.title || url;
 
-        bottomHtml += `
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'result-item result-item-history';
+        button.dataset.url = url;
 
-          <button type="button" class="result-item result-item-history" data-url="${escapeHtml(url)}">
+        const icon = createSvgIconElement('historyClock');
+        if (icon) {
+          button.appendChild(icon);
+        }
 
-            ${clockIcon}
+        const info = document.createElement('div');
+        info.className = 'result-item-info';
+        const label = document.createElement('strong');
+        label.className = 'result-label';
+        label.textContent = title;
+        info.appendChild(label);
 
-            <div class="result-item-info">
-
-              <strong class="result-label">${escapeHtml(title)}</strong>
-
-            </div>
-
-          </button>
-
-        `;
-
+        button.appendChild(info);
+        bottomFragment.appendChild(button);
       });
-
     }
-
   }
-
-
 
   if (suggestionResults === null) {
-
     attachHoverSync();
-
     return;
-
   }
-
-
 
   if (suggestionResults && suggestionResults.length > 0) {
-
-    const safeQuery = escapeHtml(query);
+    const header = document.createElement('div');
+    header.className = 'result-header';
+    header.textContent = `${currentSearchEngine.name} Search`;
+    bottomFragment.appendChild(header);
 
     const searchUrl = `${currentSearchEngine.url}${encodeURIComponent(query)}`;
+    const directButton = document.createElement('button');
+    directButton.type = 'button';
+    directButton.className = 'result-item result-item-suggestion';
+    directButton.dataset.url = searchUrl;
 
-    
-
-    bottomHtml += `<div class="result-header">${currentSearchEngine.name} Search</div>`;
-
-    bottomHtml += `
-
-      <button type="button" class="result-item result-item-suggestion" data-url="${escapeHtml(searchUrl)}">
-
-        ${searchIcon}
-
-        <div class="result-item-info">
-
-          <strong class="result-label">${safeQuery}</strong>
-
-        </div>
-
-      </button>
-
-    `;
-
-
+    const directIcon = createSvgIconElement('search');
+    if (directIcon) {
+      directButton.appendChild(directIcon);
+    }
+    const directInfo = document.createElement('div');
+    directInfo.className = 'result-item-info';
+    const directLabel = document.createElement('strong');
+    directLabel.className = 'result-label';
+    directLabel.textContent = query;
+    directInfo.appendChild(directLabel);
+    directButton.appendChild(directInfo);
+    bottomFragment.appendChild(directButton);
 
     suggestionResults.slice(0, 10).forEach(suggestion => {
-
       if (suggestion.toLowerCase() === query.toLowerCase()) return;
-
-      const safeSuggestion = escapeHtml(suggestion);
-
       const suggestionUrl = `${currentSearchEngine.url}${encodeURIComponent(suggestion)}`;
 
-      bottomHtml += `
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'result-item result-item-suggestion';
+      button.dataset.url = suggestionUrl;
 
-        <button type="button" class="result-item result-item-suggestion" data-url="${escapeHtml(suggestionUrl)}">
+      const icon = createSvgIconElement('search');
+      if (icon) {
+        button.appendChild(icon);
+      }
 
-          ${searchIcon}
+      const info = document.createElement('div');
+      info.className = 'result-item-info';
+      const label = document.createElement('strong');
+      label.className = 'result-label';
+      label.textContent = suggestion;
+      info.appendChild(label);
 
-          <div class="result-item-info">
-
-            <strong class="result-label">${safeSuggestion}</strong>
-
-          </div>
-
-        </button>
-
-      `;
-
+      button.appendChild(info);
+      bottomFragment.appendChild(button);
     });
-
   }
 
+  const bottomSignature = JSON.stringify({
+    history: historyResults.map(item => ({ url: item.url || '', title: item.title || '' })),
+    suggestions: suggestionResults ? suggestionResults.slice(0, 10) : [],
+    engine: currentSearchEngine.id || '',
+    query
+  });
 
-
-  if (bottomHtml !== lastSuggestionHtml) {
-
-    suggestionResultsContainer.innerHTML = bottomHtml;
-
-    lastSuggestionHtml = bottomHtml;
-
+  if (bottomSignature !== lastSuggestionHtml) {
+    suggestionResultsContainer.replaceChildren(bottomFragment);
+    lastSuggestionHtml = bottomSignature;
   }
 
 
@@ -18906,19 +19251,54 @@ function renderNewsItems(items, options = {}) {
   if (list.length === 0) {
     const message = options.emptyMessage || NEWS_EMPTY_MESSAGE;
     const hint = options.emptyHint || NEWS_EMPTY_HINT;
-    const hintMarkup = hint ? `<span class="news-empty-hint">${escapeHtml(hint)}</span>` : '';
-    newsList.innerHTML = `<li class="news-empty">${escapeHtml(message)}${hintMarkup}</li>`;
+    const empty = document.createElement('li');
+    empty.className = 'news-empty';
+    empty.textContent = message;
+    if (hint) {
+      const hintEl = document.createElement('span');
+      hintEl.className = 'news-empty-hint';
+      hintEl.textContent = hint;
+      empty.appendChild(hintEl);
+    }
+    newsList.replaceChildren(empty);
     return;
   }
-  newsList.innerHTML = list.map((item) => {
-    const title = escapeHtml(item.title);
-    const link = escapeHtml(item.link);
-    const description = escapeHtml(item.description || '');
-    const image = escapeHtml(item.image || '');
+  const fragment = document.createDocumentFragment();
+  list.forEach((item) => {
+    const title = String(item.title || '');
+    const link = String(item.link || '');
+    const description = String(item.description || '');
+    const image = String(item.image || '');
     const timeAgo = formatTimeAgo(item.publishedAt);
-    const timeMarkup = timeAgo ? `<div class="news-meta"><span class="news-time">${escapeHtml(timeAgo)}</span></div>` : '';
-    return `<li class="news-item" data-news-title="${title}" data-news-desc="${description}" data-news-image="${image}" data-news-link="${link}"><a class="news-title" href="${link}" target="_blank" rel="noreferrer noopener">${title}</a>${timeMarkup}</li>`;
-  }).join('');
+
+    const li = document.createElement('li');
+    li.className = 'news-item';
+    li.dataset.newsTitle = title;
+    li.dataset.newsDesc = description;
+    li.dataset.newsImage = image;
+    li.dataset.newsLink = link;
+
+    const anchor = document.createElement('a');
+    anchor.className = 'news-title';
+    anchor.href = link;
+    anchor.target = '_blank';
+    anchor.rel = 'noreferrer noopener';
+    anchor.textContent = title;
+    li.appendChild(anchor);
+
+    if (timeAgo) {
+      const meta = document.createElement('div');
+      meta.className = 'news-meta';
+      const time = document.createElement('span');
+      time.className = 'news-time';
+      time.textContent = timeAgo;
+      meta.appendChild(time);
+      li.appendChild(meta);
+    }
+
+    fragment.appendChild(li);
+  });
+  newsList.replaceChildren(fragment);
 }
 
 let newsHoverPreviewEl = null;
@@ -19830,7 +20210,7 @@ function showDeleteConfirm(message, options = {}) {
 
     // ---------- ICON ----------
 
-    iconSpan.innerHTML = '';
+    iconSpan.replaceChildren();
 
 
 
@@ -19841,11 +20221,13 @@ function showDeleteConfirm(message, options = {}) {
     if (previewIcon) {
       iconSpan.appendChild(previewIcon);
     } else if (isFolder) {
-      iconSpan.innerHTML = `
-        <div class="bookmark-icon-wrapper">
-          ${useSvgIcon('bookmarkFolderLarge')}
-        </div>
-      `;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bookmark-icon-wrapper';
+      const folderIcon = createSvgIconElement('bookmarkFolderLarge');
+      if (folderIcon) {
+        wrapper.appendChild(folderIcon);
+      }
+      iconSpan.appendChild(wrapper);
     } else if (faviconUrl) {
       const img = document.createElement('img');
       img.src = faviconUrl;
@@ -20034,7 +20416,11 @@ async function searchForLocation(searchTerm) {
 
         item.className = 'location-result-item';
 
-        item.innerHTML = `${result.name}, <span>${result.admin1 || ''} ${result.country}</span>`;
+        item.textContent = '';
+        item.appendChild(document.createTextNode(`${result.name}, `));
+        const meta = document.createElement('span');
+        meta.textContent = `${result.admin1 || ''} ${result.country}`;
+        item.appendChild(meta);
 
         item.addEventListener('click', () => {
 
@@ -22106,6 +22492,56 @@ function logInitSettled(name, result) {
 
 
 
+  const positionContextMenuInViewport = (menuEl, clientX, clientY, opts = {}) => {
+    if (!menuEl) return;
+
+    ensureMenuMountedToBody(menuEl);
+
+    const margin = Number.isFinite(opts.margin) ? opts.margin : 8;
+    const docEl = document.documentElement;
+    const viewportWidth = (docEl && docEl.clientWidth) || window.innerWidth || 0;
+    const viewportHeight = (docEl && docEl.clientHeight) || window.innerHeight || 0;
+
+    const wasHidden = menuEl.classList.contains('hidden');
+    const prevVisibility = menuEl.style.visibility;
+    const prevDisplay = menuEl.style.display;
+    const prevPointerEvents = menuEl.style.pointerEvents;
+
+    if (wasHidden) {
+      menuEl.classList.remove('hidden');
+    }
+
+    menuEl.style.visibility = 'hidden';
+    menuEl.style.pointerEvents = 'none';
+
+    const computedDisplay = window.getComputedStyle(menuEl).display;
+    if (computedDisplay === 'none') {
+      menuEl.style.display = 'flex';
+    }
+
+    const rect = menuEl.getBoundingClientRect();
+    const menuWidth = rect.width || 0;
+    const menuHeight = rect.height || 0;
+
+    const maxLeft = Math.max(margin, viewportWidth - menuWidth - margin);
+    const maxTop = Math.max(margin, viewportHeight - menuHeight - margin);
+    const left = Math.min(Math.max(clientX, margin), maxLeft);
+    const top = Math.min(Math.max(clientY, margin), maxTop);
+
+    menuEl.style.visibility = prevVisibility;
+    menuEl.style.display = prevDisplay;
+    menuEl.style.pointerEvents = prevPointerEvents;
+
+    menuEl.style.left = `${left}px`;
+    menuEl.style.top = `${top}px`;
+
+    if (opts.show === true) {
+      menuEl.classList.remove('hidden');
+    } else if (wasHidden) {
+      menuEl.classList.add('hidden');
+    }
+  };
+
   window.addEventListener('click', hideAllContextMenus);
 
   window.addEventListener('blur', hideAllContextMenus);
@@ -22265,11 +22701,7 @@ function logInitSettled(name, result) {
 
 
 
-        targetMenu.style.top = `${e.clientY}px`;
-
-        targetMenu.style.left = `${e.clientX}px`;
-
-        targetMenu.classList.remove('hidden');
+        positionContextMenuInViewport(targetMenu, e.clientX, e.clientY, { show: true });
 
       });
 
@@ -22298,11 +22730,7 @@ function logInitSettled(name, result) {
 
       hideAllContextMenus();
 
-      gridBlankMenu.style.top = `${e.clientY}px`;
-
-      gridBlankMenu.style.left = `${e.clientX}px`;
-
-      gridBlankMenu.classList.remove('hidden');
+      positionContextMenuInViewport(gridBlankMenu, e.clientX, e.clientY, { show: true });
 
     });
 

@@ -147,23 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.4.1',
-  date: '2026-01-31',
+  version: '0.4.2',
+  date: '2026-02-04',
   items: [
     {
-      type: 'FIX',
-      title: 'Google Apps icons',
-      desc: 'Google Apps shortcuts now load icons from the new icon pack location.'
-    },
-    {
-      type: 'FIX',
-      title: 'Bookmark drag-and-drop',
-      desc: 'Sortable now loads from the bundled assets path to keep drag-and-drop working.'
+      type: 'NEW',
+      title: 'Welcome tip',
+      desc: 'First-time users now see a welcome tip with quick setup guidance.'
     },
     {
       type: 'IMPROVED',
-      title: 'Google icon pack',
-      desc: 'Google Apps assets are organized under a dedicated icon folder for consistent loading.'
+      title: 'Tip of the Day',
+      desc: 'Tips now animate in and out and remember the last viewed tip each day.'
+    },
+    {
+      type: 'FIX',
+      title: 'Context menus',
+      desc: 'Context menus now stay within the viewport instead of rendering off-screen.'
+    },
+    {
+      type: 'FIX',
+      title: 'Search suggestions',
+      desc: 'Suggestions no longer overwrite your query unless you explicitly select one.'
     }
   ]
 };
@@ -205,6 +210,19 @@ function useSvgIcon(name, className = '') {
   const classList = className || ICON_SYMBOL_CLASSES[name] || '';
   const classAttr = classList ? ` class="${classList}"` : '';
   return `<svg${classAttr} aria-hidden="true" focusable="false"><use href="#icon-${name}"></use></svg>`;
+}
+
+function createSvgIconElement(name, className = '') {
+  if (!name) return null;
+  const classList = className || ICON_SYMBOL_CLASSES[name] || '';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  if (classList) svg.setAttribute('class', classList);
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `#icon-${name}`);
+  svg.appendChild(use);
+  return svg;
 }
 
 function tintSvgElement(svg, color) {

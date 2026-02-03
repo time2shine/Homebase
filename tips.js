@@ -1,5 +1,14 @@
 window.HOMEBASE_TIPS = [
   {
+    "id": "welcome-tip",
+    "title": "Welcome to Homebase",
+    "body": "Open Settings to customize widgets, search, and wallpaper for your new tab.",
+    "tags": [
+      "welcome",
+      "getting-started"
+    ]
+  },
+  {
     "id": "search-math",
     "title": "Instant math in the search bar",
     "body": "Type an expression like `12*7` (or start with `=`) and Homebase can treat it as a calculator/search helper (toggleable in Settings).",

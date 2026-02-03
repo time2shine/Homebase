@@ -14,6 +14,16 @@
         el.textContent = nextStr;
       }
     }
+    function createSvgIconElement(name) {
+      if (!name) return null;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('focusable', 'false');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', `#icon-${name}`);
+      svg.appendChild(use);
+      return svg;
+    }
     function addClass(el, cls) {
       if (el) el.classList.add(cls);
     }
@@ -111,8 +121,34 @@
 
       if (searchWidget && searchInput && searchSelector) {
         if (s.placeholder) searchInput.placeholder = s.placeholder;
-        if (s.selectorHtml) {
-          searchSelector.innerHTML = s.selectorHtml;
+        if (s.selectorData && s.selectorData.name) {
+          const list = document.createElement('div');
+          list.className = 'search-engine-list';
+          list.style.transform = 'translateX(0px)';
+
+          const btn = document.createElement('div');
+          btn.className = 'engine-icon-btn active';
+          btn.style.setProperty('--engine-color', s.selectorData.color || '#333');
+
+          const tooltip = document.createElement('span');
+          tooltip.className = 'tooltip-popup tooltip-top';
+          tooltip.textContent = s.selectorData.name;
+          btn.appendChild(tooltip);
+
+          const iconEl = s.selectorData.symbolId ? createSvgIconElement(s.selectorData.symbolId) : null;
+          if (iconEl) {
+            btn.appendChild(iconEl);
+          } else {
+            const fallback = document.createElement('span');
+            fallback.style.fontWeight = 'bold';
+            fallback.style.fontSize = '12px';
+            fallback.style.color = '#555';
+            fallback.textContent = (s.selectorData.fallback || s.selectorData.name || '').charAt(0);
+            btn.appendChild(fallback);
+          }
+
+          list.appendChild(btn);
+          searchSelector.replaceChildren(list);
           searchSelector.classList.add('is-instant-fixed');
         }
         showWidget(searchWidget);

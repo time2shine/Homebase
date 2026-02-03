@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.4.2 — 2026-02-04
+### Added
+- Added a welcome tip for first-time Homebase users.
+### Improved
+- Tip of the Day now animates in and out and resumes the last viewed tip for the day.
+- Privacy policy clarifies search suggestion providers and what data is sent for weather and search.
+### Fixed
+- Context menus now stay within the viewport instead of rendering off-screen.
+- Search suggestions no longer overwrite your query unless you explicitly select one.
+
 ## v0.4.1 — 2026-01-31
 ### Added
 - None.

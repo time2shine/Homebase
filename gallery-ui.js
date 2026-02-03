@@ -830,33 +830,86 @@ window.GalleryUI = (() => {
         const titleText = item.title || 'Wallpaper';
         const needsMarquee = titleText.length > 20;
         const marqueeDuration = 6;
-        const binTopIcon = useSvgIcon('binTop');
-        const binBottomIcon = useSvgIcon('binBottom');
-        const binGarbageIcon = useSvgIcon('binGarbage');
-    
-        card.innerHTML = `
-          <button type="button" class="mw-card-remove bin-button" aria-label="Delete">
-            ${binTopIcon}
-            ${binBottomIcon}
-            ${binGarbageIcon}
-          </button>
-          <div class="mw-card-media">
-            <div class="mw-preview" data-wallpaper-id="${item.id}" data-kind="${isLive ? 'live' : 'static'}" data-media-loaded="false">
-              <div class="mw-preview-blur" style="background-image:url('${PLACEHOLDER_POSTER}')"></div>
-              <img class="mw-preview-media" alt="${titleText}" loading="lazy">
-              ${isLive ? '<video class="mw-preview-media mw-live-preview" muted loop playsinline preload="metadata" data-mw-pending="false"></video>' : ''}
-            </div>
-          </div>
-          <div class="mw-card-body">
-            <div class="mw-card-text">
-              <p class="mw-card-title ${needsMarquee ? 'mw-marquee' : ''}" ${needsMarquee ? `style="--mw-marquee-duration:${marqueeDuration}s"` : ''}><span>${titleText}</span></p>
-              <p class="mw-card-meta">${isLive ? 'Live upload' : 'Static upload'}</p>
-            </div>
-            <button type="button" class="mw-card-btn apply-button" data-id="${item.id}">
-              Apply
-            </button>
-          </div>
-        `;
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'mw-card-remove bin-button';
+        removeBtn.setAttribute('aria-label', 'Delete');
+
+        const binTopIcon = createSvgIconElement('binTop');
+        const binBottomIcon = createSvgIconElement('binBottom');
+        const binGarbageIcon = createSvgIconElement('binGarbage');
+        if (binTopIcon) removeBtn.appendChild(binTopIcon);
+        if (binBottomIcon) removeBtn.appendChild(binBottomIcon);
+        if (binGarbageIcon) removeBtn.appendChild(binGarbageIcon);
+
+        const mediaWrap = document.createElement('div');
+        mediaWrap.className = 'mw-card-media';
+
+        const preview = document.createElement('div');
+        preview.className = 'mw-preview';
+        preview.dataset.wallpaperId = item.id;
+        preview.dataset.kind = isLive ? 'live' : 'static';
+        preview.dataset.mediaLoaded = 'false';
+
+        const blur = document.createElement('div');
+        blur.className = 'mw-preview-blur';
+        blur.style.backgroundImage = `url('${PLACEHOLDER_POSTER}')`;
+
+        const img = document.createElement('img');
+        img.className = 'mw-preview-media';
+        img.alt = titleText;
+        img.loading = 'lazy';
+
+        preview.appendChild(blur);
+        preview.appendChild(img);
+
+        if (isLive) {
+          const video = document.createElement('video');
+          video.className = 'mw-preview-media mw-live-preview';
+          video.muted = true;
+          video.loop = true;
+          video.setAttribute('playsinline', '');
+          video.preload = 'metadata';
+          video.dataset.mwPending = 'false';
+          preview.appendChild(video);
+        }
+
+        mediaWrap.appendChild(preview);
+
+        const body = document.createElement('div');
+        body.className = 'mw-card-body';
+
+        const textWrap = document.createElement('div');
+        textWrap.className = 'mw-card-text';
+
+        const title = document.createElement('p');
+        title.className = `mw-card-title${needsMarquee ? ' mw-marquee' : ''}`;
+        if (needsMarquee) {
+          title.style.setProperty('--mw-marquee-duration', `${marqueeDuration}s`);
+        }
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = titleText;
+        title.appendChild(titleSpan);
+
+        const meta = document.createElement('p');
+        meta.className = 'mw-card-meta';
+        meta.textContent = isLive ? 'Live upload' : 'Static upload';
+
+        textWrap.appendChild(title);
+        textWrap.appendChild(meta);
+
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'mw-card-btn apply-button';
+        applyBtn.dataset.id = item.id;
+        applyBtn.textContent = 'Apply';
+
+        body.appendChild(textWrap);
+        body.appendChild(applyBtn);
+
+        card.appendChild(removeBtn);
+        card.appendChild(mediaWrap);
+        card.appendChild(body);
     
         return card;
       };

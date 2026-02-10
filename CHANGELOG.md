@@ -2,6 +2,14 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.4.4 — 2026-02-11
+### Added
+- None.
+### Improved
+- Container open actions now request the cookies permission only when you choose a container.
+### Fixed
+- Container bookmark opens no longer fail when cookies permission is missing; they fall back to a normal tab if denied.
+
 ## v0.4.3 — 2026-02-11
 ### Added
 - Weather setup now includes clear actions to choose a city or use your location.

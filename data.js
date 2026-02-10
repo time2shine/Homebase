@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.4.3',
+  version: '0.4.4',
   date: '2026-02-11',
   items: [
     {
-      type: 'NEW',
-      title: 'Weather setup actions',
-      desc: 'The Weather widget now offers clear options to choose a city or use your location.'
-    },
-    {
       type: 'IMPROVED',
-      title: 'Weather setup clarity',
-      desc: 'The setup prompt is centered and emphasized for quicker onboarding.'
+      title: 'On-demand container permission',
+      desc: 'The cookies permission is now requested only when you choose a container.'
     },
     {
       type: 'FIX',
-      title: 'Location permission',
-      desc: 'Geolocation is now requested only after you explicitly click to use your location.'
+      title: 'Container tab opens',
+      desc: 'Opening bookmarks in containers no longer fails with a cookieStoreId permission error.'
+    },
+    {
+      type: 'FIX',
+      title: 'Graceful container fallback',
+      desc: 'If the permission is denied, the bookmark opens normally without breaking the flow.'
     }
   ]
 };

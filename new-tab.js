@@ -21862,6 +21862,36 @@ async function setupContainerMode() {
 
 
 
+async function ensureCookiesPermissionForContainers() {
+  if (!browser || !browser.permissions || !browser.permissions.contains || !browser.permissions.request) {
+    return false;
+  }
+
+  try {
+    const has = await browser.permissions.contains({ permissions: ['cookies'] });
+    if (has) return true;
+
+    const request = await browser.permissions.request({ permissions: ['cookies'] });
+    return request === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function handleContainerPermissionDenied(urlOrUrls) {
+  console.warn('Cookies permission denied or unavailable; opening without container.');
+  if (!urlOrUrls) return;
+  const urls = Array.isArray(urlOrUrls) ? urlOrUrls : [urlOrUrls];
+  for (const url of urls) {
+    if (!url) continue;
+    try {
+      await browser.tabs.create({ url, active: true });
+    } catch (e) {
+      // Best-effort fallback only.
+    }
+  }
+}
+
 // Updated to accept targetId explicitly
 
 async function populateContainerMenu(targetId, isFolder = false) {
@@ -22048,6 +22078,32 @@ async function openFolderInContainer(folderId, cookieStoreId) {
 
 
 
+  if (!cookieStoreId) {
+    for (const child of folderNode.children) {
+      if (child.url) {
+        await browser.tabs.create({
+          url: child.url,
+          active: false
+        });
+      }
+    }
+    return;
+  }
+
+  const hasPermission = await ensureCookiesPermissionForContainers();
+  if (!hasPermission) {
+    const urls = [];
+    for (const child of folderNode.children) {
+      if (child.url) {
+        urls.push(child.url);
+      }
+    }
+    if (urls.length) {
+      await handleContainerPermissionDenied(urls);
+    }
+    return;
+  }
+
   for (const child of folderNode.children) {
 
     if (child.url) {
@@ -22156,7 +22212,38 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
 
     }
 
+    const openWithoutContainer = async () => {
+      if (appContainerNewTabPreference) {
+        await browser.tabs.create({
+          url: node.url,
+          active: false
+        });
+      } else {
+        const createProps = {
+          url: node.url,
+          active: true
+        };
 
+        if (currentTab && currentTab.id) {
+          createProps.index = currentTab.index + 1;
+          await browser.tabs.create(createProps);
+          await browser.tabs.remove(currentTab.id);
+        } else {
+          await browser.tabs.create(createProps);
+        }
+      }
+    };
+
+    if (!cookieStoreId) {
+      await openWithoutContainer();
+      return;
+    }
+
+    const hasPermission = await ensureCookiesPermissionForContainers();
+    if (!hasPermission) {
+      await handleContainerPermissionDenied(node.url);
+      return;
+    }
 
     if (appContainerNewTabPreference) {
 

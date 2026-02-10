@@ -2928,8 +2928,25 @@ input:checked + .toggle-label:before { transform: translateX(30px); background-c
 input:checked + .toggle-label .toggle-label-text { left: 8px; color: #333; }
 input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on); }
 
+#weather-setup {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  text-align: center;
+  padding: 10px 0;
+}
+.weather-setup-title {
+  font-size: 1.3em;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 6px 0;
+  text-align: center;
+}
+
 /* Save Buttons */
 #set-location-btn,
+#weather-choose-city-btn,
 #save-settings-btn,
 #save-quote-settings-btn {
   background-color: #f0f0f0;
@@ -2943,13 +2960,17 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   font-size: 1em;
   margin-top: 15px;
 }
-#set-location-btn {
+#set-location-btn,
+#weather-choose-city-btn {
   background-color: rgba(255, 255, 255, 0.8);
   border-radius: 20px;
   padding: 8px 12px;
+}
+#set-location-btn {
   margin-top: auto; /* Push to bottom */
 }
 #set-location-btn:hover,
+#weather-choose-city-btn:hover,
 #save-settings-btn:hover,
 #save-quote-settings-btn:hover {
   background-color: #fff;

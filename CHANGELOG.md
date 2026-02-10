@@ -2,6 +2,14 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.4.3 — 2026-02-11
+### Added
+- Weather setup now includes clear actions to choose a city or use your location.
+### Improved
+- Weather setup prompt is centered and more prominent for easier onboarding.
+### Fixed
+- Location permission prompts only appear after an explicit user click.
+
 ## v0.4.2 — 2026-02-04
 ### Added
 - Added a welcome tip for first-time Homebase users.

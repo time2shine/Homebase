@@ -147,28 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.4.2',
-  date: '2026-02-04',
+  version: '0.4.3',
+  date: '2026-02-11',
   items: [
     {
       type: 'NEW',
-      title: 'Welcome tip',
-      desc: 'First-time users now see a welcome tip with quick setup guidance.'
+      title: 'Weather setup actions',
+      desc: 'The Weather widget now offers clear options to choose a city or use your location.'
     },
     {
       type: 'IMPROVED',
-      title: 'Tip of the Day',
-      desc: 'Tips now animate in and out and remember the last viewed tip each day.'
+      title: 'Weather setup clarity',
+      desc: 'The setup prompt is centered and emphasized for quicker onboarding.'
     },
     {
       type: 'FIX',
-      title: 'Context menus',
-      desc: 'Context menus now stay within the viewport instead of rendering off-screen.'
-    },
-    {
-      type: 'FIX',
-      title: 'Search suggestions',
-      desc: 'Suggestions no longer overwrite your query unless you explicitly select one.'
+      title: 'Location permission',
+      desc: 'Geolocation is now requested only after you explicitly click to use your location.'
     }
   ]
 };

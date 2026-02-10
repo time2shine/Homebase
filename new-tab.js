@@ -19721,6 +19721,10 @@ const settingsBtn = document.getElementById('settings-btn');
 
 const setLocationBtn = document.getElementById('set-location-btn');
 
+const weatherSetup = document.getElementById('weather-setup');
+
+const weatherChooseCityBtn = document.getElementById('weather-choose-city-btn');
+
 const weatherSettingsModal = document.getElementById('weather-settings-modal');
 
 const weatherSettingsCloseBtn = document.getElementById('weather-settings-close-btn');
@@ -19741,12 +19745,35 @@ const weatherRefreshBtn = document.getElementById('weather-refresh-btn');
 
 const weatherUpdatedEl = document.getElementById('weather-updated');
 
+const weatherBody = weatherWidget ? weatherWidget.querySelector('.weather-body') : null;
+
+const weatherFooter = weatherWidget ? weatherWidget.querySelector('.weather-footer') : null;
+
 let selectedLocation = null;
 let searchTimeout = null;
 // Abort stale geocode lookups and ignore late responses
 let geoAbortController = null;
 let geoRequestId = 0;
 let weatherRefreshInFlight = false;
+
+function showWeatherSetupUI(options = {}) {
+  const { hideBody = true } = options;
+  if (weatherSetup) weatherSetup.classList.remove('hidden');
+  if (hideBody) {
+    if (weatherBody) weatherBody.classList.add('hidden');
+    if (weatherFooter) weatherFooter.classList.add('hidden');
+  } else {
+    if (weatherBody) weatherBody.classList.remove('hidden');
+    if (weatherFooter) weatherFooter.classList.remove('hidden');
+  }
+  revealWidget('.widget-weather');
+}
+
+function hideWeatherSetupUI() {
+  if (weatherSetup) weatherSetup.classList.add('hidden');
+  if (weatherBody) weatherBody.classList.remove('hidden');
+  if (weatherFooter) weatherFooter.classList.remove('hidden');
+}
 
 
 
@@ -19959,7 +19986,7 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now()) {
 
   if (iconEl && iconEl.style.lineHeight !== '1') iconEl.style.lineHeight = '1';
 
-  if (setLocationBtn) setLocationBtn.classList.add('hidden');
+  hideWeatherSetupUI();
 
   browser.storage.local.set({
 
@@ -20020,11 +20047,8 @@ function showWeatherError(error) {
   const updatedEl = document.getElementById('weather-updated');
   if (updatedEl) setText(updatedEl, '');
 
-  if (typeof setLocationBtn !== 'undefined' && setLocationBtn) {
-    setLocationBtn.classList.remove('hidden');
-  }
+  showWeatherSetupUI({ hideBody: false });
 
-  revealWidget('.widget-weather');
   browser.storage.local.remove(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
 }
 
@@ -20500,6 +20524,13 @@ async function setupWeather() {
     });
   }
 
+  if (weatherChooseCityBtn) {
+    weatherChooseCityBtn.addEventListener('click', async () => {
+      await openWeatherSettingsModal(weatherChooseCityBtn);
+      if (weatherLocationInput) weatherLocationInput.focus();
+    });
+  }
+
   if (weatherUseCurrentBtn) {
     weatherUseCurrentBtn.addEventListener('click', async () => {
       await browser.storage.local.remove(['weatherLat', 'weatherLon', 'weatherCityName']);
@@ -20521,7 +20552,7 @@ async function setupWeather() {
         if (data.weatherLat && data.weatherLon) {
           await fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName || 'Current Location');
         } else {
-          await startGeolocation();
+          showWeatherSetupUI();
         }
       } finally {
         weatherRefreshInFlight = false;
@@ -20576,7 +20607,7 @@ async function setupWeather() {
       if (data.weatherLat) {
         fetchWeather(data.weatherLat, data.weatherLon, data.weatherUnits, data.weatherCityName);
       } else {
-        startGeolocation();
+        showWeatherSetupUI();
       }
 
       closeWeatherSettingsModal();
@@ -20599,6 +20630,7 @@ async function setupWeather() {
   const WEATHER_TTL = 30 * 60 * 1000; // 30 Minutes
 
   if (data.weatherLat && data.weatherLon) {
+    hideWeatherSetupUI();
     // Only fetch if data is older than 30 mins
     if (now - lastFetch > WEATHER_TTL) {
       console.log('Weather cache expired. Fetching new data...');
@@ -20607,7 +20639,8 @@ async function setupWeather() {
       console.log('Using cached weather data.');
     }
   } else {
-    startGeolocation();
+    showWeatherSetupUI();
+    return;
   }
 
 }

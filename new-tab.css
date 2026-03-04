@@ -3231,6 +3231,10 @@ body.debug-align #quick-actions-bar {
   gap: 14px;
 }
 
+.app-settings-section[data-section="pro-tips"] {
+  gap: 14px;
+}
+
 .app-settings-whatsnew-header {
   padding: 14px 16px;
   border-radius: 12px;
@@ -3339,6 +3343,57 @@ body.debug-align #quick-actions-bar {
   border: 1px dashed #e2e8f0;
   color: #64748b;
   background: #f8fafc;
+}
+
+.app-settings-protips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-settings-protip-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.app-settings-protip-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  padding: 12px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.app-settings-protip-toggle:hover {
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.app-settings-protip-title {
+  line-height: 1.35;
+}
+
+.app-settings-protip-indicator {
+  min-width: 12px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.app-settings-protip-body {
+  border-top: 1px solid #e2e8f0;
+  padding: 10px 14px 12px;
+  color: #475569;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .app-settings-about-header {

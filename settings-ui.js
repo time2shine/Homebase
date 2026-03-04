@@ -1,7 +1,8 @@
 window.SettingsUI = (() => {
   let initialized = false;
-  const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'support', 'whats-new', 'about', 'privacy']);
+  const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'support', 'whats-new', 'pro-tips', 'about', 'privacy']);
   const WHATS_NEW_SECTION = 'whats-new';
+  const PRO_TIPS_SECTION = 'pro-tips';
   const WHATS_NEW_STORAGE_KEY = 'lastSeenWhatsNewVersion';
   const WHATS_NEW_LATEST_STORAGE_KEY = 'latestKnownWhatsNewVersion';
   const QR_MODAL_ANIM_MS = 220;
@@ -15,6 +16,7 @@ window.SettingsUI = (() => {
   let whatsNewChangelogPromise = null;
   let privacyPolicyCache = null;
   let privacyPolicyFetchPromise = null;
+  let openProTipId = '';
 
   function setSupportQrModalVars(qrEl) {
     if (!supportQrModal || !supportQrModalDialog || !qrEl) return;
@@ -418,6 +420,239 @@ window.SettingsUI = (() => {
     markWhatsNewSeen(data.version);
   }
 
+  function createProTipsNavItem() {
+    const navItem = document.createElement('button');
+    navItem.className = 'app-settings-nav-item';
+    navItem.dataset.section = PRO_TIPS_SECTION;
+    navItem.innerHTML = `
+      <span class="nav-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.09 14.37a5 5 0 1 0-6.18 0A7 7 0 0 0 5 21h14a7 7 0 0 0-3.91-6.63"></path><path d="M12 7h.01"></path></svg>
+      </span>
+      <span class="nav-label">Pro Tips</span>
+    `;
+    return navItem;
+  }
+
+  function createProTipsSection() {
+    const section = document.createElement('section');
+    section.className = 'app-settings-section';
+    section.dataset.section = PRO_TIPS_SECTION;
+
+    const header = document.createElement('div');
+    header.className = 'app-settings-whatsnew-header';
+
+    const title = document.createElement('div');
+    title.className = 'app-settings-whatsnew-title';
+    title.textContent = 'Pro Tips';
+    header.appendChild(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'app-settings-whatsnew-meta';
+    const line = document.createElement('div');
+    line.className = 'app-settings-whatsnew-line';
+    line.textContent = 'Tips are filtered by enabled settings when available.';
+    meta.appendChild(line);
+    header.appendChild(meta);
+    section.appendChild(header);
+
+    const list = document.createElement('div');
+    list.id = 'pro-tips-list';
+    list.className = 'app-settings-protips-list';
+    list.setAttribute('aria-live', 'polite');
+    section.appendChild(list);
+
+    section.addEventListener('click', (e) => {
+      const trigger = e.target.closest('.app-settings-protip-toggle');
+      if (!trigger) return;
+      const tipId = trigger.dataset.tipId;
+      if (!tipId) return;
+      openProTipId = openProTipId === tipId ? '' : tipId;
+      renderProTipsSection();
+    });
+
+    return section;
+  }
+
+  function readSettingStateById(settingId) {
+    if (typeof settingId !== 'string' || !settingId) return null;
+    const el = document.getElementById(settingId);
+    if (!el) return null;
+
+    if (el.matches('input[type="checkbox"]')) {
+      return !!el.checked;
+    }
+
+    if (el.matches('select')) {
+      const value = typeof el.value === 'string' ? el.value.trim() : '';
+      if (!value) return null;
+      if (value === '0' || value === 'false' || value === 'off' || value === 'none' || value === 'never' || value === 'disabled') {
+        return false;
+      }
+      return true;
+    }
+
+    return true;
+  }
+
+  function resolveSettingKeyEnabled(settingKey) {
+    switch (settingKey) {
+      case 'APP_SEARCH_MATH_KEY':
+        if (typeof appSearchMathPreference !== 'undefined') return !!appSearchMathPreference;
+        return readSettingStateById('app-search-math-toggle');
+      case 'APP_DEBUG_PERF_OVERLAY_KEY':
+        if (typeof debugPerfOverlayPreference !== 'undefined') return !!debugPerfOverlayPreference;
+        return readSettingStateById('app-perf-debug-overlay-toggle');
+      case 'APP_SHOW_SIDEBAR_KEY':
+        if (typeof appShowSidebarPreference !== 'undefined') return !!appShowSidebarPreference;
+        return readSettingStateById('app-show-sidebar-toggle');
+      case 'APP_SHOW_WEATHER_KEY':
+        if (typeof appShowWeatherPreference !== 'undefined') return !!appShowWeatherPreference;
+        return readSettingStateById('app-show-weather-toggle');
+      case 'APP_SHOW_QUOTE_KEY':
+        if (typeof appShowQuotePreference !== 'undefined') return !!appShowQuotePreference;
+        return readSettingStateById('app-show-quote-toggle');
+      case 'APP_SHOW_NEWS_KEY':
+        if (typeof appShowNewsPreference !== 'undefined') return !!appShowNewsPreference;
+        return readSettingStateById('app-show-news-toggle');
+      case 'APP_SHOW_TODO_KEY':
+        if (typeof appShowTodoPreference !== 'undefined') return !!appShowTodoPreference;
+        return readSettingStateById('app-show-todo-toggle');
+      case 'APP_NEWS_SOURCE_KEY':
+        if (typeof appShowNewsPreference !== 'undefined' && !appShowNewsPreference) return false;
+        return readSettingStateById('news-source-select');
+      case 'APP_SINGLETON_MODE_KEY':
+        if (typeof appSingletonModePreference !== 'undefined') return !!appSingletonModePreference;
+        return readSettingStateById('app-singleton-mode-toggle');
+      case 'APP_MAX_TABS_KEY':
+        if (typeof appMaxTabsPreference !== 'undefined') return Number(appMaxTabsPreference) > 0;
+        return readSettingStateById('app-max-tabs-select');
+      case 'APP_AUTOCLOSE_KEY':
+        if (typeof appAutoClosePreference !== 'undefined') return Number(appAutoClosePreference) > 0;
+        return readSettingStateById('app-autoclose-select');
+      default:
+        return null;
+    }
+  }
+
+  function evaluateTipSettingKeys(settingKeys) {
+    if (!Array.isArray(settingKeys) || !settingKeys.length) return null;
+    let resolved = false;
+    for (const key of settingKeys) {
+      const enabled = resolveSettingKeyEnabled(typeof key === 'string' ? key.trim() : '');
+      if (enabled === true) return true;
+      if (enabled === false) resolved = true;
+    }
+    return resolved ? false : null;
+  }
+
+  function evaluateTipSettingIds(settingIds) {
+    if (!Array.isArray(settingIds) || !settingIds.length) return null;
+    let resolved = false;
+    for (const id of settingIds) {
+      const state = readSettingStateById(typeof id === 'string' ? id.trim() : '');
+      if (state === true) return true;
+      if (state === false) resolved = true;
+    }
+    return resolved ? false : null;
+  }
+
+  function shouldIncludeTip(tip) {
+    const keysResult = evaluateTipSettingKeys(tip.settingKeys);
+    const idsResult = evaluateTipSettingIds(tip.settingIds);
+
+    if (keysResult === false || idsResult === false) {
+      return false;
+    }
+
+    if (keysResult === null && idsResult === null) {
+      return true;
+    }
+
+    return keysResult !== false && idsResult !== false;
+  }
+
+  function getFilteredProTips() {
+    const sourceTips = Array.isArray(window.HOMEBASE_TIPS) ? window.HOMEBASE_TIPS : [];
+    const uniqueTips = [];
+    const seenIds = new Set();
+
+    sourceTips.forEach((tip) => {
+      if (!tip || tip.id == null) return;
+      const id = String(tip.id).trim();
+      if (!id || seenIds.has(id)) return;
+      if (id === 'welcome-tip') return;
+      seenIds.add(id);
+
+      const title = tip.title == null ? '' : String(tip.title).trim();
+      const body = tip.body == null ? '' : String(tip.body).trim();
+      if (!title && !body) return;
+
+      uniqueTips.push({
+        id,
+        title: title || 'Untitled tip',
+        body,
+        settingKeys: Array.isArray(tip.settingKeys) ? tip.settingKeys : [],
+        settingIds: Array.isArray(tip.settingIds) ? tip.settingIds : []
+      });
+    });
+
+    return uniqueTips.filter(shouldIncludeTip);
+  }
+
+  function renderProTipsSection() {
+    const listEl = document.getElementById('pro-tips-list');
+    if (!listEl) return;
+
+    const tips = getFilteredProTips();
+    listEl.textContent = '';
+
+    if (!tips.length) {
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'app-settings-whatsnew-empty';
+      emptyEl.textContent = 'No tips available for the currently enabled settings.';
+      listEl.appendChild(emptyEl);
+      openProTipId = '';
+      return;
+    }
+
+    if (!tips.some((tip) => tip.id === openProTipId)) {
+      openProTipId = '';
+    }
+
+    tips.forEach((tip) => {
+      const isOpen = openProTipId === tip.id;
+      const item = document.createElement('article');
+      item.className = 'app-settings-protip-item';
+      item.classList.toggle('is-open', isOpen);
+
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'app-settings-protip-toggle';
+      trigger.dataset.tipId = tip.id;
+      trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+
+      const title = document.createElement('span');
+      title.className = 'app-settings-protip-title';
+      title.textContent = tip.title;
+
+      const indicator = document.createElement('span');
+      indicator.className = 'app-settings-protip-indicator';
+      indicator.textContent = isOpen ? '-' : '+';
+
+      trigger.appendChild(title);
+      trigger.appendChild(indicator);
+      item.appendChild(trigger);
+
+      const body = document.createElement('div');
+      body.className = 'app-settings-protip-body';
+      body.hidden = !isOpen;
+      body.textContent = tip.body;
+      item.appendChild(body);
+
+      listEl.appendChild(item);
+    });
+  }
+
   function setActiveAppSettingsSection(section = 'general') {
     const navItems = document.querySelectorAll('.app-settings-nav-item');
     const sections = document.querySelectorAll('.app-settings-section');
@@ -437,6 +672,11 @@ window.SettingsUI = (() => {
 
     if (section === WHATS_NEW_SECTION) {
       renderWhatsNewSection();
+      return;
+    }
+
+    if (section === PRO_TIPS_SECTION) {
+      renderProTipsSection();
     }
   }
 
@@ -623,13 +863,17 @@ window.SettingsUI = (() => {
     const appSettingsContent = document.querySelector('.app-settings-content');
     if (!appSettingsNav || !appSettingsContent) return;
 
-    const navOrder = ['backup', 'whats-new', 'support', 'privacy', 'about'];
+    const navOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, 'support', 'privacy', 'about'];
     const navItems = new Map();
 
     navOrder.forEach((section) => {
       let item = appSettingsNav.querySelector(`.app-settings-nav-item[data-section="${section}"]`);
-      if (!item && section === 'privacy') {
-        item = createPrivacyNavItem();
+      if (!item) {
+        if (section === 'privacy') {
+          item = createPrivacyNavItem();
+        } else if (section === PRO_TIPS_SECTION) {
+          item = createProTipsNavItem();
+        }
       }
       if (item) {
         navItems.set(section, item);
@@ -645,13 +889,17 @@ window.SettingsUI = (() => {
     const navDivider = appSettingsNav.querySelector('.nav-divider');
     appSettingsNav.insertBefore(navFragment, navDivider ? navDivider.nextSibling : null);
 
-    const panelOrder = ['backup', 'whats-new', 'support', 'privacy', 'about'];
+    const panelOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, 'support', 'privacy', 'about'];
     const panelItems = new Map();
 
     panelOrder.forEach((section) => {
       let panel = appSettingsContent.querySelector(`.app-settings-section[data-section="${section}"]`);
-      if (!panel && section === 'privacy') {
-        panel = createPrivacySection();
+      if (!panel) {
+        if (section === 'privacy') {
+          panel = createPrivacySection();
+        } else if (section === PRO_TIPS_SECTION) {
+          panel = createProTipsSection();
+        }
       }
       if (panel) {
         panelItems.set(section, panel);

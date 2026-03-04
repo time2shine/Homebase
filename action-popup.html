@@ -1,0 +1,52 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Save this page</title>
+  <link rel="stylesheet" href="action-popup.css">
+</head>
+<body>
+  <main class="popup popup-card" id="popup-card" aria-live="polite">
+    <header class="popup-header">
+      <h1 class="popup-title">Save this page</h1>
+      <button id="close-btn" class="icon-btn" type="button" aria-label="Close popup">&times;</button>
+    </header>
+
+    <p class="scope-line">Choose folder in <strong id="root-name">Loading...</strong></p>
+
+    <label class="search-wrap" for="folder-search">
+      <span class="search-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+          <path d="M10.5 3a7.5 7.5 0 0 1 5.98 12.03l3.75 3.74a1 1 0 1 1-1.42 1.42l-3.74-3.75A7.5 7.5 0 1 1 10.5 3zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z"></path>
+        </svg>
+      </span>
+      <input id="folder-search" type="search" placeholder="Search folders" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="create-row">
+      <button id="new-subfolder-btn" class="btn tertiary" type="button">New Subfolder</button>
+      <button id="new-root-folder-btn" class="btn tertiary" type="button">New Root Folder</button>
+    </div>
+
+    <div id="error-box" class="error-box hidden" role="alert"></div>
+    <button id="settings-hint" class="settings-hint hidden" type="button">Open Homebase settings</button>
+
+    <section class="section" aria-labelledby="recent-heading">
+      <h2 id="recent-heading" class="section-title">Recent Folders</h2>
+      <div id="recent-list" class="list" role="listbox" aria-label="Recent folders"></div>
+    </section>
+
+    <section class="section" aria-labelledby="folders-heading">
+      <h2 id="folders-heading" class="section-title">Subfolders</h2>
+      <div id="folder-list" class="list" role="listbox" aria-label="Folders under bookmark root"></div>
+    </section>
+
+    <footer class="actions">
+      <button id="cancel-btn" class="btn secondary" type="button">Cancel</button>
+      <button id="save-btn" class="btn primary" type="button" disabled>Save Bookmark</button>
+    </footer>
+  </main>
+
+  <script src="action-popup.js"></script>
+</body>
+</html>

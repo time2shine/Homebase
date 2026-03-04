@@ -9,6 +9,18 @@ window.HOMEBASE_TIPS = [
     ]
   },
   {
+    "id": "bang-search",
+    "title": "Use ! shortcuts to search instantly",
+    "body": "Type `!<shortcut> <query>` to switch engines on the fly. Examples: `!g cats` (Google), `!yt lo-fi` (YouTube), `!ddg privacy` (DuckDuckGo), `!w relativity` (Wikipedia), `!gh react` (GitHub), `!so fetch api` (StackOverflow), `!r linux` (Reddit), `!amz headphones` (Amazon), `!maps coffee` (Maps).",
+    "tags": ["search", "productivity"]
+  },
+  {
+    "id": "save-current-page",
+    "title": "Save the current page from the extension icon",
+    "body": "Click the Homebase extension icon to open “Save this page”. Pick a destination folder (recent folders appear first) and click “Save Bookmark”. Homebase checks for duplicates and won’t save restricted pages like chrome:// or about: URLs.",
+    "tags": ["bookmarks", "productivity"]
+  },
+  {
     "id": "search-math",
     "title": "Instant math in the search bar",
     "body": "Type an expression like `12*7` (or start with `=`) and Homebase can treat it as a calculator/search helper (toggleable in Settings).",
@@ -248,5 +260,53 @@ window.HOMEBASE_TIPS = [
     "settingIds": [
       "app-container-mode-toggle"
     ]
+  },
+  {
+    "id": "widgets-reorder",
+    "title": "Put your favorite widgets on top",
+    "body": "Reorder widgets so what you use most is always visible. Go to Settings → Widgets and drag items (Weather, Daily Quote, To-Do, News) into your preferred order.",
+    "tags": ["widgets", "ui", "productivity"]
+  },
+  {
+    "id": "performance-mode-battery",
+    "title": "Use Performance mode when on battery",
+    "body": "Reduce blur/glass effects to save battery and keep things smooth. In Settings → General, toggle Performance mode.",
+    "tags": ["performance", "ui"]
+  },
+  {
+    "id": "background-dim-readability",
+    "title": "Dim the background for readability",
+    "body": "Boost text contrast without changing your wallpaper. In Settings → General, raise Background Dim until widgets and search are easy to read.",
+    "tags": ["ui", "accessibility"]
+  },
+  {
+    "id": "search-engines-tidy",
+    "title": "Keep your search engines tidy",
+    "body": "Enable only the engines you actually use. Go to Settings → Search panel → Configure and toggle engines on/off.",
+    "tags": ["search", "productivity"]
+  },
+  {
+    "id": "bookmarks-root-folder",
+    "title": "Make bookmarks feel instant by choosing a root folder",
+    "body": "Go to Settings → Bookmarks → Change folder and pick a root folder that contains your most-used links. This keeps results clean and fast.",
+    "tags": ["bookmarks", "productivity"]
+  },
+  {
+    "id": "my-wallpapers-stash",
+    "title": "Keep your own stash in “My Wallpapers”",
+    "body": "Open Gallery → My Wallpapers and add your own images/videos. Great for long focus weeks when you don’t want daily rotation.",
+    "tags": ["wallpaper", "productivity"]
+  },
+  {
+    "id": "todo-3-item-focus",
+    "title": "Use To-Do as a 3-item daily focus",
+    "body": "Enable To-Do in Settings → Widgets, then keep only 3 priorities at a time so it stays useful (and not a backlog).",
+    "tags": ["todo", "productivity", "widgets"]
+  },
+  {
+    "id": "news-tune-noise",
+    "title": "Tune News so it stays helpful (not noisy)",
+    "body": "If News feels overwhelming, reduce sources/topics in Settings → Widgets → News → Configure—or keep News disabled for a quieter new tab.",
+    "tags": ["news", "widgets"]
   }
 ];

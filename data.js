@@ -147,23 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.4.4',
-  date: '2026-02-11',
+  version: '0.5.0',
+  date: '2026-03-04',
   items: [
     {
+      type: 'NEW',
+      title: 'Save this page popup',
+      desc: 'You can now save the current tab from the Homebase toolbar icon without opening Settings.'
+    },
+    {
+      type: 'NEW',
+      title: 'Pro Tips section',
+      desc: 'Settings now includes a Pro Tips panel with expandable guidance tailored to enabled options.'
+    },
+    {
       type: 'IMPROVED',
-      title: 'On-demand container permission',
-      desc: 'The cookies permission is now requested only when you choose a container.'
+      title: 'Faster folder targeting',
+      desc: 'The save popup prioritizes recent folders, supports search, and allows creating folders inline.'
     },
     {
       type: 'FIX',
-      title: 'Container tab opens',
-      desc: 'Opening bookmarks in containers no longer fails with a cookieStoreId permission error.'
-    },
-    {
-      type: 'FIX',
-      title: 'Graceful container fallback',
-      desc: 'If the permission is denied, the bookmark opens normally without breaking the flow.'
+      title: 'Safer bookmark saves',
+      desc: 'Saving now avoids restricted browser pages and prevents duplicate bookmarks in the same folder.'
     }
   ]
 };

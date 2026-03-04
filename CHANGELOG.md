@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.5.0 — 2026-03-04
+### Added
+- Added a Homebase toolbar popup to save the current page directly into your bookmark folders.
+- Added a Pro Tips section in Settings with expandable tip cards.
+### Improved
+- Save popup folder picking now surfaces recent folders first, supports search, and lets you create folders inline.
+- Added new practical tips for bang shortcuts and saving pages from the extension icon.
+### Fixed
+- Save actions now block restricted browser pages and prevent duplicate bookmarks in the selected folder.
+
 ## v0.4.4 — 2026-02-11
 ### Added
 - None.

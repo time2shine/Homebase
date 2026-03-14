@@ -1,4 +1,32 @@
 (function () {
+  const WALLPAPER_STARTUP_STATE_KEY = 'wallpaperStartupState';
+  const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
+  const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
+  const SKIP_STARTUP_WALLPAPER_FALLBACK_ATTR = 'data-skip-startup-wallpaper-fallback';
+
+  function getLocalDayStamp(ts) {
+    const date = new Date(ts || Date.now());
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function isDailyRotationDue(selectedAt, allowDailyRotation) {
+    const stamp = Number(selectedAt || 0);
+    if (allowDailyRotation === false || !Number.isFinite(stamp) || stamp <= 0) return false;
+    return getLocalDayStamp(stamp) !== getLocalDayStamp(Date.now());
+  }
+
+  function setSkipStartupWallpaperFallback(enabled) {
+    document.documentElement.toggleAttribute(SKIP_STARTUP_WALLPAPER_FALLBACK_ATTR, !!enabled);
+  }
+
+  function clearInitialWallpaper() {
+    document.documentElement.style.removeProperty('--initial-wallpaper');
+    delete document.documentElement.dataset.initialWallpaper;
+  }
+
   // Instant Background Dim (sync fast path)
   try {
     const raw = (window.localStorage && localStorage.getItem('fast-bg-dim')) || '';
@@ -81,6 +109,8 @@
   function applyInitial(url) {
     if (!url) return;
 
+    setSkipStartupWallpaperFallback(false);
+
     // 1. Store the raw URL so new-tab.js can compare without CSS normalization
     document.documentElement.dataset.initialWallpaper = url;
 
@@ -92,17 +122,26 @@
   // Fast path: synchronous localStorage
   let url = '';
   let dataUrl = '';
+  let skipInitialWallpaper = false;
   try {
     if (window.localStorage) {
       dataUrl = localStorage.getItem('cachedAppliedPosterDataUrl') || '';
       url = localStorage.getItem('cachedAppliedPosterUrl') || '';
+      const startupStateRaw = localStorage.getItem(WALLPAPER_STARTUP_STATE_KEY) || '';
+      if (startupStateRaw) {
+        const startupState = JSON.parse(startupStateRaw);
+        skipInitialWallpaper = isDailyRotationDue(startupState && startupState.selectedAt, startupState && startupState.dailyRotationEnabled);
+      }
     }
   } catch (e) {
     url = '';
     dataUrl = '';
+    skipInitialWallpaper = false;
   }
 
-  const initial = url || dataUrl;
+  setSkipStartupWallpaperFallback(skipInitialWallpaper);
+
+  const initial = skipInitialWallpaper ? '' : (url || dataUrl);
   if (initial) {
     applyInitial(initial);
   }
@@ -112,8 +151,18 @@
   if (!browserApi || !browserApi.storage || !browserApi.storage.local) return;
 
   browserApi.storage.local
-    .get(['cachedAppliedPosterDataUrl', 'cachedAppliedPosterUrl'])
+    .get(['cachedAppliedPosterDataUrl', 'cachedAppliedPosterUrl', WALLPAPER_SELECTION_KEY, DAILY_ROTATION_KEY])
     .then((res) => {
+      const selection = res && res[WALLPAPER_SELECTION_KEY];
+      const allowDailyRotation = !res || !Object.prototype.hasOwnProperty.call(res, DAILY_ROTATION_KEY) || res[DAILY_ROTATION_KEY] !== false;
+      if (isDailyRotationDue(selection && selection.selectedAt, allowDailyRotation)) {
+        setSkipStartupWallpaperFallback(true);
+        clearInitialWallpaper();
+        return;
+      }
+
+      setSkipStartupWallpaperFallback(false);
+
       const asyncDataUrl = res && res.cachedAppliedPosterDataUrl;
       const asyncUrl = res && res.cachedAppliedPosterUrl;
       const pick = asyncDataUrl || asyncUrl || '';

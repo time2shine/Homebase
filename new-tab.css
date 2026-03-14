@@ -51,6 +51,10 @@ body {
   will-change: transform;
 }
 
+:root[data-skip-startup-wallpaper-fallback] #wallpaper-layer {
+  background-image: var(--initial-wallpaper, none);
+}
+
 /* Ensure body::before is not used */
 body::before {
   display: none !important;

@@ -147,28 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.5.0',
-  date: '2026-03-04',
+  version: '0.5.1',
+  date: '2026-03-15',
   items: [
     {
-      type: 'NEW',
-      title: 'Save this page popup',
-      desc: 'You can now save the current tab from the Homebase toolbar icon without opening Settings.'
-    },
-    {
-      type: 'NEW',
-      title: 'Pro Tips section',
-      desc: 'Settings now includes a Pro Tips panel with expandable guidance tailored to enabled options.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Faster folder targeting',
-      desc: 'The save popup prioritizes recent folders, supports search, and allows creating folders inline.'
+      type: 'FIX',
+      title: 'Direct next wallpaper startup',
+      desc: 'When daily rotation is due at startup, Homebase now loads the next wallpaper instead of briefly showing the previous one.'
     },
     {
       type: 'FIX',
-      title: 'Safer bookmark saves',
-      desc: 'Saving now avoids restricted browser pages and prevents duplicate bookmarks in the same folder.'
+      title: 'No fallback wallpaper flash',
+      desc: 'Startup day-rollover now shows a neutral background instead of flashing the default fallback wallpaper image.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Smoother live wallpaper rollover',
+      desc: 'Video wallpapers keep the next poster visible while the next day’s background finishes loading.'
     }
   ]
 };

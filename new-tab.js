@@ -85,8 +85,10 @@ const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
 const CACHED_APPLIED_POSTER_CACHE_KEY = 'cachedAppliedPoster';
 
 const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
+const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
 const PENDING_DAILY_ROTATION_KEY = 'pendingDailyRotation';
 const PENDING_DAILY_ROTATION_SINCE_KEY = 'pendingDailyRotationSince';
+const WALLPAPER_STARTUP_STATE_KEY = 'wallpaperStartupState';
 const DAILY_ROTATION_SEEN_DELAY_MS = 8000;
 
 const WALLPAPER_CACHE_NAME = 'wallpaper-assets';
@@ -131,6 +133,48 @@ function getLocalDayStamp(ts) {
 function isNewLocalDay(prevTs, nowTs) {
 
   return getLocalDayStamp(prevTs || 0) !== getLocalDayStamp(nowTs || Date.now());
+
+}
+
+function isDailyWallpaperRotationDue(selection, allowDailyRotation, now = Date.now()) {
+
+  if (allowDailyRotation === false || !selection) return false;
+
+  const selectedAt = Number(selection.selectedAt || 0);
+
+  return Number.isFinite(selectedAt) && selectedAt > 0 && isNewLocalDay(selectedAt, now);
+
+}
+
+function syncWallpaperStartupState(selection, allowDailyRotation) {
+
+  try {
+
+    if (!window.localStorage) return;
+
+    if (!selection) {
+
+      localStorage.removeItem(WALLPAPER_STARTUP_STATE_KEY);
+
+      return;
+
+    }
+
+    const selectedAt = Number(selection.selectedAt || 0);
+
+    localStorage.setItem(WALLPAPER_STARTUP_STATE_KEY, JSON.stringify({
+
+      selectedAt: Number.isFinite(selectedAt) ? selectedAt : 0,
+
+      dailyRotationEnabled: allowDailyRotation !== false
+
+    }));
+
+  } catch (err) {
+
+    // Ignore; preload mirror is best-effort only
+
+  }
 
 }
 
@@ -1138,21 +1182,47 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
 
       WALLPAPER_SELECTION_KEY,
 
-      WALLPAPER_FALLBACK_USED_KEY
+      WALLPAPER_FALLBACK_USED_KEY,
+
+      DAILY_ROTATION_KEY,
+
+      PENDING_DAILY_ROTATION_KEY,
+
+      PENDING_DAILY_ROTATION_SINCE_KEY
 
     ]);
 
 
 
-    const selection = stored[WALLPAPER_SELECTION_KEY];
+    let selection = stored[WALLPAPER_SELECTION_KEY];
 
     const now = Date.now();
+    const allowDailyRotation = stored[DAILY_ROTATION_KEY] !== false;
 
+    if (selection && isDailyWallpaperRotationDue(selection, allowDailyRotation, now)) {
 
+      const manifest = await getVideosManifest();
+      const nextSelection = await pickNextWallpaper(manifest);
 
-    // Always use the current wallpaper poster first
+      if (nextSelection) {
+
+        selection = nextSelection;
+
+        await browser.storage.local.remove([
+
+          PENDING_DAILY_ROTATION_KEY,
+
+          PENDING_DAILY_ROTATION_SINCE_KEY
+
+        ]);
+
+      }
+
+    }
 
     if (selection) {
+
+      syncWallpaperStartupState(selection, allowDailyRotation);
 
       const hydrated = await hydrateWallpaperSelection(selection);
 
@@ -1185,6 +1255,8 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
       [WALLPAPER_FALLBACK_USED_KEY]: now
 
     });
+
+    syncWallpaperStartupState(fallbackSelection, allowDailyRotation);
 
   } catch (err) {
 
@@ -2632,7 +2704,7 @@ function schedulePendingDailyRotationAttempt() {
 
       }
 
-      const dueByDayChange = isNewLocalDay(selectedAt, now);
+      const dueByDayChange = isDailyWallpaperRotationDue(current, allowDailyRotation, now);
 
       if (!pending) return;
 
@@ -2727,7 +2799,7 @@ async function ensureDailyWallpaper(forceNext = false) {
   const allowDailyRotation = stored[DAILY_ROTATION_KEY] !== false;
   const pendingAlreadySet = stored[PENDING_DAILY_ROTATION_KEY] === true;
   const pendingSince = stored[PENDING_DAILY_ROTATION_SINCE_KEY] || 0;
-  const dueByDayChange = isNewLocalDay(current ? current.selectedAt : 0, now);
+  const dueByDayChange = isDailyWallpaperRotationDue(current, allowDailyRotation, now);
 
   if (pendingAlreadySet && !dueByDayChange) {
 
@@ -2798,6 +2870,8 @@ async function ensureDailyWallpaper(forceNext = false) {
   }
 
   if (current) {
+
+    syncWallpaperStartupState(current, allowDailyRotation);
 
     const hydratedSelection = await hydrateWallpaperSelection(current);
     await ensurePlayableSelection(hydratedSelection);
@@ -3825,8 +3899,6 @@ const wallpaperQualityToggle = document.getElementById('gallery-wallpaper-qualit
 const galleryDailyToggle = document.getElementById('gallery-daily-toggle');
 
 const FAVORITES_KEY = 'galleryFavorites';
-
-const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
 
 const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
 const WALLPAPER_QUALITY_KEY = 'wallpaperQualityPreference';
@@ -23097,6 +23169,19 @@ if (browser?.storage?.onChanged) {
   browser.storage.onChanged.addListener((changes, area) => {
 
     if (area !== 'local') return;
+
+    if (changes[WALLPAPER_SELECTION_KEY] || changes[DAILY_ROTATION_KEY]) {
+
+      const nextSelection = changes[WALLPAPER_SELECTION_KEY]
+        ? (changes[WALLPAPER_SELECTION_KEY].newValue || null)
+        : currentWallpaperSelection;
+      const allowDailyRotation = changes[DAILY_ROTATION_KEY]
+        ? changes[DAILY_ROTATION_KEY].newValue !== false
+        : dailyRotationPreference !== false;
+
+      syncWallpaperStartupState(nextSelection, allowDailyRotation);
+
+    }
 
 
 

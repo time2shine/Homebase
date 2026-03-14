@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.5.1 — 2026-03-15
+### Added
+- None.
+### Improved
+- Daily wallpaper rollover now keeps the next poster visible while the next live wallpaper loads.
+### Fixed
+- Daily wallpaper rotation due at startup now switches straight to the next wallpaper instead of briefly restoring the previous one.
+- Startup day-rollover no longer flashes the default fallback wallpaper image before the next wallpaper poster appears.
+
 ## v0.5.0 — 2026-03-04
 ### Added
 - Added a Homebase toolbar popup to save the current page directly into your bookmark folders.

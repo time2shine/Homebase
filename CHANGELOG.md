@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.5.2 — 2026-03-15
+### Added
+- None.
+### Improved
+- Bookmark and folder title, icon, and color edits now refresh only the affected visible tile when possible instead of rebuilding the whole grid.
+### Fixed
+- Renaming a bookmark from the Rename action or Edit dialog now updates the visible tile without clearing the bookmark grid.
+- Renaming a folder from the Rename action or Edit dialog now updates the visible tile without rebuilding the bookmark grid.
+
 ## v0.5.1 — 2026-03-15
 ### Added
 - None.

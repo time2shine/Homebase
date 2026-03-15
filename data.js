@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.5.1',
+  version: '0.5.2',
   date: '2026-03-15',
   items: [
     {
-      type: 'FIX',
-      title: 'Direct next wallpaper startup',
-      desc: 'When daily rotation is due at startup, Homebase now loads the next wallpaper instead of briefly showing the previous one.'
-    },
-    {
-      type: 'FIX',
-      title: 'No fallback wallpaper flash',
-      desc: 'Startup day-rollover now shows a neutral background instead of flashing the default fallback wallpaper image.'
-    },
-    {
       type: 'IMPROVED',
-      title: 'Smoother live wallpaper rollover',
-      desc: 'Video wallpapers keep the next poster visible while the next day’s background finishes loading.'
+      title: 'Lighter bookmark refreshes',
+      desc: 'Bookmark and folder title or appearance edits now update the visible tile directly when possible instead of rebuilding the whole grid.'
+    },
+    {
+      type: 'FIX',
+      title: 'Bookmark rename updates in place',
+      desc: 'Renaming a bookmark from the quick Rename action or the Edit dialog now updates the visible bookmark tile without clearing the grid.'
+    },
+    {
+      type: 'FIX',
+      title: 'Folder rename stays on screen',
+      desc: 'Renaming a folder from Rename or Edit now updates the visible folder tile without a full grid refresh.'
     }
   ]
 };

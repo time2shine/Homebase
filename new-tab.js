@@ -3453,6 +3453,8 @@ let virtualizerState = {
   lastEnd: -1
 };
 
+const METADATA_GRID_PATCH_LIMIT = 12;
+
 let sortableTimeout = null;
 
 const PERF_OVERLAY_CACHE_THROTTLE_MS = 5000;
@@ -5424,32 +5426,20 @@ async function handleBookmarkModalSave() {
         await getBookmarkTree(true); // Fallback if the node could not be patched
       }
 
+      if (currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
+        const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+        const updatedBookmarkNode = findBookmarkNodeById(bookmarkTree[0], bookmarkModalEditingId);
+        const isVisibleActiveChild = activeNode && Array.isArray(activeNode.children)
+          && activeNode.children.some((child) => child && child.id === bookmarkModalEditingId);
 
-
-      let folderToRender = null;
-
-      if (currentGridFolderNode) {
-
-        folderToRender = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
-
-      }
-
-      if (!folderToRender && activeHomebaseFolderId) {
-
-        folderToRender = findBookmarkNodeById(bookmarkTree[0], activeHomebaseFolderId);
-
-      }
-
-
-
-      if (folderToRender) {
-
-        renderBookmarkGrid(folderToRender);
-
-      } else {
-
-        loadBookmarks(activeHomebaseFolderId);
-
+        if (activeNode && updatedBookmarkNode && isVisibleActiveChild) {
+          const itemEl = findRenderedGridItemById(bookmarkModalEditingId);
+          if (itemEl) {
+            updateElementData(itemEl, updatedBookmarkNode);
+          } else if (!virtualizerState.isEnabled) {
+            renderBookmarkGrid(activeNode);
+          }
+        }
       }
 
 
@@ -7794,6 +7784,10 @@ async function handleEditFolderSave() {
 
 
   const newName = editFolderNameInput.value.trim();
+  const currentFolderNode = bookmarkTree && bookmarkTree[0]
+    ? findBookmarkNodeById(bookmarkTree[0], editFolderTargetId)
+    : null;
+  const nameChanged = !currentFolderNode || (currentFolderNode.title || '') !== newName;
 
   if (!newName) return alert('Name required');
 
@@ -7845,42 +7839,32 @@ async function handleEditFolderSave() {
 
     // 3. Save to Storage
 
+    let treePatched = false;
+    if (bookmarkTree && bookmarkTree[0]) {
+      treePatched = Boolean(updateNodeInTree(bookmarkTree[0], editFolderTargetId, {
+        title: newName
+      }));
+    }
+    if (!treePatched) {
+      await getBookmarkTree(true);
+    }
+
     await browser.storage.local.set({ [FOLDER_META_KEY]: folderMetadata });
 
+    if (nameChanged && currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
+      const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+      const updatedFolderNode = findBookmarkNodeById(bookmarkTree[0], editFolderTargetId);
+      const isVisibleActiveChild = activeNode && Array.isArray(activeNode.children)
+        && activeNode.children.some((child) => child && child.id === editFolderTargetId);
 
-
-    // 4. Refresh UI
-
-    await getBookmarkTree(true);
-
-
-
-    let folderToRender = null;
-
-    if (currentGridFolderNode) {
-
-      folderToRender = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
-
-    }
-
-
-
-    if (!folderToRender && activeHomebaseFolderId) {
-
-      folderToRender = findBookmarkNodeById(bookmarkTree[0], activeHomebaseFolderId);
-
-    }
-
-
-
-    if (folderToRender) {
-
-      renderBookmarkGrid(folderToRender);
-
-    } else {
-
-      loadBookmarks(editFolderTargetId);
-
+      if (activeNode && updatedFolderNode && isVisibleActiveChild) {
+        const itemEl = findRenderedGridItemById(editFolderTargetId);
+        if (itemEl) {
+          updateElementData(itemEl, updatedFolderNode);
+        } else if (!virtualizerState.isEnabled) {
+          renderBookmarkGrid(activeNode);
+        }
+      }
     }
 
 
@@ -10623,6 +10607,84 @@ function updateElementData(el, node) {
   }
 }
 
+function metadataEntriesEqual(previousEntry, nextEntry) {
+  if (previousEntry === nextEntry) return true;
+  if (!previousEntry || !nextEntry) return false;
+
+  const previousKeys = Object.keys(previousEntry);
+  const nextKeys = Object.keys(nextEntry);
+  if (previousKeys.length !== nextKeys.length) return false;
+
+  for (const key of previousKeys) {
+    if (!Object.prototype.hasOwnProperty.call(nextEntry, key) || previousEntry[key] !== nextEntry[key]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function getChangedMetadataIds(previousMetadata, nextMetadata) {
+  const previous = previousMetadata || {};
+  const next = nextMetadata || {};
+  const changedIds = new Set([
+    ...Object.keys(previous),
+    ...Object.keys(next)
+  ]);
+
+  return Array.from(changedIds).filter((id) => !metadataEntriesEqual(previous[id], next[id]));
+}
+
+function findRenderedGridItemById(itemId) {
+  if (!bookmarksGridEl || !itemId) return null;
+
+  const renderedItems = bookmarksGridEl.children;
+  for (let i = 0; i < renderedItems.length; i++) {
+    const item = renderedItems[i];
+    if (item?.dataset?.bookmarkId === itemId) {
+      return item;
+    }
+  }
+
+  return null;
+}
+
+function patchActiveGridMetadataItems(activeNode, changedIds) {
+  if (!activeNode || !Array.isArray(activeNode.children) || !changedIds.length) {
+    return false;
+  }
+
+  const changedIdSet = new Set(changedIds);
+  const relevantNodes = activeNode.children.filter((child) => child && changedIdSet.has(child.id));
+
+  if (!relevantNodes.length) {
+    return false;
+  }
+
+  if (relevantNodes.length > METADATA_GRID_PATCH_LIMIT) {
+    return true;
+  }
+
+  for (const node of relevantNodes) {
+    const itemEl = findRenderedGridItemById(node.id);
+
+    if (!itemEl) {
+      if (!virtualizerState.isEnabled) {
+        return true;
+      }
+      continue;
+    }
+
+    try {
+      updateElementData(itemEl, node);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
 
  * Setup listeners for scrolling and resizing
@@ -11268,27 +11330,24 @@ function showGridItemRenameInput(gridItem, bookmarkNode) {
 
         await browser.bookmarks.update(bookmarkNode.id, { title: newName });
 
-        
-
-        // Refresh the tree and re-render the current grid
-
-        const newTree = await getBookmarkTree(true);
-
-        
-
-        const activeGridNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
-
-        
-
-        if (activeGridNode) {
-
-          renderBookmarkGrid(activeGridNode); // This will remove the input
-
-        } else {
-
-          loadBookmarks(activeHomebaseFolderId); // Fallback
-
+        let treePatched = false;
+        if (bookmarkTree && bookmarkTree[0]) {
+          treePatched = Boolean(updateNodeInTree(bookmarkTree[0], bookmarkNode.id, {
+            title: newName
+          }));
         }
+        if (!treePatched) {
+          await getBookmarkTree(true);
+        }
+
+        const updatedNode = bookmarkTree && bookmarkTree[0]
+          ? findBookmarkNodeById(bookmarkTree[0], bookmarkNode.id)
+          : null;
+
+        if (updatedNode) {
+          updateElementData(gridItem, updatedNode);
+        }
+        cleanup();
 
         
 
@@ -23237,55 +23296,43 @@ if (browser?.storage?.onChanged) {
 
     }
 
+    let changedMetadataIds = null;
 
+    if (changes[FOLDER_META_KEY]) {
+      const nextFolderMetadata = changes[FOLDER_META_KEY].newValue || {};
+      changedMetadataIds = getChangedMetadataIds(changes[FOLDER_META_KEY].oldValue, nextFolderMetadata);
+      folderMetadata = nextFolderMetadata;
+    }
 
-      if (changes[FOLDER_META_KEY]) {
+    if (changes[BOOKMARK_META_KEY]) {
+      const nextBookmarkMetadata = changes[BOOKMARK_META_KEY].newValue || {};
+      const changedBookmarkIds = getChangedMetadataIds(changes[BOOKMARK_META_KEY].oldValue, nextBookmarkMetadata);
+      changedMetadataIds = changedMetadataIds
+        ? Array.from(new Set([...changedMetadataIds, ...changedBookmarkIds]))
+        : changedBookmarkIds;
+      bookmarkMetadata = nextBookmarkMetadata;
+    }
 
-        folderMetadata = changes[FOLDER_META_KEY].newValue || {};
-
-
-
-        // If currently viewing a folder that changed elsewhere, refresh that grid
-
-        if (currentGridFolderNode && folderMetadata[currentGridFolderNode.id]) {
-
-          const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
-
-          if (activeNode) renderBookmarkGrid(activeNode);
-
-        }
-
+    if (changedMetadataIds?.length && currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
+      const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+      if (activeNode && patchActiveGridMetadataItems(activeNode, changedMetadataIds)) {
+        renderBookmarkGrid(activeNode);
       }
+    }
 
+    if (changes[DOMAIN_ICON_MAP_KEY]) {
+      domainIconMap = changes[DOMAIN_ICON_MAP_KEY].newValue || {};
+    }
 
+    if (changes[LAST_USED_BOOKMARK_FOLDER_KEY]) {
+      lastUsedBookmarkFolderId = changes[LAST_USED_BOOKMARK_FOLDER_KEY].newValue || null;
+    }
 
-      if (changes[BOOKMARK_META_KEY]) {
+    if (changes[HOMEBASE_BOOKMARK_ROOT_ID_KEY]) {
+      loadBookmarks();
+    }
 
-        bookmarkMetadata = changes[BOOKMARK_META_KEY].newValue || {};
-
-        if (currentGridFolderNode) {
-
-          const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
-
-          if (activeNode) renderBookmarkGrid(activeNode);
-
-        }
-
-      }
-
-      if (changes[DOMAIN_ICON_MAP_KEY]) {
-        domainIconMap = changes[DOMAIN_ICON_MAP_KEY].newValue || {};
-      }
-
-      if (changes[LAST_USED_BOOKMARK_FOLDER_KEY]) {
-        lastUsedBookmarkFolderId = changes[LAST_USED_BOOKMARK_FOLDER_KEY].newValue || null;
-      }
-
-      if (changes[HOMEBASE_BOOKMARK_ROOT_ID_KEY]) {
-        loadBookmarks();
-      }
-
-    });
+  });
 
 }
 

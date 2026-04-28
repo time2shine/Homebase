@@ -671,6 +671,35 @@ const DEBUG_STARTUP_PERF = (() => {
 const DEBUG_IDLE_STARTUP = DEBUG_STARTUP_PERF;
 const DEBUG_STARTUP_GUARDS = DEBUG_STARTUP_PERF;
 
+const HB_DEBUG_LOGS_KEY = 'homebaseDebugLogs';
+
+const DEBUG_HOMEBASE_LOGS = (() => {
+  try {
+    return (
+      localStorage.getItem(HB_DEBUG_LOGS_KEY) === '1' ||
+      localStorage.getItem(HB_PERF_DEBUG_KEY) === '1' ||
+      new URLSearchParams(window.location.search).has('debug') ||
+      new URLSearchParams(window.location.search).has('perf')
+    );
+  } catch (_) {
+    return false;
+  }
+})();
+
+function hbDebugLog(...args) {
+  if (!DEBUG_HOMEBASE_LOGS) return;
+  try {
+    console.log(...args);
+  } catch (_) {}
+}
+
+function hbDebugInfo(...args) {
+  if (!DEBUG_HOMEBASE_LOGS) return;
+  try {
+    console.info(...args);
+  } catch (_) {}
+}
+
 function hbPerfMark(name) {
   if (!DEBUG_STARTUP_PERF) return;
   try {
@@ -2727,7 +2756,7 @@ async function checkBatteryStatus() {
 
       if (!battery.charging) {
 
-        console.log('Battery mode detected: Pausing live wallpaper.');
+        hbDebugLog('Battery mode detected: Pausing live wallpaper.');
 
         return true;
 
@@ -14384,7 +14413,7 @@ async function manageHomebaseTabs() {
 
       await browser.tabs.remove(Array.from(tabsToClose));
 
-      console.log(`Cleaned up ${tabsToClose.size} extra Homebase tabs.`);
+      hbDebugInfo(`Cleaned up ${tabsToClose.size} extra Homebase tabs.`);
 
     }
 
@@ -20563,10 +20592,10 @@ async function setupWeather() {
     hideWeatherSetupUI();
     // Only fetch if data is older than 30 mins
     if (now - lastFetch > WEATHER_TTL) {
-      console.log('Weather cache expired. Fetching new data...');
+      hbDebugInfo('Weather cache expired. Fetching new data...');
       fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName);
     } else {
-      console.log('Using cached weather data.');
+      hbDebugInfo('Using cached weather data.');
     }
   } else {
     showWeatherSetupUI();
@@ -23737,11 +23766,15 @@ function cleanupUnusedObjectUrls(currentSelection) {
     }
   }
 
-  console.debug('cleanupUnusedObjectUrls', {
-    videoUrl: currentSelection && currentSelection.videoUrl,
-    videoCacheKey: currentSelection && currentSelection.videoCacheKey,
-    cacheEntries: Array.from(wallpaperObjectUrlCache.entries())
-  });
+  if (DEBUG_HOMEBASE_LOGS) {
+    try {
+      console.debug('cleanupUnusedObjectUrls', {
+        videoUrl: currentSelection && currentSelection.videoUrl,
+        videoCacheKey: currentSelection && currentSelection.videoCacheKey,
+        cacheEntries: Array.from(wallpaperObjectUrlCache.entries())
+      });
+    } catch (_) {}
+  }
 
   for (const [cacheKey, objectUrl] of wallpaperObjectUrlCache.entries()) {
 

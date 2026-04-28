@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.5.4 — 2026-04-29
+### Added
+- None.
+### Improved
+- Routine battery saver, weather, tab cleanup, and wallpaper messages now stay quiet during normal new tab use.
+- Troubleshooting details remain available when Homebase debug or performance logging is enabled.
+### Fixed
+- Wallpaper cleanup no longer prints detailed background data unless troubleshooting logs are turned on.
+
 ## v0.5.3 — 2026-04-29
 ### Added
 - None.

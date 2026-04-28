@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.5.3',
+  version: '0.5.4',
   date: '2026-04-29',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Lighter startup',
-      desc: 'The folder icon picker now loads only when you open it, helping the new tab stay lighter at launch.'
+      title: 'Quieter daily use',
+      desc: 'Routine background messages now stay out of the console during normal new tab use.'
     },
     {
       type: 'IMPROVED',
-      title: 'Startup troubleshooting',
-      desc: 'Optional performance logging now reports clearer startup timing details when troubleshooting slow loads.'
+      title: 'Opt-in diagnostics',
+      desc: 'Troubleshooting details remain available when Homebase debug or performance logging is enabled.'
     },
     {
       type: 'FIX',
-      title: 'Icon picker retry message',
-      desc: 'If the folder icon picker cannot load, Homebase now shows a clear retry message instead of failing silently.'
+      title: 'Wallpaper cleanup logs',
+      desc: 'Detailed wallpaper cleanup data no longer appears unless troubleshooting logs are turned on.'
     }
   ]
 };

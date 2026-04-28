@@ -654,8 +654,82 @@ const IDLE_TASK_BUDGET_MS = 12;
 const idleTaskQueue = [];
 const idleTaskLabels = new Map();
 let idleTaskScheduled = false;
-const DEBUG_IDLE_STARTUP = false;
-const DEBUG_STARTUP_GUARDS = false;
+
+const HB_PERF_DEBUG_KEY = 'homebasePerfDebug';
+
+const DEBUG_STARTUP_PERF = (() => {
+  try {
+    return (
+      localStorage.getItem(HB_PERF_DEBUG_KEY) === '1' ||
+      new URLSearchParams(window.location.search).has('perf')
+    );
+  } catch (_) {
+    return false;
+  }
+})();
+
+const DEBUG_IDLE_STARTUP = DEBUG_STARTUP_PERF;
+const DEBUG_STARTUP_GUARDS = DEBUG_STARTUP_PERF;
+
+function hbPerfMark(name) {
+  if (!DEBUG_STARTUP_PERF) return;
+  try {
+    if (typeof performance === 'undefined' || typeof performance.mark !== 'function') return;
+    performance.mark(`hb:${name}`);
+  } catch (_) {}
+}
+
+function hbPerfMeasure(name, start, end) {
+  if (!DEBUG_STARTUP_PERF) return;
+  try {
+    if (typeof performance === 'undefined' || typeof performance.measure !== 'function') return;
+    performance.measure(`hb:${name}`, `hb:${start}`, `hb:${end}`);
+  } catch (_) {}
+}
+
+function hbPerfTime(label, startTime, extra) {
+  if (!DEBUG_STARTUP_PERF) return;
+  try {
+    if (typeof performance === 'undefined' || typeof performance.now !== 'function') return;
+    const start = Number(startTime);
+    if (!Number.isFinite(start)) return;
+    const ms = performance.now() - start;
+    if (!Number.isFinite(ms)) return;
+    const roundedMs = Math.round(ms * 100) / 100;
+    if (extra === undefined) {
+      console.log('[homebase perf]', label, roundedMs, 'ms');
+    } else {
+      console.log('[homebase perf]', label, roundedMs, 'ms', extra);
+    }
+  } catch (_) {}
+}
+
+function hbPerfReport() {
+  if (!DEBUG_STARTUP_PERF) return;
+  try {
+    if (
+      typeof performance === 'undefined' ||
+      typeof performance.getEntriesByType !== 'function'
+    ) return;
+    const rows = performance
+      .getEntriesByType('measure')
+      .filter(entry => entry && typeof entry.name === 'string' && entry.name.startsWith('hb:'))
+      .map(entry => ({
+        measure: entry.name,
+        ms: Math.round(entry.duration * 100) / 100,
+        startMs: Math.round(entry.startTime * 100) / 100
+      }));
+    if (!rows.length) return;
+    if (typeof console !== 'undefined' && typeof console.table === 'function') {
+      console.table(rows);
+    } else if (typeof console !== 'undefined' && typeof console.log === 'function') {
+      console.log('[homebase perf]', rows);
+    }
+  } catch (_) {}
+}
+
+hbPerfMark('script-start');
+
 const STARTUP_IDLE_LABELS = new Set([
   'startup:loadCachedWeather',
   'startup:quoteIndex',
@@ -960,6 +1034,25 @@ function loadScriptOnce(src) {
   });
 
   return promise;
+}
+
+async function openBookmarkIconPicker(context = {}) {
+  try {
+    await loadScriptOnce('assets/js/icon-picker.js');
+
+    if (
+      !window.HomebaseIconPicker ||
+      typeof window.HomebaseIconPicker.open !== 'function'
+    ) {
+      throw new Error('HomebaseIconPicker failed to load');
+    }
+
+    return window.HomebaseIconPicker.open(context);
+  } catch (err) {
+    console.warn('Failed to open icon picker', err);
+    alert('Could not open the icon picker. Please try again.');
+    return null;
+  }
 }
 
 async function isFirefoxBrowser() {
@@ -7427,352 +7520,42 @@ function initBubbleSlider(containerId, min, max, initialValue, step, onUpdate) {
 
 
 
-// Duration must match the CSS animation (0.2s closing)
-
-const ICON_PICKER_CLOSE_DURATION = 200;
-
-
-
-function showBuiltinIconPicker(anchorButton) {
-
-  const overlay = document.getElementById('builtin-icon-picker-modal');
-
-  if (!overlay) return;
-
-
-
-  const dialog = overlay.querySelector('.popover-dialog');
-
-  const list = document.getElementById('builtin-icon-list');
-
-
-
-  // Reset scroll to top
-
-  if (list) list.scrollTop = 0;
-
-
-
-  // Clear manual positioning so CSS centering can take over; keep CSS left offset
-
-  if (dialog) {
-
-    dialog.style.top = '';
-
-  }
-
-
-
-  // Calculate transform origin from button to centered dialog
-
-  if (dialog && anchorButton) {
-
-    const btnRect = anchorButton.getBoundingClientRect();
-
-    const btnCenterX = btnRect.left + (btnRect.width / 2);
-
-    const btnCenterY = btnRect.top + (btnRect.height / 2);
-
-
-
-    // Dialog is centered in the viewport via flex; its center is screen center plus offset
-
-    const offsetX = 322; // matches CSS left shift
-
-    const dialogCenterX = (window.innerWidth / 2) + offsetX;
-
-    const dialogCenterY = window.innerHeight / 2;
-
-
-
-    const originX = btnCenterX - dialogCenterX;
-
-    const originY = btnCenterY - dialogCenterY;
-
-
-
-    dialog.style.setProperty(
-
-      '--popover-origin',
-
-      `calc(50% + ${originX}px) calc(50% + ${originY}px)`
-
-    );
-
-  }
-
-
-
-  overlay.classList.remove('hidden', 'closing');
-
-}
-
-
-
-function hideBuiltinIconPicker() {
-
-  const overlay = document.getElementById('builtin-icon-picker-modal');
-
-  if (!overlay || overlay.classList.contains('hidden')) return;
-
-
-
-  const dialog = overlay.querySelector('.popover-dialog');
-
-  let finished = false;
-
-
-
-  const finalizeClose = () => {
-
-    if (finished) return;
-
-    finished = true;
-
-    overlay.classList.add('hidden');
-
-    overlay.classList.remove('closing');
-
-    if (dialog) dialog.removeEventListener('animationend', finalizeClose);
-
-  };
-
-
-
-  overlay.classList.add('closing');
-
-
-
-  if (dialog) dialog.addEventListener('animationend', finalizeClose, { once: true });
-
-  // Fallback in case transitionend doesn't fire
-
-  setTimeout(finalizeClose, ICON_PICKER_CLOSE_DURATION + 50);
-
-}
-
-
-
 function setupBuiltInIconPicker() {
-
-  const builtinIconOverlay = document.getElementById('builtin-icon-picker-modal');
-
-  const builtinIconDialog = document.getElementById('builtin-icon-picker-dialog');
-
-  const builtinIconList = document.getElementById('builtin-icon-list');
-
   const triggerBtn = document.getElementById('edit-folder-builtin-btn');
 
-
-
-  // State to track original icon for hover-revert effect
-
-  let originalIconState = null;
-
-
-
-  if (!builtinIconOverlay || !builtinIconList || !triggerBtn || !builtinIconDialog) return;
-
-
-
-  const renderIcons = () => {
-
-    // Only render if empty to save performance
-
-    if (builtinIconList.children.length > 0) return;
-
-
-
-    builtinIconList.replaceChildren();
-
-    
-
-    Object.entries(ICON_CATEGORIES).forEach(([categoryName, iconKeys]) => {
-
-      const section = document.createElement('div');
-
-      section.className = 'icon-picker-category';
-
-      
-
-      const title = document.createElement('h4');
-
-      title.className = 'icon-picker-category-title';
-
-      title.textContent = categoryName;
-
-      section.appendChild(title);
-
-      
-
-      const grid = document.createElement('div');
-
-      grid.className = 'icon-picker-grid';
-
-      
-
-      iconKeys.forEach(key => {
-
-        const svgEl = createSvgIconElement(key);
-
-        if (!svgEl) return;
-
-
-
-        const btn = document.createElement('div');
-
-        btn.className = 'icon-picker-item';
-
-        btn.dataset.iconId = key;
-
-        // Use custom tooltip markup instead of native title
-
-        const tooltip = document.createElement('span');
-        tooltip.className = 'tooltip-popup tooltip-top';
-        tooltip.textContent = key;
-        btn.appendChild(tooltip);
-        btn.appendChild(svgEl);
-
-        
-
-        // --- 1. Real-time Hover Preview ---
-
-        btn.addEventListener('mouseenter', () => {
-
-          if (!editFolderTargetId) return;
-
-          updateEditPreview(`builtin:${key}`);
-
-        });
-
-
-
-        // --- 2. Select Icon (Save) ---
-
-        btn.addEventListener('click', (e) => {
-
-          e.stopPropagation();
-
-          if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
-
-          
-
-          const newIcon = `builtin:${key}`;
-
-          pendingFolderMeta[editFolderTargetId].icon = newIcon;
-
-          
-
-          // Update the "original" state so moving mouse away doesn't revert it
-
-          originalIconState = newIcon; 
-
-          
-
-          updateEditPreview();
-
-          hideBuiltinIconPicker();
-
-        });
-
-
-
-        grid.appendChild(btn);
-
-      });
-
-      
-
-      if (grid.children.length > 0) {
-
-        section.appendChild(grid);
-
-        builtinIconList.appendChild(section);
-
-      }
-
-    });
-
-  };
-
-
-
-  // --- 3. Revert on Mouse Leave (The whole list) ---
-
-  builtinIconList.addEventListener('mouseleave', () => {
-
-    if (!editFolderTargetId) return;
-
-    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
-
-
-
-    if (originalIconState) {
-
-      pendingFolderMeta[editFolderTargetId].icon = originalIconState;
-
-    } else {
-
-      delete pendingFolderMeta[editFolderTargetId].icon;
-
-    }
-
-    updateEditPreview();
-
-  });
-
-
+  if (!triggerBtn) return;
 
   triggerBtn.addEventListener('click', (e) => {
-
     e.preventDefault();
-
     e.stopPropagation();
 
-    renderIcons();
-
-    
-
-    if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
-
-    originalIconState = pendingFolderMeta[editFolderTargetId].icon || null;
-
-
-
-    // Show picker and reset scroll so it always starts at the top
-
-    showBuiltinIconPicker(triggerBtn);
-
-  });
-
-
-
-  // Close when clicking outside
-
-  builtinIconOverlay.addEventListener('click', (e) => {
-
-    if (!builtinIconDialog.contains(e.target)) {
-
-      hideBuiltinIconPicker();
-
-      
-
-      if (originalIconState) {
-
-        pendingFolderMeta[editFolderTargetId].icon = originalIconState;
-
-      } else {
-
-        if (pendingFolderMeta[editFolderTargetId]) delete pendingFolderMeta[editFolderTargetId].icon;
-
+    openBookmarkIconPicker({
+      anchorButton: triggerBtn,
+      iconCategories: ICON_CATEGORIES,
+      createSvgIconElement,
+      getCurrentIcon: () => pendingFolderMeta[editFolderTargetId]?.icon || null,
+      previewIcon: (icon) => {
+        if (!editFolderTargetId) return;
+        updateEditPreview(icon);
+      },
+      selectIcon: (icon) => {
+        if (!editFolderTargetId) return;
+        if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+        pendingFolderMeta[editFolderTargetId].icon = icon;
+        updateEditPreview();
+      },
+      revertIcon: (icon) => {
+        if (!editFolderTargetId) return;
+        if (!pendingFolderMeta[editFolderTargetId]) pendingFolderMeta[editFolderTargetId] = {};
+        if (icon) {
+          pendingFolderMeta[editFolderTargetId].icon = icon;
+        } else {
+          delete pendingFolderMeta[editFolderTargetId].icon;
+        }
+        updateEditPreview();
       }
-
-      updateEditPreview();
-
-    }
-
+    });
   });
-
 }
 
 
@@ -12189,6 +11972,11 @@ async function confirmFolderPickerSelection() {
 
 async function loadBookmarks(activeFolderId = null) {
 
+  const loadBookmarksStart =
+    DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : 0;
+
   beginBookmarksBoot();
   if (!browser.bookmarks) {
 
@@ -12203,7 +11991,12 @@ async function loadBookmarks(activeFolderId = null) {
 
   try {
 
+    const treeStart =
+      DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : 0;
     const tree = await getBookmarkTree(true);
+    hbPerfTime('bookmarks getBookmarkTree', treeStart);
     const treeRoot = tree && tree[0];
     if (!treeRoot) {
       console.warn('Bookmark tree is empty.');
@@ -12251,7 +12044,12 @@ async function loadBookmarks(activeFolderId = null) {
 
     hideBookmarksEmptyState();
     showBookmarksUI();
+    const processStart =
+      DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : 0;
     processBookmarks([rootNode], activeFolderId, rootNode);
+    hbPerfTime('bookmarks process/render request', processStart);
 
   } catch (err) {
 
@@ -12260,6 +12058,7 @@ async function loadBookmarks(activeFolderId = null) {
 
   } finally {
     endBookmarksBoot();
+    hbPerfTime('loadBookmarks function total', loadBookmarksStart);
   }
 
 }
@@ -22448,6 +22247,7 @@ function logInitSettled(name, result) {
 // - ready flip must not wait for hydration
 // ===============================================
   async function initializePage() {
+    hbPerfMark('init-start');
     let STARTUP_PHASE = 'critical';
     let markReadyCount = 0;
     performance.mark('init:start');
@@ -22465,7 +22265,14 @@ function logInitSettled(name, result) {
     waitForWallpaperReady(currentWallpaperSelection, type);
 
     performance.mark('init:parallel-start');
+    hbPerfMark('parallel-start');
     const parallelResults = await Promise.allSettled([settingsP, bookmarkMetaP, iconMapP, lastFolderP]);
+    hbPerfMark('parallel-done');
+    hbPerfMeasure(
+      'parallel-storage-loads',
+      'parallel-start',
+      'parallel-done'
+    );
     performance.mark('init:parallel-done');
     performance.measure('init:parallel', 'init:parallel-start', 'init:parallel-done');
 
@@ -22475,7 +22282,12 @@ function logInitSettled(name, result) {
     logInitSettled('loadDomainIconMap', iconMapResult);
     logInitSettled('loadLastUsedFolderId', lastFolderResult);
 
+    const folderMetaStart =
+      DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : 0;
     await loadFolderMetadata();
+    hbPerfTime('loadFolderMetadata', folderMetaStart);
 
     document.querySelectorAll('.sub-settings-container').forEach((container) => {
       ensureSubSettingsInner(container);
@@ -22530,7 +22342,13 @@ function logInitSettled(name, result) {
 
   try {
 
+    const bookmarksStart =
+      DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : 0;
     await loadBookmarks();
+    hbPerfTime('loadBookmarks total', bookmarksStart);
+    hbPerfMark('bookmarks-done');
 
   } catch (e) {
 
@@ -22556,6 +22374,23 @@ function logInitSettled(name, result) {
       if (DEBUG_STARTUP_GUARDS) console.warn('[startup guard] ready flip failed', err);
     }
     STARTUP_PHASE = 'ready';
+    if (DEBUG_STARTUP_PERF && b.classList.contains('ready')) {
+      hbPerfMark('ready-class');
+      hbPerfMeasure('script-to-ready-class', 'script-start', 'ready-class');
+      hbPerfMeasure('init-to-ready-class', 'init-start', 'ready-class');
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          hbPerfMark('after-ready-paint');
+          hbPerfMeasure(
+            'script-to-after-ready-paint',
+            'script-start',
+            'after-ready-paint'
+          );
+          hbPerfReport();
+        });
+      });
+    }
   };
 
   const loadCachedWeatherSafe = async () => {
@@ -23338,9 +23173,22 @@ if (browser?.storage?.onChanged) {
 
 
 document.addEventListener('DOMContentLoaded', () => {
+  hbPerfMark('dom-content-loaded');
+  hbPerfMeasure(
+    'script-to-dom-content-loaded',
+    'script-start',
+    'dom-content-loaded'
+  );
   renderTipOfDay();
   initAddonStoreDockLink();
 });
+
+if (DEBUG_STARTUP_PERF) {
+  window.addEventListener('load', () => {
+    hbPerfMark('window-load');
+    hbPerfMeasure('script-to-window-load', 'script-start', 'window-load');
+  });
+}
 
 
 initializePage();

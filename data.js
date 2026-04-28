@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.5.2',
-  date: '2026-03-15',
+  version: '0.5.3',
+  date: '2026-04-29',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Lighter bookmark refreshes',
-      desc: 'Bookmark and folder title or appearance edits now update the visible tile directly when possible instead of rebuilding the whole grid.'
+      title: 'Lighter startup',
+      desc: 'The folder icon picker now loads only when you open it, helping the new tab stay lighter at launch.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Startup troubleshooting',
+      desc: 'Optional performance logging now reports clearer startup timing details when troubleshooting slow loads.'
     },
     {
       type: 'FIX',
-      title: 'Bookmark rename updates in place',
-      desc: 'Renaming a bookmark from the quick Rename action or the Edit dialog now updates the visible bookmark tile without clearing the grid.'
-    },
-    {
-      type: 'FIX',
-      title: 'Folder rename stays on screen',
-      desc: 'Renaming a folder from Rename or Edit now updates the visible folder tile without a full grid refresh.'
+      title: 'Icon picker retry message',
+      desc: 'If the folder icon picker cannot load, Homebase now shows a clear retry message instead of failing silently.'
     }
   ]
 };

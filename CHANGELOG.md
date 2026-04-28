@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.5.3 — 2026-04-29
+### Added
+- None.
+### Improved
+- Folder icon picker loading now waits until you open the picker, keeping startup lighter.
+- Optional performance logging now reports clearer startup timing details when troubleshooting slow new tab loads.
+### Fixed
+- Folder icon picker load failures now show a clear retry message instead of failing silently.
+
 ## v0.5.2 — 2026-03-15
 ### Added
 - None.

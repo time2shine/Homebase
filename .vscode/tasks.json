@@ -22,7 +22,7 @@
         "${workspaceFolder}",
         "--verbose",
         "--firefox-profile",
-        "C:\\Users\\rokon\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles\\2cyyp2nk.homebase-dev",
+        "C:\\Users\\rokon\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles\\t2s94xii.default-release",
         "--keep-profile-changes"
       ],
       "group": {

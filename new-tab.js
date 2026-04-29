@@ -1,4 +1,4 @@
-// ===============================================
+﻿// ===============================================
 
 // --- GLOBAL ELEMENTS ---
 
@@ -1080,6 +1080,101 @@ async function openBookmarkIconPicker(context = {}) {
   } catch (err) {
     console.warn('Failed to open icon picker', err);
     alert('Could not open the icon picker. Please try again.');
+    return null;
+  }
+}
+
+async function ensureGalleryUi() {
+  await loadScriptOnce('gallery-ui.js');
+
+  if (
+    !window.HomebaseGallery ||
+    typeof window.HomebaseGallery.open !== 'function'
+  ) {
+    throw new Error('HomebaseGallery failed to load');
+  }
+
+  return window.HomebaseGallery;
+}
+
+function createGalleryContext() {
+  return {
+    getCurrentWallpaperSelection: () => currentWallpaperSelection,
+    setCurrentWallpaperSelection: (selection) => { currentWallpaperSelection = selection || null; },
+    getWallpaperSettings: () => ({
+      type: wallpaperTypePreference || 'video',
+      quality: wallpaperQualityPreference || 'low',
+      daily: dailyRotationPreference !== false
+    }),
+    getWallpaperTypePreferenceState: () => wallpaperTypePreference,
+    setWallpaperTypePreferenceState: (type) => {
+      wallpaperTypePreference = type === 'static' ? 'static' : 'video';
+    },
+    getWallpaperQualityPreference: () => wallpaperQualityPreference,
+    setWallpaperQualityPreference: (quality) => {
+      wallpaperQualityPreference = quality === 'high' ? 'high' : 'low';
+    },
+    getDailyRotationPreference: () => dailyRotationPreference,
+    setDailyRotationPreference: (enabled) => {
+      dailyRotationPreference = enabled !== false;
+    },
+    loadWallpaperTypePreference,
+    loadCurrentWallpaperSelection,
+    getWallpaperTypePreference,
+    setWallpaperTypePreference,
+    applyWallpaperByType,
+    rebuildCurrentSelectionFromGallery,
+    ensureDailyWallpaper,
+    getVideosManifest,
+    cacheGalleryPosters,
+    cacheAppliedWallpaperVideo,
+    cacheAppliedWallpaperPoster,
+    resolvePosterBlob,
+    cacheAsset,
+    hydrateWallpaperSelection,
+    ensurePlayableSelection,
+    getWallpaperUrls,
+    isGallerySelection,
+    isRemoteVideoUrl,
+    normalizeWallpaperCacheKey,
+    getCacheKeyVariants,
+    buildFallbackSelection,
+    applyWallpaperBackground,
+    setWallpaperFallbackPoster,
+    clearBackgroundVideos,
+    isPerformanceModeEnabled,
+    blobToDataUrl,
+    openModalWithAnimation,
+    closeModalWithAnimation,
+    showCustomDialog,
+    showCustomAlert,
+    scheduleIdleTask,
+    debounce,
+    storageLocalGet: (keys) => browser.storage.local.get(keys),
+    storageLocalSet: (items) => browser.storage.local.set(items),
+    storageLocalRemove: (keys) => browser.storage.local.remove(keys)
+  };
+}
+
+function notifyGalleryUiLoadFailure(err) {
+  console.warn('Failed to open gallery UI', err);
+  const message = 'Could not open the wallpaper gallery. Please try again.';
+  if (typeof showCustomAlert === 'function') {
+    showCustomAlert(message);
+  } else {
+    alert(message);
+  }
+}
+
+async function openWallpaperGallery(triggerSource = 'dock-gallery-btn') {
+  try {
+    const gallery = await ensureGalleryUi();
+    return await gallery.open({
+      triggerSource,
+      context: createGalleryContext()
+    });
+  } catch (err) {
+    notifyGalleryUiLoadFailure(err);
     return null;
   }
 }
@@ -3929,18 +4024,6 @@ const quickAddFolderBtn = document.getElementById('quick-add-folder');
 
 const quickOpenBookmarksBtn = document.getElementById('quick-open-bookmarks');
 
-const galleryModal = document.getElementById('gallery-modal');
-
-const galleryGrid = document.getElementById('gallery-grid');
-
-const galleryCloseBtn = document.getElementById('gallery-close-btn');
-
-const galleryAlternateBtn = document.getElementById('gallery-alternate-btn');
-
-const galleryActiveFilter = document.getElementById('gallery-active-filter');
-
-const galleryClearTagBtn = document.getElementById('gallery-clear-tag-btn');
-
 const dockGalleryBtn = document.getElementById('dock-gallery-btn');
 
 const addonStoreBtn = document.getElementById('addon-store-btn');
@@ -3950,18 +4033,6 @@ const addonStoreTooltip = document.getElementById('addon-store-tooltip');
 const addonStoreIcon = document.getElementById('addon-store-icon');
 
 const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
-
-const myWallpapersJumpBtn = document.getElementById('mw-jump-gallery-btn');
-
-const myWallpapersUseFallbackBtn = document.getElementById('mw-use-fallback-btn');
-
-const myWallpapersUploadBtn = document.getElementById('mw-upload-btn');
-
-const myWallpapersUploadInput = document.getElementById('mw-upload-input');
-
-const myWallpapersUploadLiveBtn = document.getElementById('mw-upload-live-btn');
-
-const myWallpapersUploadLiveInput = document.getElementById('mw-upload-live-input');
 
 const mainSettingsBtn = document.getElementById('main-settings-btn');
 
@@ -4813,37 +4884,12 @@ let folderMetadata = {};
 
 let lastUsedBookmarkFolderId = null;
 
-let galleryManifest = [];
-
-let galleryActiveFilterValue = 'all';
-
-let galleryActiveTag = null;
-
-let gallerySection = 'gallery'; // gallery | favorites | my-wallpapers | settings (future)
-
-const MY_WALLPAPERS_BATCH_SIZE = 24;
-
-let galleryFavorites = new Set();
-
 let currentWallpaperSelection = null;
 
 let wallpaperTypePreference = null; // 'video' | 'static'
 let wallpaperQualityPreference = 'low';
 let dailyRotationPreference = true;
 let initialWallpaperState = {};
-
-let galleryVirtualState = {
-  items: [],
-  itemHeight: 235,
-  itemWidth: 195,
-  gap: 10,
-  renderBuffer: 4,
-  itemsPerRow: 1
-};
-let galleryVirtualScrollHandler = null;
-let galleryVirtualResizeAttached = false;
-let galleryNodePool = [];
-let galleryPoolAttached = 0;
 
 let timeFormatPreference = '12-hour';
 
@@ -4910,34 +4956,6 @@ let debugPerfOverlayPreference = false;
 let appBatteryOptimizationPreference = false;
 
 let appCinemaModePreference = false;
-
-const galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
-
-const galleryEmptyState = document.getElementById('gallery-empty-state');
-
-const gallerySettingsPanel = document.getElementById('gallery-settings-panel');
-
-const galleryMyWallpapersPanel = document.getElementById('gallery-mywallpapers-panel');
-
-const myWallpapersGrid = document.getElementById('mywallpapers-grid');
-
-const myWallpapersEmptyCard = document.querySelector('.mywallpapers-empty-card');
-
-const galleryFiltersContainer = document.querySelector('.gallery-filters');
-
-const galleryActionsBar = document.querySelector('.gallery-actions');
-
-const galleryHeaderTitle = document.getElementById('gallery-header-title');
-
-const settingsPreviewVideo = document.getElementById('gallery-settings-preview-video');
-
-const settingsPreviewImg = document.getElementById('gallery-settings-preview-img');
-
-const settingsPreviewTitle = document.getElementById('gallery-settings-preview-title');
-
-const settingsPreviewAuthor = document.getElementById('gallery-settings-preview-author');
-
-
 
 function setNextWallpaperButtonLoading(isLoading) {
 
@@ -8484,7 +8502,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     saveButton.className = 'bookmark-folder-save-btn';
 
-    saveButton.textContent = '✓';
+    saveButton.textContent = '?';
 
     saveButton.title = 'Save Folder';
     saveButton.setAttribute('aria-label', 'Save folder');
@@ -8495,7 +8513,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     cancelButton.className = 'bookmark-folder-cancel-btn';
 
-    cancelButton.textContent = '✕';
+    cancelButton.textContent = '?';
 
     cancelButton.title = 'Cancel';
     cancelButton.setAttribute('aria-label', 'Cancel');
@@ -17038,7 +17056,7 @@ function showWeatherError(error) {
   if (error) console.error('Weather Error:', error);
 
   setText(document.getElementById('weather-city'), 'Weather Error');
-  setText(document.getElementById('weather-temp'), '--°');
+  setText(document.getElementById('weather-temp'), '--Â°');
   setText(document.getElementById('weather-desc'), 'Could not load data');
   setText(document.getElementById('weather-icon'), '-');
 
@@ -17835,16 +17853,7 @@ function setupDockNavigation() {
 
   if (dockGalleryBtn) {
 
-    dockGalleryBtn.addEventListener('click', async () => {
-      try {
-        await loadScriptOnce('gallery-ui.js');
-        if (window.GalleryUI && typeof window.GalleryUI.open === 'function') {
-          await window.GalleryUI.open({ triggerSource: 'dock-gallery-btn' });
-        }
-      } catch (err) {
-        console.warn('Failed to open gallery UI', err);
-      }
-    });
+    dockGalleryBtn.addEventListener('click', () => openWallpaperGallery('dock-gallery-btn'));
 
   }
 
@@ -20212,6 +20221,8 @@ async function loadWallpaperTypePreference() {
     appWallpaperTypeSelect.value = wallpaperTypePreference;
   }
 
+  return wallpaperTypePreference;
+
 }
 
 
@@ -20231,6 +20242,8 @@ async function loadCurrentWallpaperSelection() {
     currentWallpaperSelection = null;
 
   }
+
+  return currentWallpaperSelection;
 
 }
 
@@ -20304,19 +20317,6 @@ async function setWallpaperTypePreference(type) {
 }
 
 
-
-if (wallpaperTypeToggle && !wallpaperTypeToggle.dataset.typeListenerAttached) {
-  wallpaperTypeToggle.dataset.typeListenerAttached = 'true';
-
-  wallpaperTypeToggle.addEventListener('change', async (e) => {
-
-    const type = e.target.checked ? 'video' : 'static';
-
-    await setWallpaperTypePreference(type);
-
-  });
-
-}
 
 document.addEventListener('visibilitychange', () => {
 
@@ -20786,72 +20786,15 @@ function startBackgroundVideos() {
 
 function updateSettingsPreview(selection, type = 'video') {
 
-  const finalType = type === 'static' ? 'static' : 'video';
-
-  const perfModeOn = isPerformanceModeEnabled();
-
-  const poster = (selection && (selection.posterUrl || selection.poster)) || 'assets/fallback.webp';
-
-  const title = (selection && selection.title) || 'Wallpaper';
-
-  const author = (selection && selection.category) || '';
-
-
-
-  if (settingsPreviewTitle) settingsPreviewTitle.textContent = title;
-
-  if (settingsPreviewAuthor) settingsPreviewAuthor.textContent = author ? `Category: ${author}` : '';
-
-
-
-  if (!settingsPreviewImg || !settingsPreviewVideo) return;
-
-
-
-  if (!perfModeOn && finalType === 'video' && selection && selection.videoUrl) {
-
-    settingsPreviewVideo.classList.remove('hidden');
-
-    settingsPreviewImg.classList.add('hidden');
-
-    settingsPreviewVideo.poster = poster;
-
-    const srcEl = settingsPreviewVideo.querySelector('source');
-
-    if (srcEl) {
-
-      srcEl.src = selection.videoUrl;
-
-    } else {
-
-      settingsPreviewVideo.src = selection.videoUrl;
-
-    }
-
-    settingsPreviewVideo.load();
-
-    settingsPreviewVideo.play().catch(() => {});
-
-  } else {
-
-    settingsPreviewVideo.pause();
-
-    settingsPreviewVideo.removeAttribute('src');
-
-    const srcEl = settingsPreviewVideo.querySelector('source');
-
-    if (srcEl) srcEl.src = '';
-
-    settingsPreviewVideo.load();
-
-
-
-    settingsPreviewImg.src = poster;
-
-    settingsPreviewImg.classList.remove('hidden');
-
-    settingsPreviewVideo.classList.add('hidden');
-
+  if (
+    window.HomebaseGallery &&
+    typeof window.HomebaseGallery.refresh === 'function'
+  ) {
+    window.HomebaseGallery.refresh({
+      context: createGalleryContext(),
+      selection,
+      type
+    });
   }
 
 }

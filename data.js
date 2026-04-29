@@ -147,23 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.5.5',
+  version: '0.5.6',
   date: '2026-04-29',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Lighter bookmark tools',
-      desc: 'Bookmark add, edit, folder, move, and delete dialogs now load only when you use them.'
+      title: 'Lighter gallery startup',
+      desc: 'Wallpaper gallery setup now waits until you open the gallery, keeping normal new tabs lighter.'
     },
     {
       type: 'IMPROVED',
-      title: 'Faster new tabs',
-      desc: 'Homebase skips bookmark editor setup and saved icon lookups during normal startup.'
+      title: 'Synced wallpaper settings',
+      desc: 'Wallpaper type, quality, and daily rotation choices now stay aligned between Settings and the gallery.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Reliable custom wallpapers',
+      desc: 'My Wallpapers now restores cached posters and videos more consistently while previewing and applying uploads.'
     },
     {
       type: 'FIX',
-      title: 'Editor load feedback',
-      desc: 'If bookmark tools cannot open, Homebase now shows a clear retry message.'
+      title: 'Gallery load feedback',
+      desc: 'If the wallpaper gallery cannot open, Homebase now shows a clear retry message.'
     }
   ]
 };

@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.5.6 — 2026-04-29
+### Added
+- None.
+### Improved
+- Wallpaper gallery setup now loads on demand when you open it, keeping normal new tabs lighter.
+- Wallpaper type, quality, and daily rotation choices stay synced between Settings and the gallery.
+- My Wallpapers previews and applies uploaded wallpapers more reliably by restoring cached posters and videos.
+### Fixed
+- Wallpaper gallery load failures now show a clear retry message instead of failing silently.
+
 ## v0.5.5 — 2026-04-29
 ### Added
 - None.

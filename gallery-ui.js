@@ -1,13 +1,468 @@
-window.GalleryUI = (() => {
+window.HomebaseGallery = (() => {
   let initialized = false;
   let myWallpapersInstance = null;
+  let galleryContext = {};
+
+  const MY_WALLPAPERS_BATCH_SIZE = 24;
+  const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
+  const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
+  const WALLPAPER_CACHE_NAME = 'wallpaper-assets';
+  const GALLERY_POSTERS_CACHE_KEY = 'cachedGalleryPosters';
+  const USER_WALLPAPER_CACHE_PREFIX = 'https://user-wallpapers.local/';
+  const CACHED_APPLIED_POSTER_URL_KEY = 'cachedAppliedPosterUrl';
+  const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
+  const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
+  const FAVORITES_KEY = 'galleryFavorites';
+  const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
+  const WALLPAPER_QUALITY_KEY = 'wallpaperQualityPreference';
+
+  let galleryModal = null;
+  let galleryGrid = null;
+  let galleryCloseBtn = null;
+  let galleryAlternateBtn = null;
+  let galleryActiveFilter = null;
+  let galleryClearTagBtn = null;
+  let wallpaperTypeToggle = null;
+  let wallpaperQualityToggle = null;
+  let galleryDailyToggle = null;
+  let appDailyToggle = null;
+  let appWallpaperTypeSelect = null;
+  let appWallpaperQualitySelect = null;
+  let galleryFooterButtons = [];
+  let galleryEmptyState = null;
+  let gallerySettingsPanel = null;
+  let galleryMyWallpapersPanel = null;
+  let myWallpapersGrid = null;
+  let myWallpapersEmptyCard = null;
+  let galleryFiltersContainer = null;
+  let galleryActionsBar = null;
+  let galleryHeaderTitle = null;
+  let settingsPreviewVideo = null;
+  let settingsPreviewImg = null;
+  let settingsPreviewTitle = null;
+  let settingsPreviewAuthor = null;
+  let myWallpapersJumpBtn = null;
+  let myWallpapersUseFallbackBtn = null;
+  let myWallpapersUploadBtn = null;
+  let myWallpapersUploadInput = null;
+  let myWallpapersUploadLiveBtn = null;
+  let myWallpapersUploadLiveInput = null;
+
+  let galleryManifest = [];
+  let galleryActiveFilterValue = 'all';
+  let galleryActiveTag = null;
+  let gallerySection = 'gallery';
+  let galleryFavorites = new Set();
+  let currentWallpaperSelection = null;
+  let wallpaperTypePreference = null;
+  let wallpaperQualityPreference = 'low';
+  let dailyRotationPreference = true;
+  let galleryVirtualState = {
+    items: [],
+    itemHeight: 235,
+    itemWidth: 195,
+    gap: 10,
+    renderBuffer: 4,
+    itemsPerRow: 1
+  };
+  let galleryVirtualScrollHandler = null;
+  let galleryVirtualResizeAttached = false;
+  let galleryNodePool = [];
+  let galleryPoolAttached = 0;
+
+  function getContextCallback(name) {
+    return galleryContext && typeof galleryContext[name] === 'function'
+      ? galleryContext[name]
+      : null;
+  }
+
+  function callContextCallback(name, ...args) {
+    const fn = getContextCallback(name);
+    if (!fn) {
+      throw new Error(`HomebaseGallery missing context callback: ${name}`);
+    }
+    return fn(...args);
+  }
+
+  function syncStateFromContext() {
+    const getSelection = getContextCallback('getCurrentWallpaperSelection');
+    const getSettings = getContextCallback('getWallpaperSettings');
+    const getType = getContextCallback('getWallpaperTypePreferenceState');
+    const getQuality = getContextCallback('getWallpaperQualityPreference');
+    const getDaily = getContextCallback('getDailyRotationPreference');
+
+    if (getSelection) {
+      currentWallpaperSelection = getSelection() || null;
+    }
+
+    const settings = getSettings ? getSettings() : null;
+    const nextType = settings && settings.type ? settings.type : (getType ? getType() : wallpaperTypePreference);
+    const nextQuality = settings && settings.quality ? settings.quality : (getQuality ? getQuality() : wallpaperQualityPreference);
+    const nextDaily = settings && Object.prototype.hasOwnProperty.call(settings, 'daily')
+      ? settings.daily
+      : (getDaily ? getDaily() : dailyRotationPreference);
+
+    wallpaperTypePreference = nextType === 'static' ? 'static' : 'video';
+    wallpaperQualityPreference = nextQuality === 'high' ? 'high' : 'low';
+    dailyRotationPreference = nextDaily !== false;
+  }
+
+  function setContextWallpaperTypePreference(type) {
+    const fn = getContextCallback('setWallpaperTypePreferenceState');
+    if (fn) fn(type === 'static' ? 'static' : 'video');
+  }
+
+  function setContextCurrentWallpaperSelection(selection) {
+    const fn = getContextCallback('setCurrentWallpaperSelection');
+    if (fn) fn(selection || null);
+  }
+
+  function setContextWallpaperQualityPreference(quality) {
+    const fn = getContextCallback('setWallpaperQualityPreference');
+    if (fn) fn(quality === 'high' ? 'high' : 'low');
+  }
+
+  function setContextDailyRotationPreference(enabled) {
+    const fn = getContextCallback('setDailyRotationPreference');
+    if (fn) fn(enabled !== false);
+  }
+
+  function cacheGalleryElements() {
+    galleryModal = document.getElementById('gallery-modal');
+    galleryGrid = document.getElementById('gallery-grid');
+    galleryCloseBtn = document.getElementById('gallery-close-btn');
+    galleryAlternateBtn = document.getElementById('gallery-alternate-btn');
+    galleryActiveFilter = document.getElementById('gallery-active-filter');
+    galleryClearTagBtn = document.getElementById('gallery-clear-tag-btn');
+    wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
+    wallpaperQualityToggle = document.getElementById('gallery-wallpaper-quality-toggle');
+    galleryDailyToggle = document.getElementById('gallery-daily-toggle');
+    appDailyToggle = document.getElementById('app-daily-toggle');
+    appWallpaperTypeSelect = document.getElementById('app-wallpaper-type-select');
+    appWallpaperQualitySelect = document.getElementById('app-wallpaper-quality-select');
+    galleryFooterButtons = document.querySelectorAll('.gallery-footer-btn');
+    galleryEmptyState = document.getElementById('gallery-empty-state');
+    gallerySettingsPanel = document.getElementById('gallery-settings-panel');
+    galleryMyWallpapersPanel = document.getElementById('gallery-mywallpapers-panel');
+    myWallpapersGrid = document.getElementById('mywallpapers-grid');
+    myWallpapersEmptyCard = document.querySelector('.mywallpapers-empty-card');
+    galleryFiltersContainer = document.querySelector('.gallery-filters');
+    galleryActionsBar = document.querySelector('.gallery-actions');
+    galleryHeaderTitle = document.getElementById('gallery-header-title');
+    settingsPreviewVideo = document.getElementById('gallery-settings-preview-video');
+    settingsPreviewImg = document.getElementById('gallery-settings-preview-img');
+    settingsPreviewTitle = document.getElementById('gallery-settings-preview-title');
+    settingsPreviewAuthor = document.getElementById('gallery-settings-preview-author');
+    myWallpapersJumpBtn = document.getElementById('mw-jump-gallery-btn');
+    myWallpapersUseFallbackBtn = document.getElementById('mw-use-fallback-btn');
+    myWallpapersUploadBtn = document.getElementById('mw-upload-btn');
+    myWallpapersUploadInput = document.getElementById('mw-upload-input');
+    myWallpapersUploadLiveBtn = document.getElementById('mw-upload-live-btn');
+    myWallpapersUploadLiveInput = document.getElementById('mw-upload-live-input');
+  }
+
+  function configureGallery(options = {}) {
+    if (options.context && typeof options.context === 'object') {
+      galleryContext = options.context;
+    }
+
+    cacheGalleryElements();
+    syncStateFromContext();
+  }
+
+  function storageLocalGet(keys) {
+    const fn = getContextCallback('storageLocalGet');
+    return fn ? fn(keys) : browser.storage.local.get(keys);
+  }
+
+  function storageLocalSet(items) {
+    const fn = getContextCallback('storageLocalSet');
+    return fn ? fn(items) : browser.storage.local.set(items);
+  }
+
+  function storageLocalRemove(keys) {
+    const fn = getContextCallback('storageLocalRemove');
+    return fn ? fn(keys) : browser.storage.local.remove(keys);
+  }
+
+  function normalizeWallpaperCacheKey(cacheKey) {
+    const fn = getContextCallback('normalizeWallpaperCacheKey');
+    if (fn) return fn(cacheKey);
+    if (!cacheKey) return '';
+    if (/^https?:\/\//i.test(cacheKey)) return cacheKey;
+    return `${USER_WALLPAPER_CACHE_PREFIX}${encodeURIComponent(cacheKey)}`;
+  }
+
+  function getCacheKeyVariants(cacheKey) {
+    const fn = getContextCallback('getCacheKeyVariants');
+    if (fn) return fn(cacheKey);
+    if (!cacheKey) return [];
+    const normalized = normalizeWallpaperCacheKey(cacheKey);
+    const variants = [normalized];
+    if (normalized !== cacheKey) {
+      variants.push(cacheKey);
+    } else if (normalized.startsWith(USER_WALLPAPER_CACHE_PREFIX)) {
+      const legacy = normalized.slice(USER_WALLPAPER_CACHE_PREFIX.length);
+      if (legacy) variants.push(legacy);
+    }
+    return variants;
+  }
+
+  function dataUrlToBlob(dataUrl = '') {
+    const fn = getContextCallback('dataUrlToBlob');
+    if (fn) return fn(dataUrl);
+    if (!dataUrl) return null;
+    const parts = dataUrl.split(',');
+    if (parts.length < 2) return null;
+    const mimeMatch = parts[0].match(/data:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const binary = atob(parts[1]);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mime });
+  }
+
+  async function blobToDataUrl(blob) {
+    return callContextCallback('blobToDataUrl', blob);
+  }
+
+  async function getVideosManifest() {
+    return callContextCallback('getVideosManifest');
+  }
+
+  function cacheGalleryPosters(manifest = []) {
+    const fn = getContextCallback('cacheGalleryPosters');
+    if (fn) return fn(manifest);
+    return null;
+  }
+
+  function scheduleIdleTask(fn, label) {
+    const contextFn = getContextCallback('scheduleIdleTask');
+    if (contextFn) return contextFn(fn, label);
+    return window.setTimeout(fn, 0);
+  }
+
+  function debounce(func, wait) {
+    const fn = getContextCallback('debounce');
+    if (fn) return fn(func, wait);
+    let timeoutId = null;
+    return function debounced(...args) {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => func.apply(this, args), wait);
+    };
+  }
+
+  function showCustomDialog(title, message) {
+    const fn = getContextCallback('showCustomDialog');
+    if (fn) return fn(title, message);
+    alert(message || title || '');
+    return null;
+  }
+
+  function openModalWithAnimation(modalId, triggerSource, dialogSelector) {
+    return callContextCallback('openModalWithAnimation', modalId, triggerSource, dialogSelector);
+  }
+
+  function closeModalWithAnimation(modalId, dialogSelector, onCleanup) {
+    return callContextCallback('closeModalWithAnimation', modalId, dialogSelector, onCleanup);
+  }
+
+  function getWallpaperUrls(id) {
+    return callContextCallback('getWallpaperUrls', id);
+  }
+
+  function isGallerySelection(selection) {
+    const fn = getContextCallback('isGallerySelection');
+    return fn ? fn(selection) : Boolean(selection && selection.id);
+  }
+
+  function isRemoteVideoUrl(url) {
+    const fn = getContextCallback('isRemoteVideoUrl');
+    return fn ? fn(url) : /^https?:\/\/.+\.(mp4|webm)(\?|#|$)/i.test(url || '');
+  }
+
+  async function cacheAsset(url) {
+    return callContextCallback('cacheAsset', url);
+  }
+
+  async function hydrateFromMyWallpapers(selection) {
+    if (!selection) return selection;
+
+    const hydrated = { ...selection };
+    const myWallpapers = ensureMyWallpapers();
+
+    if (hydrated.videoCacheKey && (!hydrated.videoUrl || !String(hydrated.videoUrl).startsWith('blob:'))) {
+      const cachedVideo = await myWallpapers.getObjectUrl(hydrated.videoCacheKey);
+      if (cachedVideo) hydrated.videoUrl = cachedVideo;
+    }
+
+    const posterLookupKey = hydrated.posterCacheKey || '';
+    if (posterLookupKey && (!hydrated.posterUrl || !String(hydrated.posterUrl).startsWith('data:'))) {
+      const cachedPoster = await myWallpapers.getObjectUrl(posterLookupKey);
+      if (cachedPoster) hydrated.posterUrl = cachedPoster;
+    }
+
+    return hydrated;
+  }
+
+  async function hydrateWallpaperSelection(selection) {
+    const fn = getContextCallback('hydrateWallpaperSelection');
+    const hydrated = fn ? await fn(selection) : selection;
+    return hydrateFromMyWallpapers(hydrated);
+  }
+
+  async function ensurePlayableSelection(selection) {
+    const fn = getContextCallback('ensurePlayableSelection');
+    const ensured = fn ? await fn(selection) : selection;
+    return hydrateFromMyWallpapers(ensured);
+  }
+
+  function applyWallpaperByType(selection, type = 'video') {
+    return callContextCallback('applyWallpaperByType', selection, type);
+  }
+
+  async function loadWallpaperTypePreference() {
+    const fn = getContextCallback('loadWallpaperTypePreference');
+    if (fn) {
+      const loadedType = await fn();
+      syncStateFromContext();
+      if (loadedType) {
+        wallpaperTypePreference = loadedType === 'static' ? 'static' : 'video';
+      }
+    }
+
+    if (!wallpaperTypePreference) {
+      const stored = await storageLocalGet(WALLPAPER_TYPE_KEY);
+      wallpaperTypePreference = stored[WALLPAPER_TYPE_KEY] || 'video';
+    }
+
+    if (wallpaperTypeToggle) {
+      wallpaperTypeToggle.checked = wallpaperTypePreference === 'video';
+    }
+
+    if (appWallpaperTypeSelect) {
+      appWallpaperTypeSelect.value = wallpaperTypePreference;
+    }
+
+    setContextWallpaperTypePreference(wallpaperTypePreference);
+    return wallpaperTypePreference;
+  }
+
+  async function getWallpaperTypePreference() {
+    const fn = getContextCallback('getWallpaperTypePreference');
+    if (fn) {
+      const type = await fn();
+      wallpaperTypePreference = type === 'static' ? 'static' : 'video';
+      return wallpaperTypePreference;
+    }
+
+    if (!wallpaperTypePreference) {
+      await loadWallpaperTypePreference();
+    }
+
+    return wallpaperTypePreference || 'video';
+  }
+
+  async function setWallpaperTypePreference(type) {
+    const next = type === 'static' ? 'static' : 'video';
+    wallpaperTypePreference = next;
+    setContextWallpaperTypePreference(next);
+
+    const fn = getContextCallback('setWallpaperTypePreference');
+    if (fn) {
+      await fn(next);
+    } else {
+      await storageLocalSet({ [WALLPAPER_TYPE_KEY]: next });
+    }
+
+    return next;
+  }
+
+  async function loadCurrentWallpaperSelection() {
+    const fn = getContextCallback('loadCurrentWallpaperSelection');
+    if (fn) {
+      const selection = await fn();
+      syncStateFromContext();
+      if (selection) currentWallpaperSelection = selection;
+      return currentWallpaperSelection;
+    }
+
+    try {
+      const stored = await storageLocalGet(WALLPAPER_SELECTION_KEY);
+      const selection = stored[WALLPAPER_SELECTION_KEY] || null;
+      currentWallpaperSelection = await hydrateWallpaperSelection(selection);
+    } catch (err) {
+      currentWallpaperSelection = null;
+    }
+
+    return currentWallpaperSelection;
+  }
+
+  function rebuildCurrentSelectionFromGallery() {
+    return callContextCallback('rebuildCurrentSelectionFromGallery');
+  }
+
+  async function ensureDailyWallpaper(forceNext = false) {
+    return callContextCallback('ensureDailyWallpaper', forceNext);
+  }
+
+  function buildFallbackSelection(selectedAt = Date.now()) {
+    return callContextCallback('buildFallbackSelection', selectedAt);
+  }
+
+  function applyWallpaperBackground(posterUrl) {
+    return callContextCallback('applyWallpaperBackground', posterUrl);
+  }
+
+  function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
+    return callContextCallback('setWallpaperFallbackPoster', posterUrl, posterCacheKey);
+  }
+
+  function clearBackgroundVideos() {
+    return callContextCallback('clearBackgroundVideos');
+  }
+
+  function cacheAppliedWallpaperVideo(selection) {
+    const fn = getContextCallback('cacheAppliedWallpaperVideo');
+    if (fn) return fn(selection);
+    return null;
+  }
+
+  async function resolvePosterBlob(posterUrl, posterCacheKey = '') {
+    const fn = getContextCallback('resolvePosterBlob');
+    const contextBlob = fn ? await fn(posterUrl, posterCacheKey) : null;
+    if (contextBlob) return contextBlob;
+
+    const keys = getCacheKeyVariants(posterCacheKey || posterUrl || '');
+    if (!keys.length) return null;
+
+    try {
+      const cache = await caches.open('user-wallpapers-v1');
+      for (const key of keys) {
+        const match = await cache.match(key);
+        if (match) return await match.blob();
+      }
+    } catch (err) {
+      // ignore fallback cache read errors
+    }
+
+    return null;
+  }
+
+  async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
+    return callContextCallback('cacheAppliedWallpaperPoster', posterUrl, posterCacheKey);
+  }
+
+  function isPerformanceModeEnabled() {
+    const fn = getContextCallback('isPerformanceModeEnabled');
+    return fn ? fn() : false;
+  }
 
   function ensureMyWallpapers() {
     if (myWallpapersInstance) return myWallpapersInstance;
-    if (typeof MyWallpapers !== 'undefined' && MyWallpapers) {
-      myWallpapersInstance = MyWallpapers;
-      return myWallpapersInstance;
-    }
     myWallpapersInstance = (() => {
       const MY_WALLPAPERS_KEY = 'myWallpapers';
       const MY_WALLPAPER_CACHE = 'user-wallpapers-v1';
@@ -249,7 +704,7 @@ window.GalleryUI = (() => {
     
       const loadList = async () => {
         try {
-          const stored = await browser.storage.local.get(MY_WALLPAPERS_KEY);
+          const stored = await storageLocalGet(MY_WALLPAPERS_KEY);
           const storedItems = Array.isArray(stored[MY_WALLPAPERS_KEY]) ? stored[MY_WALLPAPERS_KEY] : [];
           return normalizeList(storedItems);
         } catch (err) {
@@ -259,7 +714,7 @@ window.GalleryUI = (() => {
     
       const saveList = async (list) => {
         try {
-          await browser.storage.local.set({ [MY_WALLPAPERS_KEY]: list });
+          await storageLocalSet({ [MY_WALLPAPERS_KEY]: list });
         } catch (err) {
           console.warn('Failed to save My Wallpapers', err);
         }
@@ -524,7 +979,7 @@ window.GalleryUI = (() => {
     
         let activeId = null;
         try {
-          const stored = await browser.storage.local.get(WALLPAPER_SELECTION_KEY);
+          const stored = await storageLocalGet(WALLPAPER_SELECTION_KEY);
           activeId = (currentWallpaperSelection || stored[WALLPAPER_SELECTION_KEY] || {}).id || null;
         } catch (err) {
           activeId = null;
@@ -1144,7 +1599,7 @@ window.GalleryUI = (() => {
         if (!lookupKey) return '';
     
         try {
-          const stored = await browser.storage.local.get([CACHED_APPLIED_POSTER_URL_KEY, CACHED_APPLIED_POSTER_DATA_URL_KEY]);
+          const stored = await storageLocalGet([CACHED_APPLIED_POSTER_URL_KEY, CACHED_APPLIED_POSTER_DATA_URL_KEY]);
           const cachedUrl = stored[CACHED_APPLIED_POSTER_URL_KEY];
           const cachedData = stored[CACHED_APPLIED_POSTER_DATA_URL_KEY];
           if (cachedData && cachedUrl && cachedUrl === lookupKey && typeof cachedData === 'string' && cachedData.startsWith('data:')) {
@@ -1160,7 +1615,7 @@ window.GalleryUI = (() => {
           const dataUrl = await fileToDataURL(blob);
           if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
             try {
-              await browser.storage.local.set({
+              await storageLocalSet({
                 [CACHED_APPLIED_POSTER_DATA_URL_KEY]: dataUrl,
                 [CACHED_APPLIED_POSTER_URL_KEY]: lookupKey
               });
@@ -1222,7 +1677,7 @@ window.GalleryUI = (() => {
         let originalTypePref = wallpaperTypePreference;
         if (preserveType) {
           try {
-            const storedType = await browser.storage.local.get(WALLPAPER_TYPE_KEY);
+            const storedType = await storageLocalGet(WALLPAPER_TYPE_KEY);
             if (storedType && storedType[WALLPAPER_TYPE_KEY]) {
               originalTypePref = storedType[WALLPAPER_TYPE_KEY];
             }
@@ -1263,12 +1718,13 @@ window.GalleryUI = (() => {
           hydratedSelection.posterUrl = quickPoster;
         }
     
-        await browser.storage.local.set({
+        await storageLocalSet({
           [WALLPAPER_SELECTION_KEY]: selection,
           [DAILY_ROTATION_KEY]: false
         });
     
         currentWallpaperSelection = hydratedSelection;
+        setContextCurrentWallpaperSelection(hydratedSelection);
         if (galleryDailyToggle) galleryDailyToggle.checked = false;
     
         if (!preserveType) {
@@ -1285,7 +1741,7 @@ window.GalleryUI = (() => {
               const isDataPoster = (hydratedSelection.posterUrl || '').startsWith('data:');
               const urlToStore = hydratedSelection.posterCacheKey || hydratedSelection.posterUrl || '';
               if (isDataPoster) {
-                await browser.storage.local.set({
+                await storageLocalSet({
                   [CACHED_APPLIED_POSTER_DATA_URL_KEY]: hydratedSelection.posterUrl,
                   [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore
                 });
@@ -1302,8 +1758,8 @@ window.GalleryUI = (() => {
               const blob = await resolvePosterBlob(hydratedSelection.posterUrl, hydratedSelection.posterCacheKey || hydratedSelection.posterUrl || '');
               if (blob && blob.size > 2 * 1024 * 1024) {
                 if (urlToStore) {
-                  await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore });
-                  await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+                  await storageLocalSet({ [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore });
+                  await storageLocalRemove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
                   try {
                     if (window.localStorage) {
                       localStorage.setItem('cachedAppliedPosterUrl', urlToStore);
@@ -1323,11 +1779,12 @@ window.GalleryUI = (() => {
           if (preserveType) {
             // Regression guard: ensure we didn't mutate global type preference when applying My Wallpapers
             try {
-              const storedType = await browser.storage.local.get(WALLPAPER_TYPE_KEY);
+              const storedType = await storageLocalGet(WALLPAPER_TYPE_KEY);
               const currentType = storedType ? storedType[WALLPAPER_TYPE_KEY] : undefined;
               if (originalTypePref !== undefined && currentType !== originalTypePref) {
-                await browser.storage.local.set({ [WALLPAPER_TYPE_KEY]: originalTypePref });
+                await storageLocalSet({ [WALLPAPER_TYPE_KEY]: originalTypePref });
                 wallpaperTypePreference = originalTypePref;
+                setContextWallpaperTypePreference(originalTypePref);
               }
             } catch (err) {
               // best-effort only
@@ -1356,7 +1813,7 @@ window.GalleryUI = (() => {
         if (target?.posterCacheKey) await cacheDelete(target.posterCacheKey);
     
         try {
-          const stored = await browser.storage.local.get(WALLPAPER_SELECTION_KEY);
+          const stored = await storageLocalGet(WALLPAPER_SELECTION_KEY);
           const activeSelection = currentWallpaperSelection || stored[WALLPAPER_SELECTION_KEY] || null;
           const activeId = activeSelection && activeSelection.id;
           const selectionKeys = new Set(
@@ -1374,9 +1831,11 @@ window.GalleryUI = (() => {
             const now = Date.now();
             const fallbackSelection = buildFallbackSelection(now);
             currentWallpaperSelection = fallbackSelection;
+            setContextCurrentWallpaperSelection(fallbackSelection);
             wallpaperTypePreference = 'video';
+            setContextWallpaperTypePreference('video');
             if (wallpaperTypeToggle) wallpaperTypeToggle.checked = false;
-            await browser.storage.local.set({
+            await storageLocalSet({
               [WALLPAPER_SELECTION_KEY]: fallbackSelection,
               [WALLPAPER_FALLBACK_USED_KEY]: now,
               [WALLPAPER_TYPE_KEY]: 'video'
@@ -1409,7 +1868,6 @@ window.GalleryUI = (() => {
         maybeEvictForSpace
       };
     })();
-    window.MyWallpapers = myWallpapersInstance;
     return myWallpapersInstance;
   }
 
@@ -1420,17 +1878,18 @@ window.GalleryUI = (() => {
       wallpaperQualityToggle.addEventListener('change', async (e) => {
         const newQuality = e.target.checked ? 'high' : 'low';
         wallpaperQualityPreference = newQuality;
+        setContextWallpaperQualityPreference(newQuality);
         if (appWallpaperQualitySelect) {
           appWallpaperQualitySelect.value = newQuality;
         }
-        await browser.storage.local.set({ [WALLPAPER_QUALITY_KEY]: newQuality });
+        await storageLocalSet({ [WALLPAPER_QUALITY_KEY]: newQuality });
         console.log('Wallpaper quality set to:', newQuality);
 
         const updatedSelection = rebuildCurrentSelectionFromGallery();
         if (!updatedSelection) return;
 
         // Persist updated selection so future loads use the new quality
-        await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: updatedSelection });
+        await storageLocalSet({ [WALLPAPER_SELECTION_KEY]: updatedSelection });
 
         await applyWallpaperByType(updatedSelection, wallpaperTypePreference);
       });
@@ -1442,10 +1901,11 @@ window.GalleryUI = (() => {
         const newType = e.target.checked ? 'video' : 'static';
 
         wallpaperTypePreference = newType;
+        setContextWallpaperTypePreference(newType);
         if (appWallpaperTypeSelect) {
           appWallpaperTypeSelect.value = newType;
         }
-        await browser.storage.local.set({ [WALLPAPER_TYPE_KEY]: newType });
+        await storageLocalSet({ [WALLPAPER_TYPE_KEY]: newType });
 
         if (currentWallpaperSelection) {
           console.log('Switching wallpaper type to:', newType);
@@ -1464,14 +1924,52 @@ window.GalleryUI = (() => {
       galleryDailyToggle.addEventListener('change', async (e) => {
         const isEnabled = e.target.checked;
         dailyRotationPreference = isEnabled;
+        setContextDailyRotationPreference(isEnabled);
         if (appDailyToggle) {
           appDailyToggle.checked = isEnabled;
         }
-        await browser.storage.local.set({ [DAILY_ROTATION_KEY]: isEnabled });
+        await storageLocalSet({ [DAILY_ROTATION_KEY]: isEnabled });
         if (isEnabled) {
           await ensureDailyWallpaper();
         }
       });
+    }
+  }
+
+  function updateSettingsPreview(selection, type = 'video') {
+    const finalType = type === 'static' ? 'static' : 'video';
+    const perfModeOn = isPerformanceModeEnabled();
+    const poster = (selection && (selection.posterUrl || selection.poster)) || 'assets/fallback.webp';
+    const title = (selection && selection.title) || 'Wallpaper';
+    const author = (selection && selection.category) || '';
+
+    if (settingsPreviewTitle) settingsPreviewTitle.textContent = title;
+    if (settingsPreviewAuthor) settingsPreviewAuthor.textContent = author ? `Category: ${author}` : '';
+
+    if (!settingsPreviewImg || !settingsPreviewVideo) return;
+
+    if (!perfModeOn && finalType === 'video' && selection && selection.videoUrl) {
+      settingsPreviewVideo.classList.remove('hidden');
+      settingsPreviewImg.classList.add('hidden');
+      settingsPreviewVideo.poster = poster;
+      const srcEl = settingsPreviewVideo.querySelector('source');
+      if (srcEl) {
+        srcEl.src = selection.videoUrl;
+      } else {
+        settingsPreviewVideo.src = selection.videoUrl;
+      }
+      settingsPreviewVideo.load();
+      settingsPreviewVideo.play().catch(() => {});
+    } else {
+      settingsPreviewVideo.pause();
+      settingsPreviewVideo.removeAttribute('src');
+      const srcEl = settingsPreviewVideo.querySelector('source');
+      if (srcEl) srcEl.src = '';
+      settingsPreviewVideo.load();
+
+      settingsPreviewImg.src = poster;
+      settingsPreviewImg.classList.remove('hidden');
+      settingsPreviewVideo.classList.add('hidden');
     }
   }
 
@@ -1536,7 +2034,7 @@ window.GalleryUI = (() => {
 
   const galleryPosterDataCache = async () => {
     try {
-      const stored = await browser.storage.local.get(GALLERY_POSTERS_CACHE_KEY);
+      const stored = await storageLocalGet(GALLERY_POSTERS_CACHE_KEY);
       const map = stored[GALLERY_POSTERS_CACHE_KEY] || {};
       return typeof map === 'object' && map !== null ? map : {};
     } catch (err) {
@@ -1546,7 +2044,7 @@ window.GalleryUI = (() => {
 
   const persistGalleryPosterDataCache = async (map) => {
     try {
-      await browser.storage.local.set({ [GALLERY_POSTERS_CACHE_KEY]: map });
+      await storageLocalSet({ [GALLERY_POSTERS_CACHE_KEY]: map });
     } catch (err) {
       // ignore persistence errors
     }
@@ -1670,8 +2168,9 @@ window.GalleryUI = (() => {
       const hydrated = await hydrateWallpaperSelection(selection);
       await ensurePlayableSelection(hydrated);
 
-      await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: hydrated });
+      await storageLocalSet({ [WALLPAPER_SELECTION_KEY]: hydrated });
       currentWallpaperSelection = hydrated;
+      setContextCurrentWallpaperSelection(hydrated);
 
       const type = await getWallpaperTypePreference();
       if (type === 'static') {
@@ -2023,19 +2522,21 @@ window.GalleryUI = (() => {
       galleryMyWallpapersPanel.classList.toggle('hidden', !isMyWallpapers);
     }
 
+    const myWallpapers = ensureMyWallpapers();
+
     if (myWallpapersEmptyCard) {
-      const hasItems = typeof MyWallpapers !== 'undefined' && MyWallpapers.hasItems();
+      const hasItems = myWallpapers && myWallpapers.hasItems();
       myWallpapersEmptyCard.classList.toggle('hidden', hasItems || !isMyWallpapers);
     }
 
     if (myWallpapersGrid) {
-      const hasItems = typeof MyWallpapers !== 'undefined' && MyWallpapers.hasItems();
+      const hasItems = myWallpapers && myWallpapers.hasItems();
       myWallpapersGrid.classList.toggle('hidden', !isMyWallpapers || !hasItems);
     }
 
     if (isMyWallpapers) {
-      if (typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.render === 'function') {
-        MyWallpapers.render();
+      if (myWallpapers && typeof myWallpapers.render === 'function') {
+        myWallpapers.render();
       }
     } else {
       renderGalleryVirtual(data);
@@ -2145,7 +2646,7 @@ window.GalleryUI = (() => {
 
   async function loadGalleryFavorites() {
     try {
-      const stored = await browser.storage.local.get(FAVORITES_KEY);
+      const stored = await storageLocalGet(FAVORITES_KEY);
       const ids = Array.isArray(stored[FAVORITES_KEY]) ? stored[FAVORITES_KEY] : [];
       galleryFavorites = new Set(ids);
     } catch (err) {
@@ -2156,7 +2657,7 @@ window.GalleryUI = (() => {
 
   async function saveGalleryFavorites() {
     try {
-      await browser.storage.local.set({ [FAVORITES_KEY]: Array.from(galleryFavorites) });
+      await storageLocalSet({ [FAVORITES_KEY]: Array.from(galleryFavorites) });
     } catch (err) {
       console.warn('Failed to save gallery favorites', err);
     }
@@ -2230,15 +2731,17 @@ window.GalleryUI = (() => {
     if (!galleryDailyToggle) return;
 
     try {
-      const stored = await browser.storage.local.get(DAILY_ROTATION_KEY);
+      const stored = await storageLocalGet(DAILY_ROTATION_KEY);
       const enabled = stored[DAILY_ROTATION_KEY];
       dailyRotationPreference = enabled !== false;
+      setContextDailyRotationPreference(dailyRotationPreference);
       galleryDailyToggle.checked = dailyRotationPreference;
       if (appDailyToggle) {
         appDailyToggle.checked = dailyRotationPreference;
       }
     } catch (err) {
       dailyRotationPreference = true;
+      setContextDailyRotationPreference(dailyRotationPreference);
       galleryDailyToggle.checked = true;
       if (appDailyToggle) {
         appDailyToggle.checked = true;
@@ -2373,7 +2876,8 @@ window.GalleryUI = (() => {
           const now = Date.now();
           const selection = buildFallbackSelection(now);
           currentWallpaperSelection = selection;
-          await browser.storage.local.set({
+          setContextCurrentWallpaperSelection(selection);
+          await storageLocalSet({
             [WALLPAPER_SELECTION_KEY]: selection,
             [WALLPAPER_FALLBACK_USED_KEY]: now
           });
@@ -2425,19 +2929,35 @@ window.GalleryUI = (() => {
     if (initialized) return;
     initialized = true;
 
+    cacheGalleryElements();
     ensureMyWallpapers();
     setupGalleryListeners();
     attachGalleryEventListeners();
   }
 
   async function open(options = {}) {
+    configureGallery(options);
     init();
 
     await openGalleryModal(options.triggerSource || 'dock-gallery-btn');
   }
 
+  function close() {
+    closeGalleryModal();
+  }
+
+  function refresh(options = {}) {
+    configureGallery(options);
+    const selection = Object.prototype.hasOwnProperty.call(options, 'selection')
+      ? options.selection
+      : currentWallpaperSelection;
+    const type = options.type || wallpaperTypePreference || 'video';
+    updateSettingsPreview(selection, type);
+  }
+
   return {
-    init,
-    open
+    open,
+    close,
+    refresh
   };
 })();

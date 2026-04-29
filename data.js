@@ -147,28 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.5.7',
+  version: '0.5.8',
   date: '2026-04-30',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Instant saved quotes',
-      desc: 'The Quote widget now shows a valid saved quote immediately during startup.'
+      title: 'Ready container opens',
+      desc: 'Firefox Container actions now have the needed access available up front for smoother bookmark opening.'
     },
     {
       type: 'IMPROVED',
-      title: 'Lighter quote loading',
-      desc: 'Homebase now skips quote data loading when the saved quote is still current.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Efficient quote setup',
-      desc: 'Saved quote indexes are reused more efficiently to reduce background startup work.'
+      title: 'Clearer permissions',
+      desc: 'Homebase now declares its container-related access during install or update instead of prompting later.'
     },
     {
       type: 'FIX',
-      title: 'Scheduled quote refreshes',
-      desc: 'Quote refreshes no longer run before your selected quote schedule is due.'
+      title: 'Reliable container tabs',
+      desc: 'Container bookmark opens no longer fall back to a normal tab because the needed access was missing.'
     }
   ]
 };

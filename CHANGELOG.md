@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.5.8 — 2026-04-30
+### Added
+- None.
+### Improved
+- Firefox Container actions now have the needed access available up front for smoother bookmark opening.
+- Homebase now declares its container-related access during install or update instead of prompting later.
+### Fixed
+- Container bookmark opens no longer fall back to a normal tab because the needed access was missing.
+
 ## v0.5.7 — 2026-04-30
 ### Added
 - None.

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Homebase",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "Replaces the default new tab with a fast, customizable dashboard for search, weather, news, bookmarks, and focused daily use.",
 
   "icons": {
@@ -39,14 +39,12 @@
 
   "permissions": [
     "tabs",
+    "cookies",
     "storage",
     "history",
     "bookmarks",
     "clipboardRead",
     "contextualIdentities"
-  ],
-  "optional_permissions": [
-    "cookies"
   ],
 
   "host_permissions": [

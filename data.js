@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.5.4',
+  version: '0.5.5',
   date: '2026-04-29',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Quieter daily use',
-      desc: 'Routine background messages now stay out of the console during normal new tab use.'
+      title: 'Lighter bookmark tools',
+      desc: 'Bookmark add, edit, folder, move, and delete dialogs now load only when you use them.'
     },
     {
       type: 'IMPROVED',
-      title: 'Opt-in diagnostics',
-      desc: 'Troubleshooting details remain available when Homebase debug or performance logging is enabled.'
+      title: 'Faster new tabs',
+      desc: 'Homebase skips bookmark editor setup and saved icon lookups during normal startup.'
     },
     {
       type: 'FIX',
-      title: 'Wallpaper cleanup logs',
-      desc: 'Detailed wallpaper cleanup data no longer appears unless troubleshooting logs are turned on.'
+      title: 'Editor load feedback',
+      desc: 'If bookmark tools cannot open, Homebase now shows a clear retry message.'
     }
   ]
 };

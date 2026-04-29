@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.5.5 — 2026-04-29
+### Added
+- None.
+### Improved
+- Bookmark add, edit, folder, move, and delete tools now load only when you open them.
+- New tab startup skips bookmark editor setup and saved icon lookups until bookmark tools are needed.
+### Fixed
+- Bookmark tool load failures now show a clear retry message instead of failing silently.
+
 ## v0.5.4 — 2026-04-29
 ### Added
 - None.

@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.5.6',
-  date: '2026-04-29',
+  version: '0.5.7',
+  date: '2026-04-30',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Lighter gallery startup',
-      desc: 'Wallpaper gallery setup now waits until you open the gallery, keeping normal new tabs lighter.'
+      title: 'Instant saved quotes',
+      desc: 'The Quote widget now shows a valid saved quote immediately during startup.'
     },
     {
       type: 'IMPROVED',
-      title: 'Synced wallpaper settings',
-      desc: 'Wallpaper type, quality, and daily rotation choices now stay aligned between Settings and the gallery.'
+      title: 'Lighter quote loading',
+      desc: 'Homebase now skips quote data loading when the saved quote is still current.'
     },
     {
       type: 'IMPROVED',
-      title: 'Reliable custom wallpapers',
-      desc: 'My Wallpapers now restores cached posters and videos more consistently while previewing and applying uploads.'
+      title: 'Efficient quote setup',
+      desc: 'Saved quote indexes are reused more efficiently to reduce background startup work.'
     },
     {
       type: 'FIX',
-      title: 'Gallery load feedback',
-      desc: 'If the wallpaper gallery cannot open, Homebase now shows a clear retry message.'
+      title: 'Scheduled quote refreshes',
+      desc: 'Quote refreshes no longer run before your selected quote schedule is due.'
     }
   ]
 };

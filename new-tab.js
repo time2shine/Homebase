@@ -9390,6 +9390,134 @@ let quoteIndexPromise = null;
 
 let quoteIndexCache = null;
 
+function readCachedQuoteState(options = {}) {
+
+  const fallbackState = { current: null, next: null, config: {} };
+
+  let localStateRaw = null;
+
+  try {
+
+    localStateRaw = localStorage.getItem('fast-quote-state');
+
+  } catch (err) {
+
+    if (options.warnOnParse) console.warn('Failed to read quote state', err);
+
+    return fallbackState;
+
+  }
+
+  if (!localStateRaw) return fallbackState;
+
+  try {
+
+    const parsed = JSON.parse(localStateRaw);
+
+    if (!parsed || typeof parsed !== 'object') return fallbackState;
+
+    return {
+      current: parsed.current || null,
+      next: parsed.next || null,
+      config: parsed.config || {}
+    };
+
+  } catch (err) {
+
+    if (options.warnOnParse) console.warn('Failed to parse quote state, resetting', err);
+
+    return fallbackState;
+
+  }
+
+}
+
+function isUsableCachedQuote(quote) {
+
+  return !!(quote && typeof quote.text === 'string' && quote.text.trim());
+
+}
+
+function shouldRefreshQuoteNow(state, now = Date.now()) {
+
+  if (!isUsableCachedQuote(state?.current)) return true;
+
+  const frequency = state?.config?.frequency || 'hourly';
+
+  if (frequency === 'always') return true;
+
+  const intervalMs = frequency === 'daily' ? 86400 * 1000 : 3600 * 1000;
+
+  const lastShown = Number(state?.config?.lastShown || 0);
+
+  if (!Number.isFinite(lastShown) || lastShown <= 0) return true;
+
+  return now - lastShown > intervalMs;
+
+}
+
+function hasUsableCachedQuoteState(state, now = Date.now()) {
+
+  return isUsableCachedQuote(state?.current) && !shouldRefreshQuoteNow(state, now);
+
+}
+
+function isQuoteWidgetEnabled() {
+
+  return !!quoteWidget && appShowSidebarPreference && appShowQuotePreference;
+
+}
+
+function renderQuoteToWidget(q) {
+
+  if (!isUsableCachedQuote(q) || !quoteText || !quoteAuthor) return false;
+
+  quoteText.textContent = `"${q.text}"`;
+
+  quoteAuthor.textContent = q.author ? `- ${q.author}` : '';
+
+  revealWidget('.widget-quote');
+
+  return true;
+
+}
+
+function renderCachedQuoteState(state = readCachedQuoteState()) {
+
+  if (!isQuoteWidgetEnabled()) return false;
+
+  return renderQuoteToWidget(state?.current);
+
+}
+
+function shouldLoadQuoteCatalog(options = {}) {
+
+  if (options.forceRefresh === true) return true;
+
+  if (!isQuoteWidgetEnabled()) return false;
+
+  const state = options.state || readCachedQuoteState();
+
+  return !hasUsableCachedQuoteState(state, options.now || Date.now());
+
+}
+
+function hasUsableStoredQuoteIndex(index) {
+
+  return !!(
+    index
+    && index.version === QUOTE_INDEX_VERSION
+    && Number.isFinite(index.count)
+    && index.count > 0
+    && Array.isArray(index.allIds)
+    && index.allIds.length === index.count
+    && index.tagToIds
+    && typeof index.tagToIds === 'object'
+    && !Array.isArray(index.tagToIds)
+  );
+
+}
+
 // Local quote loader (bundled JSON)
 async function loadLocalQuotes() {
 
@@ -9469,25 +9597,15 @@ async function ensureQuoteIndexBuilt() {
 
     const storedIndex = stored[QUOTE_INDEX_KEY];
 
-    const { quotes } = await loadLocalQuotesCached();
-
-    const expectedCount = quotes.length;
-
-    const isStoredValid = storedIndex
-      && storedIndex.version === QUOTE_INDEX_VERSION
-      && storedIndex.count === expectedCount
-      && Array.isArray(storedIndex.allIds)
-      && storedIndex.allIds.length === expectedCount
-      && storedIndex.tagToIds
-      && typeof storedIndex.tagToIds === 'object';
-
-    if (isStoredValid) {
+    if (hasUsableStoredQuoteIndex(storedIndex)) {
 
       quoteIndexCache = storedIndex;
 
       return storedIndex;
 
     }
+
+    const { quotes } = await loadLocalQuotesCached();
 
     const tagToIds = {};
 
@@ -9640,27 +9758,15 @@ async function fetchQuote(options = {}) {
 
   try {
 
-    let localStateRaw = localStorage.getItem('fast-quote-state');
+    let localState = readCachedQuoteState({ warnOnParse: true });
 
-    let localState = { current: null, next: null, config: {} };
+    const now = Date.now();
 
-    if (localStateRaw) {
+    if (!forceRefresh && hasUsableCachedQuoteState(localState, now)) {
 
-      try {
+      renderQuoteToWidget(localState.current);
 
-        const parsed = JSON.parse(localStateRaw);
-
-        localState = {
-          current: parsed.current || null,
-          next: parsed.next || null,
-          config: parsed.config || {}
-        };
-
-      } catch (err) {
-
-        console.warn('Failed to parse quote state, resetting', err);
-
-      }
+      return;
 
     }
 
@@ -9674,19 +9780,7 @@ async function fetchQuote(options = {}) {
 
     localState.config.source = QUOTE_SOURCE_MODE;
 
-    const renderQuote = (q) => {
-
-      if (!q || !quoteText || !quoteAuthor) return;
-
-      quoteText.textContent = `"${q.text}"`;
-
-      quoteAuthor.textContent = q.author ? `- ${q.author}` : '';
-
-      revealWidget('.widget-quote');
-
-    };
-
-    const now = Date.now();
+    const renderQuote = renderQuoteToWidget;
 
     let rotatedFromNext = false;
 
@@ -9917,6 +10011,8 @@ async function openQuoteSettingsModal(triggerSource) {
 }
 
 function setupQuoteWidget() {
+
+  renderCachedQuoteState();
 
   if (quoteSettingsBtn) {
 
@@ -19273,6 +19369,11 @@ function logInitSettled(name, result) {
     const start = performance.now();
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex start');
     try {
+      const cachedState = readCachedQuoteState();
+      if (!shouldLoadQuoteCatalog({ state: cachedState })) {
+        if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex skipped');
+        return;
+      }
       await ensureQuoteIndexBuilt();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:quoteIndex', err);
@@ -19370,6 +19471,11 @@ function logInitSettled(name, result) {
     const start = performance.now();
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote start');
     try {
+      const cachedState = readCachedQuoteState();
+      if (!shouldLoadQuoteCatalog({ state: cachedState })) {
+        renderCachedQuoteState(cachedState);
+        return;
+      }
       fetchQuote();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:fetchQuote', err);

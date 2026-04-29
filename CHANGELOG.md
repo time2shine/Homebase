@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.5.7 — 2026-04-30
+### Added
+- None.
+### Improved
+- The Quote widget now shows a valid saved quote immediately during startup.
+- Homebase now skips quote data loading when the saved quote is still current.
+- Saved quote indexes are reused more efficiently, reducing background quote setup work.
+### Fixed
+- Quote refreshes no longer run before your selected quote schedule is due.
+
 ## v0.5.6 — 2026-04-29
 ### Added
 - None.

@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.6.0 — 2026-05-01
+### Added
+- Added a first-run Homebase welcome guide with quick shortcuts and setup ideas.
+### Improved
+- Tip of the Day now uses a focused built-in rotation with clear Next tip and Dismiss actions.
+- The tips card has a cleaner layout, clearer buttons, and smoother show and hide motion.
+### Fixed
+- Tips now fit better on small screens and stay clear of the bottom controls.
+
 ## v0.5.8 — 2026-04-30
 ### Added
 - None.

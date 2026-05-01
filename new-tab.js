@@ -184,455 +184,326 @@ function getLocalDateKey() {
 
 }
 
-function hashStringToUint32(str) {
+const HOMEBASE_ONBOARDING_DISMISSED_KEY = 'homebaseOnboardingDismissed';
+const HOMEBASE_TIP_DISMISSED_DATE_KEY = 'homebaseTipDismissedDate';
+const HOMEBASE_TIP_LAST_INDEX_KEY = 'homebaseTipLastIndex';
+const HOMEBASE_DAILY_TIPS = [
+  {
+    title: 'Search faster with bangs',
+    body: 'Try !g cats, !yt lo-fi, or !w Firefox Containers.'
+  },
+  {
+    title: 'Right-click bookmarks',
+    body: 'Edit, move, delete, rename, or open bookmarks in Firefox Containers.'
+  },
+  {
+    title: 'Customize widgets',
+    body: 'Open Settings to enable, disable, and customize your widgets.'
+  },
+  {
+    title: 'Use the wallpaper gallery',
+    body: 'Choose wallpapers, upload your own, or enable daily rotation.'
+  },
+  {
+    title: 'Quick save pages',
+    body: 'Use the Homebase toolbar icon to save the current page.'
+  },
+  {
+    title: 'Performance mode',
+    body: 'Turn on Performance Mode on older devices or laptops.'
+  },
+  {
+    title: 'Search suggestions',
+    body: 'You can enable or disable search suggestions from Settings.'
+  }
+];
 
-  let hash = 2166136261;
+let homebaseOnboardingHiddenForSession = false;
+let homebaseOnboardingCompletedThisSession = false;
+let homebaseTipCurrentIndex = null;
+let homebaseTipsRenderToken = 0;
 
-  for (let i = 0; i < str.length; i++) {
+function getHomebaseLocalStorageItem(key) {
 
-    hash ^= str.charCodeAt(i);
-
-    hash = Math.imul(hash, 16777619);
-
+  try {
+    if (!window.localStorage) return null;
+    return localStorage.getItem(key);
+  } catch (err) {
+    return null;
   }
 
-  return hash >>> 0;
-
 }
 
-const TIPS_FIRST_RUN_SHOWN_KEY = 'tipsFirstRunShown';
-const TIPS_OPENS_COUNT_KEY = 'tipsOpensCount';
-const TIPS_INSTALL_SALT_KEY = 'tipsInstallSalt';
-const TIPS_LAST_VIEWED_KEY = 'tipsLastViewed';
-const TIPS_HIDDEN_DATE_KEY = 'tipsHiddenDateKey';
-const TIPS_ENABLED_KEY = 'tipsEnabled';
-const WELCOME_TIP_ID = 'welcome-tip';
-let cachedTipsInstallSalt = null;
+function setHomebaseLocalStorageItem(key, value) {
 
-async function getOrCreateInstallSalt() {
-
-  if (cachedTipsInstallSalt) return cachedTipsInstallSalt;
-
-  const storage = getStorageLocal();
-  if (!storage) {
-    cachedTipsInstallSalt = 'local';
-    return cachedTipsInstallSalt;
+  try {
+    if (!window.localStorage) return false;
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    return false;
   }
 
-  const result = await storageLocalGetAsync([TIPS_INSTALL_SALT_KEY]);
-  const stored = result ? result[TIPS_INSTALL_SALT_KEY] : null;
-  if (stored && typeof stored === 'string') {
-    cachedTipsInstallSalt = stored;
-    return stored;
-  }
+}
 
-  let salt = '';
-  if (window.crypto && window.crypto.getRandomValues) {
-    const bytes = new Uint8Array(16);
-    window.crypto.getRandomValues(bytes);
-    salt = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
-  } else {
-    salt = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
+function normalizeHomebaseTipIndex(index) {
 
-  cachedTipsInstallSalt = salt;
-  await storageLocalSetAsync({ [TIPS_INSTALL_SALT_KEY]: salt });
-  return salt;
+  const tipCount = HOMEBASE_DAILY_TIPS.length;
+  if (!tipCount) return 0;
+
+  const numericIndex = Number.parseInt(index, 10);
+  if (!Number.isFinite(numericIndex) || numericIndex < 0) return 0;
+
+  return numericIndex % tipCount;
 
 }
 
-async function incrementTipsOpensCount() {
+function clearHomebaseTipsCard(tipCard) {
 
-  if (!getStorageLocal()) return 0;
+  if (!tipCard) return;
 
-  const result = await storageLocalGetAsync([TIPS_OPENS_COUNT_KEY]);
-  const current = result && Number.isFinite(result[TIPS_OPENS_COUNT_KEY])
-    ? result[TIPS_OPENS_COUNT_KEY]
-    : 0;
-  const next = current + 1;
-  await storageLocalSetAsync({ [TIPS_OPENS_COUNT_KEY]: next });
-  return next;
-
-}
-
-function getSortedTips() {
-
-  const tips = Array.isArray(window.HOMEBASE_TIPS) ? window.HOMEBASE_TIPS : [];
-  if (!tips.length) return [];
-  return tips
-    .filter((tip) => tip && tip.id != null)
-    .slice()
-    .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  homebaseTipsRenderToken += 1;
+  tipCard.className = 'homebase-tips-card';
+  tipCard.classList.remove('is-visible');
+  tipCard.setAttribute('hidden', '');
+  tipCard.removeAttribute('role');
+  tipCard.removeAttribute('aria-label');
+  tipCard.removeAttribute('aria-live');
+  tipCard.replaceChildren();
 
 }
 
-function pickDailyTipId(dateKey, salt, sortedTips) {
+function prepareHomebaseTipsCard(tipCard, role, ariaLabel) {
 
-  if (!dateKey || !salt || !Array.isArray(sortedTips) || sortedTips.length === 0) return '';
-  const idx = hashStringToUint32(`${dateKey}:${salt}`) % sortedTips.length;
-  const tip = sortedTips[idx];
-  if (!tip || tip.id == null) return '';
-  return String(tip.id);
-
-}
-
-function getStorageLocal() {
-
-  if (window.browser && browser.storage && browser.storage.local) return browser.storage.local;
-  if (window.chrome && chrome.storage && chrome.storage.local) return chrome.storage.local;
-  return null;
+  homebaseTipsRenderToken += 1;
+  tipCard.className = 'homebase-tips-card';
+  tipCard.classList.remove('is-visible');
+  tipCard.setAttribute('role', role);
+  tipCard.setAttribute('aria-label', ariaLabel);
+  tipCard.removeAttribute('aria-live');
+  tipCard.replaceChildren();
 
 }
 
-function storageLocalGetAsync(keys) {
+function showHomebaseTipsCard(tipCard) {
 
-  const storage = getStorageLocal();
-  if (!storage || !storage.get) return Promise.resolve({});
-  const usePromise = window.browser && browser.storage && browser.storage.local === storage;
+  const showToken = homebaseTipsRenderToken;
 
-  return new Promise((resolve) => {
-    let settled = false;
-    const done = (result) => {
-      if (settled) return;
-      settled = true;
-      resolve(result || {});
-    };
-    try {
-      if (usePromise) {
-        const maybePromise = storage.get(keys);
-        if (maybePromise && typeof maybePromise.then === 'function') {
-          maybePromise.then(done).catch(() => done({}));
-        } else {
-          done({});
-        }
-      } else {
-        storage.get(keys, (result) => done(result));
-      }
-    } catch (e) {
-      done({});
+  tipCard.removeAttribute('hidden');
+  requestAnimationFrame(() => {
+    if (showToken === homebaseTipsRenderToken && !tipCard.hasAttribute('hidden')) {
+      tipCard.classList.add('is-visible');
     }
   });
 
 }
 
-function storageLocalSetAsync(items) {
+function hideHomebaseTipsCard(tipCard) {
 
-  const storage = getStorageLocal();
-  if (!storage || !storage.set) return Promise.resolve();
-  const usePromise = window.browser && browser.storage && browser.storage.local === storage;
+  if (!tipCard) return;
 
-  return new Promise((resolve) => {
-    let settled = false;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-    try {
-      if (usePromise) {
-        const maybePromise = storage.set(items);
-        if (maybePromise && typeof maybePromise.then === 'function') {
-          maybePromise.then(done).catch(done);
-        } else {
-          done();
-        }
-      } else {
-        storage.set(items, () => done());
-      }
-    } catch (e) {
-      done();
+  const hideToken = homebaseTipsRenderToken + 1;
+  homebaseTipsRenderToken = hideToken;
+  tipCard.classList.remove('is-visible');
+
+  if (tipCard.hasAttribute('hidden')) return;
+
+  let finished = false;
+  let fallbackId = null;
+  let onTransitionEnd = null;
+
+  const cleanup = () => {
+    if (finished) return;
+    finished = true;
+    if (onTransitionEnd) {
+      tipCard.removeEventListener('transitionend', onTransitionEnd);
     }
-  });
-
-}
-
-let tipPreviewIndex = null;
-let tipListenersBound = false;
-
-async function renderTipOfDay() {
-
-  const tipsOriginal = Array.isArray(window.HOMEBASE_TIPS) ? window.HOMEBASE_TIPS : null;
-
-  if (!tipsOriginal || tipsOriginal.length === 0) return;
-
-  const sortedTips = getSortedTips();
-
-  if (!sortedTips.length) return;
-
-  const tipCard = document.getElementById('tip-card');
-
-  const tipTitle = document.getElementById('tip-title');
-
-  const tipBody = document.getElementById('tip-body');
-
-  const tipBtnClose = document.getElementById('tip-btn-close');
-
-  const tipBtnNext = document.getElementById('tip-btn-next');
-
-  const tipBtnDisable = document.getElementById('tip-btn-disable');
-
-  const storage = getStorageLocal();
-  const storageAvailable = !!storage;
-
-  if (!tipCard || !tipTitle || !tipBody || !tipBtnClose || !tipBtnNext || !tipBtnDisable) return;
-
-  if (tipCard.hasAttribute('hidden')) {
-    tipCard.classList.remove('is-open');
-  }
-
-  const animateHideTipCard = () => {
-
-    tipCard.classList.remove('is-open');
-
-    if (tipCard.hasAttribute('hidden')) return;
-
-    let finished = false;
-    let fallbackId = null;
-    let onTransitionEnd = null;
-
-    const cleanup = () => {
-      if (finished) return;
-      finished = true;
-      if (onTransitionEnd) {
-        tipCard.removeEventListener('transitionend', onTransitionEnd);
-      }
-      if (fallbackId !== null) {
-        clearTimeout(fallbackId);
-      }
-      tipCard.setAttribute('hidden', '');
-    };
-
-    onTransitionEnd = (event) => {
-      if (event.target !== tipCard) return;
-      cleanup();
-    };
-
-    tipCard.addEventListener('transitionend', onTransitionEnd);
-    // Keep in sync with --tip-card-motion-ms.
-    fallbackId = setTimeout(cleanup, 620);
-
+    if (fallbackId !== null) {
+      clearTimeout(fallbackId);
+    }
+    if (hideToken !== homebaseTipsRenderToken) return;
+    tipCard.setAttribute('hidden', '');
+    tipCard.replaceChildren();
   };
 
-  const renderTipAtIndex = (index) => {
+  onTransitionEnd = (event) => {
+    if (event.target !== tipCard) return;
+    cleanup();
+  };
 
-    const tip = sortedTips[index];
+  tipCard.addEventListener('transitionend', onTransitionEnd);
+  fallbackId = setTimeout(cleanup, 280);
+
+}
+
+function createHomebaseTipsButton(label, className) {
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = className;
+  button.textContent = label;
+  return button;
+
+}
+
+function renderHomebaseOnboardingCard(tipCard) {
+
+  prepareHomebaseTipsCard(tipCard, 'dialog', 'Welcome to Homebase tips');
+
+  const title = document.createElement('h2');
+  title.className = 'homebase-tips-title';
+  title.textContent = 'Welcome to Homebase';
+
+  const intro = document.createElement('p');
+  intro.className = 'homebase-tips-body';
+  intro.textContent = 'Here are a few quick things you can try first.';
+
+  const list = document.createElement('ul');
+  list.className = 'homebase-tips-list';
+
+  [
+    {
+      icon: '⌘',
+      text: 'Use bang searches like !g cats, !yt lo-fi, or !w Firefox.'
+    },
+    {
+      icon: '⌥',
+      text: 'Press Alt + Arrow Down to switch between search engines on the go.'
+    },
+    {
+      icon: '↗',
+      text: 'Right-click bookmarks to edit, move, delete, or open in Firefox Containers.'
+    },
+    {
+      icon: '✦',
+      text: 'Open the wallpaper gallery to choose images, videos, and your own wallpapers.'
+    },
+    {
+      icon: '⚙',
+      text: 'Use Settings to enable, disable, and customize widgets.'
+    }
+  ].forEach((onboardingItem) => {
+    const item = document.createElement('li');
+    const dot = document.createElement('span');
+    const text = document.createElement('span');
+
+    dot.className = 'homebase-tips-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    dot.textContent = onboardingItem.icon;
+    text.textContent = onboardingItem.text;
+
+    item.append(dot, text);
+    list.appendChild(item);
+  });
+
+  const actions = document.createElement('div');
+  actions.className = 'homebase-tips-actions';
+
+  const laterButton = createHomebaseTipsButton('Later', 'homebase-tips-btn');
+  const gotItButton = createHomebaseTipsButton('Got it', 'homebase-tips-btn homebase-tips-btn-primary');
+
+  laterButton.addEventListener('click', () => {
+    homebaseOnboardingHiddenForSession = true;
+    hideHomebaseTipsCard(tipCard);
+  });
+
+  gotItButton.addEventListener('click', () => {
+    setHomebaseLocalStorageItem(HOMEBASE_ONBOARDING_DISMISSED_KEY, 'true');
+    homebaseOnboardingCompletedThisSession = true;
+    hideHomebaseTipsCard(tipCard);
+  });
+
+  actions.append(laterButton, gotItButton);
+  tipCard.append(title, intro, list, actions);
+  showHomebaseTipsCard(tipCard);
+
+}
+
+function renderHomebaseDailyTipCard(tipCard, tipIndex) {
+
+  prepareHomebaseTipsCard(tipCard, 'region', 'Homebase tip of the day');
+  tipCard.setAttribute('aria-live', 'polite');
+
+  const eyebrow = document.createElement('div');
+  eyebrow.className = 'homebase-tips-eyebrow';
+  eyebrow.textContent = 'Tip of the day';
+
+  const title = document.createElement('h2');
+  title.className = 'homebase-tips-title';
+
+  const body = document.createElement('p');
+  body.className = 'homebase-tips-body';
+
+  const actions = document.createElement('div');
+  actions.className = 'homebase-tips-actions';
+
+  const nextButton = createHomebaseTipsButton('Next tip', 'homebase-tips-btn');
+  const dismissButton = createHomebaseTipsButton('Dismiss', 'homebase-tips-btn homebase-tips-btn-primary');
+
+  const updateTip = (nextIndex) => {
+    const normalizedIndex = normalizeHomebaseTipIndex(nextIndex);
+    const tip = HOMEBASE_DAILY_TIPS[normalizedIndex];
 
     if (!tip) return;
 
-    tipTitle.textContent = tip.title || '';
-
-    tipBody.textContent = tip.body || '';
-
-    tipCard.removeAttribute('hidden');
-    tipCard.classList.remove('is-open');
-    requestAnimationFrame(() => {
-      tipCard.classList.add('is-open');
-    });
-
-    return true;
-
+    homebaseTipCurrentIndex = normalizedIndex;
+    title.textContent = tip.title;
+    body.textContent = tip.body;
+    setHomebaseLocalStorageItem(HOMEBASE_TIP_LAST_INDEX_KEY, String(normalizedIndex));
   };
 
-  const setPreviewIndexById = (tipId) => {
+  nextButton.addEventListener('click', () => {
+    updateTip(homebaseTipCurrentIndex === null ? 0 : homebaseTipCurrentIndex + 1);
+  });
 
-    if (tipId == null) return false;
-    const targetId = String(tipId);
-    const index = sortedTips.findIndex((tip) => tip && tip.id != null && String(tip.id) === targetId);
-    if (index < 0) return false;
-    tipPreviewIndex = index;
-    return true;
+  dismissButton.addEventListener('click', () => {
+    setHomebaseLocalStorageItem(HOMEBASE_TIP_DISMISSED_DATE_KEY, getLocalDateKey());
+    hideHomebaseTipsCard(tipCard);
+  });
 
-  };
+  actions.append(nextButton, dismissButton);
+  tipCard.append(eyebrow, title, body, actions);
+  updateTip(tipIndex);
+  showHomebaseTipsCard(tipCard);
 
-  const coerceFirstRunShown = (value) => {
-    if (value === true || value === 'true' || value === 1 || value === '1') return true;
-    return false;
-  };
+}
 
-  const normalizeLastViewed = (lastViewed, dateKey, storageAvailable) => {
+function renderTipOfDay() {
 
-    if (!lastViewed) return null;
+  const tipCard = document.getElementById('tip-card');
+  if (!tipCard) return;
 
-    let storedDateKey = dateKey;
-    let legacyIndex = null;
+  const onboardingDismissed = getHomebaseLocalStorageItem(HOMEBASE_ONBOARDING_DISMISSED_KEY) === 'true';
 
-    if (typeof lastViewed === 'number' && Number.isFinite(lastViewed)) {
-      legacyIndex = lastViewed;
-    } else if (typeof lastViewed === 'object') {
-      if (typeof lastViewed.dateKey === 'string') {
-        storedDateKey = lastViewed.dateKey;
-      }
-      if (lastViewed.tipId != null) {
-        return { dateKey: storedDateKey, tipId: String(lastViewed.tipId) };
-      }
-      if (Number.isFinite(lastViewed.index)) {
-        legacyIndex = lastViewed.index;
-      } else if (Number.isFinite(lastViewed.tipIndex)) {
-        legacyIndex = lastViewed.tipIndex;
-      }
+  if (!onboardingDismissed) {
+    if (homebaseOnboardingHiddenForSession) {
+      clearHomebaseTipsCard(tipCard);
+      return;
     }
 
-    if (legacyIndex !== null) {
-      const legacyTip = tipsOriginal[legacyIndex];
-      if (legacyTip && legacyTip.id != null) {
-        const migrated = { dateKey: storedDateKey, tipId: String(legacyTip.id) };
-        if (storageAvailable) {
-          storageLocalSetAsync({ [TIPS_LAST_VIEWED_KEY]: migrated });
-        }
-        return migrated;
-      }
-    }
-
-    return null;
-
-  };
-
-  const bindTipListeners = () => {
-
-    if (tipListenersBound) return;
-    tipListenersBound = true;
-
-    tipBtnClose.addEventListener('click', () => {
-
-      if (storageAvailable) {
-        storageLocalSetAsync({ [TIPS_HIDDEN_DATE_KEY]: getLocalDateKey() });
-      }
-
-      animateHideTipCard();
-
-    });
-
-    tipBtnNext.addEventListener('click', () => {
-
-      if (!sortedTips.length) return;
-
-      if (tipPreviewIndex === null || tipPreviewIndex < 0 || tipPreviewIndex >= sortedTips.length) {
-        tipPreviewIndex = 0;
-      } else {
-        tipPreviewIndex = (tipPreviewIndex + 1) % sortedTips.length;
-      }
-
-      renderTipAtIndex(tipPreviewIndex);
-
-      const nextTip = sortedTips[tipPreviewIndex];
-
-      if (nextTip && nextTip.id != null && storageAvailable) {
-        storageLocalSetAsync({ [TIPS_LAST_VIEWED_KEY]: { dateKey: getLocalDateKey(), tipId: String(nextTip.id) } });
-      }
-
-    });
-
-    tipBtnDisable.addEventListener('click', () => {
-
-      if (storageAvailable) {
-        storageLocalSetAsync({ [TIPS_ENABLED_KEY]: false });
-      }
-
-      animateHideTipCard();
-
-    });
-
-  };
-
-  const dateKey = getLocalDateKey();
-  const rotationTips = sortedTips.filter((tip) => tip && String(tip.id) !== WELCOME_TIP_ID);
-  const dailyTips = rotationTips.length ? rotationTips : sortedTips;
-
-  if (tipPreviewIndex !== null && (tipPreviewIndex < 0 || tipPreviewIndex >= sortedTips.length)) {
-    tipPreviewIndex = null;
-  }
-
-  if (!storageAvailable) {
-    if (tipPreviewIndex === null) {
-      const dailyTipId = pickDailyTipId(dateKey, 'local', dailyTips);
-      if (!setPreviewIndexById(dailyTipId)) {
-        tipPreviewIndex = 0;
-      }
-    }
-    if (renderTipAtIndex(tipPreviewIndex)) {
-      bindTipListeners();
-    }
+    renderHomebaseOnboardingCard(tipCard);
     return;
   }
 
-  const opensCount = await incrementTipsOpensCount();
-
-  const result = await storageLocalGetAsync([
-    TIPS_ENABLED_KEY,
-    TIPS_HIDDEN_DATE_KEY,
-    TIPS_LAST_VIEWED_KEY,
-    TIPS_FIRST_RUN_SHOWN_KEY
-  ]);
-
-  if (result && result[TIPS_ENABLED_KEY] === false) return;
-  if (result && result[TIPS_HIDDEN_DATE_KEY] === dateKey) return;
-
-  const storedFirstRunShown = result ? result[TIPS_FIRST_RUN_SHOWN_KEY] : null;
-  let firstRunShown = coerceFirstRunShown(storedFirstRunShown);
-  if (firstRunShown && storedFirstRunShown !== true) {
-    await storageLocalSetAsync({ [TIPS_FIRST_RUN_SHOWN_KEY]: true });
-  }
-  if (!firstRunShown && result && result[TIPS_LAST_VIEWED_KEY]) {
-    const lastViewed = result[TIPS_LAST_VIEWED_KEY];
-    if (lastViewed && typeof lastViewed === 'object' && lastViewed.tipId != null && String(lastViewed.tipId) === WELCOME_TIP_ID) {
-      firstRunShown = true;
-      await storageLocalSetAsync({ [TIPS_FIRST_RUN_SHOWN_KEY]: true });
-    }
-  }
-  if (result && result[TIPS_LAST_VIEWED_KEY]) {
-    const lastViewed = result[TIPS_LAST_VIEWED_KEY];
-    if (
-      lastViewed
-      && typeof lastViewed === 'object'
-      && lastViewed.tipId != null
-      && String(lastViewed.tipId) === WELCOME_TIP_ID
-      && lastViewed.dateKey === dateKey
-    ) {
-      await storageLocalSetAsync({ [TIPS_LAST_VIEWED_KEY]: { dateKey: '', tipId: '' } });
-    }
-  }
-
-  if (!firstRunShown) {
-    if (setPreviewIndexById(WELCOME_TIP_ID) && renderTipAtIndex(tipPreviewIndex)) {
-      await storageLocalSetAsync({
-        [TIPS_FIRST_RUN_SHOWN_KEY]: true
-      });
-      const verify = await storageLocalGetAsync([TIPS_FIRST_RUN_SHOWN_KEY]);
-      if (!verify || !verify[TIPS_FIRST_RUN_SHOWN_KEY]) {
-        await storageLocalSetAsync({ [TIPS_FIRST_RUN_SHOWN_KEY]: true });
-      }
-      bindTipListeners();
-    }
+  if (homebaseOnboardingCompletedThisSession) {
+    clearHomebaseTipsCard(tipCard);
     return;
   }
 
-  if (opensCount < 2) return;
+  const todayKey = getLocalDateKey();
+  const dismissedDate = getHomebaseLocalStorageItem(HOMEBASE_TIP_DISMISSED_DATE_KEY);
 
-  const normalizedLastViewed = normalizeLastViewed(
-    result ? result[TIPS_LAST_VIEWED_KEY] : null,
-    dateKey,
-    storageAvailable
-  );
-
-  if (tipPreviewIndex === null) {
-
-    if (normalizedLastViewed && normalizedLastViewed.dateKey === dateKey && normalizedLastViewed.tipId) {
-      setPreviewIndexById(normalizedLastViewed.tipId);
-    }
-
-    if (tipPreviewIndex === null) {
-      const salt = await getOrCreateInstallSalt();
-      const dailyTipId = pickDailyTipId(dateKey, salt, dailyTips);
-      if (!setPreviewIndexById(dailyTipId)) {
-        tipPreviewIndex = 0;
-      }
-    }
-
+  if (dismissedDate === todayKey) {
+    clearHomebaseTipsCard(tipCard);
+    return;
   }
 
-  if (renderTipAtIndex(tipPreviewIndex)) {
-    bindTipListeners();
-  }
+  const storedIndex = getHomebaseLocalStorageItem(HOMEBASE_TIP_LAST_INDEX_KEY);
+  const initialIndex = homebaseTipCurrentIndex === null
+    ? normalizeHomebaseTipIndex(storedIndex)
+    : normalizeHomebaseTipIndex(homebaseTipCurrentIndex);
+
+  renderHomebaseDailyTipCard(tipCard, initialIndex);
 
 }
 

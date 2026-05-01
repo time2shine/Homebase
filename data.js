@@ -147,23 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.5.8',
-  date: '2026-04-30',
+  version: '0.6.0',
+  date: '2026-05-01',
   items: [
     {
-      type: 'IMPROVED',
-      title: 'Ready container opens',
-      desc: 'Firefox Container actions now have the needed access available up front for smoother bookmark opening.'
+      type: 'NEW',
+      title: 'Welcome guide',
+      desc: 'First-time users now see a quick Homebase guide with helpful shortcuts and setup ideas.'
     },
     {
       type: 'IMPROVED',
-      title: 'Clearer permissions',
-      desc: 'Homebase now declares its container-related access during install or update instead of prompting later.'
+      title: 'Simpler daily tips',
+      desc: 'Tip of the Day now uses a focused built-in rotation with clear Next tip and Dismiss actions.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Cleaner tip card',
+      desc: 'The tips card has a lighter layout, clearer buttons, and smoother show and hide motion.'
     },
     {
       type: 'FIX',
-      title: 'Reliable container tabs',
-      desc: 'Container bookmark opens no longer fall back to a normal tab because the needed access was missing.'
+      title: 'Mobile tip placement',
+      desc: 'Tips now fit better on small screens and stay clear of the bottom controls.'
     }
   ]
 };

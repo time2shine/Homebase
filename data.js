@@ -147,28 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.6.0',
-  date: '2026-05-01',
+  version: '0.6.1',
+  date: '2026-05-02',
   items: [
     {
-      type: 'NEW',
-      title: 'Welcome guide',
-      desc: 'First-time users now see a quick Homebase guide with helpful shortcuts and setup ideas.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Simpler daily tips',
-      desc: 'Tip of the Day now uses a focused built-in rotation with clear Next tip and Dismiss actions.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Cleaner tip card',
-      desc: 'The tips card has a lighter layout, clearer buttons, and smoother show and hide motion.'
+      type: 'FIX',
+      title: 'About version',
+      desc: 'The About panel now falls back to the correct Homebase version when needed.'
     },
     {
       type: 'FIX',
-      title: 'Mobile tip placement',
-      desc: 'Tips now fit better on small screens and stay clear of the bottom controls.'
+      title: 'Tip card rendering',
+      desc: 'Welcome and Tip of the Day cards now use the current card layout consistently.'
+    },
+    {
+      type: 'FIX',
+      title: 'Wallpaper type toggle',
+      desc: 'Static and live wallpaper switching now avoids repeated toggle handling.'
     }
   ]
 };

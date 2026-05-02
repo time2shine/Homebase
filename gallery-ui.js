@@ -1883,8 +1883,6 @@ window.HomebaseGallery = (() => {
           appWallpaperQualitySelect.value = newQuality;
         }
         await storageLocalSet({ [WALLPAPER_QUALITY_KEY]: newQuality });
-        console.log('Wallpaper quality set to:', newQuality);
-
         const updatedSelection = rebuildCurrentSelectionFromGallery();
         if (!updatedSelection) return;
 
@@ -1896,7 +1894,8 @@ window.HomebaseGallery = (() => {
     }
 
     // 2. Wallpaper Type Toggle (ON = Video, OFF = Static)
-    if (wallpaperTypeToggle) {
+    if (wallpaperTypeToggle && !wallpaperTypeToggle.dataset.typeListenerAttached) {
+      wallpaperTypeToggle.dataset.typeListenerAttached = 'true';
       wallpaperTypeToggle.addEventListener('change', async (e) => {
         const newType = e.target.checked ? 'video' : 'static';
 
@@ -1908,7 +1907,6 @@ window.HomebaseGallery = (() => {
         await storageLocalSet({ [WALLPAPER_TYPE_KEY]: newType });
 
         if (currentWallpaperSelection) {
-          console.log('Switching wallpaper type to:', newType);
           if (typeof applyWallpaperByType === 'function') {
             applyWallpaperByType(currentWallpaperSelection, newType);
           } else {

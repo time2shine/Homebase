@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.6.1 — 2026-05-02
+### Added
+- None.
+### Improved
+- None.
+### Fixed
+- The About panel now falls back to the correct Homebase version when browser manifest details are unavailable.
+- Welcome and Tip of the Day cards now render from the current card layout consistently.
+- Static and live wallpaper switching now avoids repeated toggle handling.
+
 ## v0.6.0 — 2026-05-01
 ### Added
 - Added a first-run Homebase welcome guide with quick shortcuts and setup ideas.

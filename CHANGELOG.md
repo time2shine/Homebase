@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.7.0 — 2026-05-04
+### Added
+- Added a General setting to show or hide Homebase Tips after onboarding.
+- Added a tip card action to stop showing future Homebase Tips.
+### Improved
+- Homebase Tips visibility now stays synced between the tip card and General settings.
+### Fixed
+- None.
+
 ## v0.6.1 — 2026-05-02
 ### Added
 - None.

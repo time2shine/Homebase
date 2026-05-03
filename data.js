@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.6.1',
-  date: '2026-05-02',
+  version: '0.7.0',
+  date: '2026-05-04',
   items: [
     {
-      type: 'FIX',
-      title: 'About version',
-      desc: 'The About panel now falls back to the correct Homebase version when needed.'
+      type: 'NEW',
+      title: 'Tips setting',
+      desc: 'You can turn Homebase Tips on or off from General settings.'
     },
     {
-      type: 'FIX',
-      title: 'Tip card rendering',
-      desc: 'Welcome and Tip of the Day cards now use the current card layout consistently.'
+      type: 'NEW',
+      title: 'Hide tips action',
+      desc: 'Tip cards now include a button that hides future Homebase Tips.'
     },
     {
-      type: 'FIX',
-      title: 'Wallpaper type toggle',
-      desc: 'Static and live wallpaper switching now avoids repeated toggle handling.'
+      type: 'IMPROVED',
+      title: 'Synced tip preference',
+      desc: 'Homebase Tips visibility now stays synced between the tip card and settings.'
     }
   ]
 };

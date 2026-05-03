@@ -5,7 +5,9 @@ window.SettingsUI = (() => {
   const PRO_TIPS_SECTION = 'pro-tips';
   const WHATS_NEW_STORAGE_KEY = 'lastSeenWhatsNewVersion';
   const WHATS_NEW_LATEST_STORAGE_KEY = 'latestKnownWhatsNewVersion';
+  const HOMEBASE_TIPS_DISABLED_KEY = 'homebaseTipsDisabled';
   const QR_MODAL_ANIM_MS = 220;
+  const appHomebaseTipsToggle = document.getElementById('app-show-homebase-tips-toggle');
   const supportQrModal = document.getElementById('support-qr-modal');
   const supportQrModalDialog = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__dialog') : null;
   const supportQrModalImg = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__img') : null;
@@ -989,10 +991,46 @@ window.SettingsUI = (() => {
     }
   }
 
+  function syncHomebaseTipsToggle() {
+    if (!appHomebaseTipsToggle) return;
+
+    try {
+      appHomebaseTipsToggle.checked = localStorage.getItem(HOMEBASE_TIPS_DISABLED_KEY) !== 'true';
+    } catch (err) {
+      appHomebaseTipsToggle.checked = true;
+    }
+  }
+
+  function setHomebaseTipsEnabled(enabled) {
+    try {
+      if (enabled) {
+        localStorage.removeItem(HOMEBASE_TIPS_DISABLED_KEY);
+      } else {
+        localStorage.setItem(HOMEBASE_TIPS_DISABLED_KEY, 'true');
+      }
+    } catch (err) {
+      // Best-effort only; storage may be unavailable in restricted contexts.
+    }
+
+    if (typeof renderTipOfDay === 'function') {
+      renderTipOfDay();
+    }
+  }
+
+  function setupHomebaseTipsToggle() {
+    if (!appHomebaseTipsToggle || appHomebaseTipsToggle.dataset.listenerAttached) return;
+
+    appHomebaseTipsToggle.dataset.listenerAttached = 'true';
+    appHomebaseTipsToggle.addEventListener('change', (e) => {
+      setHomebaseTipsEnabled(e.target.checked);
+    });
+  }
+
   function openAppSettingsModal(triggerSource = 'main-settings-btn') {
     if (!appSettingsModal) return;
 
     syncAppSettingsForm();
+    syncHomebaseTipsToggle();
     setActiveAppSettingsSection('general');
 
     initialWallpaperState = {
@@ -1009,6 +1047,7 @@ window.SettingsUI = (() => {
 
     closeModalWithAnimation('app-settings-modal', '.app-settings-dialog', () => {
       syncAppSettingsForm();
+      syncHomebaseTipsToggle();
     });
   }
 
@@ -1478,6 +1517,7 @@ window.SettingsUI = (() => {
     if (initialized) return;
     initialized = true;
     setupAppSettingsModal();
+    setupHomebaseTipsToggle();
   }
 
   function open(options = {}) {

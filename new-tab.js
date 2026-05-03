@@ -185,6 +185,7 @@ function getLocalDateKey() {
 }
 
 const HOMEBASE_ONBOARDING_DISMISSED_KEY = 'homebaseOnboardingDismissed';
+const HOMEBASE_TIPS_DISABLED_KEY = 'homebaseTipsDisabled';
 const HOMEBASE_TIP_DISMISSED_DATE_KEY = 'homebaseTipDismissedDate';
 const HOMEBASE_TIP_LAST_INDEX_KEY = 'homebaseTipLastIndex';
 const HOMEBASE_DAILY_TIPS = [
@@ -438,6 +439,7 @@ function renderHomebaseDailyTipCard(tipCard, tipIndex) {
   actions.className = 'homebase-tips-actions';
 
   const nextButton = createHomebaseTipsButton('Next tip', 'homebase-tips-btn');
+  const disableTipsButton = createHomebaseTipsButton('Don’t show tips', 'homebase-tips-btn');
   const dismissButton = createHomebaseTipsButton('Dismiss', 'homebase-tips-btn homebase-tips-btn-primary');
 
   const updateTip = (nextIndex) => {
@@ -456,12 +458,17 @@ function renderHomebaseDailyTipCard(tipCard, tipIndex) {
     updateTip(homebaseTipCurrentIndex === null ? 0 : homebaseTipCurrentIndex + 1);
   });
 
+  disableTipsButton.addEventListener('click', () => {
+    setHomebaseLocalStorageItem(HOMEBASE_TIPS_DISABLED_KEY, 'true');
+    hideHomebaseTipsCard(tipCard);
+  });
+
   dismissButton.addEventListener('click', () => {
     setHomebaseLocalStorageItem(HOMEBASE_TIP_DISMISSED_DATE_KEY, getLocalDateKey());
     hideHomebaseTipsCard(tipCard);
   });
 
-  actions.append(nextButton, dismissButton);
+  actions.append(nextButton, disableTipsButton, dismissButton);
   tipCard.append(eyebrow, title, body, actions);
   updateTip(tipIndex);
   showHomebaseTipsCard(tipCard);
@@ -486,6 +493,11 @@ function renderTipOfDay() {
   }
 
   if (homebaseOnboardingCompletedThisSession) {
+    clearHomebaseTipsCard(tipCard);
+    return;
+  }
+
+  if (getHomebaseLocalStorageItem(HOMEBASE_TIPS_DISABLED_KEY) === 'true') {
     clearHomebaseTipsCard(tipCard);
     return;
   }

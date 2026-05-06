@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.8.0 — 2026-05-06
+### Added
+- Folder tabs can now be renamed directly with a double-click.
+### Improved
+- Folder tab scroll buttons now move by a responsive distance for easier navigation through long tab rows.
+- Folder rename fields now resize to the folder name and stay aligned in the tab row.
+### Fixed
+- The folder tab row no longer jumps back to the beginning when refreshing an active folder.
+- Folder tab right-click actions now stay reliable after the tab row rebuilds.
+
 ## v0.7.2 — 2026-05-06
 ### Added
 - None.

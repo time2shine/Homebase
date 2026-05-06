@@ -71,8 +71,6 @@ const SIDEBAR_COLLAPSE_RATIO = 0.49;
 
 const DOCK_COLLAPSE_RATIO = 0.32;
 
-const TAB_SCROLL_STEP = 180;
-
 const WALLPAPER_POOL_KEY = 'wallpaperPoolIds';
 
 const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
@@ -1489,21 +1487,23 @@ function scrollActiveFolderTabIntoView({ behavior = 'smooth', centerIfLarge = fa
 
 /**
 
- * Scrolls the folder tab row by a fixed amount in the given direction.
+ * Scrolls the folder tab row by a responsive amount in the given direction.
 
  */
 
 function scrollBookmarkTabs(direction) {
 
+  if (!bookmarkTabsTrack) return;
+
+  const scrollAmount = Math.max(160, Math.round(bookmarkTabsTrack.clientWidth * 0.75));
+
   if (tabsScrollController) {
-    tabsScrollController.scrollByStep(direction);
+    tabsScrollController.scrollByStep(direction, scrollAmount);
     return;
   }
 
-  if (!bookmarkTabsTrack) return;
-
   bookmarkTabsTrack.scrollBy({
-    left: direction * TAB_SCROLL_STEP,
+    left: direction * scrollAmount,
     behavior: 'smooth'
   });
 
@@ -3356,49 +3356,11 @@ function initTabsScrollController() {
 
 
 
-  const scrollByStep = (direction) => {
-
-    const tabs = Array.from(track.querySelectorAll('.bookmark-folder-tab'));
-
-    const viewLeft = track.scrollLeft;
-
-    const viewRight = viewLeft + track.clientWidth;
-
-
-    if (direction > 0) {
-
-      const targetTab = tabs.find((tab) => (tab.offsetLeft + tab.offsetWidth) > (viewRight + 1));
-
-      if (targetTab) {
-
-        targetTab.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
-
-        return;
-
-      }
-
-    } else {
-
-      for (let i = tabs.length - 1; i >= 0; i -= 1) {
-
-        const tab = tabs[i];
-
-        if (tab.offsetLeft < (viewLeft - 1)) {
-
-          tab.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
-
-          return;
-
-        }
-
-      }
-
-    }
-
+  const scrollByStep = (direction, scrollAmount) => {
 
     track.scrollBy({
 
-      left: direction * track.clientWidth * 0.7,
+      left: direction * scrollAmount,
 
       behavior: 'smooth'
 
@@ -7929,9 +7891,17 @@ function showEditInput(tabButton, folderNode) {
 
   input.type = 'text';
 
-  input.className = 'bookmark-folder-input';
+  input.className = 'bookmark-folder-input bookmark-folder-rename-input';
 
   input.value = folderNode.title;
+
+  const resizeFolderRenameInput = () => {
+    const valueLength = Math.max(input.value.length, 6);
+    const nextWidth = Math.min(Math.max(valueLength * 8 + 24, 110), 260);
+    input.style.width = `${nextWidth}px`;
+  };
+
+  resizeFolderRenameInput();
 
 
 
@@ -7949,7 +7919,7 @@ function showEditInput(tabButton, folderNode) {
 
     input.remove();
 
-    tabButton.style.display = 'block';
+    tabButton.style.display = '';
 
   };
 
@@ -7984,6 +7954,8 @@ function showEditInput(tabButton, folderNode) {
   };
 
 
+
+  input.addEventListener('input', resizeFolderRenameInput);
 
   input.addEventListener('keydown', async (e) => {
 
@@ -8265,7 +8237,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
   bookmarkFolderTabsContainer.replaceChildren();
 
-  if (bookmarkTabsTrack) {
+  if (bookmarkTabsTrack && !activeFolderId) {
 
     bookmarkTabsTrack.scrollLeft = 0;
 
@@ -8317,54 +8289,13 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
 
 
-    tabButton.addEventListener('contextmenu', (e) => {
-
+    tabButton.addEventListener('dblclick', (e) => {
       e.preventDefault();
-
       e.stopPropagation();
 
+      if (isTabDragging) return;
 
-
-      folderContextMenu.style.top = `${e.clientY}px`;
-
-      folderContextMenu.style.left = `${e.clientX}px`;
-
-      folderContextMenu.classList.remove('hidden');
-
-
-
-      menuEditBtn.onclick = () => {
-
-        folderContextMenu.classList.add('hidden');
-
-        showEditInput(tabButton, folderNode);
-
-      };
-
-
-
-      menuDeleteBtn.onclick = async () => {
-
-        folderContextMenu.classList.add('hidden');
-
-
-
-        const confirmed = await showDeleteConfirm(
-
-          `Delete "${folderNode.title}" and all its contents?`,
-
-          { isFolder: true, node: folderNode }
-
-        );
-
-        if (confirmed) {
-
-          deleteBookmarkFolder(folderNode.id);
-
-        }
-
-      };
-
+      showEditInput(tabButton, folderNode);
     });
 
     
@@ -8377,6 +8308,47 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
   });
 
+  if (bookmarkFolderTabsContainer._tabContextMenuHandler) {
+    bookmarkFolderTabsContainer.removeEventListener('contextmenu', bookmarkFolderTabsContainer._tabContextMenuHandler);
+  }
+
+  const tabContextMenuHandler = (e) => {
+    const tabButton = e.target.closest('.bookmark-folder-tab');
+    if (!tabButton) return;
+    if (!bookmarkFolderTabsContainer.contains(tabButton)) return;
+
+    const folderId = tabButton.dataset.folderId;
+    const folderNode = folderChildren.find(node => node.id === folderId) || findBookmarkNodeById(bookmarkTree[0], folderId);
+    if (!folderNode) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    folderContextMenu.style.top = `${e.clientY}px`;
+    folderContextMenu.style.left = `${e.clientX}px`;
+    folderContextMenu.classList.remove('hidden');
+
+    menuEditBtn.onclick = () => {
+      folderContextMenu.classList.add('hidden');
+      showEditInput(tabButton, folderNode);
+    };
+
+    menuDeleteBtn.onclick = async () => {
+      folderContextMenu.classList.add('hidden');
+
+      const confirmed = await showDeleteConfirm(
+        `Delete "${folderNode.title}" and all its contents?`,
+        { isFolder: true, node: folderNode }
+      );
+      if (confirmed) {
+        deleteBookmarkFolder(folderNode.id);
+      }
+    };
+  };
+
+  bookmarkFolderTabsContainer.addEventListener('contextmenu', tabContextMenuHandler);
+  bookmarkFolderTabsContainer._tabContextMenuHandler = tabContextMenuHandler;
+
   if (bookmarkFolderTabsContainer._tabClickHandler) {
     bookmarkFolderTabsContainer.removeEventListener('click', bookmarkFolderTabsContainer._tabClickHandler);
   }
@@ -8386,7 +8358,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
     if (!tabButton) return;
     if (isTabDragging) return;
 
-    document.querySelectorAll('.bookmark-folder-tab').forEach(btn => btn.classList.remove('active'));
+    bookmarkFolderTabsContainer.querySelectorAll('.bookmark-folder-tab').forEach(btn => btn.classList.remove('active'));
     tabButton.classList.add('active');
 
     const folderId = tabButton.dataset.folderId;

@@ -147,23 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.7.2',
+  version: '0.8.0',
   date: '2026-05-06',
   items: [
     {
-      type: 'FIX',
-      title: 'Folder save timing',
-      desc: 'Saving a new folder now waits for the inline editor to finish closing before creating it.'
+      type: 'NEW',
+      title: 'Double-click rename',
+      desc: 'Folder tabs can now be renamed directly with a double-click.'
     },
     {
       type: 'IMPROVED',
-      title: 'Folder transitions',
-      desc: 'The folder tab row stays steadier while the new-folder editor exits.'
+      title: 'Smarter tab scrolling',
+      desc: 'Folder tab arrows now move farther on wide rows, making long tab lists easier to browse.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Rename field fit',
+      desc: 'Folder rename fields now size to the folder name and stay aligned in the tab row.'
     },
     {
       type: 'FIX',
-      title: 'Add button recovery',
-      desc: 'The add-folder button is restored before the saved folder is added.'
+      title: 'Tab row stability',
+      desc: 'The folder tab row no longer jumps back to the beginning when the active folder refreshes.'
     }
   ]
 };

@@ -1673,6 +1673,16 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   outline: none;
   box-sizing: border-box;
 }
+
+.bookmark-folder-rename-input {
+  height: 26px;
+  min-height: 26px;
+  align-self: center;
+  box-sizing: border-box;
+  margin: 0;
+  line-height: 1;
+}
+
 .bookmark-folder-input::placeholder {
   color: #777;
 }

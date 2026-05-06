@@ -1595,7 +1595,9 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.18s ease;
+  opacity: 1;
+  transform: scale(1);
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, opacity 160ms ease-out, transform 160ms ease-out;
   color: #ffffff;
 }
 .bookmark-folder-add-btn svg {
@@ -1617,18 +1619,59 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.26);
 }
 
+.bookmark-folder-add-btn.is-editor-hidden {
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+}
+
+.bookmark-bar-wrapper.has-folder-inline-editor,
+.bookmark-tabs-wrapper.has-folder-inline-editor {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.bookmark-folder-inline-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+.bookmark-folder-inline-editor.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.bookmark-folder-inline-editor.is-exiting {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.bookmark-folder-inline-editor .bookmark-folder-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
 .bookmark-folder-input {
-  padding: 4px 12px; 
-  font-size: 0.85em; 
+  padding: 4px 12px;
+  font-size: 0.85em;
   font-weight: 500;
-  color: #333; /* Dark text */
-  background-color: white; /* White background */
+  color: #333;
+  background-color: white;
   border: 1px solid white;
   border-radius: 20px;
-  width: 120px; /* Give it a default width */
+  width: 120px;
   transition: all 0.2s ease;
   outline: none;
-  box-sizing: border-box; /* Ensure padding doesn't break layout */
+  box-sizing: border-box;
 }
 .bookmark-folder-input::placeholder {
   color: #777;
@@ -1636,17 +1679,22 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 
 .bookmark-folder-save-btn,
 .bookmark-folder-cancel-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px; 
-  height: 26px; 
-  font-size: 1.1em; 
-  font-weight: bold;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 0.8em;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
   color: white;
   background-color: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
+  border-radius: 999px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -1655,10 +1703,41 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
   background-color: rgba(0, 0, 0, 0.5);
 }
 .bookmark-folder-save-btn {
-  color: #8f8; /* Greenish */
+  color: #8f8;
 }
 .bookmark-folder-cancel-btn {
-  color: #f88; /* Reddish */
+  color: #f88;
+}
+
+@media (max-width: 520px) {
+  .bookmark-folder-inline-editor {
+    flex-wrap: wrap;
+  }
+
+  .bookmark-folder-inline-editor .bookmark-folder-input {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bookmark-folder-add-btn {
+    transform: none;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, opacity 160ms ease-out;
+  }
+
+  .bookmark-folder-add-btn.is-editor-hidden {
+    transform: none;
+  }
+
+  .bookmark-folder-inline-editor {
+    transition: none;
+    transform: none;
+  }
+
+  .bookmark-folder-inline-editor.is-visible,
+  .bookmark-folder-inline-editor.is-exiting {
+    transform: none;
+  }
 }
 
 

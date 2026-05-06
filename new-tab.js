@@ -8198,7 +8198,70 @@ function showGridItemRenameInput(gridItem, bookmarkNode) {
 
  */
 
+function setupBookmarkFolderAddTooltip(addButton, addTooltip) {
+  if (!addButton || !addTooltip) return () => {};
+
+  const resetTooltip = () => {
+    addTooltip.style.position = '';
+    addTooltip.style.left = '';
+    addTooltip.style.top = '';
+    addTooltip.style.transform = '';
+    addTooltip.style.opacity = '';
+    addTooltip.style.visibility = '';
+    addTooltip.style.pointerEvents = '';
+    addTooltip.style.zIndex = '';
+    addTooltip.style.marginTop = '';
+    addTooltip.style.marginBottom = '';
+  };
+
+  const showTooltip = () => {
+    if (!document.body) return;
+
+    const buttonRect = addButton.getBoundingClientRect();
+    document.body.appendChild(addTooltip);
+    addTooltip.hidden = false;
+    addTooltip.style.position = 'fixed';
+    addTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
+    addTooltip.style.top = `${buttonRect.bottom + 10}px`;
+    addTooltip.style.transform = 'translateX(-50%) translateY(6px)';
+    addTooltip.style.opacity = '1';
+    addTooltip.style.visibility = 'visible';
+    addTooltip.style.pointerEvents = 'none';
+    addTooltip.style.zIndex = '1000';
+    addTooltip.style.marginTop = '0';
+    addTooltip.style.marginBottom = '0';
+  };
+
+  const hideTooltip = () => {
+    addTooltip.hidden = true;
+    resetTooltip();
+    if (addTooltip.parentElement !== addButton) {
+      addButton.appendChild(addTooltip);
+    }
+  };
+
+  addTooltip.hidden = true;
+  addButton.addEventListener('mouseenter', showTooltip);
+  addButton.addEventListener('focus', showTooltip);
+  addButton.addEventListener('mouseleave', hideTooltip);
+  addButton.addEventListener('blur', hideTooltip);
+
+  return hideTooltip;
+}
+
 function createFolderTabs(homebaseFolder, activeFolderId = null) {
+
+  const folderTabsWrapper = bookmarkFolderTabsContainer.closest('.bookmark-tabs-wrapper');
+
+  const folderEditorHost = folderTabsWrapper?.closest('.bookmark-bar-wrapper') || folderTabsWrapper || bookmarkTabsTrack || bookmarkFolderTabsContainer.parentElement;
+
+  if (folderEditorHost) {
+
+    folderEditorHost.querySelectorAll('.bookmark-folder-inline-editor').forEach(editorElement => editorElement.remove());
+
+    folderEditorHost.classList.remove('has-folder-inline-editor');
+
+  }
 
   bookmarkFolderTabsContainer.replaceChildren();
 
@@ -8348,12 +8411,16 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
   addButton.setAttribute('aria-label', 'Create New Folder');
 
-  addButton.title = 'Create New Folder';
-
   const addIcon = createSvgIconElement('bookmarkTabsPlus');
   if (addIcon) {
     addButton.appendChild(addIcon);
   }
+
+  const addTooltip = document.createElement('span');
+  addTooltip.className = 'tooltip-popup tooltip-bottom bookmark-folder-add-tooltip';
+  addTooltip.textContent = 'Create New Folder';
+  addButton.appendChild(addTooltip);
+  const hideAddTooltip = setupBookmarkFolderAddTooltip(addButton, addTooltip);
 
   
 
@@ -8363,7 +8430,27 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     
 
-    addButton.style.display = 'none';
+    hideAddTooltip();
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const addButtonFadeDuration = prefersReducedMotion ? 0 : 160;
+
+    let cleanupStarted = false;
+
+    let cleanupFinished = false;
+
+    addButton.classList.add('is-editor-hidden');
+
+    setTimeout(() => {
+
+      if (!cleanupFinished && addButton.classList.contains('is-editor-hidden')) {
+
+        addButton.style.display = 'none';
+
+      }
+
+    }, addButtonFadeDuration);
 
 
 
@@ -8385,9 +8472,7 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     saveButton.className = 'bookmark-folder-save-btn';
 
-    saveButton.textContent = '?';
-
-    saveButton.title = 'Save Folder';
+    saveButton.textContent = '✓ Save';
     saveButton.setAttribute('aria-label', 'Save folder');
 
 
@@ -8396,22 +8481,72 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     cancelButton.className = 'bookmark-folder-cancel-btn';
 
-    cancelButton.textContent = '?';
-
-    cancelButton.title = 'Cancel';
+    cancelButton.textContent = '× Cancel';
     cancelButton.setAttribute('aria-label', 'Cancel');
 
+    const editor = document.createElement('div');
 
+    editor.className = 'bookmark-folder-inline-editor';
+
+    editor.append(input, saveButton, cancelButton);
+
+    const editorExitDuration = prefersReducedMotion ? 0 : 160;
+
+    function finishCleanup() {
+
+      if (cleanupFinished) return;
+
+      cleanupFinished = true;
+
+      editor.classList.remove('is-visible', 'is-exiting');
+
+      editor.remove();
+
+      if (folderEditorHost) {
+
+        folderEditorHost.classList.remove('has-folder-inline-editor');
+
+      }
+
+      addButton.style.display = 'flex';
+
+      requestAnimationFrame(() => {
+
+        addButton.classList.remove('is-editor-hidden');
+
+      });
+
+    }
 
     function cleanup() {
 
-      input.remove();
+      if (cleanupStarted) return;
 
-      saveButton.remove();
+      cleanupStarted = true;
 
-      cancelButton.remove();
+      editor.classList.remove('is-visible');
 
-      addButton.style.display = 'flex';
+      editor.classList.add('is-exiting');
+
+      if (editorExitDuration === 0) {
+
+        finishCleanup();
+
+        return;
+
+      }
+
+      editor.addEventListener('transitionend', (event) => {
+
+        if (event.target === editor) {
+
+          finishCleanup();
+
+        }
+
+      }, { once: true });
+
+      setTimeout(finishCleanup, editorExitDuration);
 
     }
 
@@ -8428,6 +8563,8 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
       const folderName = input.value.trim();
 
       if (folderName) {
+
+        cleanup();
 
         createNewBookmarkFolder(folderName);
 
@@ -8476,11 +8613,27 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     
 
-    bookmarkFolderTabsContainer.appendChild(input);
+    if (folderEditorHost) {
 
-    bookmarkFolderTabsContainer.appendChild(saveButton);
+      folderEditorHost.appendChild(editor);
 
-    bookmarkFolderTabsContainer.appendChild(cancelButton);
+      folderEditorHost.classList.add('has-folder-inline-editor');
+
+    } else {
+
+      bookmarkFolderTabsContainer.insertAdjacentElement('afterend', editor);
+
+    }
+
+    requestAnimationFrame(() => {
+
+      if (!cleanupStarted) {
+
+        editor.classList.add('is-visible');
+
+      }
+
+    });
 
     input.focus();
 

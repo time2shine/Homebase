@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.7.0',
-  date: '2026-05-04',
+  version: '0.7.1',
+  date: '2026-05-06',
   items: [
     {
-      type: 'NEW',
-      title: 'Tips setting',
-      desc: 'You can turn Homebase Tips on or off from General settings.'
-    },
-    {
-      type: 'NEW',
-      title: 'Hide tips action',
-      desc: 'Tip cards now include a button that hides future Homebase Tips.'
+      type: 'IMPROVED',
+      title: 'Folder creation',
+      desc: 'Creating bookmark folders now opens a smoother full-width inline editor.'
     },
     {
       type: 'IMPROVED',
-      title: 'Synced tip preference',
-      desc: 'Homebase Tips visibility now stays synced between the tip card and settings.'
+      title: 'Clear folder actions',
+      desc: 'Save and Cancel controls are easier to read while naming a new folder.'
+    },
+    {
+      type: 'FIX',
+      title: 'Folder tooltip',
+      desc: 'The Create New Folder tooltip now stays positioned correctly as the editor opens.'
     }
   ]
 };

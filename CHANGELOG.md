@@ -2,6 +2,17 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.7.1 — 2026-05-06
+### Added
+- None.
+### Improved
+- Creating bookmark folders now opens in a full-width inline editor with smoother entry and exit.
+- New-folder Save and Cancel actions now use clear text labels.
+- The folder editor now adapts better on small screens and reduced-motion settings.
+### Fixed
+- The Create New Folder tooltip now stays positioned correctly while the folder editor opens.
+- Starting or closing folder creation now restores the add button cleanly.
+
 ## v0.7.0 — 2026-05-04
 ### Added
 - Added a General setting to show or hide Homebase Tips after onboarding.

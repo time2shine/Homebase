@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.7.1',
+  version: '0.7.2',
   date: '2026-05-06',
   items: [
     {
-      type: 'IMPROVED',
-      title: 'Folder creation',
-      desc: 'Creating bookmark folders now opens a smoother full-width inline editor.'
+      type: 'FIX',
+      title: 'Folder save timing',
+      desc: 'Saving a new folder now waits for the inline editor to finish closing before creating it.'
     },
     {
       type: 'IMPROVED',
-      title: 'Clear folder actions',
-      desc: 'Save and Cancel controls are easier to read while naming a new folder.'
+      title: 'Folder transitions',
+      desc: 'The folder tab row stays steadier while the new-folder editor exits.'
     },
     {
       type: 'FIX',
-      title: 'Folder tooltip',
-      desc: 'The Create New Folder tooltip now stays positioned correctly as the editor opens.'
+      title: 'Add button recovery',
+      desc: 'The add-folder button is restored before the saved folder is added.'
     }
   ]
 };

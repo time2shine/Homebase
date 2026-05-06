@@ -8440,6 +8440,8 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
     let cleanupFinished = false;
 
+    let pendingCleanupCallback = null;
+
     addButton.classList.add('is-editor-hidden');
 
     setTimeout(() => {
@@ -8516,9 +8518,25 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
       });
 
+      const callback = pendingCleanupCallback;
+
+      pendingCleanupCallback = null;
+
+      if (typeof callback === 'function') {
+
+        callback();
+
+      }
+
     }
 
-    function cleanup() {
+    function cleanup(afterCleanup) {
+
+      if (typeof afterCleanup === 'function') {
+
+        pendingCleanupCallback = afterCleanup;
+
+      }
 
       if (cleanupStarted) return;
 
@@ -8564,9 +8582,11 @@ function createFolderTabs(homebaseFolder, activeFolderId = null) {
 
       if (folderName) {
 
-        cleanup();
+        cleanup(() => {
 
-        createNewBookmarkFolder(folderName);
+          createNewBookmarkFolder(folderName);
+
+        });
 
       } else {
 

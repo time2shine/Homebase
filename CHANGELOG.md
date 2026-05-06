@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.7.2 — 2026-05-06
+### Added
+- None.
+### Improved
+- Saving a new bookmark folder now feels smoother because the tab row updates after the inline editor closes.
+- The add-folder button now returns before the saved folder is added.
+### Fixed
+- New folders no longer appear while the creation editor is still closing.
+
 ## v0.7.1 — 2026-05-06
 ### Added
 - None.

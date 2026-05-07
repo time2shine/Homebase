@@ -17012,6 +17012,102 @@ async function loadCachedWeather() {
 
 
 
+function getCurrentHourlyWeatherIndex(data) {
+
+  const hourly = data?.hourly;
+
+  if (!hourly || typeof hourly !== 'object') return 0;
+
+  const hourlyTimes = Array.isArray(hourly.time) ? hourly.time : [];
+
+  const hourlyLengths = [
+    hourlyTimes.length,
+    Array.isArray(hourly.surface_pressure) ? hourly.surface_pressure.length : 0,
+    Array.isArray(hourly.relative_humidity_2m) ? hourly.relative_humidity_2m.length : 0,
+    Array.isArray(hourly.cloudcover) ? hourly.cloudcover.length : 0,
+    Array.isArray(hourly.precipitation_probability) ? hourly.precipitation_probability.length : 0
+  ].filter((length) => length > 0);
+
+  if (hourlyLengths.length === 0) return 0;
+
+  const maxIndex = Math.max(...hourlyLengths) - 1;
+
+  const apiCurrentTime = data?.current_weather?.time || data?.current?.time;
+
+  if (hourlyTimes.length > 0) {
+
+    if (apiCurrentTime) {
+
+      const exactIndex = hourlyTimes.indexOf(apiCurrentTime);
+
+      if (exactIndex >= 0) return Math.min(exactIndex, maxIndex);
+
+    }
+
+    const targetTimestamp = new Date(apiCurrentTime || Date.now()).getTime();
+
+    if (Number.isFinite(targetTimestamp)) {
+
+      let nearestIndex = 0;
+      let nearestDiff = Infinity;
+      const timeLimit = Math.min(hourlyTimes.length - 1, maxIndex);
+
+      for (let i = 0; i <= timeLimit; i += 1) {
+
+        const hourlyTimestamp = new Date(hourlyTimes[i]).getTime();
+
+        if (!Number.isFinite(hourlyTimestamp)) continue;
+
+        const diff = Math.abs(hourlyTimestamp - targetTimestamp);
+
+        if (diff < nearestDiff) {
+
+          nearestDiff = diff;
+          nearestIndex = i;
+
+        }
+
+      }
+
+      if (Number.isFinite(nearestDiff)) return nearestIndex;
+
+    }
+
+    const currentHour = new Date().getHours();
+    const hourIndex = hourlyTimes.findIndex((time) => {
+      if (typeof time !== 'string') return false;
+      const match = time.match(/T(\d{2}):/);
+      return match ? Number(match[1]) === currentHour : false;
+    });
+
+    if (hourIndex >= 0) return Math.min(hourIndex, maxIndex);
+
+  }
+
+  return Math.min(new Date().getHours(), maxIndex);
+
+}
+
+
+
+function getHourlyValueAtIndex(hourly, key, index) {
+
+  if (!hourly || typeof hourly !== 'object') return undefined;
+
+  const values = hourly[key];
+
+  if (!Array.isArray(values) || values.length === 0) return undefined;
+
+  const safeIndex = Number.isInteger(index) ? index : 0;
+
+  if (safeIndex < 0 || safeIndex >= values.length) return undefined;
+
+  return values[safeIndex];
+
+}
+
+
+
 function updateWeatherUI(data, cityName, units, fetchedAt = Date.now()) {
 
   const iconEl = document.getElementById('weather-icon');
@@ -17054,20 +17150,30 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now()) {
 
   const code = weather.weathercode;
 
-  const pressure = (Array.isArray(hourly.surface_pressure) && Number.isFinite(hourly.surface_pressure[0]))
-    ? Math.round(hourly.surface_pressure[0] * 0.75006)
+  const hourlyIndex = getCurrentHourlyWeatherIndex(data);
+
+  const pressureValue = getHourlyValueAtIndex(hourly, 'surface_pressure', hourlyIndex);
+
+  const humidityValue = getHourlyValueAtIndex(hourly, 'relative_humidity_2m', hourlyIndex);
+
+  const cloudcoverValue = getHourlyValueAtIndex(hourly, 'cloudcover', hourlyIndex);
+
+  const precipProbValue = getHourlyValueAtIndex(hourly, 'precipitation_probability', hourlyIndex);
+
+  const pressure = Number.isFinite(pressureValue)
+    ? Math.round(pressureValue * 0.75006)
     : '--';
 
-  const humidity = (Array.isArray(hourly.relative_humidity_2m) && Number.isFinite(hourly.relative_humidity_2m[0]))
-    ? hourly.relative_humidity_2m[0]
+  const humidity = Number.isFinite(humidityValue)
+    ? humidityValue
     : '--';
 
-  const cloudcover = (Array.isArray(hourly.cloudcover) && Number.isFinite(hourly.cloudcover[0]))
-    ? hourly.cloudcover[0]
+  const cloudcover = Number.isFinite(cloudcoverValue)
+    ? cloudcoverValue
     : '--';
 
-  const precipProb = (Array.isArray(hourly.precipitation_probability) && Number.isFinite(hourly.precipitation_probability[0]))
-    ? hourly.precipitation_probability[0]
+  const precipProb = Number.isFinite(precipProbValue)
+    ? precipProbValue
     : '--';
 
   let sunrise = '--', sunset = '--';
@@ -17176,11 +17282,23 @@ function setText(el, value) {
   if (el.textContent !== v) el.textContent = v;
 }
 
-function showWeatherError(error) {
+async function showWeatherError(error) {
   if (error) console.error('Weather Error:', error);
 
+  try {
+    const data = await browser.storage.local.get(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
+
+    if (data.cachedWeatherData && data.cachedCityName) {
+      const cachedTs = data.weatherFetchedAt ?? data.cachedWeatherData.__timestamp ?? Date.now();
+      updateWeatherUI(data.cachedWeatherData, data.cachedCityName, data.cachedUnits || 'celsius', cachedTs);
+      return;
+    }
+  } catch (cacheError) {
+    console.warn('Could not restore cached weather after error:', cacheError);
+  }
+
   setText(document.getElementById('weather-city'), 'Weather Error');
-  setText(document.getElementById('weather-temp'), '--Â°');
+  setText(document.getElementById('weather-temp'), '--\u00b0');
   setText(document.getElementById('weather-desc'), 'Could not load data');
   setText(document.getElementById('weather-icon'), '-');
 
@@ -17188,8 +17306,6 @@ function showWeatherError(error) {
   if (updatedEl) setText(updatedEl, '');
 
   showWeatherSetupUI({ hideBody: false });
-
-  browser.storage.local.remove(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
 }
 
 

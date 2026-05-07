@@ -2,6 +2,14 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.8.1 — 2026-05-08
+### Improved
+- Weather pressure, humidity, cloud cover, and rain chance now use the hourly reading closest to the current weather time.
+- Weather detail matching now follows the API current time instead of always reading the first hourly slot.
+### Fixed
+- Temporary weather refresh failures now restore the last saved forecast instead of immediately showing an error.
+- Cached weather data is no longer cleared after refresh errors, helping the widget recover cleanly.
+
 ## v0.8.0 — 2026-05-06
 ### Added
 - Folder tabs can now be renamed directly with a double-click.

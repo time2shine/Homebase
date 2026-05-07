@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.8.0',
-  date: '2026-05-06',
+  version: '0.8.1',
+  date: '2026-05-08',
   items: [
     {
-      type: 'NEW',
-      title: 'Double-click rename',
-      desc: 'Folder tabs can now be renamed directly with a double-click.'
+      type: 'IMPROVED',
+      title: 'Current-hour weather details',
+      desc: 'Pressure, humidity, cloud cover, and rain chance now use the hourly reading closest to the current weather time.'
     },
     {
       type: 'IMPROVED',
-      title: 'Smarter tab scrolling',
-      desc: 'Folder tab arrows now move farther on wide rows, making long tab lists easier to browse.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Rename field fit',
-      desc: 'Folder rename fields now size to the folder name and stay aligned in the tab row.'
+      title: 'More accurate weather matching',
+      desc: 'Weather details now line up with the API current time instead of always reading the first hourly slot.'
     },
     {
       type: 'FIX',
-      title: 'Tab row stability',
-      desc: 'The folder tab row no longer jumps back to the beginning when the active folder refreshes.'
+      title: 'Weather fallback',
+      desc: 'Temporary weather refresh failures now restore the last saved forecast instead of immediately showing an error.'
+    },
+    {
+      type: 'FIX',
+      title: 'Weather cache reliability',
+      desc: 'Saved weather data is kept after refresh errors so the widget can recover cleanly.'
     }
   ]
 };

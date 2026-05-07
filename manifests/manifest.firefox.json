@@ -1,0 +1,69 @@
+{
+  "manifest_version": 3,
+  "name": "Homebase",
+  "version": "0.8.0",
+  "description": "Replaces the default new tab with a fast, customizable dashboard for search, weather, news, bookmarks, and focused daily use.",
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+
+  "action": {
+    "default_title": "Homebase",
+    "default_popup": "action-popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "rokonmagura@gmail.com",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["none"],
+        "optional": []
+      }
+    }
+  },
+
+  "chrome_url_overrides": {
+    "newtab": "new-tab.html"
+  },
+
+  "permissions": [
+    "tabs",
+    "cookies",
+    "storage",
+    "history",
+    "bookmarks",
+    "clipboardRead",
+    "contextualIdentities"
+  ],
+
+  "host_permissions": [
+    "https://www.espn.com/*",
+    "https://t2.gstatic.com/*",
+    "https://www.google.com/*",
+    "https://en.wikipedia.org/*",
+    "https://feeds.bbci.co.uk/*",
+    "https://www.aljazeera.com/*",
+    "https://duckduckgo.com/ac/*",
+    "https://suggest.yandex.com/*",
+    "https://api.open-meteo.com/*",
+    "https://ff.search.yahoo.com/*",
+    "https://www.espncricinfo.com/*",
+    "https://feeds.feedburner.com/*",
+    "https://completion.amazon.com/*",
+    "https://api.bing.com/osjson.aspx*",
+    "https://suggestqueries.google.com/*",
+    "https://geocoding-api.open-meteo.com/*",
+    "https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/*"
+  ]
+}

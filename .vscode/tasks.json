@@ -2,6 +2,52 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Build Homebase Extension",
+      "type": "shell",
+      "command": "npm run build",
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "cmd.exe",
+            "args": ["/d", "/c"]
+          }
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Chrome Extension",
+      "type": "shell",
+      "command": "npm run build:chrome",
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "cmd.exe",
+            "args": ["/d", "/c"]
+          }
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Firefox Extension",
+      "type": "shell",
+      "command": "npm run build:firefox",
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "cmd.exe",
+            "args": ["/d", "/c"]
+          }
+        }
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Run Homebase (Dev Profile)",
       "type": "shell",
       "windows": {
@@ -19,20 +65,12 @@
         "--firefox",
         "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
         "--source-dir",
-        "${workspaceFolder}",
+        "${workspaceFolder}\\dist\\firefox",
         "--verbose",
         "--firefox-profile",
         "C:\\Users\\rokon\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles\\t2s94xii.default-release",
         "--keep-profile-changes"
       ],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      },
       "problemMatcher": []
     }
   ]

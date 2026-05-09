@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.8.1',
-  date: '2026-05-08',
+  version: '0.9.0',
+  date: '2026-05-09',
   items: [
     {
-      type: 'IMPROVED',
-      title: 'Current-hour weather details',
-      desc: 'Pressure, humidity, cloud cover, and rain chance now use the hourly reading closest to the current weather time.'
+      type: 'NEW',
+      title: 'Weather detail cards',
+      desc: 'Wind, humidity, rain chance, clouds, sunrise, and sunset now appear in compact weather cards.'
     },
     {
       type: 'IMPROVED',
-      title: 'More accurate weather matching',
-      desc: 'Weather details now line up with the API current time instead of always reading the first hourly slot.'
+      title: 'Weather widget design',
+      desc: 'The weather card now has a cleaner layout with a larger condition icon and easier-to-scan details.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Refresh feedback',
+      desc: 'Refreshing weather now shows a loading state and keeps the refresh button disabled until it finishes.'
     },
     {
       type: 'FIX',
-      title: 'Weather fallback',
-      desc: 'Temporary weather refresh failures now restore the last saved forecast instead of immediately showing an error.'
-    },
-    {
-      type: 'FIX',
-      title: 'Weather cache reliability',
-      desc: 'Saved weather data is kept after refresh errors so the widget can recover cleanly.'
+      title: 'Weather recovery states',
+      desc: 'Cached forecasts and load errors now show clearer status text and restore setup options when needed.'
     }
   ]
 };

@@ -16896,8 +16896,26 @@ let geoAbortController = null;
 let geoRequestId = 0;
 let weatherRefreshInFlight = false;
 
+function setWeatherLoadingState(isLoading) {
+  const loading = Boolean(isLoading);
+
+  if (weatherWidget) {
+    weatherWidget.classList.toggle('weather-loading', loading);
+    weatherWidget.setAttribute('aria-busy', loading ? 'true' : 'false');
+  }
+
+  if (weatherRefreshBtn) {
+    weatherRefreshBtn.disabled = loading;
+    weatherRefreshBtn.setAttribute('aria-label', loading ? 'Refreshing weather' : 'Refresh weather');
+  }
+}
+
 function showWeatherSetupUI(options = {}) {
-  const { hideBody = true } = options;
+  const { hideBody = true, isError = false } = options;
+  if (weatherWidget) {
+    weatherWidget.classList.toggle('weather-error', Boolean(isError));
+    weatherWidget.classList.remove('weather-cached');
+  }
   if (weatherSetup) weatherSetup.classList.remove('hidden');
   if (hideBody) {
     if (weatherBody) weatherBody.classList.add('hidden');
@@ -16913,35 +16931,56 @@ function hideWeatherSetupUI() {
   if (weatherSetup) weatherSetup.classList.add('hidden');
   if (weatherBody) weatherBody.classList.remove('hidden');
   if (weatherFooter) weatherFooter.classList.remove('hidden');
+  if (weatherWidget) weatherWidget.classList.remove('weather-error');
 }
 
 
 
 function getWeatherEmoji(code) {
 
-  // Use explicit Unicode escapes to avoid encoding issues
+  const weatherCode = Number(code);
 
-  if ([0, 1].includes(code)) return '\u2600'; // sun
+  if ([0].includes(weatherCode)) return '☀️'; // Clear sky
 
-  if ([2].includes(code)) return '\u26C5'; // sun behind cloud
+  if ([1].includes(weatherCode)) return '🌤️'; // Mainly clear
 
-  if ([3].includes(code)) return '\u2601'; // cloud
+  if ([2].includes(weatherCode)) return '⛅'; // Partly cloudy
 
-  if ([45, 48].includes(code)) return '\uD83C\uDF2B'; // fog
+  if ([3].includes(weatherCode)) return '☁️'; // Overcast
 
-  if ([51, 53, 55, 56, 57].includes(code)) return '\uD83C\uDF26'; // light rain
+  if ([45, 48].includes(weatherCode)) return '🌫️'; // Fog
 
-  if ([61, 63, 65, 66, 67].includes(code)) return '\uD83C\uDF27'; // rain
+  if ([51, 53, 55].includes(weatherCode)) return '🌦️'; // Drizzle
 
-  if ([71, 73, 75, 77].includes(code)) return '\uD83C\uDF28'; // snow
+  if ([56, 57].includes(weatherCode)) return '🌧️'; // Freezing drizzle
 
-  if ([80, 81, 82].includes(code)) return '\uD83C\uDF26'; // showers
+  if ([61].includes(weatherCode)) return '🌦️'; // Slight rain
 
-  if ([85, 86].includes(code)) return '\uD83C\uDF28'; // snow showers
+  if ([63].includes(weatherCode)) return '🌧️'; // Moderate rain
 
-  if ([95, 96, 99].includes(code)) return '\u26C8'; // thunderstorm
+  if ([65].includes(weatherCode)) return '⛈️'; // Heavy rain
 
-  return '\u2753'; // unknown
+  if ([66, 67].includes(weatherCode)) return '🌧️'; // Freezing rain
+
+  if ([71].includes(weatherCode)) return '🌨️'; // Slight snow
+
+  if ([73, 75].includes(weatherCode)) return '❄️'; // Moderate/heavy snow
+
+  if ([77].includes(weatherCode)) return '🌨️'; // Snow grains
+
+  if ([80].includes(weatherCode)) return '🌦️'; // Slight showers
+
+  if ([81].includes(weatherCode)) return '🌧️'; // Moderate showers
+
+  if ([82].includes(weatherCode)) return '⛈️'; // Violent showers
+
+  if ([85, 86].includes(weatherCode)) return '🌨️'; // Snow showers
+
+  if ([95].includes(weatherCode)) return '⛈️'; // Thunderstorm
+
+  if ([96, 99].includes(weatherCode)) return '🌩️'; // Thunderstorm with hail
+
+  return '🌡️';
 
 }
 
@@ -16975,15 +17014,19 @@ function getWeatherDescription(code) {
 
 
 
-function formatWeatherUpdated(timestamp) {
+function formatWeatherUpdated(timestamp, options = {}) {
 
-  if (!timestamp) return '';
+  const { isCached = false } = options;
+
+  if (!timestamp) return isCached ? 'Cached weather data' : '';
 
   const date = new Date(timestamp);
 
-  if (Number.isNaN(date.getTime())) return '';
+  if (Number.isNaN(date.getTime())) return isCached ? 'Cached weather data' : '';
 
-  return `Updated: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  const updatedLabel = `Updated: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+  return isCached ? `Cached data - ${updatedLabel}` : updatedLabel;
 
 }
 
@@ -17022,7 +17065,7 @@ function getCurrentHourlyWeatherIndex(data) {
 
   const hourlyLengths = [
     hourlyTimes.length,
-    Array.isArray(hourly.surface_pressure) ? hourly.surface_pressure.length : 0,
+    Array.isArray(hourly.wind_speed_10m) ? hourly.wind_speed_10m.length : 0,
     Array.isArray(hourly.relative_humidity_2m) ? hourly.relative_humidity_2m.length : 0,
     Array.isArray(hourly.cloudcover) ? hourly.cloudcover.length : 0,
     Array.isArray(hourly.precipitation_probability) ? hourly.precipitation_probability.length : 0
@@ -17108,7 +17151,81 @@ function getHourlyValueAtIndex(hourly, key, index) {
 
 
 
-function updateWeatherUI(data, cityName, units, fetchedAt = Date.now()) {
+function normalizeWeatherDisplay(data, cityName, units, fetchedAt = Date.now(), options = {}) {
+
+  if (!data) return null;
+
+  const weather = data.current_weather || {};
+
+  const hourly = data.hourly || {};
+
+  const daily = data.daily || {};
+
+  const tempNumber = Number(weather.temperature);
+
+  const tempValue = Number.isFinite(tempNumber) ? Math.round(tempNumber) : '--';
+
+  const codeNumber = Number(weather.weathercode);
+
+  const code = Number.isFinite(codeNumber) ? codeNumber : weather.weathercode;
+
+  const hourlyIndex = getCurrentHourlyWeatherIndex(data);
+
+  const windValue = Number(getHourlyValueAtIndex(hourly, 'wind_speed_10m', hourlyIndex));
+
+  const humidityValue = Number(getHourlyValueAtIndex(hourly, 'relative_humidity_2m', hourlyIndex));
+
+  const cloudcoverValue = Number(getHourlyValueAtIndex(hourly, 'cloudcover', hourlyIndex));
+
+  const precipProbValue = Number(getHourlyValueAtIndex(hourly, 'precipitation_probability', hourlyIndex));
+
+  const formatPercent = (value) => Number.isFinite(value) ? `${Math.round(value)}%` : '--';
+
+  const windUnit = units === 'fahrenheit' ? 'mph' : 'km/h';
+
+  const wind = Number.isFinite(windValue)
+    ? `${Math.round(windValue)}\u00A0${windUnit}`
+    : '--';
+
+  const formatSunTime = (value) => {
+    if (!value) return '--';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '--';
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP]M)$/i, '\u00A0$1');
+  };
+
+  const timestampValue = typeof fetchedAt === 'number' ? fetchedAt : new Date(fetchedAt).getTime();
+
+  const effectiveTimestamp = Number.isFinite(timestampValue) ? timestampValue : Date.now();
+
+  const isCached = Boolean(options.isCached);
+
+  const unitLabel = units === 'fahrenheit' ? 'F' : 'C';
+
+  return {
+    cityName: cityName || 'Weather',
+    emoji: getWeatherEmoji(code),
+    description: getWeatherDescription(code),
+    temperature: `${tempValue === '--' ? '--' : tempValue}\u00b0${unitLabel}`,
+    // Legacy property name used for the third metric slot and fast-weather compatibility.
+    pressure: wind,
+    humidity: formatPercent(humidityValue),
+    cloudCover: formatPercent(cloudcoverValue),
+    precipitationProbability: formatPercent(precipProbValue),
+    sunrise: formatSunTime(Array.isArray(daily.sunrise) ? daily.sunrise[0] : null),
+    sunset: formatSunTime(Array.isArray(daily.sunset) ? daily.sunset[0] : null),
+    units,
+    fetchedAt: effectiveTimestamp,
+    isCached,
+    weatherCode: code ?? '',
+    updatedLabel: formatWeatherUpdated(effectiveTimestamp, { isCached })
+  };
+
+}
+
+
+
+function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options = {}) {
 
   const iconEl = document.getElementById('weather-icon');
 
@@ -17132,7 +17249,9 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now()) {
 
   const updatedEl = weatherUpdatedEl || document.getElementById('weather-updated');
 
-  if (!data) {
+  const display = normalizeWeatherDisplay(data, cityName, units, fetchedAt, options);
+
+  if (!display) {
 
     showWeatherError(new Error('Weather data missing'));
 
@@ -17140,97 +17259,33 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now()) {
 
   }
 
-  const weather = data.current_weather || {};
+  setText(cityEl, display.cityName);
 
-  const hourly = data.hourly || {};
+  setText(tempEl, display.temperature);
 
-  const daily = data.daily || {};
+  setText(descEl, display.description);
 
-  const tempValue = Number.isFinite(weather.temperature) ? Math.round(weather.temperature) : '--';
+  setText(pressureEl, display.pressure);
 
-  const code = weather.weathercode;
+  setText(humidityEl, display.humidity);
 
-  const hourlyIndex = getCurrentHourlyWeatherIndex(data);
+  setText(cloudcoverEl, display.cloudCover);
 
-  const pressureValue = getHourlyValueAtIndex(hourly, 'surface_pressure', hourlyIndex);
+  setText(precipProbEl, display.precipitationProbability);
 
-  const humidityValue = getHourlyValueAtIndex(hourly, 'relative_humidity_2m', hourlyIndex);
+  setText(sunriseEl, display.sunrise);
 
-  const cloudcoverValue = getHourlyValueAtIndex(hourly, 'cloudcover', hourlyIndex);
+  setText(sunsetEl, display.sunset);
 
-  const precipProbValue = getHourlyValueAtIndex(hourly, 'precipitation_probability', hourlyIndex);
+  if (updatedEl) setText(updatedEl, display.updatedLabel);
 
-  const pressure = Number.isFinite(pressureValue)
-    ? Math.round(pressureValue * 0.75006)
-    : '--';
+  setText(iconEl, display.emoji);
 
-  const humidity = Number.isFinite(humidityValue)
-    ? humidityValue
-    : '--';
+  setAttr(iconEl, 'data-weather-code', display.weatherCode);
 
-  const cloudcover = Number.isFinite(cloudcoverValue)
-    ? cloudcoverValue
-    : '--';
+  if (iconEl) iconEl.classList.add('is-instant-icon');
 
-  const precipProb = Number.isFinite(precipProbValue)
-    ? precipProbValue
-    : '--';
-
-  let sunrise = '--', sunset = '--';
-
-  if (Array.isArray(daily.sunrise) && daily.sunrise[0] && Array.isArray(daily.sunset) && daily.sunset[0]) {
-
-    const sunriseDate = new Date(daily.sunrise[0]);
-
-    const sunsetDate = new Date(daily.sunset[0]);
-
-    const timeOptions = { hour: 'numeric', minute: '2-digit' };
-
-    sunrise = sunriseDate.toLocaleTimeString('en-US', timeOptions);
-
-    sunset = sunsetDate.toLocaleTimeString('en-US', timeOptions);
-
-  }
-
-  const effectiveTimestamp = typeof fetchedAt === 'number' ? fetchedAt : Date.now();
-
-  const unitLabel = units === 'fahrenheit' ? 'F' : 'C';
-
-  const tempLabel = `${tempValue === '--' ? '--' : tempValue}\u00b0${unitLabel}`;
-
-  const description = getWeatherDescription(code);
-
-  const icon = getWeatherEmoji(code);
-
-  const updatedLabel = formatWeatherUpdated(effectiveTimestamp);
-
-  setText(cityEl, cityName);
-
-  setText(tempEl, tempLabel);
-
-  setText(descEl, description);
-
-  setText(pressureEl, `Pressure: ${pressure}${pressure !== '--' ? ' mmHg' : ''}`);
-
-  setText(humidityEl, `Humidity: ${humidity}${humidity !== '--' ? '%' : ''}`);
-
-  setText(cloudcoverEl, `Cloudcover: ${cloudcover}${cloudcover !== '--' ? '%' : ''}`);
-
-  setText(precipProbEl, `Rain Chance: ${precipProb}${precipProb !== '--' ? '%' : ''}`);
-
-  setText(sunriseEl, `Sunrise: ${sunrise}`);
-
-  setText(sunsetEl, `Sunset: ${sunset}`);
-
-  if (updatedEl) setText(updatedEl, updatedLabel);
-
-  setText(iconEl, icon);
-
-  setAttr(iconEl, 'data-weather-code', code ?? '');
-
-  if (iconEl && iconEl.style.fontSize !== '3.5em') iconEl.style.fontSize = '3.5em';
-
-  if (iconEl && iconEl.style.lineHeight !== '1') iconEl.style.lineHeight = '1';
+  if (weatherWidget) weatherWidget.classList.toggle('weather-cached', display.isCached);
 
   hideWeatherSetupUI();
 
@@ -17238,11 +17293,11 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now()) {
 
     cachedWeatherData: data,
 
-    cachedCityName: cityName,
+    cachedCityName: display.cityName,
 
-    cachedUnits: units,
+    cachedUnits: display.units,
 
-    weatherFetchedAt: effectiveTimestamp
+    weatherFetchedAt: display.fetchedAt
 
   });
 
@@ -17253,19 +17308,18 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now()) {
   // Mirror simplified weather info to localStorage for instant paint on next load
   try {
     const fastWeather = {
-      city: cityName,
-      temp: tempLabel,
-      desc: description,
-      icon,
-      // --- NEW: Cache detailed stats for instant load ---
-      pressure: `Pressure: ${pressure}${pressure !== '--' ? ' mmHg' : ''}`,
-      humidity: `Humidity: ${humidity}${humidity !== '--' ? '%' : ''}`,
-      cloudcover: `Cloudcover: ${cloudcover}${cloudcover !== '--' ? '%' : ''}`,
-      precipProb: `Rain Chance: ${precipProb}${precipProb !== '--' ? '%' : ''}`,
-      sunrise: `Sunrise: ${sunrise}`,
-      sunset: `Sunset: ${sunset}`,
-      updated: updatedLabel,
-      __timestamp: effectiveTimestamp
+      city: display.cityName,
+      temp: display.temperature,
+      desc: display.description,
+      icon: display.emoji,
+      pressure: display.pressure,
+      humidity: display.humidity,
+      cloudcover: display.cloudCover,
+      precipProb: display.precipitationProbability,
+      sunrise: display.sunrise,
+      sunset: display.sunset,
+      updated: display.updatedLabel,
+      __timestamp: display.fetchedAt
     };
     localStorage.setItem('fast-weather', JSON.stringify(fastWeather));
   } catch (e) {
@@ -17282,6 +17336,12 @@ function setText(el, value) {
   if (el.textContent !== v) el.textContent = v;
 }
 
+function setAttr(el, name, value) {
+  if (!el) return;
+  const v = String(value ?? '');
+  if (el.getAttribute(name) !== v) el.setAttribute(name, v);
+}
+
 async function showWeatherError(error) {
   if (error) console.error('Weather Error:', error);
 
@@ -17290,7 +17350,7 @@ async function showWeatherError(error) {
 
     if (data.cachedWeatherData && data.cachedCityName) {
       const cachedTs = data.weatherFetchedAt ?? data.cachedWeatherData.__timestamp ?? Date.now();
-      updateWeatherUI(data.cachedWeatherData, data.cachedCityName, data.cachedUnits || 'celsius', cachedTs);
+      updateWeatherUI(data.cachedWeatherData, data.cachedCityName, data.cachedUnits || 'celsius', cachedTs, { isCached: true });
       return;
     }
   } catch (cacheError) {
@@ -17301,11 +17361,18 @@ async function showWeatherError(error) {
   setText(document.getElementById('weather-temp'), '--\u00b0');
   setText(document.getElementById('weather-desc'), 'Could not load data');
   setText(document.getElementById('weather-icon'), '-');
+  setText(document.getElementById('weather-pressure'), '--');
+  setText(document.getElementById('weather-humidity'), '--');
+  setText(document.getElementById('weather-cloudcover'), '--');
+  setText(document.getElementById('weather-precip-prob'), '--');
+  setText(document.getElementById('weather-sunrise'), '--');
+  setText(document.getElementById('weather-sunset'), '--');
+  setAttr(document.getElementById('weather-icon'), 'data-weather-code', '');
 
   const updatedEl = document.getElementById('weather-updated');
-  if (updatedEl) setText(updatedEl, '');
+  if (updatedEl) setText(updatedEl, 'Choose a city or use your location to try again');
 
-  showWeatherSetupUI({ hideBody: false });
+  showWeatherSetupUI({ hideBody: false, isError: true });
 }
 
 
@@ -17315,15 +17382,17 @@ async function fetchWeather(lat, lon, units, cityName) {
 
   try {
 
-    const hourlyParams = 'relative_humidity_2m,surface_pressure,cloudcover,precipitation_probability';
+    const hourlyParams = 'relative_humidity_2m,wind_speed_10m,cloudcover,precipitation_probability';
 
     const dailyParams = 'sunrise,sunset';
+
+    const windSpeedUnitParam = units === 'fahrenheit' ? '&wind_speed_unit=mph' : '';
 
     const weatherUrl =
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
       `&current_weather=true&temperature_unit=${units}` +
       `&hourly=${hourlyParams}&daily=${dailyParams}` +
-      `&forecast_days=1&timezone=auto`;
+      `&forecast_days=1&timezone=auto${windSpeedUnitParam}`;
 
     const weatherResponse = await fetch(weatherUrl);
 
@@ -17335,7 +17404,7 @@ async function fetchWeather(lat, lon, units, cityName) {
 
   } catch (error) {
 
-    showWeatherError(error);
+    await showWeatherError(error);
 
   }
 
@@ -17596,7 +17665,7 @@ async function setupWeather() {
     weatherRefreshBtn.addEventListener('click', async () => {
       if (weatherRefreshInFlight) return;
       weatherRefreshInFlight = true;
-      weatherRefreshBtn.disabled = true;
+      setWeatherLoadingState(true);
 
       try {
         const data = await browser.storage.local.get(['weatherLat', 'weatherLon', 'weatherUnits', 'weatherCityName']);
@@ -17609,7 +17678,7 @@ async function setupWeather() {
         }
       } finally {
         weatherRefreshInFlight = false;
-        weatherRefreshBtn.disabled = false;
+        setWeatherLoadingState(false);
       }
     });
   }

@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.9.0 — 2026-05-09
+### Added
+- Added a dedicated wind metric to the weather details grid.
+### Improved
+- Redesigned the weather widget with a larger condition icon and compact detail cards for faster scanning.
+- Weather refresh now shows a loading state and disables the refresh button until the update finishes.
+- The weather setup prompt now fits the refreshed widget style and stays clearer during setup.
+### Fixed
+- Cached weather and load-error states now show clearer status text and recovery options.
+
 ## v0.8.1 — 2026-05-08
 ### Improved
 - Weather pressure, humidity, cloud cover, and rain chance now use the hourly reading closest to the current weather time.

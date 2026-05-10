@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.9.2 — 2026-05-11
+### Improved
+- Todo widget actions now stay available when keyboard focus is inside the widget.
+- The todo input now includes a clearer accessible label and a sensible task length limit.
+- Todo updates from another Homebase tab now refresh the visible list more reliably.
+### Fixed
+- Todo lists with missing or duplicate task IDs now repair those IDs instead of skipping tasks.
+- The completed-task filter now shows a clearer empty state when no active tasks are visible.
+
 ## v0.9.1 — 2026-05-10
 ### Improved
 - Quote settings now use clearer rotation wording and a cleaner category picker.

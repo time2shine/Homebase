@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.9.1',
-  date: '2026-05-10',
+  version: '0.9.2',
+  date: '2026-05-11',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Quote settings',
-      desc: 'Quote controls now use clearer rotation wording and a cleaner category picker.'
+      title: 'Todo accessibility',
+      desc: 'Todo actions now stay available while keyboard focus is inside the widget.'
     },
     {
       type: 'IMPROVED',
-      title: 'Quote startup',
-      desc: 'Saved quotes now load more safely during instant new-tab startup.'
+      title: 'Task entry',
+      desc: 'The todo input now has a clear label and a sensible length limit.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Todo syncing',
+      desc: 'Task changes from another Homebase tab now refresh the list more reliably.'
     },
     {
       type: 'FIX',
-      title: 'Quote fallback',
-      desc: 'The quote widget now keeps a saved or built-in quote visible if local quote loading fails.'
-    },
-    {
-      type: 'FIX',
-      title: 'Quote refresh',
-      desc: 'Manual quote refresh and category changes no longer rely on obsolete quote cache state.'
+      title: 'Todo recovery',
+      desc: 'Tasks with missing or duplicate IDs are repaired instead of being skipped.'
     }
   ]
 };

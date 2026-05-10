@@ -10242,6 +10242,14 @@ function generateTodoId() {
   return `todo-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function generateUniqueTodoId(usedIds) {
+  let id = generateTodoId();
+  while (usedIds.has(id)) {
+    id = generateTodoId();
+  }
+  return id;
+}
+
 function normalizeTodoItems(items) {
   const list = Array.isArray(items) ? items : [];
   const normalized = [];
@@ -10250,8 +10258,10 @@ function normalizeTodoItems(items) {
     if (!item || typeof item.text !== 'string') return;
     const text = item.text.trim();
     if (!text) return;
-    let id = typeof item.id === 'string' && item.id.trim() ? item.id : generateTodoId();
-    if (seen.has(id)) return;
+    let id = typeof item.id === 'string' && item.id.trim() ? item.id : '';
+    if (!id || seen.has(id)) {
+      id = generateUniqueTodoId(seen);
+    }
     seen.add(id);
     const createdAt = Number.isFinite(item.createdAt) ? item.createdAt : Date.now();
     normalized.push({
@@ -10285,11 +10295,12 @@ function renderTodoList() {
   if (!todoList) return;
   const visibleItems = getVisibleTodoItems();
   todoList.innerHTML = '';
+  const fragment = document.createDocumentFragment();
   if (visibleItems.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'todo-empty';
-    empty.textContent = 'No tasks yet';
-    todoList.appendChild(empty);
+    empty.textContent = (todoItems.length > 0 && todoHideDone) ? 'No active tasks' : 'No tasks yet';
+    fragment.appendChild(empty);
   } else {
     visibleItems.forEach((item) => {
       const li = document.createElement('li');
@@ -10321,9 +10332,10 @@ function renderTodoList() {
 
       li.appendChild(label);
       li.appendChild(delBtn);
-      todoList.appendChild(li);
+      fragment.appendChild(li);
     });
   }
+  todoList.appendChild(fragment);
 
   syncTodoFilterUI();
 
@@ -20345,6 +20357,23 @@ if (browser?.storage?.onChanged) {
 
       }
 
+    }
+
+    let shouldRenderTodo = false;
+
+    if (changes[TODO_ITEMS_KEY]) {
+      todoItems = normalizeTodoItems(changes[TODO_ITEMS_KEY].newValue);
+      shouldRenderTodo = true;
+    }
+
+    if (changes[TODO_HIDE_DONE_KEY]) {
+      todoHideDone = changes[TODO_HIDE_DONE_KEY].newValue === true;
+      shouldRenderTodo = true;
+    }
+
+    if (shouldRenderTodo) {
+      updateTodoCache();
+      renderTodoList();
     }
 
     let changedMetadataIds = null;

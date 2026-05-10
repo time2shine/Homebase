@@ -2669,7 +2669,8 @@ html.todo-hidden .widget-todo { display: none !important; }
   transform: translateY(-2px);
   transition: opacity 160ms ease, transform 160ms ease;
 }
-.widget-todo:hover .todo-header-actions {
+.widget-todo:hover .todo-header-actions,
+.widget-todo:focus-within .todo-header-actions {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;

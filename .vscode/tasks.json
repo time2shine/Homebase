@@ -2,6 +2,48 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Build and Create Homebase Upload ZIP",
+      "dependsOn": [
+        "Build Homebase Extension",
+        "Create Homebase Upload ZIP"
+      ],
+      "dependsOrder": "sequence",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Create Homebase Upload ZIP",
+      "type": "process",
+      "windows": {
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "$stamp = Get-Date -Format 'yyyy-MM-dd-HHmm'; $dest = Join-Path (Split-Path -Parent (Get-Location)) \"homebase-chatgpt-upload-$stamp.zip\"; $items = Get-ChildItem -Force | Where-Object { $_.Name -notin @('.git','node_modules','dist','web-ext-artifacts') -and $_.Name -notlike '*.zip' }; Compress-Archive -Path $items.FullName -DestinationPath $dest -Force; Write-Host \"Created $dest\""
+        ]
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "stamp=$(date +%Y-%m-%d-%H%M) && zip -r ../homebase-chatgpt-upload-$stamp.zip . -x '.git/*' 'node_modules/*' 'dist/*' 'web-ext-artifacts/*' '*.zip' && echo \"Created ../homebase-chatgpt-upload-$stamp.zip\""
+        ]
+      },
+      "osx": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "stamp=$(date +%Y-%m-%d-%H%M) && zip -r ../homebase-chatgpt-upload-$stamp.zip . -x '.git/*' 'node_modules/*' 'dist/*' 'web-ext-artifacts/*' '*.zip' && echo \"Created ../homebase-chatgpt-upload-$stamp.zip\""
+        ]
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Build Homebase Extension",
       "type": "shell",
       "command": "npm run build",
@@ -12,10 +54,6 @@
             "args": ["/d", "/c"]
           }
         }
-      },
-      "group": {
-        "kind": "build",
-        "isDefault": true
       },
       "problemMatcher": []
     },
@@ -45,6 +83,65 @@
           }
         }
       },
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean old ZIP files",
+      "type": "shell",
+      "windows": {
+        "command": "if exist dist\\*.zip del /q dist\\*.zip",
+        "options": {
+          "shell": {
+            "executable": "cmd.exe",
+            "args": ["/d", "/c"]
+          }
+        }
+      },
+      "linux": {
+        "command": "rm -f dist/*.zip"
+      },
+      "osx": {
+        "command": "rm -f dist/*.zip"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Package Chrome ZIP",
+      "type": "shell",
+      "command": "npm run zip:chrome",
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "cmd.exe",
+            "args": ["/d", "/c"]
+          }
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Package Firefox ZIP",
+      "type": "shell",
+      "command": "npm run zip:firefox",
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "cmd.exe",
+            "args": ["/d", "/c"]
+          }
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean ZIPs and Package",
+      "dependsOn": [
+        "Clean old ZIP files",
+        "Build Homebase Extension",
+        "Package Chrome ZIP",
+        "Package Firefox ZIP"
+      ],
+      "dependsOrder": "sequence",
       "problemMatcher": []
     },
     {

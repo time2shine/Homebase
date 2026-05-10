@@ -2,6 +2,14 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.9.1 — 2026-05-10
+### Improved
+- Quote settings now use clearer rotation wording and a cleaner category picker.
+- Saved quotes now load more safely during instant new-tab startup.
+### Fixed
+- The quote widget now falls back to a saved or built-in quote if local quote loading fails.
+- Manual quote refresh and category changes no longer rely on obsolete quote cache state.
+
 ## v0.9.0 — 2026-05-09
 ### Added
 - Added a dedicated wind metric to the weather details grid.

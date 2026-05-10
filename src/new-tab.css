@@ -2261,7 +2261,6 @@ body.is-tab-dragging .bookmark-fallback-ghost-tab {
 .widget-news,
 #settings-panel,
 .widget-quote,
-#quote-settings-panel,
 .widget-todo {
   padding: 15px;
   display: flex;
@@ -3167,14 +3166,13 @@ html.todo-hidden .widget-todo { display: none !important; }
 .setting-item-column label { font-weight: bold; margin-bottom: 5px; }
 
 /* Quote Category Pills */
-#quote-categories-list {
-  width: 100%;
-  max-height: 160px;
-  overflow-y: auto;
+#modal-quote-categories-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 5px;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 4px;
 }
 .quote-category-pill {
   background-color: transparent;
@@ -3287,8 +3285,7 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
 /* Save Buttons */
 #set-location-btn,
 #weather-choose-city-btn,
-#save-settings-btn,
-#save-quote-settings-btn {
+#save-settings-btn {
   background-color: #f0f0f0;
   color: #333;
   border: none;
@@ -3317,12 +3314,8 @@ input:checked + .toggle-label .toggle-label-text::after { content: attr(data-on)
   background-color: rgba(255, 255, 255, 0.24);
 }
 
-#save-settings-btn:hover,
-#save-quote-settings-btn:hover {
+#save-settings-btn:hover {
   background-color: #fff;
-}
-#save-quote-settings-btn {
-  margin-top: auto; /* Pushes to bottom of flex container */
 }
 
 /* ======================================= */
@@ -6591,7 +6584,6 @@ body.performance-mode .widget-weather,
 body.performance-mode .widget-news,
 body.performance-mode .widget-quote,
 body.performance-mode #settings-panel,
-body.performance-mode #quote-settings-panel,
 body.performance-mode #google-apps-panel,
 body.performance-mode .dock,
 body.performance-mode .context-menu,

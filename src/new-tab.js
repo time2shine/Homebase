@@ -4077,8 +4077,6 @@ const HOMEBASE_OWNED_STORAGE_KEYS = [
   'domainIconMap',
   'lastUsedBookmarkFolderId',
   'quoteUpdateFrequency',
-  'quoteLastFetched',
-  'quoteBufferCache',
   'quoteLocalIndexV1',
   'quoteTags',
   'searchEnginesConfig',
@@ -9400,10 +9398,6 @@ const quoteNextBtn = document.getElementById('quote-next-btn');
 
 const QUOTE_FREQUENCY_KEY = 'quoteUpdateFrequency';
 
-const QUOTE_LAST_FETCH_KEY = 'quoteLastFetched';
-
-const QUOTE_BUFFER_KEY = 'quoteBufferCache';
-
 const QUOTES_JSON_PATH = 'assets/quotes.json';
 
 const QUOTE_INDEX_KEY = 'quoteLocalIndexV1';
@@ -9411,6 +9405,15 @@ const QUOTE_INDEX_KEY = 'quoteLocalIndexV1';
 const QUOTE_INDEX_VERSION = 1;
 
 const QUOTE_SOURCE_MODE = 'local';
+
+const QUOTE_DEFAULT_FREQUENCY = 'hourly';
+
+const QUOTE_FALLBACK = {
+  id: 'homebase-fallback',
+  text: 'Small steps still move you forward.',
+  author: '',
+  tags: ['fallback']
+};
 
 let quotesCachePromise = null;
 
@@ -9470,7 +9473,7 @@ function shouldRefreshQuoteNow(state, now = Date.now()) {
 
   if (!isUsableCachedQuote(state?.current)) return true;
 
-  const frequency = state?.config?.frequency || 'hourly';
+  const frequency = state?.config?.frequency || QUOTE_DEFAULT_FREQUENCY;
 
   if (frequency === 'always') return true;
 
@@ -9800,7 +9803,7 @@ async function fetchQuote(options = {}) {
 
     const stored = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY]);
 
-    const freq = stored[QUOTE_FREQUENCY_KEY] || 'hourly';
+    const freq = stored[QUOTE_FREQUENCY_KEY] || QUOTE_DEFAULT_FREQUENCY;
 
     const tags = Array.isArray(stored.quoteTags) ? stored.quoteTags.filter((t) => typeof t === 'string' && t.trim()) : [];
 
@@ -9872,7 +9875,43 @@ async function fetchQuote(options = {}) {
 
   } catch (e) {
 
-    console.warn("Quote Logic Error", e);
+    console.warn('Quote loading failed', e);
+
+    const cachedState = readCachedQuoteState();
+
+    if (isUsableCachedQuote(cachedState?.current)) {
+
+      renderQuoteToWidget(cachedState.current);
+
+      return;
+
+    }
+
+    const now = Date.now();
+
+    const fallbackState = {
+      current: QUOTE_FALLBACK,
+      next: isUsableCachedQuote(cachedState?.next) ? cachedState.next : null,
+      config: {
+        ...(cachedState?.config && typeof cachedState.config === 'object' ? cachedState.config : {}),
+        frequency: cachedState?.config?.frequency || QUOTE_DEFAULT_FREQUENCY,
+        source: QUOTE_SOURCE_MODE,
+        lastShown: now,
+        fallback: true
+      }
+    };
+
+    renderQuoteToWidget(QUOTE_FALLBACK);
+
+    try {
+
+      localStorage.setItem('fast-quote-state', JSON.stringify(fallbackState));
+
+    } catch (storageErr) {
+
+      console.warn('Failed to cache fallback quote state', storageErr);
+
+    }
 
   }
 
@@ -10033,7 +10072,7 @@ async function openQuoteSettingsModal(triggerSource) {
   populateQuoteCategories();
   const data = await browser.storage.local.get(QUOTE_FREQUENCY_KEY);
   if (quoteFrequencySelect) {
-    quoteFrequencySelect.value = data[QUOTE_FREQUENCY_KEY] || 'hourly';
+    quoteFrequencySelect.value = data[QUOTE_FREQUENCY_KEY] || QUOTE_DEFAULT_FREQUENCY;
   }
   openModalWithAnimation('quote-settings-modal', triggerSource || null, '.dialog-content');
 }
@@ -10101,7 +10140,7 @@ function setupQuoteWidget() {
 
   if (quoteNextBtn) {
 
-    quoteNextBtn.addEventListener('click', async () => {
+    quoteNextBtn.addEventListener('click', () => {
 
       const icon = quoteNextBtn.querySelector('svg');
 
@@ -10120,8 +10159,6 @@ function setupQuoteWidget() {
         }, 400);
 
       }
-
-      await browser.storage.local.set({ [QUOTE_LAST_FETCH_KEY]: 0 });
 
       fetchQuote({ forceRefresh: true });
 
@@ -10159,11 +10196,9 @@ function setupQuoteWidget() {
 
       const tagsToSave = allSelected ? [] : selectedTags;
 
-      const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : 'hourly';
+      const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : QUOTE_DEFAULT_FREQUENCY;
 
-      await browser.storage.local.remove(QUOTE_BUFFER_KEY);
-
-      await browser.storage.local.set({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency, [QUOTE_LAST_FETCH_KEY]: 0 });
+      await browser.storage.local.set({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });
 
       closeQuoteSettingsModal();
 

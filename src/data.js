@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.9.0',
-  date: '2026-05-09',
+  version: '0.9.1',
+  date: '2026-05-10',
   items: [
     {
-      type: 'NEW',
-      title: 'Weather detail cards',
-      desc: 'Wind, humidity, rain chance, clouds, sunrise, and sunset now appear in compact weather cards.'
+      type: 'IMPROVED',
+      title: 'Quote settings',
+      desc: 'Quote controls now use clearer rotation wording and a cleaner category picker.'
     },
     {
       type: 'IMPROVED',
-      title: 'Weather widget design',
-      desc: 'The weather card now has a cleaner layout with a larger condition icon and easier-to-scan details.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Refresh feedback',
-      desc: 'Refreshing weather now shows a loading state and keeps the refresh button disabled until it finishes.'
+      title: 'Quote startup',
+      desc: 'Saved quotes now load more safely during instant new-tab startup.'
     },
     {
       type: 'FIX',
-      title: 'Weather recovery states',
-      desc: 'Cached forecasts and load errors now show clearer status text and restore setup options when needed.'
+      title: 'Quote fallback',
+      desc: 'The quote widget now keeps a saved or built-in quote visible if local quote loading fails.'
+    },
+    {
+      type: 'FIX',
+      title: 'Quote refresh',
+      desc: 'Manual quote refresh and category changes no longer rely on obsolete quote cache state.'
     }
   ]
 };

@@ -35,6 +35,7 @@
       removeClass(el, 'widget-hidden');
       addClass(el, 'widget-visible');
     }
+    const QUOTE_DEFAULT_FREQUENCY = 'hourly';
 
     // --- 1. Instant Clock ---
     const nowTime = new Date();
@@ -158,24 +159,31 @@
     // --- 4. Instant Quote ---
     const qRaw = localStorage.getItem('fast-quote-state');
     if (qRaw) {
-      let state = JSON.parse(qRaw);
-      const now = Date.now();
-      const freq = state.config?.frequency || 'hourly';
-      const lastShown = state.config?.lastShown || 0;
-      
-      let shouldRotate = false;
-      if (freq === 'always') shouldRotate = true;
-      else if (freq === 'hourly' && (now - lastShown > 3600 * 1000)) shouldRotate = true;
-      else if (freq === 'daily' && (now - lastShown > 86400 * 1000)) shouldRotate = true;
-
-      if (shouldRotate && state.next && state.next.text) {
-        state.current = state.next;
-        state.next = null; 
-        state.config.lastShown = now;
-        localStorage.setItem('fast-quote-state', JSON.stringify(state));
+      let state = null;
+      try {
+        state = JSON.parse(qRaw);
+      } catch (e) {
+        state = null;
       }
+      if (state && state.current && state.current.text) {
+        const config = state.config && typeof state.config === 'object' ? state.config : {};
+        state.config = config;
+        const now = Date.now();
+        const freq = config.frequency || QUOTE_DEFAULT_FREQUENCY;
+        const lastShown = config.lastShown || 0;
 
-      if (state.current && state.current.text) {
+        let shouldRotate = false;
+        if (freq === 'always') shouldRotate = true;
+        else if (freq === 'hourly' && (now - lastShown > 3600 * 1000)) shouldRotate = true;
+        else if (freq === 'daily' && (now - lastShown > 86400 * 1000)) shouldRotate = true;
+
+        if (shouldRotate && state.next && state.next.text) {
+          state.current = state.next;
+          state.next = null;
+          state.config.lastShown = now;
+          localStorage.setItem('fast-quote-state', JSON.stringify(state));
+        }
+
         let allowQuoteInstant = true;
         try {
           allowQuoteInstant = localStorage.getItem('fast-show-quote') !== '0';

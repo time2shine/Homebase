@@ -3,6 +3,7 @@
   const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
   const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
   const SKIP_STARTUP_WALLPAPER_FALLBACK_ATTR = 'data-skip-startup-wallpaper-fallback';
+  const MAX_PRELOAD_POSTER_DATA_URL_LENGTH = 250000;
 
   function getLocalDayStamp(ts) {
     const date = new Date(ts || Date.now());
@@ -141,7 +142,11 @@
 
   setSkipStartupWallpaperFallback(skipInitialWallpaper);
 
-  const initial = skipInitialWallpaper ? '' : (url || dataUrl);
+  const safeDataUrl =
+    dataUrl && dataUrl.length <= MAX_PRELOAD_POSTER_DATA_URL_LENGTH
+      ? dataUrl
+      : '';
+  const initial = skipInitialWallpaper ? '' : (safeDataUrl || url);
   if (initial) {
     applyInitial(initial);
   }

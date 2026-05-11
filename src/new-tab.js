@@ -104,6 +104,9 @@ const VIDEOS_JSON_FETCHED_AT_KEY = 'videosManifestFetchedAt';
 const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const GALLERY_POSTERS_CACHE_KEY = 'cachedGalleryPosters';
+const GALLERY_POSTERS_CACHE_CHECKED_AT_KEY = 'galleryPostersCacheCheckedAt';
+const GALLERY_POSTERS_CACHE_SIGNATURE_KEY = 'galleryPostersCacheSignature';
+const GALLERY_POSTERS_CACHE_CHECK_TTL_MS = 24 * 60 * 60 * 1000;
 
 let videosManifestPromise = null;
 let pendingDailyRotationTimer = null;
@@ -1585,7 +1588,7 @@ async function getVideosManifest() {
 
   if (manifest && isFresh) {
 
-    scheduleIdleTask(() => cacheGalleryPosters(manifest), 'cacheGalleryPosters');
+    scheduleIdleTask(() => cacheGalleryPostersIfNeeded(manifest), 'cacheGalleryPostersIfNeeded');
 
     return manifest;
 
@@ -1593,7 +1596,7 @@ async function getVideosManifest() {
 
   const fetched = await fetchVideosManifestIfNeeded();
 
-  scheduleIdleTask(() => cacheGalleryPosters(fetched), 'cacheGalleryPosters');
+  scheduleIdleTask(() => cacheGalleryPostersIfNeeded(fetched), 'cacheGalleryPostersIfNeeded');
 
   return fetched;
 
@@ -1705,10 +1708,9 @@ async function mapLimit(items, limit, worker) {
 
 
 
-async function cacheGalleryPosters(manifest = []) {
-
-  const posters = Array.from(new Set(
-    manifest
+function getGalleryPosterUrls(manifest = []) {
+  return Array.from(new Set(
+    (Array.isArray(manifest) ? manifest : [])
       .map((v) => {
         if (isGallerySelection(v)) {
           const urls = getWallpaperUrls(v.id);
@@ -1718,6 +1720,15 @@ async function cacheGalleryPosters(manifest = []) {
       })
       .filter(Boolean)
   ));
+}
+
+function getGalleryPosterCacheSignature(manifest = []) {
+  return getGalleryPosterUrls(manifest).join('|');
+}
+
+async function cacheGalleryPosters(manifest = []) {
+
+  const posters = getGalleryPosterUrls(manifest);
 
   if (!posters.length) return;
 
@@ -1738,6 +1749,37 @@ async function cacheGalleryPosters(manifest = []) {
     console.error('cacheGalleryPosters error:', e);
   }
 
+}
+
+async function cacheGalleryPostersIfNeeded(manifest = []) {
+  const signature = getGalleryPosterCacheSignature(manifest);
+  if (!signature) return;
+
+  const now = Date.now();
+
+  try {
+    const stored = await browser.storage.local.get([
+      GALLERY_POSTERS_CACHE_CHECKED_AT_KEY,
+      GALLERY_POSTERS_CACHE_SIGNATURE_KEY
+    ]);
+
+    const lastCheckedAt = stored[GALLERY_POSTERS_CACHE_CHECKED_AT_KEY] || 0;
+    const previousSignature = stored[GALLERY_POSTERS_CACHE_SIGNATURE_KEY] || '';
+    const isRecent = now - lastCheckedAt < GALLERY_POSTERS_CACHE_CHECK_TTL_MS;
+
+    if (isRecent && previousSignature === signature) {
+      return;
+    }
+
+    await cacheGalleryPosters(manifest);
+
+    await browser.storage.local.set({
+      [GALLERY_POSTERS_CACHE_CHECKED_AT_KEY]: now,
+      [GALLERY_POSTERS_CACHE_SIGNATURE_KEY]: signature
+    });
+  } catch (err) {
+    console.warn('Failed to check gallery poster cache freshness', err);
+  }
 }
 
 const wallpaperObjectUrlCache = new Map();
@@ -5474,6 +5516,29 @@ async function getBookmarkTree(forceRefresh = false) {
 
 }
 
+async function getStoredHomebaseRootSubTree(storedRootId) {
+  if (!storedRootId || !browser.bookmarks || typeof browser.bookmarks.getSubTree !== 'function') {
+    return null;
+  }
+
+  try {
+    const subTree = await browser.bookmarks.getSubTree(storedRootId);
+    const rootNode = Array.isArray(subTree) ? subTree[0] : null;
+
+    if (!rootNode || rootNode.url) {
+      await clearHomebaseRootId();
+      return null;
+    }
+
+    bookmarkTree = subTree;
+    return rootNode;
+  } catch (err) {
+    console.warn('Stored Homebase root ID is invalid; falling back to full bookmark tree lookup.', err);
+    await clearHomebaseRootId();
+    return null;
+  }
+}
+
 
 
 // --- NEW: Grid Drag-and-Drop Handlers (Using Sortable.js) ---
@@ -6527,15 +6592,9 @@ function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
   // 2. Prepare image icon (stacked above fallback).
   const imgIcon = document.createElement('img');
   imgIcon.className = 'bookmark-img';
-  if (!imgIcon.decoding) {
-    imgIcon.decoding = 'async';
-  }
-  if (!imgIcon.loading) {
-    imgIcon.loading = 'lazy';
-  }
-  if (!imgIcon.getAttribute('fetchpriority')) {
-    imgIcon.setAttribute('fetchpriority', 'low');
-  }
+  imgIcon.decoding = 'async';
+  imgIcon.loading = 'lazy';
+  imgIcon.setAttribute('fetchpriority', 'low');
   if (!imgIcon.referrerPolicy) {
     imgIcon.referrerPolicy = 'no-referrer';
   }
@@ -7599,7 +7658,7 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
   // 3. DECISION: Virtualize or Standard?
   const VIRTUALIZATION_THRESHOLD = 150; // Enable if > 150 items
 
-  if (itemsToRender.length > VIRTUALIZATION_THRESHOLD && !appPerformanceModePreference) {
+  if (itemsToRender.length > VIRTUALIZATION_THRESHOLD) {
 
     // --- VIRTUAL MODE ---
     initVirtualizer(itemsToRender);
@@ -9103,44 +9162,35 @@ async function loadBookmarks(activeFolderId = null) {
 
   try {
 
-    const treeStart =
-      DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
-        ? performance.now()
-        : 0;
-    const tree = await getBookmarkTree(true);
-    hbPerfTime('bookmarks getBookmarkTree', treeStart);
-    const treeRoot = tree && tree[0];
-    if (!treeRoot) {
-      console.warn('Bookmark tree is empty.');
-      showBookmarksEmptyState();
-      return;
-    }
-
     let rootNode = null;
     const storedRootId = await getHomebaseRootId();
 
     if (storedRootId) {
-      try {
-        const lookup = await browser.bookmarks.get(storedRootId);
-        const lookupNode = Array.isArray(lookup) ? lookup[0] : null;
-        if (lookupNode && !lookupNode.url) {
-          rootNode = findBookmarkNodeById(treeRoot, storedRootId);
-          if (!rootNode || rootNode.url) {
-            console.warn('Stored Homebase root not found in current tree.');
-            await clearHomebaseRootId();
-            rootNode = null;
-          }
-        } else {
-          console.warn('Stored Homebase root is missing or not a folder.');
-          await clearHomebaseRootId();
-        }
-      } catch (err) {
-        console.warn('Failed to validate stored Homebase root', err);
-        await clearHomebaseRootId();
-      }
+      const subTreeStart =
+        DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+          ? performance.now()
+          : 0;
+
+      rootNode = await getStoredHomebaseRootSubTree(storedRootId);
+      hbPerfTime('bookmarks getSubTree', subTreeStart);
     }
 
     if (!rootNode) {
+      const treeStart =
+        DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+          ? performance.now()
+          : 0;
+
+      const tree = await getBookmarkTree(true);
+      hbPerfTime('bookmarks getBookmarkTree', treeStart);
+
+      const treeRoot = tree && tree[0];
+      if (!treeRoot) {
+        console.warn('Bookmark tree is empty.');
+        showBookmarksEmptyState();
+        return;
+      }
+
       rootNode = findHomebaseUnderOtherBookmarks(treeRoot);
       if (rootNode && rootNode.id) {
         await setHomebaseRootId(rootNode.id);
@@ -11333,9 +11383,13 @@ async function loadAppSettingsFromStorage() {
 
       APP_CONTAINER_NEW_TAB_KEY,
 
+      APP_GRID_ANIMATION_KEY,
+
       APP_GRID_ANIMATION_ENABLED_KEY,
 
       APP_GRID_ANIMATION_SPEED_KEY,
+
+      APP_GLASS_STYLE_KEY,
 
       WALLPAPER_QUALITY_KEY,
 
@@ -11350,9 +11404,9 @@ async function loadAppSettingsFromStorage() {
     appBatteryOptimizationPreference = stored[APP_BATTERY_OPTIMIZATION_KEY] === true;
     appCinemaModePreference = stored[APP_CINEMA_MODE_KEY] === true;
 
-    // Load animation pref
-    await loadGridAnimationPref(); 
-    await loadGlassStylePref(); 
+    // Load style preferences from the existing startup settings batch
+    applyGridAnimation(stored[APP_GRID_ANIMATION_KEY] || 'default');
+    applyGlassStyle(stored[APP_GLASS_STYLE_KEY] || 'original');
 
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
 

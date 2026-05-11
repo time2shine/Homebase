@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.9.2',
+  version: '0.9.3',
   date: '2026-05-11',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Todo accessibility',
-      desc: 'Todo actions now stay available while keyboard focus is inside the widget.'
+      title: 'Faster bookmarks',
+      desc: 'Homebase now reopens your saved bookmark folder more quickly when possible.'
     },
     {
       type: 'IMPROVED',
-      title: 'Task entry',
-      desc: 'The todo input now has a clear label and a sensible length limit.'
+      title: 'Smoother large folders',
+      desc: 'Large bookmark folders now use the faster grid renderer more consistently.'
     },
     {
       type: 'IMPROVED',
-      title: 'Todo syncing',
-      desc: 'Task changes from another Homebase tab now refresh the list more reliably.'
+      title: 'Gallery caching',
+      desc: 'Wallpaper gallery poster caching now avoids unnecessary repeated checks.'
     },
     {
       type: 'FIX',
-      title: 'Todo recovery',
-      desc: 'Tasks with missing or duplicate IDs are repaired instead of being skipped.'
+      title: 'Startup recovery',
+      desc: 'Invalid saved weather or search startup data no longer interrupts instant widget rendering.'
     }
   ]
 };

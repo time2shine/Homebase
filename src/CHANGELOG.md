@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.9.3 — 2026-05-11
+### Improved
+- Bookmark loading now reuses the saved Homebase folder subtree when possible, speeding startup for large bookmark libraries.
+- Large bookmark folders now use the faster grid renderer more consistently.
+- Wallpaper gallery poster caching now avoids unnecessary repeated checks until the gallery list changes or the cache check is due.
+- Homebase Tips now load with the rest of the deferred new-tab scripts for smoother startup.
+### Fixed
+- Invalid saved weather or search startup data no longer interrupts instant widget rendering.
+- Oversized saved wallpaper poster previews no longer crowd out the original wallpaper URL during startup.
+
 ## v0.9.2 — 2026-05-11
 ### Improved
 - Todo widget actions now stay available when keyboard focus is inside the widget.

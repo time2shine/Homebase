@@ -58,9 +58,14 @@
     // --- 2. Instant Weather (FIXED KEY MAPPING) ---
     const wData = localStorage.getItem('fast-weather');
     if (wData) {
-      const w = JSON.parse(wData);
+      let w = null;
+      try {
+        w = JSON.parse(wData);
+      } catch (e) {
+        w = null;
+      }
       // Valid for 1 hour
-      if (w.__timestamp && (Date.now() - w.__timestamp < 3600000)) {
+      if (w && w.__timestamp && (Date.now() - w.__timestamp < 3600000)) {
         const getUpdatedLabel = () => {
           if (w.updated) return w.updated;
           if (!w.__timestamp) return '';
@@ -115,44 +120,51 @@
     // --- 3. Instant Search ---
     const sData = localStorage.getItem('fast-search');
     if (sData) {
-      const s = JSON.parse(sData);
-      const searchWidget = document.querySelector('.widget-search');
-      const searchInput = $('search-input');
-      const searchSelector = $('search-engine-selector');
+      let s = null;
+      try {
+        s = JSON.parse(sData);
+      } catch (e) {
+        s = null;
+      }
+      if (s) {
+        const searchWidget = document.querySelector('.widget-search');
+        const searchInput = $('search-input');
+        const searchSelector = $('search-engine-selector');
 
-      if (searchWidget && searchInput && searchSelector) {
-        if (s.placeholder) searchInput.placeholder = s.placeholder;
-        if (s.selectorData && s.selectorData.name) {
-          const list = document.createElement('div');
-          list.className = 'search-engine-list';
-          list.style.transform = 'translateX(0px)';
+        if (searchWidget && searchInput && searchSelector) {
+          if (s.placeholder) searchInput.placeholder = s.placeholder;
+          if (s.selectorData && s.selectorData.name) {
+            const list = document.createElement('div');
+            list.className = 'search-engine-list';
+            list.style.transform = 'translateX(0px)';
 
-          const btn = document.createElement('div');
-          btn.className = 'engine-icon-btn active';
-          btn.style.setProperty('--engine-color', s.selectorData.color || '#333');
+            const btn = document.createElement('div');
+            btn.className = 'engine-icon-btn active';
+            btn.style.setProperty('--engine-color', s.selectorData.color || '#333');
 
-          const tooltip = document.createElement('span');
-          tooltip.className = 'tooltip-popup tooltip-top';
-          tooltip.textContent = s.selectorData.name;
-          btn.appendChild(tooltip);
+            const tooltip = document.createElement('span');
+            tooltip.className = 'tooltip-popup tooltip-top';
+            tooltip.textContent = s.selectorData.name;
+            btn.appendChild(tooltip);
 
-          const iconEl = s.selectorData.symbolId ? createSvgIconElement(s.selectorData.symbolId) : null;
-          if (iconEl) {
-            btn.appendChild(iconEl);
-          } else {
-            const fallback = document.createElement('span');
-            fallback.style.fontWeight = 'bold';
-            fallback.style.fontSize = '12px';
-            fallback.style.color = '#555';
-            fallback.textContent = (s.selectorData.fallback || s.selectorData.name || '').charAt(0);
-            btn.appendChild(fallback);
+            const iconEl = s.selectorData.symbolId ? createSvgIconElement(s.selectorData.symbolId) : null;
+            if (iconEl) {
+              btn.appendChild(iconEl);
+            } else {
+              const fallback = document.createElement('span');
+              fallback.style.fontWeight = 'bold';
+              fallback.style.fontSize = '12px';
+              fallback.style.color = '#555';
+              fallback.textContent = (s.selectorData.fallback || s.selectorData.name || '').charAt(0);
+              btn.appendChild(fallback);
+            }
+
+            list.appendChild(btn);
+            searchSelector.replaceChildren(list);
+            searchSelector.classList.add('is-instant-fixed');
           }
-
-          list.appendChild(btn);
-          searchSelector.replaceChildren(list);
-          searchSelector.classList.add('is-instant-fixed');
+          showWidget(searchWidget);
         }
-        showWidget(searchWidget);
       }
     }
 

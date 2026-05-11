@@ -17,6 +17,7 @@
     {
       "label": "Create Homebase Upload ZIP",
       "type": "process",
+      "command": "bash",
       "windows": {
         "command": "powershell.exe",
         "args": [

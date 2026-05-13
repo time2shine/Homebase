@@ -170,7 +170,11 @@
 
       const asyncDataUrl = res && res.cachedAppliedPosterDataUrl;
       const asyncUrl = res && res.cachedAppliedPosterUrl;
-      const pick = asyncDataUrl || asyncUrl || '';
+      const safeAsyncDataUrl =
+        asyncDataUrl && asyncDataUrl.length <= MAX_PRELOAD_POSTER_DATA_URL_LENGTH
+          ? asyncDataUrl
+          : '';
+      const pick = safeAsyncDataUrl || asyncUrl || '';
       // Avoid double-paint if we already used this value from localStorage
       if (!pick || pick === initial) return;
 

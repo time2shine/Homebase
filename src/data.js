@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.9.3',
-  date: '2026-05-11',
+  version: '0.10.0',
+  date: '2026-05-13',
   items: [
     {
-      type: 'IMPROVED',
-      title: 'Faster bookmarks',
-      desc: 'Homebase now reopens your saved bookmark folder more quickly when possible.'
+      type: 'NEW',
+      title: 'Copy perf report',
+      desc: 'Performance Mode can now copy a privacy-safe startup and widget report for troubleshooting.'
     },
     {
       type: 'IMPROVED',
-      title: 'Smoother large folders',
-      desc: 'Large bookmark folders now use the faster grid renderer more consistently.'
+      title: 'Richer diagnostics',
+      desc: 'The performance overlay now shows startup, bookmark, grid, widget, cache, and health details together.'
     },
     {
       type: 'IMPROVED',
-      title: 'Gallery caching',
-      desc: 'Wallpaper gallery poster caching now avoids unnecessary repeated checks.'
+      title: 'Recovery visibility',
+      desc: 'Bookmark and gallery recovery paths are now easier to spot from the diagnostics panel.'
     },
     {
       type: 'FIX',
-      title: 'Startup recovery',
-      desc: 'Invalid saved weather or search startup data no longer interrupts instant widget rendering.'
+      title: 'Poster preload',
+      desc: 'Oversized saved wallpaper poster previews no longer interfere with loading the original wallpaper.'
     }
   ]
 };

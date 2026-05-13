@@ -2,6 +2,18 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.10.0 — 2026-05-13
+### Added
+- Performance Mode now includes a copyable, privacy-safe full performance report for startup, bookmark, widget, cache, media, and environment diagnostics.
+
+### Improved
+- The performance overlay now shows startup, bookmark, grid, widget, cache, and health status in one clearer panel.
+- Bookmark and gallery fallback events are now surfaced in diagnostics so recovery issues are easier to spot.
+- Weather widget styling now follows the selected glass style more cleanly.
+
+### Fixed
+- Oversized saved wallpaper poster previews are ignored during preload so the original wallpaper can keep loading reliably.
+
 ## v0.9.3 — 2026-05-11
 ### Improved
 - Bookmark loading now reuses the saved Homebase folder subtree when possible, speeding startup for large bookmark libraries.

@@ -608,6 +608,8 @@ function hbPerfTime(label, startTime, extra) {
     if (!Number.isFinite(start)) return;
     const ms = performance.now() - start;
     if (!Number.isFinite(ms)) return;
+    recordBookmarkPerfTiming(label, ms);
+    recordRawPerfTiming(label, ms);
     const roundedMs = Math.round(ms * 100) / 100;
     if (extra === undefined) {
       console.log('[homebase perf]', label, roundedMs, 'ms');
@@ -631,8 +633,14 @@ function hbPerfReport() {
         measure: entry.name,
         ms: Math.round(entry.duration * 100) / 100,
         startMs: Math.round(entry.startTime * 100) / 100
-      }));
+    }));
     if (!rows.length) return;
+    rows.forEach(row => recordStartupPerfMeasure(row.measure, row.ms));
+    perfState.startupRows = rows.map(row => ({
+      measure: row.measure,
+      ms: row.ms,
+      startMs: row.startMs
+    }));
     if (typeof console !== 'undefined' && typeof console.table === 'function') {
       console.table(rows);
     } else if (typeof console !== 'undefined' && typeof console.log === 'function') {
@@ -1779,6 +1787,7 @@ async function cacheGalleryPostersIfNeeded(manifest = []) {
     });
   } catch (err) {
     console.warn('Failed to check gallery poster cache freshness', err);
+    recordPerfFallback('galleryPosters', 'Poster cache check failed');
   }
 }
 
@@ -3562,8 +3571,61 @@ const METADATA_GRID_PATCH_LIMIT = 12;
 let sortableTimeout = null;
 
 const PERF_OVERLAY_CACHE_THROTTLE_MS = 5000;
+const PERF_HEALTH_SESSION_KEY = 'homebasePerfHealthSession';
+function createWidgetPerfState() {
+  return {
+    loadCachedWeather: { label: 'Weather cache', ms: null, status: 'pending' },
+    setupWeather: { label: 'Weather', ms: null, status: 'pending' },
+    setupSearch: { label: 'Search', ms: null, status: 'pending' },
+    setupTodoWidget: { label: 'Todo', ms: null, status: 'pending' },
+    setupNewsWidget: { label: 'News', ms: null, status: 'pending' },
+    setupQuoteWidget: { label: 'Quote', ms: null, status: 'pending' },
+    quoteIndex: { label: 'Quote index', ms: null, status: 'pending' },
+    fetchQuote: { label: 'Quote fetch', ms: null, status: 'pending' },
+    setupAppLauncher: { label: 'Apps', ms: null, status: 'pending' }
+  };
+}
+
+function createHealthPerfState() {
+  return {
+    bookmarkFallbackUsed: false,
+    galleryPosterCacheWarning: false,
+    latestWarningMessage: null
+  };
+}
+
 const perfState = {
   overlayEnabled: false,
+  gridMode: 'idle',
+  startup: {
+    domContentLoadedMs: null,
+    windowLoadMs: null,
+    readyClassMs: null,
+    afterReadyPaintMs: null,
+    initToReadyClassMs: null,
+    parallelStorageLoadsMs: null
+  },
+  bookmarks: {
+    path: 'unknown',
+    getSubTreeMs: null,
+    getBookmarkTreeMs: null,
+    metadataMs: null,
+    processRenderMs: null,
+    loadFunctionTotalMs: null,
+    loadTotalMs: null,
+    fallbackUsed: false
+  },
+  widgets: createWidgetPerfState(),
+  health: createHealthPerfState(),
+  warnings: [],
+  startupRows: [],
+  rawTimings: [],
+  idleTasks: [],
+  media: {
+    lastObjectUrlCleanup: null
+  },
+  lastReportCopiedAt: null,
+  lastReportCopyStatus: '',
   lastGridRenderMs: 0,
   lastRenderedStartIndex: -1,
   lastRenderedEndIndex: -1,
@@ -3592,6 +3654,458 @@ function formatBytes(bytes = 0) {
 
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[i]}`;
 
+}
+
+function formatPerfMs(value) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? `${Math.round(value)} ms`
+    : '—';
+}
+
+function formatWidgetPerf(entry) {
+  if (!entry) return '—';
+  if (entry.status === 'skipped') return 'skipped';
+  if (entry.status === 'failed') return 'failed';
+  return formatPerfMs(entry.ms);
+}
+
+function getPerfTimestamp() {
+  try {
+    return new Date().toISOString();
+  } catch (err) {
+    return String(Date.now());
+  }
+}
+
+function recordRawPerfTiming(label, ms) {
+  if (!Array.isArray(perfState.rawTimings)) {
+    perfState.rawTimings = [];
+  }
+
+  perfState.rawTimings.push({
+    label,
+    ms,
+    at: Date.now()
+  });
+
+  if (perfState.rawTimings.length > 80) {
+    perfState.rawTimings.shift();
+  }
+}
+
+function recordIdleTaskPerf(name, status, ms = null) {
+  if (!Array.isArray(perfState.idleTasks)) {
+    perfState.idleTasks = [];
+  }
+
+  perfState.idleTasks.push({
+    name,
+    status,
+    ms: typeof ms === 'number' && Number.isFinite(ms) ? ms : null,
+    at: Date.now()
+  });
+
+  if (perfState.idleTasks.length > 120) {
+    perfState.idleTasks.shift();
+  }
+}
+
+function recordObjectUrlCleanup(details) {
+  if (!perfState.media) {
+    perfState.media = { lastObjectUrlCleanup: null };
+  }
+
+  perfState.media.lastObjectUrlCleanup = {
+    at: Date.now(),
+    videoUrlActive: Boolean(details && details.videoUrl),
+    videoCacheKey: details && details.videoCacheKey ? 'present' : 'none',
+    cacheEntriesCount: Array.isArray(details && details.cacheEntries)
+      ? details.cacheEntries.length
+      : null
+  };
+}
+
+function recordWidgetPerfTiming(key, ms, status = 'done') {
+  if (!perfState.widgets || !perfState.widgets[key]) return;
+
+  perfState.widgets[key].ms =
+    typeof ms === 'number' && Number.isFinite(ms) ? ms : null;
+  perfState.widgets[key].status = status || 'done';
+
+  if (perfState.overlayEnabled) {
+    updatePerfOverlay(false);
+  }
+}
+
+function readPerfHealthSession() {
+  try {
+    if (!window.sessionStorage) return null;
+    const raw = sessionStorage.getItem(PERF_HEALTH_SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    return null;
+  }
+}
+
+function writePerfHealthSession() {
+  try {
+    if (!window.sessionStorage || !perfState.health) return;
+    sessionStorage.setItem(PERF_HEALTH_SESSION_KEY, JSON.stringify({
+      health: perfState.health,
+      warnings: Array.isArray(perfState.warnings) ? perfState.warnings : []
+    }));
+  } catch (err) {
+    // Best-effort perf debug state only.
+  }
+}
+
+function restorePerfHealthSession() {
+  const stored = readPerfHealthSession();
+  if (!stored) return;
+
+  if (stored.health) {
+    perfState.health = {
+      ...createHealthPerfState(),
+      ...stored.health
+    };
+  }
+
+  if (Array.isArray(stored.warnings)) {
+    perfState.warnings = stored.warnings;
+  }
+}
+
+function clearPerfHealthSession() {
+  try {
+    if (window.sessionStorage) {
+      sessionStorage.removeItem(PERF_HEALTH_SESSION_KEY);
+    }
+  } catch (err) {
+    // Best-effort perf debug state only.
+  }
+}
+
+function recordPerfWarning(key, message) {
+  if (!key || !message) return;
+
+  if (!perfState.health) {
+    perfState.health = createHealthPerfState();
+  }
+  perfState.health.latestWarningMessage = message;
+
+  if (!Array.isArray(perfState.warnings)) {
+    perfState.warnings = [];
+  }
+
+  const existing = perfState.warnings.find((warning) => warning.key === key);
+  if (existing) {
+    existing.count = (existing.count || 1) + 1;
+    existing.message = message;
+    existing.lastAt = Date.now();
+  } else {
+    perfState.warnings.push({
+      key,
+      message,
+      count: 1,
+      firstAt: Date.now(),
+      lastAt: Date.now()
+    });
+  }
+
+  writePerfHealthSession();
+
+  if (perfState.overlayEnabled) {
+    updatePerfOverlay(false);
+  }
+}
+
+function recordPerfFallback(type, message) {
+  if (!perfState.health) {
+    perfState.health = createHealthPerfState();
+  }
+
+  if (type === 'bookmarks') {
+    perfState.health.bookmarkFallbackUsed = true;
+  }
+
+  if (type === 'galleryPosters') {
+    perfState.health.galleryPosterCacheWarning = true;
+  }
+
+  if (message) {
+    perfState.health.latestWarningMessage = message;
+  }
+
+  writePerfHealthSession();
+
+  recordPerfWarning(`${type}-fallback`, message || `${type} fallback used`);
+}
+
+function getLatestPerfWarningMessage() {
+  if (perfState.health && perfState.health.latestWarningMessage) {
+    return perfState.health.latestWarningMessage;
+  }
+
+  if (!Array.isArray(perfState.warnings) || !perfState.warnings.length) {
+    return null;
+  }
+
+  const latest = perfState.warnings.reduce((latestWarning, warning) => {
+    if (!latestWarning) return warning;
+    return (warning.lastAt || 0) > (latestWarning.lastAt || 0)
+      ? warning
+      : latestWarning;
+  }, null);
+
+  return latest ? latest.message : null;
+}
+
+function getPerfFallbackSummary() {
+  const fallbacks = [];
+
+  if (
+    (perfState.health && perfState.health.bookmarkFallbackUsed) ||
+    (perfState.bookmarks && perfState.bookmarks.fallbackUsed)
+  ) {
+    fallbacks.push('Bookmarks');
+  }
+
+  if (perfState.health && perfState.health.galleryPosterCacheWarning) {
+    fallbacks.push('Gallery posters');
+  }
+
+  return fallbacks.length ? fallbacks.join(', ') : 'None';
+}
+
+function recordStartupPerfMeasure(name, ms) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return;
+
+  try {
+    switch (name) {
+      case 'hb:script-to-dom-content-loaded':
+      case 'script-to-dom-content-loaded':
+        perfState.startup.domContentLoadedMs = ms;
+        break;
+      case 'hb:script-to-window-load':
+      case 'script-to-window-load':
+        perfState.startup.windowLoadMs = ms;
+        break;
+      case 'hb:script-to-ready-class':
+      case 'script-to-ready-class':
+        perfState.startup.readyClassMs = ms;
+        break;
+      case 'hb:script-to-after-ready-paint':
+      case 'script-to-after-ready-paint':
+        perfState.startup.afterReadyPaintMs = ms;
+        break;
+      case 'hb:init-to-ready-class':
+      case 'init-to-ready-class':
+        perfState.startup.initToReadyClassMs = ms;
+        break;
+      case 'hb:parallel-storage-loads':
+      case 'parallel-storage-loads':
+        perfState.startup.parallelStorageLoadsMs = ms;
+        break;
+      default:
+        break;
+    }
+  } catch (_) {}
+}
+
+function recordBookmarkPerfTiming(label, ms) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return;
+
+  try {
+    switch (label) {
+      case 'loadFolderMetadata':
+        perfState.bookmarks.metadataMs = ms;
+        break;
+      case 'bookmarks getSubTree':
+        perfState.bookmarks.getSubTreeMs = ms;
+        if (perfState.bookmarks.path !== 'fallback') {
+          perfState.bookmarks.path = 'getSubTree';
+        }
+        break;
+      case 'bookmarks getBookmarkTree':
+        perfState.bookmarks.getBookmarkTreeMs = ms;
+        if (perfState.bookmarks.getSubTreeMs !== null) {
+          perfState.bookmarks.path = 'fallback';
+          perfState.bookmarks.fallbackUsed = true;
+          recordPerfFallback('bookmarks', 'Bookmark root recovered');
+        } else {
+          perfState.bookmarks.path = 'getBookmarkTree';
+        }
+        break;
+      case 'bookmarks process/render request':
+        perfState.bookmarks.processRenderMs = ms;
+        break;
+      case 'loadBookmarks function total':
+        perfState.bookmarks.loadFunctionTotalMs = ms;
+        break;
+      case 'loadBookmarks total':
+        perfState.bookmarks.loadTotalMs = ms;
+        break;
+      default:
+        break;
+    }
+  } catch (_) {}
+}
+
+function formatReportValue(value) {
+  return value === null || value === undefined || value === '' ? '—' : String(value);
+}
+
+function buildFullPerfReport() {
+  const lines = [];
+  const bookmarkLoadMs =
+    perfState.bookmarks.loadTotalMs ??
+    perfState.bookmarks.loadFunctionTotalMs;
+
+  lines.push('Homebase Full Performance Report');
+  lines.push(`Generated: ${getPerfTimestamp()}`);
+  lines.push('');
+
+  lines.push('Summary');
+  lines.push(`Ready: ${formatPerfMs(perfState.startup.readyClassMs)}`);
+  lines.push(`After paint: ${formatPerfMs(perfState.startup.afterReadyPaintMs)}`);
+  lines.push(`Storage: ${formatPerfMs(perfState.startup.parallelStorageLoadsMs)}`);
+  lines.push(`Bookmark path: ${perfState.bookmarks.path}`);
+  lines.push(`Bookmark load: ${formatPerfMs(bookmarkLoadMs)}`);
+  lines.push(`Bookmark fallback: ${perfState.bookmarks.fallbackUsed ? 'Yes' : 'No'}`);
+  lines.push(`Performance Mode: ${appPerformanceModePreference ? 'On' : 'Off'}`);
+  lines.push(`Console debug: ${DEBUG_STARTUP_PERF ? 'On' : 'Off'}`);
+  lines.push('');
+
+  lines.push('Startup Measures');
+  if (Array.isArray(perfState.startupRows) && perfState.startupRows.length) {
+    perfState.startupRows.forEach((row) => {
+      lines.push(`- ${row.measure}: ${formatPerfMs(row.ms)} @ ${formatPerfMs(row.startMs)}`);
+    });
+  } else {
+    lines.push('- none recorded');
+  }
+  lines.push('');
+
+  lines.push('Bookmarks');
+  lines.push(`- Path: ${perfState.bookmarks.path}`);
+  lines.push(`- getSubTree: ${formatPerfMs(perfState.bookmarks.getSubTreeMs)}`);
+  lines.push(`- getBookmarkTree: ${formatPerfMs(perfState.bookmarks.getBookmarkTreeMs)}`);
+  lines.push(`- Metadata: ${formatPerfMs(perfState.bookmarks.metadataMs)}`);
+  lines.push(`- Process/render request: ${formatPerfMs(perfState.bookmarks.processRenderMs)}`);
+  lines.push(`- Load function total: ${formatPerfMs(perfState.bookmarks.loadFunctionTotalMs)}`);
+  lines.push(`- Load total: ${formatPerfMs(perfState.bookmarks.loadTotalMs)}`);
+  lines.push(`- Fallback used: ${perfState.bookmarks.fallbackUsed ? 'Yes' : 'No'}`);
+  lines.push('');
+
+  lines.push('Grid');
+  lines.push(`- Mode: ${perfState.gridMode}`);
+  lines.push(`- Render: ${formatPerfMs(perfState.lastGridRenderMs)}`);
+  lines.push(`- Nodes: ${perfState.gridRenderedNodes}`);
+  lines.push(`- Total count: ${perfState.totalCount}`);
+  lines.push(`- Range: ${perfState.lastRenderedStartIndex}-${perfState.lastRenderedEndIndex}`);
+  lines.push('');
+
+  lines.push('Widgets');
+  Object.keys(perfState.widgets || {}).forEach((key) => {
+    const entry = perfState.widgets[key];
+    if (!entry) return;
+    lines.push(`- ${entry.label}: ${formatWidgetPerf(entry)}`);
+  });
+  lines.push('');
+
+  lines.push('Health');
+  lines.push(`- Warnings: ${Array.isArray(perfState.warnings) ? perfState.warnings.length : 0}`);
+  lines.push(`- Fallbacks: ${getPerfFallbackSummary()}`);
+  const latestWarning = getLatestPerfWarningMessage();
+  lines.push(`- Latest: ${latestWarning || 'None'}`);
+  if (Array.isArray(perfState.warnings) && perfState.warnings.length) {
+    perfState.warnings.forEach((warning) => {
+      lines.push(`  - ${warning.key}: ${warning.message} x${warning.count || 1}`);
+    });
+  }
+  lines.push('');
+
+  lines.push('Raw Timings');
+  if (Array.isArray(perfState.rawTimings) && perfState.rawTimings.length) {
+    perfState.rawTimings.forEach((event) => {
+      lines.push(`- ${event.label}: ${formatPerfMs(event.ms)}`);
+    });
+  } else {
+    lines.push('- none recorded');
+  }
+  lines.push('');
+
+  lines.push('Startup Idle Tasks');
+  if (Array.isArray(perfState.idleTasks) && perfState.idleTasks.length) {
+    perfState.idleTasks.forEach((task) => {
+      const suffix = typeof task.ms === 'number' ? ` ${formatPerfMs(task.ms)}` : '';
+      lines.push(`- ${task.name}: ${task.status}${suffix}`);
+    });
+  } else {
+    lines.push('- none recorded');
+  }
+  lines.push('');
+
+  lines.push('Cache / Storage');
+  lines.push(`- Cache size: ${perfState.cacheBytes === null ? 'calculating' : formatBytes(perfState.cacheBytes)}`);
+  lines.push(`- localStorage: ${formatBytes(perfState.localStorageBytes)}`);
+  lines.push('');
+
+  lines.push('Media');
+  if (perfState.media && perfState.media.lastObjectUrlCleanup) {
+    const cleanup = perfState.media.lastObjectUrlCleanup;
+    lines.push(`- Object URL cleanup seen: Yes`);
+    lines.push(`- Active video URL: ${cleanup.videoUrlActive ? 'Yes' : 'No'}`);
+    lines.push(`- Video cache key: ${cleanup.videoCacheKey}`);
+    lines.push(`- Cache entries count: ${formatReportValue(cleanup.cacheEntriesCount)}`);
+  } else {
+    lines.push('- Object URL cleanup seen: No');
+  }
+  lines.push('');
+
+  lines.push('Environment');
+  lines.push(`- User agent: ${navigator.userAgent || 'unknown'}`);
+  lines.push(`- Platform: ${navigator.platform || 'unknown'}`);
+  lines.push(`- Viewport: ${window.innerWidth}x${window.innerHeight}`);
+  lines.push(`- Device pixel ratio: ${window.devicePixelRatio || 1}`);
+  lines.push(`- Reduced motion: ${window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'Yes' : 'No'}`);
+  lines.push('');
+
+  lines.push('Privacy');
+  lines.push('- Report excludes bookmark titles, URLs, todo text, search content, weather location, and full wallpaper/video/blob URLs.');
+
+  return lines.join('\n');
+}
+
+async function copyFullPerfReport() {
+  const report = buildFullPerfReport();
+
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(report);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = report;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+
+    perfState.lastReportCopiedAt = Date.now();
+    perfState.lastReportCopyStatus = 'Copied';
+  } catch (err) {
+    perfState.lastReportCopyStatus = 'Copy failed';
+    console.warn('Failed to copy perf report', err);
+  }
+
+  if (perfState.overlayEnabled) {
+    updatePerfOverlay(false);
+  }
 }
 
 // Estimate localStorage usage in bytes.
@@ -3726,7 +4240,8 @@ function ensurePerfOverlayElement() {
 
   el.style.cssText = `
     position: fixed;
-    right: 12px;
+    left: auto;
+    right: 55px;
     bottom: 12px;
     background: rgba(0,0,0,0.78);
     color: #fff;
@@ -3735,12 +4250,46 @@ function ensurePerfOverlayElement() {
     font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
     line-height: 1.5;
-    pointer-events: none;
+    pointer-events: auto;
     z-index: 9999;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     max-width: 340px;
-    white-space: pre-line;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   `;
+
+  const textEl = document.createElement('div');
+  textEl.dataset.role = 'perf-overlay-text';
+  textEl.style.cssText = `
+    white-space: pre-line;
+    pointer-events: none;
+  `;
+
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.dataset.role = 'perf-copy-report';
+  copyBtn.textContent = 'Copy report';
+  copyBtn.style.cssText = `
+    align-self: flex-start;
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.2;
+    padding: 4px 7px;
+    cursor: pointer;
+  `;
+  copyBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    copyFullPerfReport();
+  });
+
+  el.appendChild(textEl);
+  el.appendChild(copyBtn);
 
   perfOverlayEl = el;
 
@@ -3792,17 +4341,105 @@ function updatePerfOverlay(forceCacheRefresh = false) {
 
   const endIdx = perfState.lastVirtualRange.end >= 0 ? perfState.lastVirtualRange.end : (perfState.lastRenderedEndIndex >= 0 ? perfState.lastRenderedEndIndex : 0);
 
+  const rangeDisplay =
+    perfState.gridMode === 'virtual'
+      ? `${startIdx}-${endIdx} / ${perfState.totalCount}`
+      : (perfState.totalCount > 0 ? `0-${perfState.totalCount - 1} / ${perfState.totalCount}` : '0 / 0');
+
   const cacheDisplay = perfState.cacheBytes != null ? formatBytes(perfState.cacheBytes) : '...';
 
   const gridRender = perfState.lastGridRenderMs ? perfState.lastGridRenderMs.toFixed(1) : '0.0';
 
-  el.textContent = [
-    `Grid render: ${gridRender} ms`,
-    `Grid nodes: ${perfState.gridRenderedNodes}`,
-    `Virtual range: ${startIdx}-${endIdx} / ${perfState.totalCount}`,
-    `Cache size: ${cacheDisplay}`,
+  const startupLines = [
+    'Startup',
+    `Ready: ${formatPerfMs(perfState.startup.readyClassMs)}`,
+    `Paint: ${formatPerfMs(perfState.startup.afterReadyPaintMs)}`,
+    `Storage: ${formatPerfMs(perfState.startup.parallelStorageLoadsMs)}`
+  ];
+
+  const bookmarkLoadMs =
+    perfState.bookmarks.loadTotalMs ??
+    perfState.bookmarks.loadFunctionTotalMs;
+
+  const bookmarkLines = [
+    'Bookmarks',
+    `Path: ${perfState.bookmarks.path}`,
+    `Load: ${formatPerfMs(bookmarkLoadMs)}`,
+    `Metadata: ${formatPerfMs(perfState.bookmarks.metadataMs)}`,
+    `Fallback: ${perfState.bookmarks.fallbackUsed ? 'Yes' : 'No'}`
+  ];
+
+  const gridLines = [
+    'Grid',
+    `Mode: ${perfState.gridMode}`,
+    `Render: ${gridRender} ms`,
+    `Nodes: ${perfState.gridRenderedNodes}`,
+    `Range: ${rangeDisplay}`
+  ];
+
+  const stateLines = [
+    'State',
+    `Performance: ${appPerformanceModePreference ? 'On' : 'Off'}`,
+    `Debug logs: ${DEBUG_STARTUP_PERF ? 'On' : 'Off'}`
+  ];
+
+  const latestWarning = getLatestPerfWarningMessage();
+  const healthLines = [
+    'Health',
+    `Warnings: ${Array.isArray(perfState.warnings) ? perfState.warnings.length : 0}`,
+    `Fallbacks: ${getPerfFallbackSummary()}`
+  ];
+
+  if (latestWarning) {
+    healthLines.push(`Latest: ${latestWarning}`);
+  }
+
+  const widgetLines = [
+    'Widgets',
+    `Weather: ${formatWidgetPerf(perfState.widgets.setupWeather)}`,
+    `Weather cache: ${formatWidgetPerf(perfState.widgets.loadCachedWeather)}`,
+    `Search: ${formatWidgetPerf(perfState.widgets.setupSearch)}`,
+    `Todo: ${formatWidgetPerf(perfState.widgets.setupTodoWidget)}`,
+    `News: ${formatWidgetPerf(perfState.widgets.setupNewsWidget)}`,
+    `Quote: ${formatWidgetPerf(perfState.widgets.setupQuoteWidget)}`,
+    `Apps: ${formatWidgetPerf(perfState.widgets.setupAppLauncher)}`
+  ];
+
+  const cacheLines = [
+    'Cache',
+    `Cache: ${cacheDisplay}`,
     `localStorage: ${formatBytes(perfState.localStorageBytes)}`
+  ];
+
+  const reportLines = perfState.lastReportCopyStatus
+    ? [`Report: ${perfState.lastReportCopyStatus}`]
+    : [];
+
+  const overlayText = [
+    'Homebase Perf',
+    '',
+    ...startupLines,
+    '',
+    ...bookmarkLines,
+    '',
+    ...gridLines,
+    '',
+    ...stateLines,
+    '',
+    ...healthLines,
+    '',
+    ...widgetLines,
+    '',
+    ...cacheLines,
+    ...(reportLines.length ? ['', ...reportLines] : [])
   ].join('\n');
+
+  const textEl = el.querySelector('[data-role="perf-overlay-text"]');
+  if (textEl) {
+    textEl.textContent = overlayText;
+  } else {
+    el.textContent = overlayText;
+  }
 
 }
 
@@ -3815,6 +4452,8 @@ function setPerfOverlayEnabled(enabled) {
   debugPerfOverlayPreference = isEnabled;
 
   if (isEnabled) {
+
+    restorePerfHealthSession();
 
     ensurePerfOverlayElement();
 
@@ -3844,6 +4483,35 @@ function setPerfOverlayEnabled(enabled) {
 
     perfOverlayEl = null;
 
+    perfState.gridMode = 'idle';
+    perfState.startup = {
+      domContentLoadedMs: null,
+      windowLoadMs: null,
+      readyClassMs: null,
+      afterReadyPaintMs: null,
+      initToReadyClassMs: null,
+      parallelStorageLoadsMs: null
+    };
+    perfState.bookmarks = {
+      path: 'unknown',
+      getSubTreeMs: null,
+      getBookmarkTreeMs: null,
+      metadataMs: null,
+      processRenderMs: null,
+      loadFunctionTotalMs: null,
+      loadTotalMs: null,
+      fallbackUsed: false
+    };
+    perfState.widgets = createWidgetPerfState();
+    perfState.health = createHealthPerfState();
+    perfState.warnings = [];
+    clearPerfHealthSession();
+    perfState.startupRows = [];
+    perfState.rawTimings = [];
+    perfState.idleTasks = [];
+    perfState.media = { lastObjectUrlCleanup: null };
+    perfState.lastReportCopiedAt = null;
+    perfState.lastReportCopyStatus = '';
     perfState.gridRenderedNodes = 0;
     perfState.lastRenderedStartIndex = -1;
     perfState.lastRenderedEndIndex = -1;
@@ -5534,6 +6202,7 @@ async function getStoredHomebaseRootSubTree(storedRootId) {
     return rootNode;
   } catch (err) {
     console.warn('Stored Homebase root ID is invalid; falling back to full bookmark tree lookup.', err);
+    recordPerfFallback('bookmarks', 'Invalid bookmark root ID');
     await clearHomebaseRootId();
     return null;
   }
@@ -7233,6 +7902,8 @@ function updateVirtualGrid() {
 
   if (!mainContentEl || !gridEl) return;
 
+  perfState.gridMode = 'virtual';
+
   const renderStart = performance.now();
   
   // 1. Calculate Columns
@@ -7668,6 +8339,11 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
   } else {
 
     // --- STANDARD MODE (Original Logic) ---
+    const standardRenderStart =
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : 0;
+
     const previousPositions = droppedItemId ? captureGridItemPositions(grid) : null;
 
     itemsToRender.forEach(node => {
@@ -7703,6 +8379,23 @@ function renderBookmarkGrid(folderNode, droppedItemId = null) {
 
     // Apply Animations (Standard Mode Only)
     const domItems = grid.querySelectorAll('.bookmark-item');
+
+    perfState.gridMode = 'standard';
+    perfState.totalCount = itemsToRender.length;
+    perfState.gridRenderedNodes = domItems.length;
+    perfState.lastRenderedStartIndex = itemsToRender.length ? 0 : -1;
+    perfState.lastRenderedEndIndex = itemsToRender.length ? itemsToRender.length - 1 : -1;
+    perfState.lastVirtualRange = { start: -1, end: -1 };
+
+    if (standardRenderStart) {
+      perfState.lastGridRenderMs = performance.now() - standardRenderStart;
+    } else {
+      perfState.lastGridRenderMs = 0;
+    }
+
+    if (perfState.overlayEnabled) {
+      updatePerfOverlay(false);
+    }
 
     if (droppedItemId) {
 
@@ -19668,83 +20361,113 @@ function logInitSettled(name, result) {
   const loadCachedWeatherSafe = async () => {
     if (!document || !document.body || !weatherWidget) return;
     const start = performance.now();
+    recordIdleTaskPerf('startup:loadCachedWeather', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:loadCachedWeather start');
     try {
       await loadCachedWeather();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:loadCachedWeather', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:loadCachedWeather end in', Math.round(performance.now() - start), 'ms');
+      const elapsedMs = performance.now() - start;
+      recordWidgetPerfTiming('loadCachedWeather', elapsedMs);
+      recordIdleTaskPerf('startup:loadCachedWeather', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:loadCachedWeather end in', Math.round(elapsedMs), 'ms');
     }
   };
 
   const buildQuoteIndexSafe = async () => {
     if (!document || !document.body) return;
     const start = performance.now();
+    let quoteIndexSkipped = false;
+    recordIdleTaskPerf('startup:quoteIndex', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex start');
     try {
       const cachedState = readCachedQuoteState();
       if (!shouldLoadQuoteCatalog({ state: cachedState })) {
         if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex skipped');
+        quoteIndexSkipped = true;
+        recordWidgetPerfTiming('quoteIndex', 0, 'skipped');
+        recordIdleTaskPerf('startup:quoteIndex', 'skipped', 0);
         return;
       }
       await ensureQuoteIndexBuilt();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:quoteIndex', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex end in', Math.round(performance.now() - start), 'ms');
+      const elapsedMs = performance.now() - start;
+      if (!quoteIndexSkipped) {
+        recordWidgetPerfTiming('quoteIndex', elapsedMs);
+      }
+      recordIdleTaskPerf('startup:quoteIndex', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex end in', Math.round(elapsedMs), 'ms');
     }
   };
 
   const setupQuoteWidgetSafe = () => {
     if (!document || !document.body || !quoteWidget) return;
     const start = performance.now();
+    recordIdleTaskPerf('startup:setupQuoteWidget', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupQuoteWidget start');
     try {
       setupQuoteWidget();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupQuoteWidget', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupQuoteWidget end in', Math.round(performance.now() - start), 'ms');
+      const elapsedMs = performance.now() - start;
+      recordWidgetPerfTiming('setupQuoteWidget', elapsedMs);
+      recordIdleTaskPerf('startup:setupQuoteWidget', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupQuoteWidget end in', Math.round(elapsedMs), 'ms');
     }
   };
 
   const setupNewsWidgetSafe = () => {
     if (!document || !document.body || !newsWidget) return;
     const start = performance.now();
+    recordIdleTaskPerf('startup:setupNewsWidget', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupNewsWidget start');
     try {
       setupNewsWidget();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupNewsWidget', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupNewsWidget end in', Math.round(performance.now() - start), 'ms');
+      const elapsedMs = performance.now() - start;
+      recordWidgetPerfTiming('setupNewsWidget', elapsedMs);
+      recordIdleTaskPerf('startup:setupNewsWidget', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupNewsWidget end in', Math.round(elapsedMs), 'ms');
     }
   };
 
   const setupTodoWidgetSafe = async () => {
     if (!document || !document.body || !todoWidget) return;
     const start = performance.now();
+    recordIdleTaskPerf('startup:setupTodoWidget', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupTodoWidget start');
     try {
       await setupTodoWidget();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupTodoWidget', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupTodoWidget end in', Math.round(performance.now() - start), 'ms');
+      const elapsedMs = performance.now() - start;
+      recordWidgetPerfTiming('setupTodoWidget', elapsedMs);
+      recordIdleTaskPerf('startup:setupTodoWidget', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupTodoWidget end in', Math.round(elapsedMs), 'ms');
     }
   };
 
   const setupSearchSafe = async () => {
     if (!document || !document.body || !searchForm || !searchInput || !searchSelect || !searchResultsPanel || !searchWidget) return;
     const start = performance.now();
+    recordIdleTaskPerf('startup:setupSearch', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupSearch start');
     try {
       await setupSearch();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupSearch', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupSearch end in', Math.round(performance.now() - start), 'ms');
+      const elapsedMs = performance.now() - start;
+      recordWidgetPerfTiming('setupSearch', elapsedMs);
+      recordIdleTaskPerf('startup:setupSearch', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupSearch end in', Math.round(elapsedMs), 'ms');
     }
     if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
       console.warn('[startup guard] setupSearchSafe ran during critical phase');
@@ -19754,13 +20477,17 @@ function logInitSettled(name, result) {
   const setupWeatherSafe = async () => {
     if (!document || !document.body || !weatherWidget) return;
     const start = performance.now();
+    recordIdleTaskPerf('startup:setupWeather', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupWeather start');
     try {
       await setupWeather();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupWeather', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupWeather end in', Math.round(performance.now() - start), 'ms');
+      const elapsedMs = performance.now() - start;
+      recordWidgetPerfTiming('setupWeather', elapsedMs);
+      recordIdleTaskPerf('startup:setupWeather', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupWeather end in', Math.round(elapsedMs), 'ms');
     }
     if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
       console.warn('[startup guard] setupWeatherSafe ran during critical phase');
@@ -19770,19 +20497,24 @@ function logInitSettled(name, result) {
   const setupAppLauncherSafe = () => {
     if (!document || !document.body || !googleAppsBtn || !googleAppsPanel) return;
     const start = performance.now();
+    recordIdleTaskPerf('startup:setupAppLauncher', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupAppLauncher start');
     try {
       setupAppLauncher();
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupAppLauncher', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupAppLauncher end in', Math.round(performance.now() - start), 'ms');
+      const elapsedMs = performance.now() - start;
+      recordWidgetPerfTiming('setupAppLauncher', elapsedMs);
+      recordIdleTaskPerf('startup:setupAppLauncher', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupAppLauncher end in', Math.round(elapsedMs), 'ms');
     }
   };
 
   const fetchQuoteSafe = () => {
     if (!document || !document.body || !quoteText || !quoteAuthor) return;
     const start = performance.now();
+    recordIdleTaskPerf('startup:fetchQuote', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote start');
     try {
       const cachedState = readCachedQuoteState();
@@ -19794,7 +20526,10 @@ function logInitSettled(name, result) {
     } catch (err) {
       console.warn('Startup task failed:', 'startup:fetchQuote', err);
     } finally {
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote end in', Math.round(performance.now() - start), 'ms');
+      const elapsedMs = performance.now() - start;
+      recordWidgetPerfTiming('fetchQuote', elapsedMs);
+      recordIdleTaskPerf('startup:fetchQuote', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote end in', Math.round(elapsedMs), 'ms');
     }
     if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
       console.warn('[startup guard] fetchQuoteSafe ran during critical phase');
@@ -21023,13 +21758,16 @@ function cleanupUnusedObjectUrls(currentSelection) {
     }
   }
 
+  const cleanupDetails = {
+    videoUrl: currentSelection && currentSelection.videoUrl,
+    videoCacheKey: currentSelection && currentSelection.videoCacheKey,
+    cacheEntries: Array.from(wallpaperObjectUrlCache.entries())
+  };
+  recordObjectUrlCleanup(cleanupDetails);
+
   if (DEBUG_HOMEBASE_LOGS) {
     try {
-      console.debug('cleanupUnusedObjectUrls', {
-        videoUrl: currentSelection && currentSelection.videoUrl,
-        videoCacheKey: currentSelection && currentSelection.videoCacheKey,
-        cacheEntries: Array.from(wallpaperObjectUrlCache.entries())
-      });
+      console.debug('cleanupUnusedObjectUrls', cleanupDetails);
     } catch (_) {}
   }
 

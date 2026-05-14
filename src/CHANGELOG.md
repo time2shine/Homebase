@@ -2,6 +2,20 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.11.0 — 2026-05-15
+### Added
+- Added a Settings toggle to turn external search suggestions on or off while typing.
+
+### Improved
+- Search engine defaults and remembered engine choices now stay aligned when engines are reordered, disabled, or changed from another Homebase tab.
+- Search startup now reuses cached selector state more smoothly and avoids unnecessary first-load animation.
+- Search suggestion caching now stays bounded and clears when suggestions are disabled.
+- App Settings rows now fit tighter panels more reliably without horizontal overflow.
+
+### Fixed
+- Bookmark grid arrow, page, Home, and End keys now scroll bookmarks when the search box is empty and the pointer is over the bookmark grid.
+- Temporary bang searches no longer replace the active search engine after the query is cleared.
+
 ## v0.10.0 — 2026-05-13
 ### Added
 - Performance Mode now includes a copyable, privacy-safe full performance report for startup, bookmark, widget, cache, media, and environment diagnostics.

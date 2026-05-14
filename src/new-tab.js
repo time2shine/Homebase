@@ -4625,6 +4625,8 @@ const appSearchMathToggle = document.getElementById('app-search-math-toggle');
 
 const appSearchHistoryToggle = document.getElementById('app-search-history-toggle');
 
+const appSearchSuggestionsToggle = document.getElementById('app-search-suggestions-toggle');
+
 const appSearchDefaultEngineContainer = document.getElementById('app-search-default-engine-container');
 
 const appSearchDefaultEngineSelect = document.getElementById('app-search-default-engine-select');
@@ -4695,6 +4697,8 @@ const APP_SEARCH_MATH_KEY = 'appSearchMath';
 
 const APP_SEARCH_SHOW_HISTORY_KEY = 'appSearchShowHistory';
 
+const APP_SEARCH_SUGGESTIONS_KEY = 'appSearchSuggestionsEnabled';
+
 const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
 
 const APP_BOOKMARK_TEXT_BG_KEY = 'appBookmarkTextBg';
@@ -4764,6 +4768,7 @@ const HOMEBASE_OWNED_STORAGE_KEYS = [
   APP_SEARCH_DEFAULT_ENGINE_KEY,
   APP_SEARCH_MATH_KEY,
   APP_SEARCH_SHOW_HISTORY_KEY,
+  APP_SEARCH_SUGGESTIONS_KEY,
   APP_BOOKMARK_OPEN_NEW_TAB_KEY,
   APP_BOOKMARK_TEXT_BG_KEY,
   APP_BOOKMARK_TEXT_BG_COLOR_KEY,
@@ -5479,6 +5484,8 @@ let appSearchRememberEnginePreference = true;
   let appSearchMathPreference = true;
 
   let appSearchShowHistoryPreference = false;
+
+  let appSearchSuggestionsPreference = true;
 
   let appContainerModePreference = true;
 
@@ -12050,6 +12057,8 @@ async function loadAppSettingsFromStorage() {
 
       APP_SEARCH_SHOW_HISTORY_KEY,
 
+      APP_SEARCH_SUGGESTIONS_KEY,
+
       APP_BOOKMARK_OPEN_NEW_TAB_KEY,
 
       APP_BOOKMARK_TEXT_BG_KEY,
@@ -12143,6 +12152,8 @@ async function loadAppSettingsFromStorage() {
     appSearchMathPreference = stored[APP_SEARCH_MATH_KEY] !== false;
 
     appSearchShowHistoryPreference = stored[APP_SEARCH_SHOW_HISTORY_KEY] === true;
+
+    appSearchSuggestionsPreference = stored[APP_SEARCH_SUGGESTIONS_KEY] !== false;
 
     appBookmarkOpenNewTabPreference = stored[APP_BOOKMARK_OPEN_NEW_TAB_KEY] === true;
 
@@ -12404,61 +12415,53 @@ async function manageHomebaseTabs() {
 
 function populateDefaultEngineSelectControl() {
 
-  if (!appSearchDefaultEngineSelect) return;
+  const activeEngines = searchEngines.filter((engine) => engine.enabled);
+
+  const safeDefaultId = getSafeEnabledSearchEngineId(appSearchDefaultEnginePreference);
+
+  const selectedId = activeEngines.some((engine) => engine.id === safeDefaultId)
+
+    ? safeDefaultId
+
+    : (activeEngines[0]?.id || '');
+
+  if (selectedId) {
+
+    appSearchDefaultEnginePreference = selectedId;
+
+  }
+
+  if (!appSearchDefaultEngineSelect) return selectedId;
 
   appSearchDefaultEngineSelect.innerHTML = '';
 
-  const activeEngines = searchEngines.filter((engine) => engine.enabled);
-
-
-
-  if (activeEngines.length === 0) {
+  activeEngines.forEach((engine) => {
 
     const option = document.createElement('option');
 
-    option.value = 'google';
+    option.value = engine.id;
 
-    option.textContent = 'Google';
+    option.textContent = engine.name;
 
     appSearchDefaultEngineSelect.appendChild(option);
 
-  } else {
+  });
 
-    activeEngines.forEach((engine) => {
+  if (selectedId) {
 
-      const option = document.createElement('option');
-
-      option.value = engine.id;
-
-      option.textContent = engine.name;
-
-      appSearchDefaultEngineSelect.appendChild(option);
-
-    });
+    appSearchDefaultEngineSelect.value = selectedId;
 
   }
 
-
-
-  const desired = appSearchDefaultEnginePreference;
-
-  if (desired) {
-
-    appSearchDefaultEngineSelect.value = desired;
-
-  }
-
-  if (!appSearchDefaultEngineSelect.value && activeEngines.length > 0) {
-
-    appSearchDefaultEngineSelect.value = activeEngines[0].id;
-
-  }
+  return selectedId;
 
 }
 
 
 
 function updateDefaultEngineVisibilityControl() {
+
+  populateDefaultEngineSelectControl();
 
   if (!appSearchDefaultEngineContainer) return;
 
@@ -12469,8 +12472,6 @@ function updateDefaultEngineVisibilityControl() {
   } else {
 
     appSearchDefaultEngineContainer.style.display = 'flex';
-
-    populateDefaultEngineSelectControl();
 
   }
 
@@ -12713,6 +12714,12 @@ function syncAppSettingsForm() {
   if (appSearchHistoryToggle) {
 
     appSearchHistoryToggle.checked = appSearchShowHistoryPreference;
+
+  }
+
+  if (appSearchSuggestionsToggle) {
+
+    appSearchSuggestionsToggle.checked = appSearchSuggestionsPreference;
 
   }
 
@@ -13449,6 +13456,34 @@ function setupSearchEnginesModal() {
 
 
 
+    const previousDefaultEngineId = appSearchDefaultEnginePreference;
+
+    const defaultEngineId = populateDefaultEngineSelectControl();
+
+    if (defaultEngineId && previousDefaultEngineId !== defaultEngineId) {
+
+      try {
+
+        await browser.storage.local.set({ [APP_SEARCH_DEFAULT_ENGINE_KEY]: defaultEngineId });
+
+      } catch (err) {
+
+        console.warn('Failed to persist default search engine', err);
+
+      }
+
+    }
+
+    if (!appSearchRememberEnginePreference && defaultEngineId) {
+
+      const defaultEngine = searchEngines.find((engine) => engine.id === defaultEngineId);
+
+      writeFastSearchCache(defaultEngine);
+
+    }
+
+
+
     populateSearchOptions();
 
 
@@ -13465,7 +13500,11 @@ function setupSearchEnginesModal() {
 
       if (appSearchRememberEnginePreference) {
 
-        browser.storage.local.set({ currentSearchEngineId: firstEnabled.id }).catch((err) => {
+        browser.storage.local.set({ currentSearchEngineId: firstEnabled.id }).then(() => {
+
+          writeFastSearchCache(firstEnabled);
+
+        }).catch((err) => {
 
           console.warn('Failed to persist search engine selection', err);
 
@@ -13477,7 +13516,7 @@ function setupSearchEnginesModal() {
 
       // Even if current is still enabled, call updateSearchUI to refresh position in the list
 
-      updateSearchUI(currentSearchEngine.id);
+      updateSearchUI(currentSearchEngine.id, { updateFastCache: appSearchRememberEnginePreference });
 
     }
 
@@ -13713,6 +13752,8 @@ const resultSections = [
 
 let currentSearchEngine = searchEngines.find((engine) => engine.enabled) || searchEngines[0];
 
+let activeSearchEngineId = currentSearchEngine ? currentSearchEngine.id : null;
+
 let currentSelectionIndex = -1;
 
 let currentSectionIndex = 0; // 0 = bookmarks, 1 = suggestions
@@ -13731,9 +13772,59 @@ let lastSuggestionHtml = '';
 
 let searchNavigationLocked = false;
 
-let searchEngineSaveTimeout = null;
+let isBookmarkGridPointerOver = false;
+
+let bookmarkGridPointerListenersAttached = false;
+
+const MAX_SUGGESTION_CACHE_ENTRIES = 150;
 
 const suggestionCache = new Map();
+
+function setSuggestionCacheEntry(cacheKey, results) {
+
+  if (!appSearchSuggestionsPreference) return;
+
+  if (!cacheKey) return;
+
+  if (!Array.isArray(results)) return;
+
+  if (suggestionCache.has(cacheKey)) {
+
+    suggestionCache.delete(cacheKey);
+
+  }
+
+  suggestionCache.set(cacheKey, results);
+
+  while (suggestionCache.size > MAX_SUGGESTION_CACHE_ENTRIES) {
+
+    const oldestKey = suggestionCache.keys().next().value;
+
+    if (oldestKey === undefined) break;
+
+    suggestionCache.delete(oldestKey);
+
+  }
+
+}
+
+function getSuggestionCacheEntry(cacheKey) {
+
+  if (!appSearchSuggestionsPreference) return null;
+
+  if (!cacheKey) return null;
+
+  if (!suggestionCache.has(cacheKey)) return null;
+
+  const cached = suggestionCache.get(cacheKey);
+
+  suggestionCache.delete(cacheKey);
+
+  setSuggestionCacheEntry(cacheKey, cached);
+
+  return cached;
+
+}
 
 
 
@@ -14072,6 +14163,33 @@ function buildSearchEngineIconContent(targetEl, engine) {
   targetEl.appendChild(fallback);
 }
 
+function getFastSearchPayload(engine) {
+  if (!engine) return null;
+
+  return {
+    placeholder: searchInput ? searchInput.placeholder : `Search with ${engine.name}`,
+    selectorData: {
+      name: engine.name,
+      color: engine.color || '#333',
+      symbolId: engine.symbolId || null,
+      fallback: engine.name.charAt(0)
+    },
+    engineId: engine.id
+  };
+}
+
+function writeFastSearchCache(engine) {
+  const fastSearch = getFastSearchPayload(engine);
+
+  if (!fastSearch) return;
+
+  try {
+    localStorage.setItem('fast-search', JSON.stringify(fastSearch));
+  } catch (e) {
+    // Ignore storage errors
+  }
+}
+
 function ensureEngineIconExists(engine) {
 
   const container = document.getElementById('search-engine-selector');
@@ -14117,6 +14235,14 @@ function ensureEngineIconExists(engine) {
       selector.classList.remove('expanded');
 
       selector.classList.add('suppress-hover');
+
+    }
+
+    if (appSearchRememberEnginePreference) {
+
+      browser.storage.local.set({ currentSearchEngineId: engine.id })
+        .then(() => writeFastSearchCache(engine))
+        .catch(() => {});
 
     }
 
@@ -14194,11 +14320,19 @@ function updateSearchSelectorPosition() {
 
 
 
-function renderSearchEngineSelector() {
+function renderSearchEngineSelector(options = {}) {
 
   const container = document.getElementById('search-engine-selector');
 
   if (!container) return;
+
+  const suppressHydrationAnimation = options.animate === false || container.classList.contains('is-instant-fixed');
+
+  if (suppressHydrationAnimation) {
+
+    container.style.transition = 'none';
+
+  }
 
   
 
@@ -14211,6 +14345,12 @@ function renderSearchEngineSelector() {
   const list = document.createElement('div');
 
   list.className = 'search-engine-list';
+
+  if (suppressHydrationAnimation) {
+
+    list.style.transition = 'none';
+
+  }
 
   
 
@@ -14275,6 +14415,16 @@ function renderSearchEngineSelector() {
     // Insert Tooltip + Icon
     buildSearchEngineIconContent(btn, engine);
 
+    if (suppressHydrationAnimation) {
+
+      btn.querySelectorAll('svg, img').forEach(icon => {
+
+        icon.style.animation = 'none';
+
+      });
+
+    }
+
     
 
     btn.addEventListener('click', (e) => {
@@ -14297,7 +14447,9 @@ function renderSearchEngineSelector() {
 
       if (appSearchRememberEnginePreference) {
 
-        browser.storage.local.set({ currentSearchEngineId: engine.id }).catch(() => {});
+        browser.storage.local.set({ currentSearchEngineId: engine.id })
+          .then(() => writeFastSearchCache(engine))
+          .catch(() => {});
 
       }
 
@@ -14315,13 +14467,21 @@ function renderSearchEngineSelector() {
 
   container.appendChild(list);
 
+  container.classList.remove('is-instant-fixed');
+
   // Allow hovering again once the mouse leaves
 
-  container.addEventListener('mouseleave', () => {
+  if (container.dataset.mouseleaveBound !== '1') {
 
-    container.classList.remove('suppress-hover');
+    container.addEventListener('mouseleave', () => {
 
-  });
+      container.classList.remove('suppress-hover');
+
+    });
+
+    container.dataset.mouseleaveBound = '1';
+
+  }
 
   
 
@@ -14329,11 +14489,21 @@ function renderSearchEngineSelector() {
 
   updateSearchSelectorPosition();
 
+  if (suppressHydrationAnimation) {
+
+    void container.offsetWidth;
+
+    container.style.transition = '';
+
+    list.style.transition = '';
+
+  }
+
 }
 
 
 
-function populateSearchOptions() {
+function populateSearchOptions(options = {}) {
 
   if (!searchSelect) return;
 
@@ -14373,11 +14543,11 @@ function populateSearchOptions() {
 
   
 
-  renderSearchEngineSelector(); 
+  renderSearchEngineSelector(options); 
 
 }
 
-function updateSearchUI(engineId) {
+function updateSearchUI(engineId, options = {}) {
 
   let engine = searchEngines.find((e) => e.id === engineId);
 
@@ -14391,6 +14561,12 @@ function updateSearchUI(engineId) {
 
   currentSearchEngine = engine;
 
+  if (options.updateActive !== false) {
+
+    activeSearchEngineId = currentSearchEngine.id;
+
+  }
+
   ensureEngineIconExists(currentSearchEngine);
 
   searchInput.placeholder = `Search with ${currentSearchEngine.name}`;
@@ -14401,7 +14577,7 @@ function updateSearchUI(engineId) {
 
     searchSelect.value = currentSearchEngine.id;
 
-    if (previousValue !== currentSearchEngine.id) {
+    if (previousValue !== currentSearchEngine.id && options.animate !== false) {
 
       searchSelect.classList.remove('engine-switch-anim');
 
@@ -14423,6 +14599,16 @@ function updateSearchUI(engineId) {
 
     const buttons = container.querySelectorAll('.engine-icon-btn');
 
+    const list = container.querySelector('.search-engine-list');
+
+    const suppressSelectorAnimation = options.animate === false && list;
+
+    if (suppressSelectorAnimation) {
+
+      list.style.transition = 'none';
+
+    }
+
     buttons.forEach(btn => {
 
       if (btn.dataset.engineId === currentSearchEngine.id) {
@@ -14443,6 +14629,14 @@ function updateSearchUI(engineId) {
 
     updateSearchSelectorPosition();
 
+    if (suppressSelectorAnimation) {
+
+      void list.offsetWidth;
+
+      list.style.transition = '';
+
+    }
+
   }
 
 
@@ -14461,22 +14655,10 @@ function updateSearchUI(engineId) {
 
   }
 
-  // --- Cache Search State for Instant Load ---
-  try {
-    const fastSearch = {
-      placeholder: searchInput.placeholder,
-      selectorData: {
-        name: currentSearchEngine.name,
-        color: currentSearchEngine.color || '#333',
-        symbolId: currentSearchEngine.symbolId || null,
-        fallback: currentSearchEngine.name.charAt(0)
-      },
-      engineId: currentSearchEngine.id
-    };
+  if (options.updateFastCache === true) {
 
-    localStorage.setItem('fast-search', JSON.stringify(fastSearch));
-  } catch (e) {
-    // Ignore storage errors
+    writeFastSearchCache(currentSearchEngine);
+
   }
 
 }
@@ -14523,9 +14705,7 @@ function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken 
 
   if (abortSuggestions && suggestionAbortController) {
 
-    suggestionAbortController.abort();
-
-    suggestionAbortController = null;
+    abortSuggestionFetch();
 
   }
 
@@ -14542,6 +14722,12 @@ function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken 
   if (clearInput) {
 
     searchInput.value = '';
+
+  }
+
+  if (activeSearchEngineId && currentSearchEngine.id !== activeSearchEngineId) {
+
+    updateSearchUI(activeSearchEngineId);
 
   }
 
@@ -14729,6 +14915,8 @@ async function setupSearch() {
 
   document.addEventListener('keydown', handleSearchKeydown);
 
+  setupBookmarkGridPointerTracking();
+
 
 
   searchInput.addEventListener('click', e => {
@@ -14812,17 +15000,17 @@ async function handleSearchChange() {
 
   if (appSearchRememberEnginePreference) {
 
-    if (searchEngineSaveTimeout) clearTimeout(searchEngineSaveTimeout);
+    const selectedEngine = currentSearchEngine;
 
-    searchEngineSaveTimeout = setTimeout(() => {
+    browser.storage.local.set({ currentSearchEngineId: newId }).then(() => {
 
-      browser.storage.local.set({ currentSearchEngineId: newId }).catch((err) => {
+      writeFastSearchCache(selectedEngine);
 
-        console.warn('Failed to persist search engine selection', err);
+    }).catch((err) => {
 
-      });
+      console.warn('Failed to persist search engine selection', err);
 
-    }, 200);
+    });
 
   }
 
@@ -14952,7 +15140,7 @@ function executeSearch(query) {
 
     if (matchingEngine && bangQuery) {
 
-      updateSearchUI(matchingEngine.id);
+      updateSearchUI(matchingEngine.id, { updateActive: false });
 
       effectiveQuery = bangQuery;
 
@@ -15020,15 +15208,185 @@ function executeSearch(query) {
 
 // ===============================================
 
-document.addEventListener('keydown', (e) => {
+function isSearchKeyboardContext(event) {
 
-  if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+  if (!event || !event.target || !(event.target instanceof Element)) return false;
 
-    e.preventDefault();
+  if (!searchResultsPanel || searchResultsPanel.classList.contains('hidden')) return false;
+
+  switch (event.key) {
+
+    case 'ArrowDown':
+
+    case 'ArrowUp':
+
+    case 'Tab':
+
+    case 'Enter':
+
+    case 'Escape':
+
+      break;
+
+    default:
+
+      return false;
 
   }
 
-}, { passive: false });
+  const target = event.target;
+
+  const inSearchWidget = searchWidget && searchWidget.contains(target);
+
+  const inSearchInput = searchInput && searchInput.contains(target);
+
+  const inSearchResults = searchResultsPanel.contains(target);
+
+  const inSearchWrapper = searchAreaWrapper && searchAreaWrapper.contains(target);
+
+  return Boolean(
+
+    (inSearchWidget || inSearchInput || inSearchResults) &&
+
+    (!searchAreaWrapper || inSearchWrapper)
+
+  );
+
+}
+
+function isBookmarkGridScrollKey(key) {
+
+  return key === 'ArrowDown' ||
+
+    key === 'ArrowUp' ||
+
+    key === 'PageDown' ||
+
+    key === 'PageUp' ||
+
+    key === 'Home' ||
+
+    key === 'End';
+
+}
+
+function isSearchInputEmptyAndPassive() {
+
+  if (!searchInput || document.activeElement !== searchInput) return false;
+
+  if (searchInput.value.trim() !== '') return false;
+
+  return !searchResultsPanel || searchResultsPanel.classList.contains('hidden');
+
+}
+
+function getBookmarkScrollContainer() {
+
+  if (virtualizerState && virtualizerState.mainContentEl) return virtualizerState.mainContentEl;
+
+  const grid = bookmarksGridEl || document.getElementById('bookmarks-grid');
+
+  if (grid) return grid.closest('.main-content') || grid;
+
+  return document.querySelector('.main-content');
+
+}
+
+function isPointerOverBookmarkGrid() {
+
+  const grid = bookmarksGridEl || document.getElementById('bookmarks-grid');
+
+  if (!grid || grid.hidden || grid.classList.contains('hidden')) return false;
+
+  if (!getBookmarkScrollContainer()) return false;
+
+  return isBookmarkGridPointerOver || grid.matches(':hover');
+
+}
+
+function scrollBookmarkGridForKey(key) {
+
+  const container = getBookmarkScrollContainer();
+
+  if (!container) return;
+
+  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+
+  const arrowStep = Math.max(40, Math.round(container.clientHeight * 0.1));
+
+  const pageStep = Math.max(arrowStep, Math.round(container.clientHeight * 0.9));
+
+  let nextScrollTop = container.scrollTop;
+
+  switch (key) {
+
+    case 'ArrowDown':
+
+      nextScrollTop += arrowStep;
+
+      break;
+
+    case 'ArrowUp':
+
+      nextScrollTop -= arrowStep;
+
+      break;
+
+    case 'PageDown':
+
+      nextScrollTop += pageStep;
+
+      break;
+
+    case 'PageUp':
+
+      nextScrollTop -= pageStep;
+
+      break;
+
+    case 'Home':
+
+      nextScrollTop = 0;
+
+      break;
+
+    case 'End':
+
+      nextScrollTop = maxScrollTop;
+
+      break;
+
+    default:
+
+      return;
+
+  }
+
+  container.scrollTop = Math.min(maxScrollTop, Math.max(0, nextScrollTop));
+
+}
+
+function setupBookmarkGridPointerTracking() {
+
+  const grid = bookmarksGridEl || document.getElementById('bookmarks-grid');
+
+  if (!grid || bookmarkGridPointerListenersAttached) return;
+
+  grid.addEventListener('pointerenter', () => {
+
+    isBookmarkGridPointerOver = true;
+
+  });
+
+  grid.addEventListener('pointerleave', () => {
+
+    isBookmarkGridPointerOver = false;
+
+  });
+
+  bookmarkGridPointerListenersAttached = true;
+
+}
 
 
 
@@ -15408,15 +15766,28 @@ function handleSearchResultClick(e) {
 
 function handleSearchKeydown(e) {
 
-  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && searchWidget.contains(e.target)) {
+  const target = e.target;
+
+  const isElementTarget = target instanceof Element;
+
+  const inSearchWidget = isElementTarget && searchWidget && searchWidget.contains(target);
+
+  if (!e.altKey && !e.ctrlKey && !e.metaKey &&
+      isBookmarkGridScrollKey(e.key) &&
+      isSearchInputEmptyAndPassive() &&
+      isPointerOverBookmarkGrid()) {
 
     e.preventDefault();
+
+    scrollBookmarkGridForKey(e.key);
+
+    return;
 
   }
 
 
 
-  if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && searchWidget.contains(e.target)) {
+  if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && inSearchWidget) {
 
     e.preventDefault();
 
@@ -15428,7 +15799,7 @@ function handleSearchKeydown(e) {
 
 
 
-  if (e.altKey && e.key === 'Home' && searchWidget.contains(e.target)) {
+  if (e.altKey && e.key === 'Home' && inSearchWidget) {
 
     e.preventDefault();
 
@@ -15446,11 +15817,9 @@ function handleSearchKeydown(e) {
 
   // Only operate when results panel is open and the event originated from the search UI.
 
-  const panelOpen = !searchResultsPanel.classList.contains('hidden');
+  if (!isSearchKeyboardContext(e)) {
 
-  if (!panelOpen) {
-
-    if (e.key === 'Escape' && searchWidget.contains(e.target)) {
+    if (e.key === 'Escape' && inSearchWidget && searchInput) {
 
       searchInput.value = '';
 
@@ -15459,16 +15828,6 @@ function handleSearchKeydown(e) {
     return;
 
   }
-
-
-
-  const isSearchContext =
-
-    searchWidget.contains(e.target) || searchResultsPanel.contains(e.target);
-
-
-
-  if (!isSearchContext) return;
 
 
 
@@ -15958,6 +16317,188 @@ function isStaleSearch(token, queryLower) {
 
 }
 
+function abortSuggestionFetch() {
+
+  if (!suggestionAbortController) return;
+
+  suggestionAbortController.abort();
+
+  suggestionAbortController = null;
+
+}
+
+function clearExternalSuggestionResults() {
+
+  if (!suggestionResultsContainer) return;
+
+  const removable = new Set();
+
+  Array.from(suggestionResultsContainer.children).forEach((node) => {
+
+    if (!(node instanceof Element)) return;
+
+    if (node.classList.contains('result-item-suggestion')) {
+
+      removable.add(node);
+
+      const previous = node.previousElementSibling;
+
+      if (
+        previous &&
+        previous.classList.contains('result-header') &&
+        (previous.dataset.externalSuggestions === 'true' || (previous.textContent || '').trim().endsWith(' Search'))
+      ) {
+
+        removable.add(previous);
+
+      }
+
+      return;
+
+    }
+
+    if (node.classList.contains('result-header') && node.dataset.externalSuggestions === 'true') {
+
+      removable.add(node);
+
+    }
+
+  });
+
+  removable.forEach(node => node.remove());
+
+  if (removable.size > 0) {
+
+    lastSuggestionHtml = '';
+
+    updatePanelVisibility();
+
+  }
+
+}
+
+function setSearchSuggestionsPreference(enabled) {
+
+  appSearchSuggestionsPreference = enabled !== false;
+
+  if (appSearchSuggestionsToggle) {
+
+    appSearchSuggestionsToggle.checked = appSearchSuggestionsPreference;
+
+  }
+
+  if (!appSearchSuggestionsPreference) {
+
+    abortSuggestionFetch();
+
+    suggestionCache.clear();
+
+    clearExternalSuggestionResults();
+
+  }
+
+}
+
+
+
+function applySearchEngineConfig(savedConfig) {
+
+  if (Array.isArray(savedConfig)) {
+
+    const reordered = [];
+
+    const processedIds = new Set();
+
+    savedConfig.forEach((cfg) => {
+
+      if (!cfg || typeof cfg !== 'object') return;
+
+      const id = cfg.id;
+
+      if (!id || processedIds.has(id)) return;
+
+      const match = searchEngines.find((engine) => engine.id === id);
+
+      if (!match) return;
+
+      match.enabled = cfg.enabled !== false;
+
+      reordered.push(match);
+
+      processedIds.add(id);
+
+    });
+
+    searchEngines.forEach((engine) => {
+
+      if (!processedIds.has(engine.id)) {
+
+        reordered.push(engine);
+
+        processedIds.add(engine.id);
+
+      }
+
+    });
+
+    searchEngines = reordered;
+
+    return true;
+
+  }
+
+  if (savedConfig && typeof savedConfig === 'object') {
+
+    let applied = false;
+
+    searchEngines.forEach((engine) => {
+
+      if (Object.prototype.hasOwnProperty.call(savedConfig, engine.id)) {
+
+        engine.enabled = savedConfig[engine.id] !== false;
+
+        applied = true;
+
+      }
+
+    });
+
+    return applied;
+
+  }
+
+  return false;
+
+}
+
+
+
+function getSafeEnabledSearchEngineId(preferredId) {
+
+  const preferred = preferredId
+
+    ? searchEngines.find((engine) => engine.id === preferredId && engine.enabled)
+
+    : null;
+
+  if (preferred) return preferred.id;
+
+  const defaultId = appSearchDefaultEnginePreference || 'google';
+
+  const defaultEngine = searchEngines.find((engine) => engine.id === defaultId && engine.enabled);
+
+  if (defaultEngine) return defaultEngine.id;
+
+  const firstEnabled = searchEngines.find((engine) => engine.enabled);
+
+  if (firstEnabled) return firstEnabled.id;
+
+  const googleEngine = searchEngines.find((engine) => engine.id === 'google');
+
+  return googleEngine ? googleEngine.id : (searchEngines[0]?.id || 'google');
+
+}
+
 
 
 async function loadSearchEnginePreferences() {
@@ -15978,71 +16519,7 @@ async function loadSearchEnginePreferences() {
 
 
 
-  // 1. Handle New Format (Array of ordered objects)
-
-  if (Array.isArray(savedConfig)) {
-
-    const reordered = [];
-
-    const processedIds = new Set();
-
-
-
-    savedConfig.forEach(cfg => {
-
-      // Find matching engine in the static list
-
-      const match = searchEngines.find(e => e.id === cfg.id);
-
-      if (match) {
-
-        match.enabled = cfg.enabled;
-
-        reordered.push(match);
-
-        processedIds.add(cfg.id);
-
-      }
-
-    });
-
-
-
-    // Add any new engines defined in code but missing from storage (e.g. after an update)
-
-    searchEngines.forEach(e => {
-
-      if (!processedIds.has(e.id)) {
-
-        reordered.push(e);
-
-      }
-
-    });
-
-
-
-    // Apply the new order
-
-    searchEngines = reordered;
-
-  } 
-
-  // 2. Handle Legacy Format (Object with boolean flags)
-
-  else if (savedConfig && typeof savedConfig === 'object') {
-
-    searchEngines.forEach((engine) => {
-
-      if (Object.prototype.hasOwnProperty.call(savedConfig, engine.id)) {
-
-        engine.enabled = savedConfig[engine.id];
-
-      }
-
-    });
-
-  }
+  applySearchEngineConfig(savedConfig);
 
 
 
@@ -16057,10 +16534,6 @@ async function loadSearchEnginePreferences() {
     appSearchDefaultEnginePreference = stored[APP_SEARCH_DEFAULT_ENGINE_KEY];
 
   }
-
-
-
-  populateSearchOptions();
 
 
 
@@ -16082,19 +16555,31 @@ async function loadSearchEnginePreferences() {
 
 
 
-  const engineObj = searchEngines.find((e) => e.id === targetEngineId && e.enabled);
+  targetEngineId = getSafeEnabledSearchEngineId(targetEngineId);
 
-  if (!engineObj) {
 
-    const fallback = searchEngines.find((e) => e.enabled && e.id === (appSearchDefaultEnginePreference || 'google'));
 
-    targetEngineId = fallback ? fallback.id : (searchEngines.find((e) => e.enabled)?.id || 'google');
+  const resolvedEngine = searchEngines.find((e) => e.id === targetEngineId) || currentSearchEngine;
+
+  if (resolvedEngine) {
+
+    currentSearchEngine = resolvedEngine;
+
+    activeSearchEngineId = resolvedEngine.id;
 
   }
 
+  populateSearchOptions({ animate: false });
 
+  updateSearchUI(targetEngineId, {
 
-  updateSearchUI(targetEngineId);
+    updateActive: true,
+
+    updateFastCache: true,
+
+    animate: false
+
+  });
 
 }
 
@@ -16104,6 +16589,10 @@ async function loadSearchEnginePreferences() {
 
 async function fetchSearchSuggestions(query, engine) {
 
+  if (!appSearchSuggestionsPreference) return [];
+
+  if (!engine) return [];
+
   // 1. If the engine has no suggestion URL (e.g. Reddit), return empty immediately
 
   if (!engine.suggestionUrl) return [];
@@ -16112,9 +16601,11 @@ async function fetchSearchSuggestions(query, engine) {
 
   const cacheKey = `${engine.id}:${query}`;
 
-  if (suggestionCache.has(cacheKey)) {
+  const cached = getSuggestionCacheEntry(cacheKey);
 
-    return suggestionCache.get(cacheKey);
+  if (cached) {
+  
+    return cached;
 
   }
 
@@ -16168,7 +16659,7 @@ async function fetchSearchSuggestions(query, engine) {
 
       results = Array.isArray(data) && Array.isArray(data[1]) ? data[1].filter(val => typeof val === 'string') : [];
 
-      suggestionCache.set(cacheKey, results);
+      setSuggestionCacheEntry(cacheKey, results);
 
       return results;
 
@@ -16182,7 +16673,7 @@ async function fetchSearchSuggestions(query, engine) {
 
       results = Array.isArray(data) ? data.map(item => item && item.phrase).filter(val => typeof val === 'string') : [];
 
-      suggestionCache.set(cacheKey, results);
+      setSuggestionCacheEntry(cacheKey, results);
 
       return results;
 
@@ -16210,7 +16701,7 @@ async function fetchSearchSuggestions(query, engine) {
 
       }
 
-      suggestionCache.set(cacheKey, results);
+      setSuggestionCacheEntry(cacheKey, results);
 
       return results;
 
@@ -16250,7 +16741,7 @@ async function fetchSearchSuggestions(query, engine) {
 
         : [];
 
-      suggestionCache.set(cacheKey, results);
+      setSuggestionCacheEntry(cacheKey, results);
 
       return results;
 
@@ -16258,7 +16749,7 @@ async function fetchSearchSuggestions(query, engine) {
 
 
 
-    suggestionCache.set(cacheKey, results);
+    setSuggestionCacheEntry(cacheKey, results);
 
     return results;
 
@@ -16493,7 +16984,7 @@ async function handleSearchInput() {
 
     if (currentSearchEngine.id !== targetEngineId) {
 
-      updateSearchUI(targetEngineId);
+      updateSearchUI(targetEngineId, { updateActive: false });
 
     }
 
@@ -16503,15 +16994,7 @@ async function handleSearchInput() {
 
     if (!queryLower.startsWith('!') || queryLower.trim().length === 0) {
 
-       const savedId = appSearchRememberEnginePreference
-
-        ? (await browser.storage.local.get('currentSearchEngineId')).currentSearchEngineId
-
-        : appSearchDefaultEnginePreference;
-
-      
-
-      const targetId = savedId || 'google';
+      const targetId = activeSearchEngineId || currentSearchEngine.id || appSearchDefaultEnginePreference || 'google';
 
       
 
@@ -16769,15 +17252,33 @@ async function handleSearchInput() {
 
 
 
-  const suggestionsPromise = fetchSearchSuggestions(query.trim(), currentSearchEngine);
+  if (!appSearchSuggestionsPreference) {
+
+    clearExternalSuggestionResults();
+
+  }
+
+  const suggestionsPromise = appSearchSuggestionsPreference
+
+    ? fetchSearchSuggestions(query.trim(), currentSearchEngine)
+
+    : Promise.resolve([]);
 
 
 
-  const [historyResults, suggestionResults] = await Promise.all([historyPromise, suggestionsPromise]);
+  const [historyResults, fetchedSuggestionResults] = await Promise.all([historyPromise, suggestionsPromise]);
 
 
 
   if (isStaleSearch(currentToken, queryLower)) return;
+
+  const suggestionResults = appSearchSuggestionsPreference ? fetchedSuggestionResults : [];
+
+  if (!appSearchSuggestionsPreference) {
+
+    clearExternalSuggestionResults();
+
+  }
 
 
 
@@ -16827,6 +17328,7 @@ async function handleSearchInput() {
   if (suggestionResults && suggestionResults.length > 0) {
     const header = document.createElement('div');
     header.className = 'result-header';
+    header.dataset.externalSuggestions = 'true';
     header.textContent = `${currentSearchEngine.name} Search`;
     bottomFragment.appendChild(header);
 
@@ -21102,9 +21604,55 @@ if (browser?.storage?.onChanged) {
 
       if (!appSearchRememberEnginePreference) {
 
-        updateSearchUI(appSearchDefaultEnginePreference);
+        updateSearchUI(appSearchDefaultEnginePreference, { updateFastCache: true });
 
       }
+
+    }
+
+    if (changes[APP_SEARCH_DEFAULT_ENGINE_KEY]) {
+
+      const requestedDefaultEngineId = changes[APP_SEARCH_DEFAULT_ENGINE_KEY].newValue || 'google';
+
+      const previousDefaultEngineId = appSearchDefaultEnginePreference;
+
+      const safeDefaultEngineId = getSafeEnabledSearchEngineId(requestedDefaultEngineId);
+
+      appSearchDefaultEnginePreference = safeDefaultEngineId;
+
+      populateDefaultEngineSelectControl();
+
+      if (safeDefaultEngineId !== requestedDefaultEngineId) {
+
+        browser.storage.local.set({ [APP_SEARCH_DEFAULT_ENGINE_KEY]: safeDefaultEngineId }).catch((err) => {
+
+          console.warn('Failed to persist default search engine', err);
+
+        });
+
+      }
+
+      if (!appSearchRememberEnginePreference) {
+
+        const defaultEngine = searchEngines.find((engine) => engine.id === safeDefaultEngineId);
+
+        if (!currentSearchEngine || currentSearchEngine.id === previousDefaultEngineId) {
+
+          updateSearchUI(safeDefaultEngineId, { updateFastCache: true, animate: false });
+
+        } else {
+
+          writeFastSearchCache(defaultEngine);
+
+        }
+
+      }
+
+    }
+
+    if (changes[APP_SEARCH_SUGGESTIONS_KEY]) {
+
+      setSearchSuggestionsPreference(changes[APP_SEARCH_SUGGESTIONS_KEY].newValue !== false);
 
     }
 
@@ -21114,21 +21662,51 @@ if (browser?.storage?.onChanged) {
 
       const newConfig = changes[SEARCH_ENGINES_PREF_KEY].newValue;
 
-      if (newConfig) {
+      if (applySearchEngineConfig(newConfig)) {
 
-        searchEngines.forEach((engine) => {
+        const previousEngineId = currentSearchEngine ? currentSearchEngine.id : null;
 
-          if (Object.prototype.hasOwnProperty.call(newConfig, engine.id)) {
+        const previousEngineStillEnabled = Boolean(previousEngineId && searchEngines.find((engine) => engine.id === previousEngineId && engine.enabled));
 
-            engine.enabled = newConfig[engine.id];
+        const previousDefaultEngineId = appSearchDefaultEnginePreference;
 
-          }
+        const defaultEngineId = populateDefaultEngineSelectControl();
 
-        });
+        if (defaultEngineId && previousDefaultEngineId !== defaultEngineId) {
 
-        populateSearchOptions();
+          browser.storage.local.set({ [APP_SEARCH_DEFAULT_ENGINE_KEY]: defaultEngineId }).catch((err) => {
 
-        updateSearchUI(currentSearchEngine.id);
+            console.warn('Failed to persist default search engine', err);
+
+          });
+
+        }
+
+        const targetEngineId = getSafeEnabledSearchEngineId(previousEngineId);
+
+        populateSearchOptions({ animate: false });
+
+        updateSearchUI(targetEngineId, { updateFastCache: appSearchRememberEnginePreference, animate: false });
+
+        if (appSearchRememberEnginePreference && !previousEngineStillEnabled) {
+
+          browser.storage.local.set({ currentSearchEngineId: targetEngineId }).catch((err) => {
+
+            console.warn('Failed to persist search engine selection', err);
+
+          });
+
+        }
+
+        if (!appSearchRememberEnginePreference) {
+
+          const startupEngineId = defaultEngineId || getSafeEnabledSearchEngineId(appSearchDefaultEnginePreference);
+
+          const startupEngine = searchEngines.find((engine) => engine.id === startupEngineId) || currentSearchEngine;
+
+          writeFastSearchCache(startupEngine);
+
+        }
 
       }
 
@@ -21142,7 +21720,7 @@ if (browser?.storage?.onChanged) {
 
       if (appSearchRememberEnginePreference && newId && newId !== currentSearchEngine.id) {
 
-        updateSearchUI(newId);
+        updateSearchUI(newId, { updateFastCache: true, animate: false });
 
       }
 

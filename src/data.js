@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.10.0',
-  date: '2026-05-13',
+  version: '0.11.0',
+  date: '2026-05-15',
   items: [
     {
       type: 'NEW',
-      title: 'Copy perf report',
-      desc: 'Performance Mode can now copy a privacy-safe startup and widget report for troubleshooting.'
+      title: 'Suggestion control',
+      desc: 'Settings can now turn external search suggestions on or off while typing.'
     },
     {
       type: 'IMPROVED',
-      title: 'Richer diagnostics',
-      desc: 'The performance overlay now shows startup, bookmark, grid, widget, cache, and health details together.'
+      title: 'Search defaults',
+      desc: 'Default and remembered search engines now stay aligned when engines are reordered or disabled.'
     },
     {
       type: 'IMPROVED',
-      title: 'Recovery visibility',
-      desc: 'Bookmark and gallery recovery paths are now easier to spot from the diagnostics panel.'
+      title: 'Startup polish',
+      desc: 'The search selector now restores cached state more smoothly during new-tab startup.'
     },
     {
       type: 'FIX',
-      title: 'Poster preload',
-      desc: 'Oversized saved wallpaper poster previews no longer interfere with loading the original wallpaper.'
+      title: 'Keyboard scrolling',
+      desc: 'Arrow and page keys now scroll bookmarks when the empty search box is passive.'
     }
   ]
 };

@@ -1359,6 +1359,7 @@ window.SettingsUI = (() => {
         const nextDefaultEngine = appSearchDefaultEngineSelect && appSearchDefaultEngineSelect.value ? appSearchDefaultEngineSelect.value : appSearchDefaultEnginePreference;
         const nextMath = appSearchMathToggle ? appSearchMathToggle.checked : true;
         const nextSearchHistory = appSearchHistoryToggle ? appSearchHistoryToggle.checked : false;
+        const nextSearchSuggestions = appSearchSuggestionsToggle ? appSearchSuggestionsToggle.checked : true;
 
         applyTimeFormatPreference(nextFormat);
         setWeatherPreference(nextShowWeather, { applyVisibility: false, updateUI: false });
@@ -1380,6 +1381,10 @@ window.SettingsUI = (() => {
         appSearchDefaultEnginePreference = nextDefaultEngine;
         appSearchMathPreference = nextMath;
         appSearchShowHistoryPreference = nextSearchHistory;
+        appSearchSuggestionsPreference = nextSearchSuggestions;
+        if (typeof setSearchSuggestionsPreference === 'function') {
+          setSearchSuggestionsPreference(nextSearchSuggestions);
+        }
         appContainerModePreference = nextContainerMode;
         appContainerNewTabPreference = nextContainerNewTab;
         dailyRotationPreference = nextDailyRotation;
@@ -1459,6 +1464,7 @@ window.SettingsUI = (() => {
             [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
             [APP_SEARCH_MATH_KEY]: nextMath,
             [APP_SEARCH_SHOW_HISTORY_KEY]: nextSearchHistory,
+            [APP_SEARCH_SUGGESTIONS_KEY]: nextSearchSuggestions,
             [APP_SEARCH_DEFAULT_ENGINE_KEY]: nextDefaultEngine,
             [APP_SINGLETON_MODE_KEY]: nextSingletonMode,
             [APP_PERFORMANCE_MODE_KEY]: nextPerformanceMode,

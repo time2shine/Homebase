@@ -3536,6 +3536,7 @@ body.debug-align #quick-actions-bar {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -3552,7 +3553,10 @@ body.debug-align #quick-actions-bar {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-gutter: stable;
+  box-sizing: border-box;
+  padding-right: 16px;
 }
 
 .app-settings-section[data-section="about"] {
@@ -4161,6 +4165,9 @@ body.debug-align #quick-actions-bar {
   gap: 18px;
   padding: 10px 0;
   border-bottom: 1px solid #eef1f5;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .app-setting-row:last-child {
@@ -4189,6 +4196,8 @@ body.debug-align #quick-actions-bar {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .app-setting-label .title {

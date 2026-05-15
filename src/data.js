@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.11.0',
-  date: '2026-05-15',
+  version: '0.11.1',
+  date: '2026-05-16',
   items: [
     {
-      type: 'NEW',
-      title: 'Suggestion control',
-      desc: 'Settings can now turn external search suggestions on or off while typing.'
+      type: 'IMPROVED',
+      title: 'Offline weather',
+      desc: 'Weather now restores the last saved forecast when you are offline or a refresh times out.'
     },
     {
       type: 'IMPROVED',
-      title: 'Search defaults',
-      desc: 'Default and remembered search engines now stay aligned when engines are reordered or disabled.'
+      title: 'Cached labels',
+      desc: 'Cached forecasts now show clearer offline or cached status with the last update time.'
     },
     {
       type: 'IMPROVED',
-      title: 'Startup polish',
-      desc: 'The search selector now restores cached state more smoothly during new-tab startup.'
+      title: 'Gallery recovery',
+      desc: 'The wallpaper gallery now reuses a saved media list while refreshing in the background.'
     },
     {
       type: 'FIX',
-      title: 'Keyboard scrolling',
-      desc: 'Arrow and page keys now scroll bookmarks when the empty search box is passive.'
+      title: 'Slow requests',
+      desc: 'Weather and gallery requests now time out sooner so the new tab can recover cleanly.'
     }
   ]
 };

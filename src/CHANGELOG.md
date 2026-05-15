@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.11.1 — 2026-05-16
+### Improved
+- Weather now restores usable cached forecasts during offline sessions, timed-out refreshes, and new-tab startup.
+- Cached weather status now distinguishes offline cache from stale cached data and shows clearer updated labels.
+- Wallpaper gallery loading now uses cached media manifests immediately when available and refreshes the manifest in the background.
+
+### Fixed
+- Slow or failed weather requests now time out and fall back to saved weather instead of leaving the widget stuck in an error state.
+- Slow, empty, or failed gallery manifest requests now fall back to the saved gallery list when possible.
+
 ## v0.11.0 — 2026-05-15
 ### Added
 - Added a Settings toggle to turn external search suggestions on or off while typing.

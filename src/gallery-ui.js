@@ -230,7 +230,8 @@ window.HomebaseGallery = (() => {
   }
 
   async function getVideosManifest() {
-    return callContextCallback('getVideosManifest');
+    const manifest = await callContextCallback('getVideosManifest');
+    return Array.isArray(manifest) ? manifest : [];
   }
 
   function cacheGalleryPosters(manifest = []) {
@@ -2209,7 +2210,6 @@ window.HomebaseGallery = (() => {
     try {
       const manifest = await getVideosManifest();
       const manifestList = Array.isArray(manifest) ? manifest : [];
-      scheduleIdleTask(() => cacheGalleryPosters(manifestList), 'cacheGalleryPosters');
       galleryManifest = manifestList;
 
       await loadGalleryFavorites();

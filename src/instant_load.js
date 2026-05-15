@@ -35,7 +35,27 @@
       removeClass(el, 'widget-hidden');
       addClass(el, 'widget-visible');
     }
+    const WEATHER_FAST_FRESH_TTL_MS = 60 * 60 * 1000;
+    const WEATHER_STALE_DISPLAY_MAX_AGE_MS = 48 * 60 * 60 * 1000;
     const QUOTE_DEFAULT_FREQUENCY = 'hourly';
+
+    function normalizeWeatherTimestamp(timestamp) {
+      if (typeof timestamp === 'number') return Number.isFinite(timestamp) ? timestamp : null;
+      if (!timestamp) return null;
+      const parsed = new Date(timestamp).getTime();
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function isWeatherCacheStale(timestamp, ttlMs) {
+      const cachedAt = normalizeWeatherTimestamp(timestamp);
+      if (!Number.isFinite(cachedAt)) return false;
+      return Date.now() - cachedAt > ttlMs;
+    }
+
+    function hasUsableCachedWeather(data) {
+      if (!data || typeof data !== 'object') return false;
+      return Boolean(data.city && data.temp !== undefined && data.desc && data.icon);
+    }
 
     // --- 1. Instant Clock ---
     const nowTime = new Date();
@@ -64,14 +84,31 @@
       } catch (e) {
         w = null;
       }
-      // Valid for 1 hour
-      if (w && w.__timestamp && (Date.now() - w.__timestamp < 3600000)) {
+      const cachedAt = normalizeWeatherTimestamp(w?.__timestamp);
+      const cacheAge = Number.isFinite(cachedAt) ? Date.now() - cachedAt : Infinity;
+      const canDisplayCachedWeather =
+        hasUsableCachedWeather(w) &&
+        Number.isFinite(cachedAt) &&
+        cacheAge <= WEATHER_STALE_DISPLAY_MAX_AGE_MS;
+
+      if (canDisplayCachedWeather) {
+        const isStaleWeather = isWeatherCacheStale(cachedAt, WEATHER_FAST_FRESH_TTL_MS);
+        const isOfflineWeather = typeof navigator !== 'undefined' && navigator.onLine === false;
         const getUpdatedLabel = () => {
-          if (w.updated) return w.updated;
-          if (!w.__timestamp) return '';
-          const d = new Date(w.__timestamp);
-          if (Number.isNaN(d.getTime())) return '';
-          return `Updated: ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+          let baseLabel = '';
+          const d = new Date(cachedAt);
+          if (!Number.isNaN(d.getTime())) {
+            baseLabel = `Updated: ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+          } else if (w.updated) {
+            baseLabel = String(w.updated).replace(/^(Cached data|Offline cache)\s*-\s*/i, '');
+          }
+          if (!baseLabel) {
+            if (isOfflineWeather) return 'Offline cache weather data';
+            return isStaleWeather ? 'Cached weather data' : '';
+          }
+          if (isOfflineWeather) return `Offline cache - ${baseLabel}`;
+          if (isStaleWeather) return `Cached data - ${baseLabel}`;
+          return baseLabel;
         };
         
         // Map DOM IDs to the exact JSON keys saved in new-tab.js
@@ -112,6 +149,11 @@
         }
         if (allowWeatherInstant) {
           const wWidget = document.querySelector('.widget-weather');
+          if (isStaleWeather || isOfflineWeather) {
+            addClass(wWidget, 'weather-cached');
+          } else {
+            removeClass(wWidget, 'weather-cached');
+          }
           showWidget(wWidget);
         }
       }

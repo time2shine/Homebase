@@ -102,6 +102,7 @@ const GALLERY_ASSETS_BASE_URL = 'https://pub-552ebdc4e1414c8594cec0ac58404459.r2
 const VIDEOS_JSON_CACHE_KEY = 'videosManifest';
 const VIDEOS_JSON_FETCHED_AT_KEY = 'videosManifestFetchedAt';
 const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const GALLERY_MANIFEST_FETCH_TIMEOUT_MS = 7000;
 
 const GALLERY_POSTERS_CACHE_KEY = 'cachedGalleryPosters';
 const GALLERY_POSTERS_CACHE_CHECKED_AT_KEY = 'galleryPostersCacheCheckedAt';
@@ -1528,6 +1529,120 @@ function scrollBookmarkTabs(direction) {
 
 // ===============================================
 
+function hasUsableGalleryManifest(value) {
+
+  if (!Array.isArray(value) || value.length === 0) return false;
+
+  return value.some((item) => item && typeof item === 'object' && item.id);
+
+}
+
+function getGalleryManifestTimestamp(value) {
+
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+
+  if (!value) return 0;
+
+  const parsed = new Date(value).getTime();
+
+  return Number.isFinite(parsed) ? parsed : 0;
+
+}
+
+async function loadCachedGalleryManifest() {
+
+  const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
+
+  const manifest = stored[VIDEOS_JSON_CACHE_KEY];
+
+  const fetchedAt = getGalleryManifestTimestamp(stored[VIDEOS_JSON_FETCHED_AT_KEY]);
+
+  const hasManifest = hasUsableGalleryManifest(manifest);
+
+  return {
+
+    manifest: hasManifest ? manifest : [],
+
+    fetchedAt,
+
+    hasManifest,
+
+    isFresh: hasManifest && Date.now() - fetchedAt < VIDEOS_JSON_TTL_MS
+
+  };
+
+}
+
+async function fetchGalleryManifestWithTimeout(url, options = {}, timeoutMs = GALLERY_MANIFEST_FETCH_TIMEOUT_MS) {
+
+  const controller = new AbortController();
+
+  const timeout = Number.isFinite(timeoutMs) ? timeoutMs : GALLERY_MANIFEST_FETCH_TIMEOUT_MS;
+
+  let didTimeout = false;
+
+  const timeoutId = setTimeout(() => {
+
+    didTimeout = true;
+
+    controller.abort();
+
+  }, timeout);
+
+  try {
+
+    return await fetch(url, { ...options, signal: controller.signal });
+
+  } catch (error) {
+
+    if (didTimeout) {
+
+      const timeoutError = new Error('Gallery manifest request timed out');
+
+      timeoutError.name = 'AbortError';
+
+      throw timeoutError;
+
+    }
+
+    throw error;
+
+  } finally {
+
+    clearTimeout(timeoutId);
+
+  }
+
+}
+
+function refreshGalleryManifestInBackground() {
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
+
+  const refreshPromise = fetchVideosManifestIfNeeded()
+    .then((manifest) => {
+
+      if (hasUsableGalleryManifest(manifest)) {
+
+        scheduleIdleTask(() => cacheGalleryPostersIfNeeded(manifest), 'cacheGalleryPostersIfNeeded');
+
+      }
+
+      return manifest;
+
+    })
+    .catch((err) => {
+
+      console.warn('Gallery manifest background refresh failed', err);
+
+      return [];
+
+    });
+
+  return refreshPromise;
+
+}
+
 async function fetchVideosManifestIfNeeded() {
 
   if (videosManifestPromise) return videosManifestPromise;
@@ -1536,23 +1651,21 @@ async function fetchVideosManifestIfNeeded() {
 
     try {
 
-      const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
-
-      const lastFetchedAt = stored[VIDEOS_JSON_FETCHED_AT_KEY] || 0;
-
       const now = Date.now();
 
-      const isFresh = now - lastFetchedAt < VIDEOS_JSON_TTL_MS;
-
-      const cached = stored[VIDEOS_JSON_CACHE_KEY];
-
-      if (cached && isFresh) return cached;
-
-      const res = await fetch(VIDEOS_JSON_URL, { cache: 'no-store' });
+      const res = await fetchGalleryManifestWithTimeout(
+        VIDEOS_JSON_URL,
+        { cache: 'no-store' },
+        GALLERY_MANIFEST_FETCH_TIMEOUT_MS
+      );
 
       if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`);
 
       const manifest = await res.json();
+
+      if (!hasUsableGalleryManifest(manifest)) {
+        throw new Error('Manifest response was empty or invalid');
+      }
 
       await browser.storage.local.set({
 
@@ -1568,9 +1681,9 @@ async function fetchVideosManifestIfNeeded() {
 
       console.error('fetchVideosManifestIfNeeded error:', err);
 
-      const fallback = await browser.storage.local.get(VIDEOS_JSON_CACHE_KEY);
+      const fallback = await loadCachedGalleryManifest();
 
-      return fallback[VIDEOS_JSON_CACHE_KEY] || [];
+      return fallback.hasManifest ? fallback.manifest : [];
 
     } finally {
 
@@ -1586,27 +1699,39 @@ async function fetchVideosManifestIfNeeded() {
 
 async function getVideosManifest() {
 
-  const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
+  const cached = await loadCachedGalleryManifest();
 
-  const manifest = stored[VIDEOS_JSON_CACHE_KEY];
+  if (cached.hasManifest) {
 
-  const lastFetchedAt = stored[VIDEOS_JSON_FETCHED_AT_KEY] || 0;
+    scheduleIdleTask(() => cacheGalleryPostersIfNeeded(cached.manifest), 'cacheGalleryPostersIfNeeded');
 
-  const isFresh = manifest && Date.now() - lastFetchedAt < VIDEOS_JSON_TTL_MS;
+    if (!cached.isFresh && typeof navigator !== 'undefined' && navigator.onLine !== false) {
 
-  if (manifest && isFresh) {
+      refreshGalleryManifestInBackground();
 
-    scheduleIdleTask(() => cacheGalleryPostersIfNeeded(manifest), 'cacheGalleryPostersIfNeeded');
+    }
 
-    return manifest;
+    return cached.manifest;
+
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+
+    return [];
 
   }
 
   const fetched = await fetchVideosManifestIfNeeded();
 
-  scheduleIdleTask(() => cacheGalleryPostersIfNeeded(fetched), 'cacheGalleryPostersIfNeeded');
+  if (hasUsableGalleryManifest(fetched)) {
 
-  return fetched;
+    scheduleIdleTask(() => cacheGalleryPostersIfNeeded(fetched), 'cacheGalleryPostersIfNeeded');
+
+    return fetched;
+
+  }
+
+  return [];
 
 }
 
@@ -18185,6 +18310,9 @@ const weatherBody = weatherWidget ? weatherWidget.querySelector('.weather-body')
 
 const weatherFooter = weatherWidget ? weatherWidget.querySelector('.weather-footer') : null;
 
+const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
+const WEATHER_FETCH_TIMEOUT_MS = 7000;
+
 let selectedLocation = null;
 let searchTimeout = null;
 // Abort stale geocode lookups and ignore late responses
@@ -18203,6 +18331,96 @@ function setWeatherLoadingState(isLoading) {
   if (weatherRefreshBtn) {
     weatherRefreshBtn.disabled = loading;
     weatherRefreshBtn.setAttribute('aria-label', loading ? 'Refreshing weather' : 'Refresh weather');
+  }
+}
+
+function normalizeWeatherTimestamp(timestamp) {
+  if (typeof timestamp === 'number') return Number.isFinite(timestamp) ? timestamp : null;
+  if (!timestamp) return null;
+  const parsed = new Date(timestamp).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isWeatherCacheStale(timestamp, ttlMs = WEATHER_CACHE_TTL_MS) {
+  const cachedAt = normalizeWeatherTimestamp(timestamp);
+  if (!Number.isFinite(cachedAt)) return false;
+  return Date.now() - cachedAt > ttlMs;
+}
+
+function getCachedWeatherTimestamp(data = {}) {
+  return normalizeWeatherTimestamp(data.weatherFetchedAt ?? data.cachedWeatherData?.__timestamp);
+}
+
+function hasUsableCachedWeather(data) {
+  if (!data || typeof data !== 'object') return false;
+  const currentWeather = data.current_weather;
+  if (!currentWeather || typeof currentWeather !== 'object') return false;
+  return currentWeather.temperature !== undefined || currentWeather.weathercode !== undefined;
+}
+
+function getCachedWeatherDisplayOptions(timestamp, options = {}) {
+  const { cacheReason = '', forceCached = false, skipCacheSave = false } = options;
+  if (cacheReason) return { isCached: true, cacheReason, skipCacheSave };
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { isCached: true, cacheReason: 'Offline cache', skipCacheSave };
+  }
+  if (forceCached || isWeatherCacheStale(timestamp, WEATHER_CACHE_TTL_MS)) {
+    return { isCached: true, cacheReason: 'Cached data', skipCacheSave };
+  }
+  return { isCached: false, cacheReason: '', skipCacheSave };
+}
+
+function markWeatherAsCachedOrStale(options = {}) {
+  if (!weatherWidget) return;
+  const marked = Boolean(options.isCached || options.cacheReason);
+  weatherWidget.classList.toggle('weather-cached', marked);
+}
+
+function showWeatherOfflineNoCache() {
+  setText(document.getElementById('weather-city'), 'Weather Offline');
+  setText(document.getElementById('weather-temp'), '--\u00b0');
+  setText(document.getElementById('weather-desc'), 'No cached weather yet');
+  setText(document.getElementById('weather-icon'), '-');
+  setText(document.getElementById('weather-pressure'), '--');
+  setText(document.getElementById('weather-humidity'), '--');
+  setText(document.getElementById('weather-cloudcover'), '--');
+  setText(document.getElementById('weather-precip-prob'), '--');
+  setText(document.getElementById('weather-sunrise'), '--');
+  setText(document.getElementById('weather-sunset'), '--');
+  setAttr(document.getElementById('weather-icon'), 'data-weather-code', '');
+
+  const updatedEl = weatherUpdatedEl || document.getElementById('weather-updated');
+  if (updatedEl) setText(updatedEl, 'Connect to the internet to load weather');
+
+  if (weatherSetup) weatherSetup.classList.add('hidden');
+  if (weatherBody) weatherBody.classList.remove('hidden');
+  if (weatherFooter) weatherFooter.classList.remove('hidden');
+  if (weatherWidget) {
+    weatherWidget.classList.remove('weather-error', 'weather-cached');
+  }
+  revealWidget('.widget-weather');
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = WEATHER_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = Number.isFinite(timeoutMs) ? timeoutMs : WEATHER_FETCH_TIMEOUT_MS;
+  let didTimeout = false;
+  const timeoutId = setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeout);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (didTimeout) {
+      const timeoutError = new Error('Weather request timed out');
+      timeoutError.name = 'AbortError';
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -18312,17 +18530,18 @@ function getWeatherDescription(code) {
 
 function formatWeatherUpdated(timestamp, options = {}) {
 
-  const { isCached = false } = options;
+  const { isCached = false, cacheReason = '' } = options;
+  const labelPrefix = cacheReason || (isCached ? 'Cached data' : '');
 
-  if (!timestamp) return isCached ? 'Cached weather data' : '';
+  if (!timestamp) return labelPrefix ? `${labelPrefix} weather data` : '';
 
   const date = new Date(timestamp);
 
-  if (Number.isNaN(date.getTime())) return isCached ? 'Cached weather data' : '';
+  if (Number.isNaN(date.getTime())) return labelPrefix ? `${labelPrefix} weather data` : '';
 
   const updatedLabel = `Updated: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-  return isCached ? `Cached data - ${updatedLabel}` : updatedLabel;
+  return labelPrefix ? `${labelPrefix} - ${updatedLabel}` : updatedLabel;
 
 }
 
@@ -18333,11 +18552,20 @@ async function loadCachedWeather() {
 
     const data = await browser.storage.local.get(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
 
-    if (data.cachedWeatherData && data.cachedCityName) {
+    const cachedTs = getCachedWeatherTimestamp(data);
 
-      const cachedTs = data.weatherFetchedAt ?? data.cachedWeatherData.__timestamp ?? Date.now();
+    if (
+      hasUsableCachedWeather(data.cachedWeatherData) &&
+      data.cachedCityName
+    ) {
 
-      updateWeatherUI(data.cachedWeatherData, data.cachedCityName, data.cachedUnits || 'celsius', cachedTs);
+      updateWeatherUI(
+        data.cachedWeatherData,
+        data.cachedCityName,
+        data.cachedUnits || 'celsius',
+        cachedTs ?? Date.now(),
+        getCachedWeatherDisplayOptions(cachedTs, { skipCacheSave: true })
+      );
 
     }
 
@@ -18495,6 +18723,7 @@ function normalizeWeatherDisplay(data, cityName, units, fetchedAt = Date.now(), 
   const effectiveTimestamp = Number.isFinite(timestampValue) ? timestampValue : Date.now();
 
   const isCached = Boolean(options.isCached);
+  const cacheReason = options.cacheReason || '';
 
   const unitLabel = units === 'fahrenheit' ? 'F' : 'C';
 
@@ -18513,8 +18742,9 @@ function normalizeWeatherDisplay(data, cityName, units, fetchedAt = Date.now(), 
     units,
     fetchedAt: effectiveTimestamp,
     isCached,
+    cacheReason,
     weatherCode: code ?? '',
-    updatedLabel: formatWeatherUpdated(effectiveTimestamp, { isCached })
+    updatedLabel: formatWeatherUpdated(effectiveTimestamp, { isCached, cacheReason })
   };
 
 }
@@ -18581,21 +18811,23 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options 
 
   if (iconEl) iconEl.classList.add('is-instant-icon');
 
-  if (weatherWidget) weatherWidget.classList.toggle('weather-cached', display.isCached);
+  markWeatherAsCachedOrStale(display);
 
   hideWeatherSetupUI();
 
-  browser.storage.local.set({
+  if (!options.skipCacheSave) {
+    browser.storage.local.set({
 
-    cachedWeatherData: data,
+      cachedWeatherData: data,
 
-    cachedCityName: display.cityName,
+      cachedCityName: display.cityName,
 
-    cachedUnits: display.units,
+      cachedUnits: display.units,
 
-    weatherFetchedAt: display.fetchedAt
+      weatherFetchedAt: display.fetchedAt
 
-  });
+    });
+  }
 
 
 
@@ -18638,19 +18870,31 @@ function setAttr(el, name, value) {
   if (el.getAttribute(name) !== v) el.setAttribute(name, v);
 }
 
-async function showWeatherError(error) {
-  if (error) console.error('Weather Error:', error);
+async function showWeatherError(error, options = {}) {
+  const { quiet = false, cacheReason = '' } = options;
+  if (error && !quiet) console.error('Weather Error:', error);
 
   try {
     const data = await browser.storage.local.get(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
 
-    if (data.cachedWeatherData && data.cachedCityName) {
-      const cachedTs = data.weatherFetchedAt ?? data.cachedWeatherData.__timestamp ?? Date.now();
-      updateWeatherUI(data.cachedWeatherData, data.cachedCityName, data.cachedUnits || 'celsius', cachedTs, { isCached: true });
+    if (hasUsableCachedWeather(data.cachedWeatherData) && data.cachedCityName) {
+      const cachedTs = getCachedWeatherTimestamp(data) ?? Date.now();
+      updateWeatherUI(
+        data.cachedWeatherData,
+        data.cachedCityName,
+        data.cachedUnits || 'celsius',
+        cachedTs,
+        getCachedWeatherDisplayOptions(cachedTs, { cacheReason, forceCached: true, skipCacheSave: true })
+      );
       return;
     }
   } catch (cacheError) {
     console.warn('Could not restore cached weather after error:', cacheError);
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    showWeatherOfflineNoCache();
+    return;
   }
 
   setText(document.getElementById('weather-city'), 'Weather Error');
@@ -18676,6 +18920,11 @@ async function showWeatherError(error) {
 
 async function fetchWeather(lat, lon, units, cityName) {
 
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    await showWeatherError(new Error('Weather unavailable offline'), { quiet: true, cacheReason: 'Offline cache' });
+    return;
+  }
+
   try {
 
     const hourlyParams = 'relative_humidity_2m,wind_speed_10m,cloudcover,precipitation_probability';
@@ -18690,7 +18939,7 @@ async function fetchWeather(lat, lon, units, cityName) {
       `&hourly=${hourlyParams}&daily=${dailyParams}` +
       `&forecast_days=1&timezone=auto${windSpeedUnitParam}`;
 
-    const weatherResponse = await fetch(weatherUrl);
+    const weatherResponse = await fetchWithTimeout(weatherUrl, {}, WEATHER_FETCH_TIMEOUT_MS);
 
     if (!weatherResponse.ok) throw new Error('Weather data not available');
 
@@ -18700,7 +18949,10 @@ async function fetchWeather(lat, lon, units, cityName) {
 
   } catch (error) {
 
-    await showWeatherError(error);
+    const cacheReason = (typeof navigator !== 'undefined' && navigator.onLine === false)
+      ? 'Offline cache'
+      : 'Cached data';
+    await showWeatherError(error, { cacheReason, quiet: error?.name === 'AbortError' });
 
   }
 
@@ -19039,27 +19291,65 @@ async function setupWeather() {
     'weatherLon',
     'weatherCityName',
     'weatherUnits',
-    'weatherFetchedAt'
+    'weatherFetchedAt',
+    'cachedWeatherData',
+    'cachedCityName',
+    'cachedUnits'
   ]);
 
-  const units = data.weatherUnits || 'celsius';
-  const now = Date.now();
-  const lastFetch = data.weatherFetchedAt || 0;
-  const WEATHER_TTL = 30 * 60 * 1000; // 30 Minutes
+  const units = data.weatherUnits || data.cachedUnits || 'celsius';
+  const cachedTs = getCachedWeatherTimestamp(data);
+  const hasCachedWeather = hasUsableCachedWeather(data.cachedWeatherData) && data.cachedCityName;
+  const renderCachedWeather = (options = getCachedWeatherDisplayOptions(cachedTs, { skipCacheSave: true })) => {
+    updateWeatherUI(
+      data.cachedWeatherData,
+      data.cachedCityName,
+      data.cachedUnits || units,
+      cachedTs ?? Date.now(),
+      options
+    );
+  };
 
   if (data.weatherLat && data.weatherLon) {
-    hideWeatherSetupUI();
-    // Only fetch if data is older than 30 mins
-    if (now - lastFetch > WEATHER_TTL) {
+
+    if (hasCachedWeather) {
+      renderCachedWeather();
+    } else {
+      hideWeatherSetupUI();
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      if (hasCachedWeather) {
+        hbDebugInfo('Weather is offline. Using cached weather data.');
+      } else {
+        showWeatherOfflineNoCache();
+      }
+      return;
+    }
+
+    const lastFetch = normalizeWeatherTimestamp(data.weatherFetchedAt) ?? cachedTs ?? 0;
+
+    if (!hasCachedWeather || !lastFetch || isWeatherCacheStale(lastFetch, WEATHER_CACHE_TTL_MS)) {
       hbDebugInfo('Weather cache expired. Fetching new data...');
       fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName);
     } else {
       hbDebugInfo('Using cached weather data.');
     }
-  } else {
-    showWeatherSetupUI();
+
     return;
   }
+
+  if (hasCachedWeather) {
+    renderCachedWeather();
+    return;
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    showWeatherOfflineNoCache();
+    return;
+  }
+
+  showWeatherSetupUI();
 
 }
 

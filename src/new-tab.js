@@ -1072,26 +1072,30 @@ async function openWallpaperGallery(triggerSource = 'dock-gallery-btn') {
   }
 }
 
+let firefoxBrowserDetectionPromise = null;
+
 async function isFirefoxBrowser() {
+  if (firefoxBrowserDetectionPromise) return firefoxBrowserDetectionPromise;
 
-  if (!browser || !browser.runtime || typeof browser.runtime.getBrowserInfo !== 'function') {
+  firefoxBrowserDetectionPromise = (async () => {
+    if (
+      typeof browser === 'undefined' ||
+      !browser ||
+      !browser.runtime ||
+      typeof browser.runtime.getBrowserInfo !== 'function'
+    ) {
+      return false;
+    }
 
-    return false;
+    try {
+      const info = await browser.runtime.getBrowserInfo();
+      return Boolean(info && typeof info.name === 'string' && info.name.toLowerCase().includes('firefox'));
+    } catch (err) {
+      return false;
+    }
+  })();
 
-  }
-
-  try {
-
-    const info = await browser.runtime.getBrowserInfo();
-
-    return Boolean(info && typeof info.name === 'string' && info.name.toLowerCase().includes('firefox'));
-
-  } catch (err) {
-
-    return false;
-
-  }
-
+  return firefoxBrowserDetectionPromise;
 }
 
 function showFirefoxShortcutInfo(feature) {
@@ -1145,6 +1149,39 @@ function showFirefoxShortcutInfo(feature) {
 
   }
 
+}
+
+async function openInternalBrowserPage(featureKey, url, event) {
+  if (event) event.preventDefault();
+
+  try {
+    if (await isFirefoxBrowser()) {
+      showFirefoxShortcutInfo(featureKey);
+      return;
+    }
+
+    if (
+      typeof browser !== 'undefined' &&
+      browser &&
+      browser.tabs &&
+      typeof browser.tabs.update === 'function'
+    ) {
+      await browser.tabs.update({ url });
+      return;
+    }
+
+    window.location.href = url;
+  } catch (err) {
+    console.warn(`Failed to open dock destination: ${featureKey}`, err);
+
+    const message = `Could not open ${featureKey}. Try using the browser shortcut instead.`;
+
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert(message);
+    } else {
+      alert(message);
+    }
+  }
 }
 
 let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
@@ -5649,6 +5686,8 @@ function setNextWallpaperButtonLoading(isLoading) {
   nextWallpaperBtn.disabled = isLoading;
 
   nextWallpaperBtn.classList.toggle('is-loading', isLoading);
+
+  nextWallpaperBtn.setAttribute('aria-busy', isLoading ? 'true' : 'false');
 
   const tooltip = nextWallpaperBtn.querySelector('.tooltip-popup');
 
@@ -19604,7 +19643,7 @@ async function initAddonStoreDockLink() {
     addonStoreBtn.href = 'https://microsoftedge.microsoft.com/addons/Microsoft-Edge-Extensions-Home';
     addonStoreTooltip.textContent = 'Edge Add-ons';
     if (addonStoreIcon) {
-      addonStoreIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      addonStoreIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
   <path d="M20.978 11.372a9 9 0 1 0-1.593 5.773"/>
   <path d="M20.978 11.372c.21 2.993-5.034 2.413-6.913 1.486c1.392-1.6.402-4.038-2.274-3.851c-1.745.122-2.927 1.157-2.784 3.202c.28 3.99 4.444 6.205 10.36 4.79"/>
   <path d="M3.022 12.628c-.283-4.043 8.717-7.228 11.248-2.688"/>
@@ -19617,7 +19656,7 @@ async function initAddonStoreDockLink() {
   addonStoreBtn.href = 'https://chromewebstore.google.com/category/extensions';
   addonStoreTooltip.textContent = 'Chrome Web Store';
   if (addonStoreIcon) {
-    addonStoreIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    addonStoreIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
   <path d="M21 12a9 9 0 1 1-18 0a9 9 0 0 1 18 0"/>
   <path d="M15 12a3 3 0 1 1-6 0a3 3 0 0 1 6 0"/>
   <path d="M12 9h8.4"/>
@@ -19651,46 +19690,17 @@ function setupLazySettingsButton() {
 }
 
 function setupDockNavigation() {
+  if (document.body.dataset.dockNavigationReady === 'true') return;
 
-  const firefoxBrowserPromise = isFirefoxBrowser();
-
-  // Helper function to open the right destination per browser
-
-  const openTab = async (featureKey, url, e) => {
-
-    if (e) e.preventDefault();
-
-    if (await firefoxBrowserPromise) {
-
-      showFirefoxShortcutInfo(featureKey);
-
-      return;
-
-    }
-
-    if (typeof browser !== 'undefined' && browser && browser.tabs && browser.tabs.update) {
-
-      browser.tabs.update({ url });
-
-      return;
-
-    }
-
-    window.location.href = url;
-
-  };
+  document.body.dataset.dockNavigationReady = 'true';
 
   const handleDockClick = (id, url, featureKey) => {
-
     const btn = document.getElementById(id);
-
     if (!btn) return;
 
-    btn.onclick = async (e) => {
-
-      await openTab(featureKey, url, e);
-
-    };
+    btn.addEventListener('click', (event) => {
+      openInternalBrowserPage(featureKey, url, event);
+    });
 
   };
 

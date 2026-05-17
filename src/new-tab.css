@@ -191,24 +191,13 @@ body.ready .dock {
   align-items: center;
   gap: 12px;
   z-index: 100;
-
-  /* --- Glass Style Defaults --- */
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-
-  /* --- BORDER FIX --- */
-  /* We allow the left border to exist (so it can change color with themes), */
-  /* but we strictly force the others to be zero using !important. */
-  border-left: 1px solid rgba(255, 255, 255, 0.15);
-  
+  contain: layout style;
+  isolation: isolate;
+  overflow: visible;
   border-right: 0 !important;
   border-top: 0 !important;
   border-bottom: 0 !important;
   border-radius: 0 !important;
-  
-  /* Prevent box-shadows from glass themes affecting the dock edge */
-  box-shadow: none !important; 
 }
 
 body.dock-collapsed .dock {
@@ -281,32 +270,9 @@ body.dock-collapsed .dock {
 .dock-icon svg[viewBox="0 -0.5 25 25"] {
   transform: translateY(0.5px);
 }
-/* Ensure bottom dock buttons span full width while keeping box style */
-.dock-bottom .dock-item,
-.dock-group-bottom .dock-item {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 5px;
-  border-radius: 9px;
-  background-color: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-}
-.dock-bottom .dock-item:hover,
-.dock-group-bottom .dock-item:hover {
-  background-color: #ffffff;
-  border-color: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  color: #111;
-}
-/* Ensure buttons keep the same box styling as anchors */
 button.dock-item {
-  background-color: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  color: inherit;
-  padding: 5px;
-  width: 100%;
-  color: inherit;
-  padding: inherit;
+  font: inherit;
+  appearance: none;
 }
 .dock-divider {
   width: 50%;
@@ -712,7 +678,7 @@ body.sidebar-collapsed .collapsed-clock-slot {
   visibility: hidden;
   pointer-events: none;
   
-  transition: all 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
   z-index: 1000;
   text-shadow: none;
 }
@@ -729,7 +695,14 @@ body.sidebar-collapsed .collapsed-clock-slot {
 }
 
 /* 3. Hover Trigger (Show tooltip when parent is hovered) */
-*:hover > .tooltip-popup {
+.dock-item:hover > .tooltip-popup,
+.icon-btn:hover > .tooltip-popup,
+.icon-button:hover > .tooltip-popup,
+.quick-action-btn:hover > .tooltip-popup,
+.engine-icon-btn:hover > .tooltip-popup,
+.edit-action-btn:hover > .tooltip-popup,
+.bookmark-folder-add-btn:hover > .tooltip-popup,
+#builtin-icon-picker-modal .icon-picker-item:hover > .tooltip-popup {
   opacity: 1;
   visibility: visible;
 }
@@ -749,7 +722,14 @@ body.sidebar-collapsed .collapsed-clock-slot {
   margin-left: -4px;
   margin-top: -4px;
 }
-*:hover > .tooltip-top {
+.dock-item:hover > .tooltip-top,
+.icon-btn:hover > .tooltip-top,
+.icon-button:hover > .tooltip-top,
+.quick-action-btn:hover > .tooltip-top,
+.engine-icon-btn:hover > .tooltip-top,
+.edit-action-btn:hover > .tooltip-top,
+.bookmark-folder-add-btn:hover > .tooltip-top,
+#builtin-icon-picker-modal .icon-picker-item:hover > .tooltip-top {
   transform: translateX(-50%) translateY(-6px);
 }
 
@@ -766,7 +746,14 @@ body.sidebar-collapsed .collapsed-clock-slot {
   margin-left: -4px;
   margin-bottom: -4px;
 }
-*:hover > .tooltip-bottom {
+.dock-item:hover > .tooltip-bottom,
+.icon-btn:hover > .tooltip-bottom,
+.icon-button:hover > .tooltip-bottom,
+.quick-action-btn:hover > .tooltip-bottom,
+.engine-icon-btn:hover > .tooltip-bottom,
+.edit-action-btn:hover > .tooltip-bottom,
+.bookmark-folder-add-btn:hover > .tooltip-bottom,
+#builtin-icon-picker-modal .icon-picker-item:hover > .tooltip-bottom {
   transform: translateX(-50%) translateY(6px);
 }
 .news-header-tooltip-fixed {
@@ -805,7 +792,14 @@ body.sidebar-collapsed .collapsed-clock-slot {
   margin-top: -4px;
   margin-left: -4px;
 }
-*:hover > .tooltip-left {
+.dock-item:hover > .tooltip-left,
+.icon-btn:hover > .tooltip-left,
+.icon-button:hover > .tooltip-left,
+.quick-action-btn:hover > .tooltip-left,
+.engine-icon-btn:hover > .tooltip-left,
+.edit-action-btn:hover > .tooltip-left,
+.bookmark-folder-add-btn:hover > .tooltip-left,
+#builtin-icon-picker-modal .icon-picker-item:hover > .tooltip-left {
   transform: translateY(-50%) translateX(-6px);
 }
 
@@ -822,7 +816,14 @@ body.sidebar-collapsed .collapsed-clock-slot {
   margin-top: -4px;
   margin-right: -4px; 
 }
-*:hover > .tooltip-right {
+.dock-item:hover > .tooltip-right,
+.icon-btn:hover > .tooltip-right,
+.icon-button:hover > .tooltip-right,
+.quick-action-btn:hover > .tooltip-right,
+.engine-icon-btn:hover > .tooltip-right,
+.edit-action-btn:hover > .tooltip-right,
+.bookmark-folder-add-btn:hover > .tooltip-right,
+#builtin-icon-picker-modal .icon-picker-item:hover > .tooltip-right {
   transform: translateY(-50%) translateX(6px);
 }
 
@@ -2909,7 +2910,7 @@ html.todo-hidden .widget-todo { display: none !important; }
   visibility: hidden;
   pointer-events: none;
   transform: translate(8px, 8px) scale(0.98);
-  transition: all 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
 }
 #news-hover-preview.tooltip-news-preview {
   background: #ffffff;

@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.11.1',
-  date: '2026-05-16',
+  version: '0.11.2',
+  date: '2026-05-18',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Offline weather',
-      desc: 'Weather now restores the last saved forecast when you are offline or a refresh times out.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Cached labels',
-      desc: 'Cached forecasts now show clearer offline or cached status with the last update time.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Gallery recovery',
-      desc: 'The wallpaper gallery now reuses a saved media list while refreshing in the background.'
+      title: 'Dock accessibility',
+      desc: 'Dock shortcuts now include clearer labels and button states for assistive technology.'
     },
     {
       type: 'FIX',
-      title: 'Slow requests',
-      desc: 'Weather and gallery requests now time out sooner so the new tab can recover cleanly.'
+      title: 'Firefox shortcuts',
+      desc: 'Firefox now shows shortcut guidance for browser-only dock destinations instead of opening unsupported pages.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Tooltip polish',
+      desc: 'Dock and picker tooltips now appear only on their intended controls with smoother motion.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Wallpaper state',
+      desc: 'The next-wallpaper button now communicates its loading state more clearly while changing backgrounds.'
     }
   ]
 };

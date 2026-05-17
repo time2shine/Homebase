@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.11.2 — 2026-05-18
+### Improved
+- Dock shortcuts now include clearer accessible labels, button roles, and hidden decorative icons for assistive technologies.
+- Dock and picker tooltips now appear only on their intended controls with smoother, less jumpy motion.
+- The next-wallpaper dock button now exposes its loading state more clearly while a wallpaper changes.
+
+### Fixed
+- Firefox now shows shortcut guidance for browser-only dock destinations instead of trying to open unsupported internal pages.
+- Dock navigation now avoids duplicate setup and has a clearer fallback if a browser page cannot be opened.
+
 ## v0.11.1 — 2026-05-16
 ### Improved
 - Weather now restores usable cached forecasts during offline sessions, timed-out refreshes, and new-tab startup.

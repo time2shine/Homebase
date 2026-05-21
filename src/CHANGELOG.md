@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.11.3 — 2026-05-21
+### Improved
+- Wallpaper startup now shows saved poster previews sooner while video backgrounds finish loading in the background.
+- Video wallpapers now transition more smoothly from the poster image into playback and avoid repeated crossfade setup.
+- The performance overlay and copyable report now include startup timeline, script timing, and drag setup details for clearer diagnostics.
+
+### Fixed
+- Oversized saved poster previews are cleaned up before preload so wallpaper startup remains reliable.
+- Startup wallpaper fallback now avoids repainting the same cached image when a safe local poster has already been applied.
+
 ## v0.11.2 — 2026-05-18
 ### Improved
 - Dock shortcuts now include clearer accessible labels, button roles, and hidden decorative icons for assistive technologies.

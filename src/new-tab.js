@@ -81,6 +81,9 @@ const CACHED_APPLIED_POSTER_URL_KEY = 'cachedAppliedPosterUrl';
 const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
 
 const CACHED_APPLIED_POSTER_CACHE_KEY = 'cachedAppliedPoster';
+const TARGET_STARTUP_POSTER_DATA_URL_LENGTH = 240000;
+const STARTUP_POSTER_MAX_DIM_SEQUENCE = [1280, 960, 720];
+const STARTUP_POSTER_QUALITY_SEQUENCE = [0.76, 0.68, 0.6];
 
 const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
 const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
@@ -541,6 +544,21 @@ const idleTaskLabels = new Map();
 let idleTaskScheduled = false;
 
 const HB_PERF_DEBUG_KEY = 'homebasePerfDebug';
+const HB_STARTUP_PERF_DEBUG_KEY = 'hbDebugStartupPerf';
+const STARTUP_PERF_MAX_ENTRIES = 80;
+const STARTUP_PERF_OVERLAY_EVENT_NAMES = new Set([
+  'preload:start',
+  'preload:initial-wallpaper-applied',
+  'preload:async-wallpaper-applied',
+  'newtab:init-start',
+  'newtab:wallpaper-poster-applied',
+  'newtab:video-load-called',
+  'newtab:video-source-load-complete',
+  'newtab:video-start-requested',
+  'newtab:video-first-active',
+  'newtab:crossfade-setup',
+  'newtab:init-ready'
+]);
 
 const DEBUG_STARTUP_PERF = (() => {
   try {
@@ -552,6 +570,233 @@ const DEBUG_STARTUP_PERF = (() => {
     return false;
   }
 })();
+
+function getStartupPerfStore() {
+  try {
+    if (!Array.isArray(window.__HB_STARTUP_PERF)) {
+      window.__HB_STARTUP_PERF = [];
+    }
+    return window.__HB_STARTUP_PERF;
+  } catch (_) {
+    return [];
+  }
+}
+
+function sanitizeStartupPerfDetail(detail) {
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+
+  const safeDetail = {};
+
+  Object.keys(detail).forEach((key) => {
+    const value = detail[key];
+    const keyName = String(key || '');
+    const lowerKey = keyName.toLowerCase();
+
+    if (/url|src|href|poster|video|blob/.test(lowerKey)) {
+      safeDetail[keyName] = value ? 'present' : 'none';
+      return;
+    }
+
+    if (typeof value === 'string') {
+      if (/^(data:|blob:|https?:)/i.test(value)) {
+        safeDetail[keyName] = 'present';
+      } else {
+        safeDetail[keyName] = value.slice(0, 80);
+      }
+      return;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      safeDetail[keyName] = Math.round(value);
+      return;
+    }
+
+    if (typeof value === 'boolean') {
+      safeDetail[keyName] = value;
+    }
+  });
+
+  return Object.keys(safeDetail).length ? safeDetail : null;
+}
+
+function recordStartupPerfEvent(name, detail) {
+  try {
+    const entryName = typeof name === 'string' && name ? name : 'unknown';
+    const now =
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    const entry = {
+      name: entryName,
+      time: Math.round(now)
+    };
+    const safeDetail = sanitizeStartupPerfDetail(detail);
+
+    if (safeDetail) {
+      entry.detail = safeDetail;
+    }
+
+    const entries = getStartupPerfStore();
+    entries.push(entry);
+
+    if (entries.length > STARTUP_PERF_MAX_ENTRIES) {
+      entries.splice(0, entries.length - STARTUP_PERF_MAX_ENTRIES);
+    }
+
+    if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+      performance.mark(`hb:${entryName}`);
+    }
+  } catch (_) {}
+}
+
+function getStartupPerfEntries() {
+  try {
+    return getStartupPerfStore()
+      .filter((entry) => entry && typeof entry.name === 'string' && typeof entry.time === 'number')
+      .map((entry) => ({
+        name: entry.name,
+        time: entry.time,
+        detail: sanitizeStartupPerfDetail(entry.detail)
+      }));
+  } catch (_) {
+    return [];
+  }
+}
+
+function getStartupPerfTimelineRows(options = {}) {
+  try {
+    let rows = getStartupPerfEntries();
+
+    if (!rows.length) return [];
+
+    const firstTime = rows[0].time;
+    rows = rows.map((entry) => ({
+      name: entry.name,
+      offsetMs: Math.max(0, Math.round(entry.time - firstTime)),
+      time: entry.time,
+      detail: entry.detail || null
+    }));
+
+    if (options && options.overlayOnly) {
+      rows = rows.filter((row) => STARTUP_PERF_OVERLAY_EVENT_NAMES.has(row.name));
+    }
+
+    const limit = options && Number.isFinite(Number(options.limit)) ? Number(options.limit) : 0;
+    if (limit > 0 && rows.length > limit) {
+      rows = rows.slice(rows.length - limit);
+    }
+
+    return rows;
+  } catch (_) {
+    return [];
+  }
+}
+
+function isStartupPerfDebugEnabled() {
+  try {
+    if (perfState && perfState.overlayEnabled === true) return true;
+  } catch (_) {}
+
+  try {
+    if (debugPerfOverlayPreference === true) return true;
+  } catch (_) {}
+
+  try {
+    return (
+      localStorage.getItem(HB_PERF_DEBUG_KEY) === '1' ||
+      localStorage.getItem(HB_STARTUP_PERF_DEBUG_KEY) === '1' ||
+      new URLSearchParams(window.location.search).has('perf')
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+function formatStartupPerfTimelineLine(row) {
+  if (!row) return '';
+  return `+${Math.max(0, Math.round(row.offsetMs || 0))} ms ${row.name}`;
+}
+
+function formatOverlayStartupTimelineRows(rows, limit = 10) {
+  try {
+    if (!Array.isArray(rows) || !rows.length) return ['none recorded'];
+
+    const compactRows = [];
+
+    rows.forEach((row) => {
+      if (!row || !row.name) return;
+
+      if (row.name === 'newtab:video-load-called') {
+        const existing = compactRows.find((item) => item.name === row.name);
+
+        if (existing) {
+          existing.count = (existing.count || 1) + 1;
+          return;
+        }
+      }
+
+      compactRows.push({ ...row, count: 1 });
+    });
+
+    const maxLines = Math.max(4, Math.min(10, Number(limit) || 10));
+    let visibleRows = compactRows;
+    let includeMoreLine = false;
+
+    if (compactRows.length > maxLines) {
+      const headCount = Math.min(4, maxLines - 2);
+      const tailCount = Math.max(1, maxLines - headCount - 1);
+      visibleRows = [
+        ...compactRows.slice(0, headCount),
+        ...compactRows.slice(compactRows.length - tailCount)
+      ];
+      includeMoreLine = true;
+    }
+
+    const lines = visibleRows.map((row) => {
+      const countSuffix = row.count && row.count > 1 ? ` x${row.count}` : '';
+      return `+${Math.max(0, Math.round(row.offsetMs || 0))} ${row.name}${countSuffix}`;
+    });
+
+    if (includeMoreLine) {
+      lines.splice(Math.min(4, lines.length), 0, '+... more in Copy report');
+    }
+
+    return lines;
+  } catch (_) {
+    return ['none recorded'];
+  }
+}
+
+function printStartupPerfReport() {
+  const rows = getStartupPerfTimelineRows();
+
+  if (typeof console === 'undefined') {
+    return rows;
+  }
+
+  if (!rows.length) {
+    if (typeof console.log === 'function') {
+      console.log('[homebase startup perf] no startup timeline events recorded');
+    }
+    return rows;
+  }
+
+  const printableRows = rows.map((row) => ({
+    offset: `+${Math.max(0, Math.round(row.offsetMs || 0))} ms`,
+    event: row.name,
+    detail: row.detail || ''
+  }));
+
+  if (typeof console.table === 'function') {
+    console.table(printableRows);
+  } else if (typeof console.log === 'function') {
+    console.log('[homebase startup perf]', printableRows);
+  }
+
+  return rows;
+}
+
+window.hbPrintStartupPerf = printStartupPerfReport;
 
 const DEBUG_IDLE_STARTUP = DEBUG_STARTUP_PERF;
 const DEBUG_STARTUP_GUARDS = DEBUG_STARTUP_PERF;
@@ -586,11 +831,7 @@ function hbDebugInfo(...args) {
 }
 
 function hbPerfMark(name) {
-  if (!DEBUG_STARTUP_PERF) return;
-  try {
-    if (typeof performance === 'undefined' || typeof performance.mark !== 'function') return;
-    performance.mark(`hb:${name}`);
-  } catch (_) {}
+  recordStartupPerfEvent(name);
 }
 
 function hbPerfMeasure(name, start, end) {
@@ -1185,12 +1426,18 @@ async function openInternalBrowserPage(featureKey, url, event) {
 }
 
 let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
+let backgroundVideoSourceLoadPromise = Promise.resolve();
+let backgroundVideoSourceLoadGeneration = 0;
+let wallpaperVideoStartSequence = 0;
+let backgroundVideoCrossfadeSetupKey = '';
 
 // --- Global Controller for Video Events ---
 let videoPlaybackController = null;
 let backgroundCrossfadeTimeout = null;
 
 function cleanupBackgroundPlayback() {
+  backgroundVideoSourceLoadGeneration += 1;
+  backgroundVideoCrossfadeSetupKey = '';
 
   // 1. Send the "Abort" signal to kill all active video listeners immediately
   if (videoPlaybackController) {
@@ -2392,15 +2639,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
 
           if (blob && blob.size > 0) {
 
-            if (blob.size > 2 * 1024 * 1024) {
-
-              dataUrl = await createOptimizedPosterDataUrl(blob);
-
-            } else {
-
-              dataUrl = await blobToDataUrl(blob);
-
-            }
+            dataUrl = await createStartupPosterDataUrl(blob);
 
           }
 
@@ -2420,7 +2659,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
 
           }
 
-          if (state.dataUrl) {
+          if (state.dataUrl && state.dataUrl.length <= TARGET_STARTUP_POSTER_DATA_URL_LENGTH) {
 
             await browser.storage.local.set({ [CACHED_APPLIED_POSTER_DATA_URL_KEY]: state.dataUrl });
 
@@ -2474,12 +2713,16 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
  * Creates a resized/compressed Data URL specifically for instant startup cache.
  * Keeps the file within localStorage limits (~5MB) without affecting the actual high-res wallpaper.
  */
-async function createOptimizedPosterDataUrl(blob) {
+async function createOptimizedPosterDataUrl(blob, options = {}) {
   if (!blob) {
     return '';
   }
 
-  const MAX_DIM = 2000;
+  const requestedMaxDim = Number(options.maxDim);
+  const maxDim = Number.isFinite(requestedMaxDim) && requestedMaxDim > 0 ? requestedMaxDim : 2000;
+  const requestedQuality = Number(options.quality);
+  const quality = Number.isFinite(requestedQuality) ? Math.min(1, Math.max(0.01, requestedQuality)) : 0.8;
+  const preferredType = typeof options.type === 'string' && options.type ? options.type : 'image/webp';
   let objectUrl = '';
 
   try {
@@ -2493,6 +2736,12 @@ async function createOptimizedPosterDataUrl(blob) {
       img.src = objectUrl;
     });
 
+    if (typeof img.decode === 'function') {
+      try {
+        await img.decode();
+      } catch (e) {}
+    }
+
     let w = img.width;
     let h = img.height;
 
@@ -2500,8 +2749,8 @@ async function createOptimizedPosterDataUrl(blob) {
       return '';
     }
 
-    if (w > MAX_DIM || h > MAX_DIM) {
-      const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
+    if (w > maxDim || h > maxDim) {
+      const ratio = Math.min(maxDim / w, maxDim / h);
       w = Math.round(w * ratio);
       h = Math.round(h * ratio);
     }
@@ -2519,25 +2768,44 @@ async function createOptimizedPosterDataUrl(blob) {
 
     ctx.drawImage(img, 0, 0, w, h);
 
-    let jpegBlob = null;
-
-    if (typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas && typeof canvas.convertToBlob === 'function') {
-      jpegBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
-    } else {
-      jpegBlob = await new Promise((resolve) => {
-        if (typeof canvas.toBlob === 'function') {
-          canvas.toBlob((result) => resolve(result || null), 'image/jpeg', 0.8);
-        } else {
-          resolve(null);
+    const canvasToBlob = async (outputType) => {
+      try {
+        if (typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas && typeof canvas.convertToBlob === 'function') {
+          return await canvas.convertToBlob({ type: outputType, quality });
         }
-      });
+
+        return await new Promise((resolve) => {
+          if (typeof canvas.toBlob === 'function') {
+            canvas.toBlob((result) => resolve(result || null), outputType, quality);
+          } else {
+            resolve(null);
+          }
+        });
+      } catch (err) {
+        return null;
+      }
+    };
+
+    let optimizedBlob = await canvasToBlob(preferredType);
+
+    if (
+      preferredType === 'image/webp' &&
+      optimizedBlob &&
+      optimizedBlob.type &&
+      optimizedBlob.type !== 'image/webp'
+    ) {
+      optimizedBlob = null;
     }
 
-    if (!jpegBlob) {
+    if ((!optimizedBlob || !optimizedBlob.size) && preferredType !== 'image/jpeg') {
+      optimizedBlob = await canvasToBlob('image/jpeg');
+    }
+
+    if (!optimizedBlob || !optimizedBlob.size) {
       return '';
     }
 
-    const dataUrl = await blobToDataUrl(jpegBlob);
+    const dataUrl = await blobToDataUrl(optimizedBlob);
 
     return typeof dataUrl === 'string' ? dataUrl : '';
   } catch (err) {
@@ -2549,6 +2817,34 @@ async function createOptimizedPosterDataUrl(blob) {
       } catch (e) {}
     }
   }
+}
+
+async function createStartupPosterDataUrl(blob) {
+  if (!blob || blob.size <= 0) {
+    return '';
+  }
+
+  const rawDataUrl = await blobToDataUrl(blob);
+
+  if (rawDataUrl && rawDataUrl.length <= TARGET_STARTUP_POSTER_DATA_URL_LENGTH) {
+    return rawDataUrl;
+  }
+
+  for (const maxDim of STARTUP_POSTER_MAX_DIM_SEQUENCE) {
+    for (const quality of STARTUP_POSTER_QUALITY_SEQUENCE) {
+      const optimizedDataUrl = await createOptimizedPosterDataUrl(blob, {
+        maxDim,
+        type: 'image/webp',
+        quality
+      });
+
+      if (optimizedDataUrl && optimizedDataUrl.length <= TARGET_STARTUP_POSTER_DATA_URL_LENGTH) {
+        return optimizedDataUrl;
+      }
+    }
+  }
+
+  return '';
 }
 
 
@@ -2733,47 +3029,135 @@ async function hydrateWallpaperSelection(selection) {
 
 
 
-function setBackgroundVideoSources(videoUrl, posterUrl = '') {
+async function setBackgroundVideoSources(videoUrl, posterUrl = '') {
   if (isPerformanceModeEnabled()) return;
 
-  const videos = Array.from(document.querySelectorAll('.background-video'));
+  try {
+    const videos = Array.from(document.querySelectorAll('.background-video'));
+    recordStartupPerfEvent('newtab:video-source-assign-start', { videoElements: videos.length });
 
-  videos.forEach((v) => {
-
-    const source = v.querySelector('source');
-
-    const currentSrc = source ? (source.getAttribute('src') || '') : (v.getAttribute('src') || '');
-
-    const desiredPoster = posterUrl || '';
-
-    const needsUpdate = currentSrc !== videoUrl || v.poster !== desiredPoster;
-
-
-
-    if (needsUpdate) {
-
-      try { v.pause(); } catch (e) {}
-
-      if (source) {
-
-        source.src = videoUrl;
-
-      } else {
-
-        v.src = videoUrl;
-
+    const videoUpdates = videos.map((v) => {
+      try {
+        const source = v.querySelector('source');
+        const currentSrc = source ? (source.getAttribute('src') || '') : (v.getAttribute('src') || '');
+        const desiredPoster = posterUrl || '';
+        const needsUpdate = currentSrc !== videoUrl || v.poster !== desiredPoster;
+        return { v, source, desiredPoster, needsUpdate };
+      } catch (e) {
+        return { v, source: null, desiredPoster: posterUrl || '', needsUpdate: false };
       }
+    });
 
-      v.poster = desiredPoster;
-
-      v.load();
-
-      v.currentTime = 0;
-
+    if (!videoUpdates.some((update) => update.needsUpdate)) {
+      await backgroundVideoSourceLoadPromise;
+      recordStartupPerfEvent('newtab:video-source-load-complete', { updated: false });
+      return;
     }
 
-  });
+    const loadGeneration = ++backgroundVideoSourceLoadGeneration;
+    const loadTasks = videoUpdates.map(({ v, source, desiredPoster, needsUpdate }, index) => {
+      return new Promise((resolve) => {
+        if (!needsUpdate) {
+          resolve();
+          return;
+        }
 
+        try {
+          try { v.pause(); } catch (e) {}
+
+          v.poster = desiredPoster;
+
+          if (source) {
+            source.src = videoUrl;
+          } else {
+            v.src = videoUrl;
+          }
+
+          const loadVideo = () => {
+            try {
+              if (loadGeneration === backgroundVideoSourceLoadGeneration && !isPerformanceModeEnabled()) {
+                try {
+                  v.load();
+                  recordStartupPerfEvent('newtab:video-load-called', { index });
+                } catch (e) {}
+                try { v.currentTime = 0; } catch (e) {}
+              }
+            } finally {
+              resolve();
+            }
+          };
+
+          if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(loadVideo);
+            });
+          } else {
+            setTimeout(loadVideo, 0);
+          }
+        } catch (e) {
+          resolve();
+        }
+      });
+    });
+
+    backgroundVideoSourceLoadPromise = Promise.all(loadTasks).then(() => undefined).catch(() => undefined);
+
+    await backgroundVideoSourceLoadPromise;
+    recordStartupPerfEvent('newtab:video-source-load-complete', { updated: true });
+  } catch (e) {
+    // Keep wallpaper application resilient; callers handle playback fallback.
+  }
+
+}
+
+function startBackgroundVideosAfterSourceLoad(sourceLoadPromise, startSequence, selection, finalType, poster, video) {
+  Promise.resolve(sourceLoadPromise)
+    .catch(() => {})
+    .finally(() => {
+      const selectionId = selection && selection.id ? selection.id : null;
+      const current = currentWallpaperSelection || null;
+      const crossfadeKey = `${selectionId || ''}|${video}|${poster}`;
+
+      if (startSequence !== wallpaperVideoStartSequence) return;
+      if (isPerformanceModeEnabled()) return;
+      if (!current || (current.id || null) !== selectionId) return;
+      if ((current.posterUrl || '') !== poster) return;
+      if (finalType === 'video' && (current.videoUrl || '') !== video) return;
+      if (
+        !lastAppliedWallpaper ||
+        lastAppliedWallpaper.id !== selectionId ||
+        lastAppliedWallpaper.poster !== poster ||
+        lastAppliedWallpaper.video !== video ||
+        lastAppliedWallpaper.type !== finalType
+      ) {
+        return;
+      }
+
+      if (crossfadeKey === backgroundVideoCrossfadeSetupKey) {
+        const activeVideo = document.querySelector('.background-video.is-active');
+        if (activeVideo && activeVideo.paused) {
+          activeVideo.play().catch(() => {});
+        }
+        return;
+      }
+
+      recordStartupPerfEvent('newtab:video-start-requested');
+      startBackgroundVideos();
+      if (setupBackgroundVideoCrossfade()) {
+        recordStartupPerfEvent('newtab:crossfade-setup');
+        backgroundVideoCrossfadeSetupKey = crossfadeKey;
+      }
+    });
+}
+
+function runAfterNextPaint(callback) {
+  if (typeof callback !== 'function') return;
+
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => requestAnimationFrame(callback));
+  } else {
+    setTimeout(callback, 0);
+  }
 }
 
 
@@ -3734,6 +4118,15 @@ let sortableTimeout = null;
 
 const PERF_OVERLAY_CACHE_THROTTLE_MS = 5000;
 const PERF_HEALTH_SESSION_KEY = 'homebasePerfHealthSession';
+
+const SCRIPT_TIMING_TARGETS = [
+  { label: 'script:instant-load', file: 'instant_load.js' },
+  { label: 'script:sortable', file: 'Sortable.min.js' },
+  { label: 'script:data', file: 'data.js' },
+  { label: 'script:tips', file: 'tips.js' },
+  { label: 'script:new-tab', file: 'new-tab.js' }
+];
+
 function createWidgetPerfState() {
   return {
     loadCachedWeather: { label: 'Weather cache', ms: null, status: 'pending' },
@@ -3745,6 +4138,18 @@ function createWidgetPerfState() {
     quoteIndex: { label: 'Quote index', ms: null, status: 'pending' },
     fetchQuote: { label: 'Quote fetch', ms: null, status: 'pending' },
     setupAppLauncher: { label: 'Apps', ms: null, status: 'pending' }
+  };
+}
+
+function createSortablePerfState() {
+  return {
+    libraryAvailable: null,
+    libraryChecked: false,
+    libraryEventRecorded: '',
+    grid: { label: 'Grid init', ms: null, status: 'skipped' },
+    tabs: { label: 'Tabs init', ms: null, status: 'skipped' },
+    widgets: { label: 'Widgets init', ms: null, status: 'skipped' },
+    searchEngines: { label: 'Search engines init', ms: null, status: 'skipped' }
   };
 }
 
@@ -3778,6 +4183,7 @@ const perfState = {
     fallbackUsed: false
   },
   widgets: createWidgetPerfState(),
+  sortable: createSortablePerfState(),
   health: createHealthPerfState(),
   warnings: [],
   startupRows: [],
@@ -3802,6 +4208,8 @@ const perfState = {
 let perfOverlayEl = null;
 let perfOverlayInterval = null;
 let perfOverlayCachePromise = null;
+
+recordSortableLibraryAvailability();
 
 // Format bytes into a human readable string.
 function formatBytes(bytes = 0) {
@@ -3896,6 +4304,114 @@ function recordWidgetPerfTiming(key, ms, status = 'done') {
 
   if (perfState.overlayEnabled) {
     updatePerfOverlay(false);
+  }
+}
+
+function getPerfMeasureStart() {
+  try {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+  } catch (_) {
+    return Date.now();
+  }
+}
+
+function recordSortableLibraryAvailability() {
+  try {
+    if (!perfState.sortable) {
+      perfState.sortable = createSortablePerfState();
+    }
+
+    const isAvailable = typeof Sortable !== 'undefined';
+    const eventName = isAvailable ? 'sortable:library-available' : 'sortable:library-missing';
+
+    perfState.sortable.libraryAvailable = isAvailable;
+    perfState.sortable.libraryChecked = true;
+
+    if (perfState.sortable.libraryEventRecorded !== eventName) {
+      perfState.sortable.libraryEventRecorded = eventName;
+      recordStartupPerfEvent(eventName);
+    }
+
+    return isAvailable;
+  } catch (_) {
+    return false;
+  }
+}
+
+function getSortablePerfEventKey(key) {
+  return key === 'searchEngines' ? 'search-engines' : key;
+}
+
+function recordSortablePerfTiming(key, startTime, status = 'done') {
+  try {
+    if (!perfState.sortable) {
+      perfState.sortable = createSortablePerfState();
+    }
+
+    const entry = perfState.sortable[key];
+    if (!entry) return;
+
+    const end = getPerfMeasureStart();
+    const start = Number(startTime);
+    const ms = Number.isFinite(start) ? Math.max(0, end - start) : null;
+
+    entry.ms = typeof ms === 'number' && Number.isFinite(ms) ? ms : null;
+    entry.status = status || 'done';
+
+    recordStartupPerfEvent(`sortable:${getSortablePerfEventKey(key)}-init`, {
+      ms: entry.ms,
+      status: entry.status
+    });
+  } catch (_) {}
+}
+
+function getScriptTimingRows() {
+  try {
+    if (
+      typeof performance === 'undefined' ||
+      typeof performance.getEntriesByType !== 'function'
+    ) {
+      return SCRIPT_TIMING_TARGETS.map((target) => ({
+        label: target.label,
+        status: 'unavailable',
+        durationMs: null,
+        startMs: null
+      }));
+    }
+
+    const resources = performance.getEntriesByType('resource') || [];
+
+    return SCRIPT_TIMING_TARGETS.map((target) => {
+      const match = resources.find((entry) => {
+        try {
+          if (!entry || typeof entry.name !== 'string') return false;
+          const url = new URL(entry.name, window.location.href);
+          return url.pathname.endsWith(`/${target.file}`) || url.pathname.endsWith(target.file);
+        } catch (_) {
+          return entry && typeof entry.name === 'string' && entry.name.endsWith(target.file);
+        }
+      });
+
+      if (!match) {
+        return {
+          label: target.label,
+          status: 'not recorded',
+          durationMs: null,
+          startMs: null
+        };
+      }
+
+      return {
+        label: target.label,
+        status: 'recorded',
+        durationMs: typeof match.duration === 'number' ? match.duration : null,
+        startMs: typeof match.startTime === 'number' ? match.startTime : null
+      };
+    });
+  } catch (_) {
+    return [];
   }
 }
 
@@ -4118,6 +4634,12 @@ function formatReportValue(value) {
   return value === null || value === undefined || value === '' ? '—' : String(value);
 }
 
+function formatSortablePerfEntry(entry) {
+  if (!entry) return 'skipped';
+  if (entry.status && entry.status !== 'done') return entry.status;
+  return formatPerfMs(entry.ms);
+}
+
 function buildFullPerfReport() {
   const lines = [];
   const bookmarkLoadMs =
@@ -4143,6 +4665,41 @@ function buildFullPerfReport() {
   if (Array.isArray(perfState.startupRows) && perfState.startupRows.length) {
     perfState.startupRows.forEach((row) => {
       lines.push(`- ${row.measure}: ${formatPerfMs(row.ms)} @ ${formatPerfMs(row.startMs)}`);
+    });
+  } else {
+    lines.push('- none recorded');
+  }
+  lines.push('');
+
+  lines.push('Startup Timeline');
+  const startupTimelineRows = getStartupPerfTimelineRows();
+  if (startupTimelineRows.length) {
+    startupTimelineRows.forEach((row) => {
+      lines.push(`- ${formatStartupPerfTimelineLine(row)}`);
+    });
+  } else {
+    lines.push('- none recorded');
+  }
+  lines.push('');
+
+  lines.push('Sortable');
+  const sortablePerf = perfState.sortable || createSortablePerfState();
+  lines.push(`- Library available: ${sortablePerf.libraryAvailable === true ? 'Yes' : (sortablePerf.libraryAvailable === false ? 'No' : 'Unknown')}`);
+  lines.push(`- Grid init: ${formatSortablePerfEntry(sortablePerf.grid)}`);
+  lines.push(`- Tabs init: ${formatSortablePerfEntry(sortablePerf.tabs)}`);
+  lines.push(`- Widgets init: ${formatSortablePerfEntry(sortablePerf.widgets)}`);
+  lines.push(`- Search engines init: ${formatSortablePerfEntry(sortablePerf.searchEngines)}`);
+  lines.push('');
+
+  lines.push('Script Timing');
+  const scriptTimingRows = getScriptTimingRows();
+  if (scriptTimingRows.length) {
+    scriptTimingRows.forEach((row) => {
+      const timing =
+        row.status === 'recorded'
+          ? `${formatPerfMs(row.durationMs)} @ +${formatPerfMs(row.startMs)}`
+          : row.status;
+      lines.push(`- ${row.label}: ${timing}`);
     });
   } else {
     lines.push('- none recorded');
@@ -4403,8 +4960,13 @@ function ensurePerfOverlayElement() {
   el.style.cssText = `
     position: fixed;
     left: auto;
-    right: 55px;
+    --hb-perf-overlay-edge-offset: 16px;
+    --hb-right-dock-width: 0px;
+    --hb-perf-overlay-dock-gap: 16px;
+    --hb-perf-overlay-right-offset: var(--hb-perf-overlay-edge-offset);
+    right: var(--hb-perf-overlay-right-offset, 16px);
     bottom: 12px;
+    box-sizing: border-box;
     background: rgba(0,0,0,0.78);
     color: #fff;
     padding: 10px 12px;
@@ -4415,7 +4977,13 @@ function ensurePerfOverlayElement() {
     pointer-events: auto;
     z-index: 9999;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-    max-width: 340px;
+    width: max-content;
+    max-width: min(520px, calc(100vw - var(--hb-perf-overlay-right-offset, 16px) - 16px));
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -4424,8 +4992,10 @@ function ensurePerfOverlayElement() {
   const textEl = document.createElement('div');
   textEl.dataset.role = 'perf-overlay-text';
   textEl.style.cssText = `
-    white-space: pre-line;
+    white-space: pre-wrap;
     pointer-events: none;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   `;
 
   const copyBtn = document.createElement('button');
@@ -4443,6 +5013,7 @@ function ensurePerfOverlayElement() {
     line-height: 1.2;
     padding: 4px 7px;
     cursor: pointer;
+    flex-shrink: 0;
   `;
   copyBtn.addEventListener('click', (event) => {
     event.preventDefault();
@@ -4475,11 +5046,46 @@ function ensurePerfOverlayElement() {
 
 }
 
+function updatePerfOverlayDockOffset(el) {
+  if (!el || !el.style) return;
+
+  let dockWidth = 0;
+
+  try {
+    const dockEl = dock || document.querySelector('.dock');
+
+    if (dockEl) {
+      const style = window.getComputedStyle ? window.getComputedStyle(dockEl) : null;
+      const rect = dockEl.getBoundingClientRect();
+      const isVisible =
+        dockEl.offsetParent !== null &&
+        rect &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        (!style || (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'));
+
+      if (isVisible) {
+        dockWidth = Math.round(rect.width);
+      }
+    }
+  } catch (e) {
+    dockWidth = 0;
+  }
+
+  const gap = dockWidth > 0 ? 16 : 0;
+  const rightOffset = dockWidth > 0 ? dockWidth + gap : 16;
+
+  el.style.setProperty('--hb-right-dock-width', `${dockWidth}px`);
+  el.style.setProperty('--hb-perf-overlay-dock-gap', `${gap}px`);
+  el.style.setProperty('--hb-perf-overlay-right-offset', `${rightOffset}px`);
+}
+
 function updatePerfOverlay(forceCacheRefresh = false) {
 
   if (!perfState.overlayEnabled) return;
 
   const el = ensurePerfOverlayElement();
+  updatePerfOverlayDockOffset(el);
 
   const now = Date.now();
 
@@ -4499,24 +5105,24 @@ function updatePerfOverlay(forceCacheRefresh = false) {
 
   perfState.localStorageBytes = estimateLocalStorageBytes();
 
-  const startIdx = perfState.lastVirtualRange.start >= 0 ? perfState.lastVirtualRange.start : (perfState.lastRenderedStartIndex >= 0 ? perfState.lastRenderedStartIndex : 0);
-
-  const endIdx = perfState.lastVirtualRange.end >= 0 ? perfState.lastVirtualRange.end : (perfState.lastRenderedEndIndex >= 0 ? perfState.lastRenderedEndIndex : 0);
-
-  const rangeDisplay =
-    perfState.gridMode === 'virtual'
-      ? `${startIdx}-${endIdx} / ${perfState.totalCount}`
-      : (perfState.totalCount > 0 ? `0-${perfState.totalCount - 1} / ${perfState.totalCount}` : '0 / 0');
-
   const cacheDisplay = perfState.cacheBytes != null ? formatBytes(perfState.cacheBytes) : '...';
 
-  const gridRender = perfState.lastGridRenderMs ? perfState.lastGridRenderMs.toFixed(1) : '0.0';
+  const startupTimelineLines = formatOverlayStartupTimelineRows(
+    getStartupPerfTimelineRows({ overlayOnly: true }),
+    10
+  );
 
-  const startupLines = [
-    'Startup',
+  const summaryLines = [
+    'Summary',
     `Ready: ${formatPerfMs(perfState.startup.readyClassMs)}`,
     `Paint: ${formatPerfMs(perfState.startup.afterReadyPaintMs)}`,
-    `Storage: ${formatPerfMs(perfState.startup.parallelStorageLoadsMs)}`
+    `Storage: ${formatPerfMs(perfState.startup.parallelStorageLoadsMs)}`,
+    `Performance: ${appPerformanceModePreference ? 'On' : 'Off'}`
+  ];
+
+  const startupLines = [
+    'Startup Timeline',
+    ...startupTimelineLines
   ];
 
   const bookmarkLoadMs =
@@ -4531,20 +5137,6 @@ function updatePerfOverlay(forceCacheRefresh = false) {
     `Fallback: ${perfState.bookmarks.fallbackUsed ? 'Yes' : 'No'}`
   ];
 
-  const gridLines = [
-    'Grid',
-    `Mode: ${perfState.gridMode}`,
-    `Render: ${gridRender} ms`,
-    `Nodes: ${perfState.gridRenderedNodes}`,
-    `Range: ${rangeDisplay}`
-  ];
-
-  const stateLines = [
-    'State',
-    `Performance: ${appPerformanceModePreference ? 'On' : 'Off'}`,
-    `Debug logs: ${DEBUG_STARTUP_PERF ? 'On' : 'Off'}`
-  ];
-
   const latestWarning = getLatestPerfWarningMessage();
   const healthLines = [
     'Health',
@@ -4556,15 +5148,11 @@ function updatePerfOverlay(forceCacheRefresh = false) {
     healthLines.push(`Latest: ${latestWarning}`);
   }
 
-  const widgetLines = [
-    'Widgets',
-    `Weather: ${formatWidgetPerf(perfState.widgets.setupWeather)}`,
-    `Weather cache: ${formatWidgetPerf(perfState.widgets.loadCachedWeather)}`,
-    `Search: ${formatWidgetPerf(perfState.widgets.setupSearch)}`,
-    `Todo: ${formatWidgetPerf(perfState.widgets.setupTodoWidget)}`,
-    `News: ${formatWidgetPerf(perfState.widgets.setupNewsWidget)}`,
-    `Quote: ${formatWidgetPerf(perfState.widgets.setupQuoteWidget)}`,
-    `Apps: ${formatWidgetPerf(perfState.widgets.setupAppLauncher)}`
+  const mediaCleanup = perfState.media && perfState.media.lastObjectUrlCleanup;
+  const mediaLines = [
+    'Media',
+    `Object URLs: ${mediaCleanup ? 'cleaned' : 'not seen'}`,
+    `Active video: ${mediaCleanup && mediaCleanup.videoUrlActive ? 'Yes' : 'No'}`
   ];
 
   const cacheLines = [
@@ -4580,17 +5168,15 @@ function updatePerfOverlay(forceCacheRefresh = false) {
   const overlayText = [
     'Homebase Perf',
     '',
+    ...summaryLines,
+    '',
     ...startupLines,
     '',
     ...bookmarkLines,
     '',
-    ...gridLines,
-    '',
-    ...stateLines,
-    '',
     ...healthLines,
     '',
-    ...widgetLines,
+    ...mediaLines,
     '',
     ...cacheLines,
     ...(reportLines.length ? ['', ...reportLines] : [])
@@ -4665,6 +5251,7 @@ function setPerfOverlayEnabled(enabled) {
       fallbackUsed: false
     };
     perfState.widgets = createWidgetPerfState();
+    perfState.sortable = createSortablePerfState();
     perfState.health = createHealthPerfState();
     perfState.warnings = [];
     clearPerfHealthSession();
@@ -6394,75 +6981,85 @@ async function getStoredHomebaseRootSubTree(storedRootId) {
 
 function setupGridSortable(gridElement) {
 
+  const sortableStart = getPerfMeasureStart();
+  recordSortableLibraryAvailability();
+
   if (gridSortable) {
 
     gridSortable.destroy(); // Destroy previous instance
 
   }
 
-  gridSortable = Sortable.create(gridElement, {
-    animation: 250, // Optimal speed for smoothness
-    group: 'bookmarks',
-    draggable: '.bookmark-item:not(.back-button)',
-    filter: '.grid-item-rename-input',
-    preventOnFilter: false,
+  try {
+    gridSortable = Sortable.create(gridElement, {
+      animation: 250, // Optimal speed for smoothness
+      group: 'bookmarks',
+      draggable: '.bookmark-item:not(.back-button)',
+      filter: '.grid-item-rename-input',
+      preventOnFilter: false,
 
-    // Explicitly tell Sortable which attribute holds the ID
-    dataIdAttr: 'data-bookmark-id',
+      // Explicitly tell Sortable which attribute holds the ID
+      dataIdAttr: 'data-bookmark-id',
 
-    // Performance Settings
-    delay: 150, // Touch-only delay keeps mouse drag responsive; tolerance reduces micro-drag.
-    delayOnTouchOnly: true,
-    touchStartThreshold: 6,
+      // Performance Settings
+      delay: 150, // Touch-only delay keeps mouse drag responsive; tolerance reduces micro-drag.
+      delayOnTouchOnly: true,
+      touchStartThreshold: 6,
 
-    ghostClass: 'bookmark-placeholder',
-    chosenClass: 'sortable-chosen',
-    dragClass: 'sortable-drag',
+      ghostClass: 'bookmark-placeholder',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
 
-    forceFallback: true,
-    fallbackClass: 'bookmark-fallback-ghost',
-    fallbackOnBody: true,
-    fallbackTolerance: 6,
+      forceFallback: true,
+      fallbackClass: 'bookmark-fallback-ghost',
+      fallbackOnBody: true,
+      fallbackTolerance: 6,
 
-    onClone: (evt) => {
-      const clone = evt.clone;
-      if (!clone) {
-        return;
-      }
+      onClone: (evt) => {
+        const clone = evt.clone;
+        if (!clone) {
+          return;
+        }
 
-      clone.classList.add('bookmark-fallback-ghost');
+        clone.classList.add('bookmark-fallback-ghost');
 
-      const fallbackIcon = clone.querySelector('.bookmark-fallback-icon');
-      if (fallbackIcon && !fallbackIcon.classList.contains('show-fallback')) {
-        clone.classList.add('bookmark-fallback-ghost-hide-fallback');
-      }
-    },
+        const fallbackIcon = clone.querySelector('.bookmark-fallback-icon');
+        if (fallbackIcon && !fallbackIcon.classList.contains('show-fallback')) {
+          clone.classList.add('bookmark-fallback-ghost-hide-fallback');
+        }
+      },
 
-    onStart: () => {
-      isGridDragging = true;
-      document.body.classList.add('is-dragging-active');
+      onStart: () => {
+        isGridDragging = true;
+        document.body.classList.add('is-dragging-active');
 
-      // Immediately strip the "drop-in" animation class so Sortable can animate positions.
-      const animatingItems = gridElement.querySelectorAll('.newly-rendered');
-      animatingItems.forEach(el => {
-        el.classList.remove('newly-rendered');
-        el.style.animationDelay = '';
-        el.style.opacity = '1';
-        el.style.animation = 'none';
-      });
-    },
+        // Immediately strip the "drop-in" animation class so Sortable can animate positions.
+        const animatingItems = gridElement.querySelectorAll('.newly-rendered');
+        animatingItems.forEach(el => {
+          el.classList.remove('newly-rendered');
+          el.style.animationDelay = '';
+          el.style.opacity = '1';
+          el.style.animation = 'none';
+        });
+      },
 
-    onEnd: (evt) => {
-      document.body.classList.remove('is-dragging-active');
-      // Delay clearing the drag flag so the subsequent click event is ignored.
-      setTimeout(() => {
-        isGridDragging = false;
-      }, 50);
-      handleGridDrop(evt);
-    },
+      onEnd: (evt) => {
+        document.body.classList.remove('is-dragging-active');
+        // Delay clearing the drag flag so the subsequent click event is ignored.
+        setTimeout(() => {
+          isGridDragging = false;
+        }, 50);
+        handleGridDrop(evt);
+      },
 
-    onMove: handleGridMove
-  });
+      onMove: handleGridMove
+    });
+
+    recordSortablePerfTiming('grid', sortableStart, 'done');
+  } catch (err) {
+    recordSortablePerfTiming('grid', sortableStart, 'failed');
+    throw err;
+  }
 
 }
 
@@ -6829,69 +7426,79 @@ async function handleGridDrop(evt) {
 
 function setupTabsSortable(tabsContainer) {
 
+  const sortableStart = getPerfMeasureStart();
+  recordSortableLibraryAvailability();
+
   if (tabsSortable) {
 
     tabsSortable.destroy();
 
   }
 
-  tabsSortable = Sortable.create(tabsContainer, {
+  try {
+    tabsSortable = Sortable.create(tabsContainer, {
 
-    animation: 350, // Slightly increased duration
+      animation: 350, // Slightly increased duration
 
-    easing: "cubic-bezier(0.25, 1, 0.5, 1)", //  <-- ADD THIS: Adds a smooth "snap" effect
+      easing: "cubic-bezier(0.25, 1, 0.5, 1)", //  <-- ADD THIS: Adds a smooth "snap" effect
 
-    draggable: '.bookmark-folder-tab', 
+      draggable: '.bookmark-folder-tab',
 
-    filter: '.bookmark-folder-add-btn', 
+      filter: '.bookmark-folder-add-btn',
 
-    ghostClass: 'sortable-ghost-tab', 
+      ghostClass: 'sortable-ghost-tab',
 
-    chosenClass: 'sortable-chosen-tab',
+      chosenClass: 'sortable-chosen-tab',
 
-    dragClass: 'sortable-drag-tab',
+      dragClass: 'sortable-drag-tab',
 
-    forceFallback: true,
+      forceFallback: true,
 
-    fallbackOnBody: true,
+      fallbackOnBody: true,
 
-    fallbackClass: 'bookmark-fallback-ghost-tab',
+      fallbackClass: 'bookmark-fallback-ghost-tab',
 
-    fallbackTolerance: 5,
+      fallbackTolerance: 5,
 
-    setData: (dataTransfer, dragEl) => {
+      setData: (dataTransfer, dragEl) => {
 
-      dataTransfer.setData('text/plain', dragEl.dataset.folderId || '');
+        dataTransfer.setData('text/plain', dragEl.dataset.folderId || '');
 
-    },
+      },
 
-    onStart: () => {
+      onStart: () => {
 
-      isTabDragging = true;
+        isTabDragging = true;
 
-      document.body.classList.add('is-tab-dragging');
+        document.body.classList.add('is-tab-dragging');
 
-    },
+      },
 
-    onEnd: (evt) => {
+      onEnd: (evt) => {
 
-      setTimeout(() => {
+        setTimeout(() => {
 
-        isTabDragging = false;
+          isTabDragging = false;
 
-      }, 50);
+        }, 50);
 
-      document.body.classList.remove('is-tab-dragging');
+        document.body.classList.remove('is-tab-dragging');
 
-      handleTabDrop(evt);
+        handleTabDrop(evt);
 
-      requestAnimationFrame(() => scrollActiveFolderTabIntoView({ behavior: 'smooth' }));
+        requestAnimationFrame(() => scrollActiveFolderTabIntoView({ behavior: 'smooth' }));
 
-    },
+      },
 
-    preventOnFilter: true
+      preventOnFilter: true
 
-  });
+    });
+
+    recordSortablePerfTiming('tabs', sortableStart, 'done');
+  } catch (err) {
+    recordSortablePerfTiming('tabs', sortableStart, 'failed');
+    throw err;
+  }
 
 }
 
@@ -11755,7 +12362,7 @@ function setupWidgetOrderSortable() {
     commitWidgetOrder();
   }, {
     handle: '.widget-drag-handle'
-  });
+  }, 'widgets');
 
   widgetList.dataset.dragReady = '1';
 }
@@ -12372,7 +12979,7 @@ async function loadAppSettingsFromStorage() {
     applyBookmarkFolderColor(appBookmarkFolderColorPreference);
 
     applyPerformanceModeState(appPerformanceModePreference);
-    setPerfOverlayEnabled(debugPerfOverlayPreference);
+    setPerfOverlayEnabled(debugPerfOverlayPreference || isStartupPerfDebugEnabled());
     resetCinemaMode();
 
     applyBackgroundDim(savedBackgroundDim);
@@ -13352,8 +13959,14 @@ function setupGlassSettings() {
 }
 
 
-function initUnifiedSortable(containerEl, onEnd, overrides = {}) {
-  if (!containerEl || typeof Sortable === 'undefined') return null;
+function initUnifiedSortable(containerEl, onEnd, overrides = {}, sortablePerfKey = 'searchEngines') {
+  const sortableStart = getPerfMeasureStart();
+  const isAvailable = recordSortableLibraryAvailability();
+
+  if (!containerEl || !isAvailable) {
+    recordSortablePerfTiming(sortablePerfKey, sortableStart, 'skipped');
+    return null;
+  }
 
   const options = Object.assign({
     animation: 150,
@@ -13365,7 +13978,14 @@ function initUnifiedSortable(containerEl, onEnd, overrides = {}) {
     options.onEnd = onEnd;
   }
 
-  return Sortable.create(containerEl, options);
+  try {
+    const sortableInstance = Sortable.create(containerEl, options);
+    recordSortablePerfTiming(sortablePerfKey, sortableStart, 'done');
+    return sortableInstance;
+  } catch (err) {
+    recordSortablePerfTiming(sortablePerfKey, sortableStart, 'failed');
+    throw err;
+  }
 }
 
 
@@ -13508,7 +14128,7 @@ function setupSearchEnginesModal() {
 
     if (engineSortable) engineSortable.destroy();
 
-    engineSortable = initUnifiedSortable(listContainer);
+    engineSortable = initUnifiedSortable(listContainer, null, {}, 'searchEngines');
 
   };
 
@@ -19403,10 +20023,10 @@ async function setupWeather() {
 function setupBackgroundVideoCrossfade() {
   if (isPerformanceModeEnabled()) {
     cleanupBackgroundPlayback();
-    return;
+    return false;
   }
   const videos = Array.from(document.querySelectorAll('.background-video'));
-  if (videos.length < 2) return;
+  if (videos.length < 2) return false;
 
   if (!videoPlaybackController) videoPlaybackController = new AbortController();
   const signal = videoPlaybackController.signal;
@@ -19425,6 +20045,7 @@ function setupBackgroundVideoCrossfade() {
   const safeDurationMs = 15000;
   const fadeSec = fadeMs / 1000;
   const bufferSec = bufferMs / 1000;
+  let firstActiveMarked = false;
 
   const playAndFadeIn = async (videoEl, enableTransition, onReady) => {
     if (isPerformanceModeEnabled()) return;
@@ -19440,6 +20061,10 @@ function setupBackgroundVideoCrossfade() {
 
       const showVideo = () => {
         videoEl.classList.add('is-active');
+        if (!firstActiveMarked) {
+          firstActiveMarked = true;
+          recordStartupPerfEvent('newtab:video-first-active', { transition: !!enableTransition });
+        }
         if (onReady) onReady();
       };
 
@@ -19541,6 +20166,8 @@ function setupBackgroundVideoCrossfade() {
       playAndFadeIn(first, false, () => startCycle(first, second));
     }, { once: true, signal });
   }
+
+  return true;
 }
 
 
@@ -21026,12 +21653,12 @@ function logInitSettled(name, result) {
 // - ready flip must not wait for hydration
 // ===============================================
   async function initializePage() {
+    hbPerfMark('newtab:init-start');
     hbPerfMark('init-start');
     let STARTUP_PHASE = 'critical';
     let markReadyCount = 0;
     performance.mark('init:start');
 
-    setupBackgroundVideoCrossfade();
     const wallpaperTypeP = getWallpaperTypePreference();
 
     const settingsP = loadAppSettingsFromStorage();
@@ -21039,6 +21666,7 @@ function logInitSettled(name, result) {
     const lastFolderP = loadLastUsedFolderId();
 
     const type = await wallpaperTypeP;
+    recordStartupPerfEvent('newtab:wallpaper-type-loaded', { type });
     // allow the video to buffer without blocking UI setup
     waitForWallpaperReady(currentWallpaperSelection, type);
 
@@ -21141,6 +21769,7 @@ function logInitSettled(name, result) {
       if (DEBUG_STARTUP_GUARDS) console.warn('[startup guard] ready flip failed', err);
     }
     STARTUP_PHASE = 'ready';
+    recordStartupPerfEvent('newtab:init-ready');
     if (DEBUG_STARTUP_PERF && b.classList.contains('ready')) {
       hbPerfMark('ready-class');
       hbPerfMeasure('script-to-ready-class', 'script-start', 'ready-class');
@@ -22679,6 +23308,8 @@ function applyWallpaperByType(selection, type = 'video') {
 
   const video = finalType === 'video' ? (selection.videoUrl || '') : '';
 
+  const videoStartSequence = ++wallpaperVideoStartSequence;
+
 
 
   setWallpaperFallbackPoster(poster, posterCacheKey);
@@ -22716,19 +23347,38 @@ function applyWallpaperByType(selection, type = 'video') {
     return;
   }
 
+  const appliedImmediateVideoPoster = finalType === 'video' && !!poster;
+
+  if (appliedImmediateVideoPoster) {
+    applyWallpaperBackground(poster);
+    recordStartupPerfEvent('newtab:wallpaper-poster-applied', { source: poster ? 'poster' : 'none' });
+  }
 
 
   if (!unchanged) {
     const applyWallpaperFlow = () => {
+      const current = currentWallpaperSelection || null;
+
+      if (
+        videoStartSequence !== wallpaperVideoStartSequence ||
+        !current ||
+        (current.id || null) !== (selection.id || null) ||
+        (current.posterUrl || '') !== poster ||
+        (finalType === 'video' && (current.videoUrl || '') !== video)
+      ) {
+        return;
+      }
+
       // Stop any existing playback loop/listeners before starting new video logic.
       cleanupBackgroundPlayback();
 
-      applyWallpaperBackground(poster);
+      if (!appliedImmediateVideoPoster) {
+        applyWallpaperBackground(poster);
+      }
 
       if (finalType === 'video' && video) {
-        setBackgroundVideoSources(video, poster);
-        startBackgroundVideos();
-        setupBackgroundVideoCrossfade();
+        const sourceLoadPromise = setBackgroundVideoSources(video, poster);
+        startBackgroundVideosAfterSourceLoad(sourceLoadPromise, videoStartSequence, selection, finalType, poster, video);
       } else {
         // Already cleaned up above, just ensure UI state is correct
         clearBackgroundVideos();
@@ -22746,7 +23396,9 @@ function applyWallpaperByType(selection, type = 'video') {
       };
     };
 
-    if (poster) {
+    if (finalType === 'video') {
+      runAfterNextPaint(applyWallpaperFlow);
+    } else if (poster) {
       const img = new Image();
       img.onload = () => {
         img.onload = null;
@@ -22768,7 +23420,8 @@ function applyWallpaperByType(selection, type = 'video') {
 
     if (finalType === 'video' && video) {
 
-      startBackgroundVideos();
+      const sourceLoadPromise = setBackgroundVideoSources(video, poster);
+      startBackgroundVideosAfterSourceLoad(sourceLoadPromise, videoStartSequence, selection, finalType, poster, video);
 
     }
 
@@ -22783,6 +23436,8 @@ function applyWallpaperByType(selection, type = 'video') {
 
 
 function clearBackgroundVideos() {
+  backgroundVideoSourceLoadGeneration += 1;
+  backgroundVideoCrossfadeSetupKey = '';
 
   const videos = Array.from(document.querySelectorAll('.background-video'));
 
@@ -22801,6 +23456,8 @@ function clearBackgroundVideos() {
     v.load();
 
     v.classList.remove('is-active');
+    v.classList.remove('with-transition');
+    v.classList.remove('on-top');
 
   });
 

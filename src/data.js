@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.11.2',
-  date: '2026-05-18',
+  version: '0.11.3',
+  date: '2026-05-21',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Dock accessibility',
-      desc: 'Dock shortcuts now include clearer labels and button states for assistive technology.'
+      title: 'Faster startup',
+      desc: 'Wallpaper previews now appear sooner while video backgrounds finish loading in the background.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Video backgrounds',
+      desc: 'Video wallpapers now hand off more smoothly from the poster image to playback.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Performance report',
+      desc: 'The copyable performance report now includes startup timeline, script, and drag setup details.'
     },
     {
       type: 'FIX',
-      title: 'Firefox shortcuts',
-      desc: 'Firefox now shows shortcut guidance for browser-only dock destinations instead of opening unsupported pages.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Tooltip polish',
-      desc: 'Dock and picker tooltips now appear only on their intended controls with smoother motion.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Wallpaper state',
-      desc: 'The next-wallpaper button now communicates its loading state more clearly while changing backgrounds.'
+      title: 'Poster cache',
+      desc: 'Oversized saved poster previews are cleaned up so startup wallpaper fallback stays reliable.'
     }
   ]
 };

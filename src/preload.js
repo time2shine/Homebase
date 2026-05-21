@@ -2,8 +2,46 @@
   const WALLPAPER_STARTUP_STATE_KEY = 'wallpaperStartupState';
   const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
   const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
+  const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
   const SKIP_STARTUP_WALLPAPER_FALLBACK_ATTR = 'data-skip-startup-wallpaper-fallback';
+  // Refuse oversized data URLs here; new-tab.js must write startup poster data URLs below this limit.
   const MAX_PRELOAD_POSTER_DATA_URL_LENGTH = 250000;
+
+  window.__HB_STARTUP_PERF = window.__HB_STARTUP_PERF || [];
+
+  function hbStartupPerfMark(name, detail) {
+    try {
+      const entryName = typeof name === 'string' && name ? name : 'unknown';
+      const now =
+        typeof performance !== 'undefined' && typeof performance.now === 'function'
+          ? performance.now()
+          : Date.now();
+      const entry = {
+        name: entryName,
+        time: Math.round(now)
+      };
+
+      if (detail && typeof detail === 'object') {
+        entry.detail = detail;
+      }
+
+      if (!Array.isArray(window.__HB_STARTUP_PERF)) {
+        window.__HB_STARTUP_PERF = [];
+      }
+
+      window.__HB_STARTUP_PERF.push(entry);
+
+      if (window.__HB_STARTUP_PERF.length > 80) {
+        window.__HB_STARTUP_PERF.splice(0, window.__HB_STARTUP_PERF.length - 80);
+      }
+
+      if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+        performance.mark(`hb:${entryName}`);
+      }
+    } catch (e) {}
+  }
+
+  hbStartupPerfMark('preload:start');
 
   function getLocalDayStamp(ts) {
     const date = new Date(ts || Date.now());
@@ -26,6 +64,29 @@
   function clearInitialWallpaper() {
     document.documentElement.style.removeProperty('--initial-wallpaper');
     delete document.documentElement.dataset.initialWallpaper;
+  }
+
+  function removeOversizedCachedPosterDataUrl(browserApi) {
+    try {
+      if (window.localStorage) {
+        const storedDataUrl = localStorage.getItem(CACHED_APPLIED_POSTER_DATA_URL_KEY) || '';
+        if (storedDataUrl && storedDataUrl.length > MAX_PRELOAD_POSTER_DATA_URL_LENGTH) {
+          localStorage.removeItem(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+          hbStartupPerfMark('preload:oversized-data-url-removed', { source: 'localStorage' });
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const storage = browserApi && browserApi.storage && browserApi.storage.local;
+      if (storage && typeof storage.remove === 'function') {
+        const result = storage.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+        hbStartupPerfMark('preload:oversized-data-url-removed', { source: 'storage.local' });
+        if (result && typeof result.catch === 'function') {
+          result.catch(() => {});
+        }
+      }
+    } catch (e) {}
   }
 
   // Instant Background Dim (sync fast path)
@@ -126,7 +187,7 @@
   let skipInitialWallpaper = false;
   try {
     if (window.localStorage) {
-      dataUrl = localStorage.getItem('cachedAppliedPosterDataUrl') || '';
+      dataUrl = localStorage.getItem(CACHED_APPLIED_POSTER_DATA_URL_KEY) || '';
       url = localStorage.getItem('cachedAppliedPosterUrl') || '';
       const startupStateRaw = localStorage.getItem(WALLPAPER_STARTUP_STATE_KEY) || '';
       if (startupStateRaw) {
@@ -140,15 +201,32 @@
     skipInitialWallpaper = false;
   }
 
+  hbStartupPerfMark('preload:localStorage-read-complete', {
+    dataUrl: dataUrl ? 'present' : 'none',
+    url: url ? 'present' : 'none'
+  });
+
   setSkipStartupWallpaperFallback(skipInitialWallpaper);
+
+  const oversizedDataUrl = dataUrl && dataUrl.length > MAX_PRELOAD_POSTER_DATA_URL_LENGTH;
+  if (oversizedDataUrl) {
+    removeOversizedCachedPosterDataUrl();
+  }
 
   const safeDataUrl =
     dataUrl && dataUrl.length <= MAX_PRELOAD_POSTER_DATA_URL_LENGTH
       ? dataUrl
       : '';
   const initial = skipInitialWallpaper ? '' : (safeDataUrl || url);
+  const usedSafeLocalDataUrl = !!safeDataUrl && initial === safeDataUrl;
+  if (skipInitialWallpaper) {
+    hbStartupPerfMark('preload:initial-wallpaper-skipped-daily-rotation');
+  }
   if (initial) {
     applyInitial(initial);
+    hbStartupPerfMark('preload:initial-wallpaper-applied', {
+      source: safeDataUrl ? 'localStorage-data-url' : 'localStorage-url'
+    });
   }
 
   // Fallback: async extension storage
@@ -156,33 +234,45 @@
   if (!browserApi || !browserApi.storage || !browserApi.storage.local) return;
 
   browserApi.storage.local
-    .get(['cachedAppliedPosterDataUrl', 'cachedAppliedPosterUrl', WALLPAPER_SELECTION_KEY, DAILY_ROTATION_KEY])
+    .get([CACHED_APPLIED_POSTER_DATA_URL_KEY, 'cachedAppliedPosterUrl', WALLPAPER_SELECTION_KEY, DAILY_ROTATION_KEY])
     .then((res) => {
+      hbStartupPerfMark('preload:async-storage-read-complete', {
+        dataUrl: res && res[CACHED_APPLIED_POSTER_DATA_URL_KEY] ? 'present' : 'none',
+        url: res && res.cachedAppliedPosterUrl ? 'present' : 'none'
+      });
+
       const selection = res && res[WALLPAPER_SELECTION_KEY];
       const allowDailyRotation = !res || !Object.prototype.hasOwnProperty.call(res, DAILY_ROTATION_KEY) || res[DAILY_ROTATION_KEY] !== false;
       if (isDailyRotationDue(selection && selection.selectedAt, allowDailyRotation)) {
         setSkipStartupWallpaperFallback(true);
         clearInitialWallpaper();
+        hbStartupPerfMark('preload:initial-wallpaper-skipped-daily-rotation');
         return;
       }
 
       setSkipStartupWallpaperFallback(false);
 
-      const asyncDataUrl = res && res.cachedAppliedPosterDataUrl;
+      const asyncDataUrl = res && res[CACHED_APPLIED_POSTER_DATA_URL_KEY];
       const asyncUrl = res && res.cachedAppliedPosterUrl;
+      if (asyncDataUrl && asyncDataUrl.length > MAX_PRELOAD_POSTER_DATA_URL_LENGTH) {
+        removeOversizedCachedPosterDataUrl(browserApi);
+      }
       const safeAsyncDataUrl =
         asyncDataUrl && asyncDataUrl.length <= MAX_PRELOAD_POSTER_DATA_URL_LENGTH
           ? asyncDataUrl
           : '';
-      const pick = safeAsyncDataUrl || asyncUrl || '';
+      const pick = safeAsyncDataUrl || (usedSafeLocalDataUrl ? '' : (asyncUrl || ''));
       // Avoid double-paint if we already used this value from localStorage
       if (!pick || pick === initial) return;
 
       applyInitial(pick);
+      hbStartupPerfMark('preload:async-wallpaper-applied', {
+        source: safeAsyncDataUrl ? 'storage.local-data-url' : 'storage.local-url'
+      });
       try {
         if (window.localStorage) {
-          if (asyncDataUrl) {
-            localStorage.setItem('cachedAppliedPosterDataUrl', asyncDataUrl);
+          if (safeAsyncDataUrl) {
+            localStorage.setItem(CACHED_APPLIED_POSTER_DATA_URL_KEY, safeAsyncDataUrl);
           }
           if (asyncUrl) {
             localStorage.setItem('cachedAppliedPosterUrl', asyncUrl);
@@ -190,7 +280,9 @@
         }
       } catch (e) {}
     })
-    .catch(() => {});
+    .catch(() => {
+      hbStartupPerfMark('preload:async-storage-read-complete', { status: 'failed' });
+    });
 
   const SIDEBAR_PREF_KEY = 'appShowSidebar';
   const WEATHER_PREF_KEY = 'appShowWeather';

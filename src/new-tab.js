@@ -2646,9 +2646,8 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
     }
 
     let urlToStore = posterUrl;
-    const skipPosterDataUrl = isPerformanceModeEnabled();
 
-    if (!skipPosterDataUrl && isRemoteHttpUrl(posterUrl)) {
+    if (isRemoteHttpUrl(posterUrl)) {
       await cacheAsset(posterUrl);
     } else if (posterUrl.startsWith('blob:')) {
       if (posterCacheKey && !posterCacheKey.startsWith('blob:')) {
@@ -2656,7 +2655,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
       }
     }
 
-    if (!skipPosterDataUrl && isRemoteHttpUrl(urlToStore)) {
+    if (isRemoteHttpUrl(urlToStore)) {
       await cacheAsset(urlToStore);
     }
 
@@ -2667,17 +2666,6 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
         localStorage.setItem('cachedAppliedPosterUrl', urlToStore);
       }
     } catch (e) {}
-
-    if (skipPosterDataUrl) {
-      await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
-      try {
-        if (window.localStorage) {
-          localStorage.removeItem('cachedAppliedPosterDataUrl');
-        }
-      } catch (e) {}
-      recordStartupPerfEventOnce('newtab:poster-data-url-skipped-performance-mode');
-      return;
-    }
 
     const cacheKeyToUse = posterCacheKey || posterUrl;
 

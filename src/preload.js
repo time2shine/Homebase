@@ -198,7 +198,7 @@
   let skipInitialWallpaper = false;
   try {
     if (window.localStorage) {
-      dataUrl = fastPerformanceMode ? '' : (localStorage.getItem(CACHED_APPLIED_POSTER_DATA_URL_KEY) || '');
+      dataUrl = localStorage.getItem(CACHED_APPLIED_POSTER_DATA_URL_KEY) || '';
       url = localStorage.getItem('cachedAppliedPosterUrl') || '';
       const startupStateRaw = localStorage.getItem(WALLPAPER_STARTUP_STATE_KEY) || '';
       if (startupStateRaw) {
@@ -228,23 +228,18 @@
     dataUrl && dataUrl.length <= MAX_PRELOAD_POSTER_DATA_URL_LENGTH
       ? dataUrl
       : '';
-  const performanceModeInitial = fastPerformanceMode ? (url || 'assets/fallback.webp') : '';
-  const initial = skipInitialWallpaper ? '' : (fastPerformanceMode ? performanceModeInitial : (safeDataUrl || url));
-  const usedSafeLocalDataUrl = !fastPerformanceMode && !!safeDataUrl && initial === safeDataUrl;
+  const initial = skipInitialWallpaper ? '' : (safeDataUrl || url);
+  const usedSafeLocalDataUrl = !!safeDataUrl && initial === safeDataUrl;
   if (skipInitialWallpaper) {
     hbStartupPerfMark('preload:initial-wallpaper-skipped-daily-rotation');
   }
   if (initial) {
     applyInitial(initial);
     hbStartupPerfMark('preload:initial-wallpaper-applied', {
-      source: fastPerformanceMode
-        ? (url ? 'performance-mode-url' : 'performance-mode-fallback')
-        : (safeDataUrl ? 'localStorage-data-url' : 'localStorage-url')
+      source: safeDataUrl ? 'localStorage-data-url' : 'localStorage-url'
     });
-    if (fastPerformanceMode) {
-      hbStartupPerfMark(url
-        ? 'preload:performance-mode-poster-url-applied'
-        : 'preload:performance-mode-fallback-poster-applied');
+    if (fastPerformanceMode && !safeDataUrl && url) {
+      hbStartupPerfMark('preload:performance-mode-poster-url-applied');
     }
   }
 
@@ -252,14 +247,17 @@
   const browserApi = window.browser || window.chrome;
   if (!browserApi || !browserApi.storage || !browserApi.storage.local) return;
 
-  const wallpaperStorageKeys = fastPerformanceMode
-    ? ['cachedAppliedPosterUrl', WALLPAPER_SELECTION_KEY, DAILY_ROTATION_KEY]
-    : [CACHED_APPLIED_POSTER_DATA_URL_KEY, 'cachedAppliedPosterUrl', WALLPAPER_SELECTION_KEY, DAILY_ROTATION_KEY];
+  const wallpaperStorageKeys = [
+    CACHED_APPLIED_POSTER_DATA_URL_KEY,
+    'cachedAppliedPosterUrl',
+    WALLPAPER_SELECTION_KEY,
+    DAILY_ROTATION_KEY
+  ];
 
   browserApi.storage.local
     .get(wallpaperStorageKeys)
     .then((res) => {
-      const asyncDataUrl = fastPerformanceMode ? '' : (res && res[CACHED_APPLIED_POSTER_DATA_URL_KEY]);
+      const asyncDataUrl = res && res[CACHED_APPLIED_POSTER_DATA_URL_KEY];
       hbStartupPerfMark('preload:async-storage-read-complete', {
         dataUrl: asyncDataUrl ? 'present' : 'none',
         url: res && res.cachedAppliedPosterUrl ? 'present' : 'none'
@@ -284,9 +282,7 @@
         asyncDataUrl && asyncDataUrl.length <= MAX_PRELOAD_POSTER_DATA_URL_LENGTH
           ? asyncDataUrl
           : '';
-      const pick = fastPerformanceMode
-        ? (asyncUrl || (url ? '' : 'assets/fallback.webp'))
-        : (safeAsyncDataUrl || (usedSafeLocalDataUrl ? '' : (asyncUrl || '')));
+      const pick = safeAsyncDataUrl || (usedSafeLocalDataUrl ? '' : (asyncUrl || ''));
       // Avoid double-paint if we already used this value from localStorage
       if (!pick || pick === initial) return;
 

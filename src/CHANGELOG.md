@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.12.1 — 2026-05-22
+### Improved
+- Wallpaper startup now reuses saved poster previews more consistently in Performance Mode.
+- Video wallpaper previews now stay available sooner while heavier playback remains deferred.
+- The search engine selector now keeps a tighter first-paint size during instant startup.
+
+### Fixed
+- Performance Mode no longer drops cached wallpaper poster data before the new tab can reuse it.
+- Async wallpaper preload now avoids unnecessary fallback flashes when a saved poster preview is available.
+
 ## v0.12.0 — 2026-05-22
 ### Added
 - Performance Mode now covers video wallpaper playback, grid animations, glass blur, and cinema mode from the same setting.

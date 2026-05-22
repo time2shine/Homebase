@@ -515,8 +515,8 @@ body.sidebar-collapsed .collapsed-clock-slot {
 }
 /* Instant-load classes: used by instant_load.js to avoid inline styles */
 .search-engine-selector.is-instant-fixed {
-  --collapsed-width: 42px;
-  --expanded-width: 42px;
+  --collapsed-width: 36px;
+  --expanded-width: 36px;
 }
 
 /* --- Inner Sliding List --- */

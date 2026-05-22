@@ -3,6 +3,7 @@
   const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
   const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
   const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
+  const FAST_PERFORMANCE_MODE_KEY = 'fast-performance-mode';
   const SKIP_STARTUP_WALLPAPER_FALLBACK_ATTR = 'data-skip-startup-wallpaper-fallback';
   // Refuse oversized data URLs here; new-tab.js must write startup poster data URLs below this limit.
   const MAX_PRELOAD_POSTER_DATA_URL_LENGTH = 250000;
@@ -42,6 +43,16 @@
   }
 
   hbStartupPerfMark('preload:start');
+
+  let fastPerformanceMode = false;
+  try {
+    fastPerformanceMode = !!(window.localStorage && localStorage.getItem(FAST_PERFORMANCE_MODE_KEY) === '1');
+  } catch (e) {
+    fastPerformanceMode = false;
+  }
+  hbStartupPerfMark('preload:performance-mode-fast-path', {
+    enabled: fastPerformanceMode ? 'yes' : 'no'
+  });
 
   function getLocalDayStamp(ts) {
     const date = new Date(ts || Date.now());
@@ -187,7 +198,7 @@
   let skipInitialWallpaper = false;
   try {
     if (window.localStorage) {
-      dataUrl = localStorage.getItem(CACHED_APPLIED_POSTER_DATA_URL_KEY) || '';
+      dataUrl = fastPerformanceMode ? '' : (localStorage.getItem(CACHED_APPLIED_POSTER_DATA_URL_KEY) || '');
       url = localStorage.getItem('cachedAppliedPosterUrl') || '';
       const startupStateRaw = localStorage.getItem(WALLPAPER_STARTUP_STATE_KEY) || '';
       if (startupStateRaw) {
@@ -217,27 +228,40 @@
     dataUrl && dataUrl.length <= MAX_PRELOAD_POSTER_DATA_URL_LENGTH
       ? dataUrl
       : '';
-  const initial = skipInitialWallpaper ? '' : (safeDataUrl || url);
-  const usedSafeLocalDataUrl = !!safeDataUrl && initial === safeDataUrl;
+  const performanceModeInitial = fastPerformanceMode ? (url || 'assets/fallback.webp') : '';
+  const initial = skipInitialWallpaper ? '' : (fastPerformanceMode ? performanceModeInitial : (safeDataUrl || url));
+  const usedSafeLocalDataUrl = !fastPerformanceMode && !!safeDataUrl && initial === safeDataUrl;
   if (skipInitialWallpaper) {
     hbStartupPerfMark('preload:initial-wallpaper-skipped-daily-rotation');
   }
   if (initial) {
     applyInitial(initial);
     hbStartupPerfMark('preload:initial-wallpaper-applied', {
-      source: safeDataUrl ? 'localStorage-data-url' : 'localStorage-url'
+      source: fastPerformanceMode
+        ? (url ? 'performance-mode-url' : 'performance-mode-fallback')
+        : (safeDataUrl ? 'localStorage-data-url' : 'localStorage-url')
     });
+    if (fastPerformanceMode) {
+      hbStartupPerfMark(url
+        ? 'preload:performance-mode-poster-url-applied'
+        : 'preload:performance-mode-fallback-poster-applied');
+    }
   }
 
   // Fallback: async extension storage
   const browserApi = window.browser || window.chrome;
   if (!browserApi || !browserApi.storage || !browserApi.storage.local) return;
 
+  const wallpaperStorageKeys = fastPerformanceMode
+    ? ['cachedAppliedPosterUrl', WALLPAPER_SELECTION_KEY, DAILY_ROTATION_KEY]
+    : [CACHED_APPLIED_POSTER_DATA_URL_KEY, 'cachedAppliedPosterUrl', WALLPAPER_SELECTION_KEY, DAILY_ROTATION_KEY];
+
   browserApi.storage.local
-    .get([CACHED_APPLIED_POSTER_DATA_URL_KEY, 'cachedAppliedPosterUrl', WALLPAPER_SELECTION_KEY, DAILY_ROTATION_KEY])
+    .get(wallpaperStorageKeys)
     .then((res) => {
+      const asyncDataUrl = fastPerformanceMode ? '' : (res && res[CACHED_APPLIED_POSTER_DATA_URL_KEY]);
       hbStartupPerfMark('preload:async-storage-read-complete', {
-        dataUrl: res && res[CACHED_APPLIED_POSTER_DATA_URL_KEY] ? 'present' : 'none',
+        dataUrl: asyncDataUrl ? 'present' : 'none',
         url: res && res.cachedAppliedPosterUrl ? 'present' : 'none'
       });
 
@@ -252,7 +276,6 @@
 
       setSkipStartupWallpaperFallback(false);
 
-      const asyncDataUrl = res && res[CACHED_APPLIED_POSTER_DATA_URL_KEY];
       const asyncUrl = res && res.cachedAppliedPosterUrl;
       if (asyncDataUrl && asyncDataUrl.length > MAX_PRELOAD_POSTER_DATA_URL_LENGTH) {
         removeOversizedCachedPosterDataUrl(browserApi);
@@ -261,7 +284,9 @@
         asyncDataUrl && asyncDataUrl.length <= MAX_PRELOAD_POSTER_DATA_URL_LENGTH
           ? asyncDataUrl
           : '';
-      const pick = safeAsyncDataUrl || (usedSafeLocalDataUrl ? '' : (asyncUrl || ''));
+      const pick = fastPerformanceMode
+        ? (asyncUrl || (url ? '' : 'assets/fallback.webp'))
+        : (safeAsyncDataUrl || (usedSafeLocalDataUrl ? '' : (asyncUrl || '')));
       // Avoid double-paint if we already used this value from localStorage
       if (!pick || pick === initial) return;
 

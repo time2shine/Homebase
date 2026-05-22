@@ -646,6 +646,46 @@ function recordStartupPerfEvent(name, detail) {
     if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
       performance.mark(`hb:${entryName}`);
     }
+
+    if (!DEBUG_STARTUP_PERF && entryName === 'newtab:init-ready') {
+      recordStartupReadyMeasures();
+    }
+  } catch (_) {}
+}
+
+function recordStartupPerfEventOnce(name, detail) {
+  try {
+    if (typeof name !== 'string' || !name) return;
+    const entries = getStartupPerfEntries();
+    if (entries.some((entry) => entry && entry.name === name)) return;
+    recordStartupPerfEvent(name, detail);
+  } catch (_) {}
+}
+
+function recordStartupReadyMeasures() {
+  try {
+    if (typeof performance === 'undefined' || typeof performance.mark !== 'function') return;
+    performance.mark('hb:ready-class');
+    hbPerfMeasure('script-to-ready-class', 'script-start', 'ready-class');
+    hbPerfMeasure('init-to-ready-class', 'init-start', 'ready-class');
+
+    const afterPaint = () => {
+      try {
+        performance.mark('hb:after-ready-paint');
+        hbPerfMeasure(
+          'script-to-after-ready-paint',
+          'script-start',
+          'after-ready-paint'
+        );
+        hbPerfReport();
+      } catch (_) {}
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(afterPaint));
+    } else {
+      setTimeout(afterPaint, 0);
+    }
   } catch (_) {}
 }
 
@@ -835,24 +875,38 @@ function hbPerfMark(name) {
 }
 
 function hbPerfMeasure(name, start, end) {
-  if (!DEBUG_STARTUP_PERF) return;
   try {
     if (typeof performance === 'undefined' || typeof performance.measure !== 'function') return;
-    performance.measure(`hb:${name}`, `hb:${start}`, `hb:${end}`);
+    const measureName = `hb:${name}`;
+    if (typeof performance.clearMeasures === 'function') {
+      try { performance.clearMeasures(measureName); } catch (_) {}
+    }
+    performance.measure(measureName, `hb:${start}`, `hb:${end}`);
+    const entries =
+      typeof performance.getEntriesByName === 'function'
+        ? performance.getEntriesByName(measureName, 'measure')
+        : [];
+    const entry = entries && entries.length ? entries[entries.length - 1] : null;
+    const ms = entry && typeof entry.duration === 'number' ? entry.duration : null;
+    const startMs = entry && typeof entry.startTime === 'number' ? entry.startTime : null;
+    if (typeof ms === 'number' && Number.isFinite(ms)) {
+      recordStartupPerfMeasure(measureName, ms);
+      recordStartupPerfMeasureRow(measureName, ms, startMs);
+    }
   } catch (_) {}
 }
 
 function hbPerfTime(label, startTime, extra) {
-  if (!DEBUG_STARTUP_PERF) return;
   try {
     if (typeof performance === 'undefined' || typeof performance.now !== 'function') return;
     const start = Number(startTime);
-    if (!Number.isFinite(start)) return;
+    if (!Number.isFinite(start) || start <= 0) return;
     const ms = performance.now() - start;
     if (!Number.isFinite(ms)) return;
     recordBookmarkPerfTiming(label, ms);
     recordRawPerfTiming(label, ms);
     const roundedMs = Math.round(ms * 100) / 100;
+    if (!DEBUG_STARTUP_PERF) return;
     if (extra === undefined) {
       console.log('[homebase perf]', label, roundedMs, 'ms');
     } else {
@@ -862,27 +916,32 @@ function hbPerfTime(label, startTime, extra) {
 }
 
 function hbPerfReport() {
-  if (!DEBUG_STARTUP_PERF) return;
   try {
     if (
       typeof performance === 'undefined' ||
       typeof performance.getEntriesByType !== 'function'
     ) return;
-    const rows = performance
+    const rowsByName = new Map();
+    performance
       .getEntriesByType('measure')
       .filter(entry => entry && typeof entry.name === 'string' && entry.name.startsWith('hb:'))
-      .map(entry => ({
-        measure: entry.name,
-        ms: Math.round(entry.duration * 100) / 100,
-        startMs: Math.round(entry.startTime * 100) / 100
-    }));
+      .forEach(entry => {
+        rowsByName.set(entry.name, {
+          measure: entry.name,
+          ms: Math.round(entry.duration * 100) / 100,
+          startMs: Math.round(entry.startTime * 100) / 100
+        });
+      });
+    const rows = Array.from(rowsByName.values());
     if (!rows.length) return;
     rows.forEach(row => recordStartupPerfMeasure(row.measure, row.ms));
+    rows.forEach(row => recordStartupPerfMeasureRow(row.measure, row.ms, row.startMs));
     perfState.startupRows = rows.map(row => ({
       measure: row.measure,
       ms: row.ms,
       startMs: row.startMs
     }));
+    if (!DEBUG_STARTUP_PERF) return;
     if (typeof console !== 'undefined' && typeof console.table === 'function') {
       console.table(rows);
     } else if (typeof console !== 'undefined' && typeof console.log === 'function') {
@@ -903,6 +962,7 @@ const STARTUP_IDLE_LABELS = new Set([
   'startup:setupWeather',
   'startup:setupAppLauncher',
   'startup:fetchQuote',
+  'startup:ensureDailyWallpaper',
 ]);
 
 async function processIdleTasks(deadline) {
@@ -2586,7 +2646,9 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
     }
 
     let urlToStore = posterUrl;
-    if (isRemoteHttpUrl(posterUrl)) {
+    const skipPosterDataUrl = isPerformanceModeEnabled();
+
+    if (!skipPosterDataUrl && isRemoteHttpUrl(posterUrl)) {
       await cacheAsset(posterUrl);
     } else if (posterUrl.startsWith('blob:')) {
       if (posterCacheKey && !posterCacheKey.startsWith('blob:')) {
@@ -2594,7 +2656,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
       }
     }
 
-    if (isRemoteHttpUrl(urlToStore)) {
+    if (!skipPosterDataUrl && isRemoteHttpUrl(urlToStore)) {
       await cacheAsset(urlToStore);
     }
 
@@ -2605,6 +2667,17 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
         localStorage.setItem('cachedAppliedPosterUrl', urlToStore);
       }
     } catch (e) {}
+
+    if (skipPosterDataUrl) {
+      await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+      try {
+        if (window.localStorage) {
+          localStorage.removeItem('cachedAppliedPosterDataUrl');
+        }
+      } catch (e) {}
+      recordStartupPerfEventOnce('newtab:poster-data-url-skipped-performance-mode');
+      return;
+    }
 
     const cacheKeyToUse = posterCacheKey || posterUrl;
 
@@ -3451,7 +3524,28 @@ function schedulePendingDailyRotationAttempt() {
 
 async function ensureDailyWallpaper(forceNext = false) {
 
-  if (isPerformanceModeEnabled()) return;
+  const recordStartupIdle = forceNext !== true;
+  const startupIdleStart =
+    recordStartupIdle && typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : 0;
+
+  if (recordStartupIdle) {
+    recordIdleTaskPerf('startup:ensureDailyWallpaper', 'start');
+    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:ensureDailyWallpaper start');
+  }
+
+  try {
+
+  if (isPerformanceModeEnabled()) {
+    if (
+      wallpaperTypePreference === 'video' ||
+      (currentWallpaperSelection && currentWallpaperSelection.videoUrl)
+    ) {
+      recordPerformanceModeVideoSkipped();
+    }
+    return;
+  }
 
   const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY, DAILY_ROTATION_KEY, WALLPAPER_QUALITY_KEY, PENDING_DAILY_ROTATION_KEY, PENDING_DAILY_ROTATION_SINCE_KEY]);
 
@@ -3604,6 +3698,22 @@ async function ensureDailyWallpaper(forceNext = false) {
   } else {
 
     applyWallpaperBackground('assets/fallback.webp');
+
+  }
+
+  } finally {
+
+    if (recordStartupIdle) {
+
+      const elapsedMs =
+        startupIdleStart && typeof performance !== 'undefined' && typeof performance.now === 'function'
+          ? performance.now() - startupIdleStart
+          : 0;
+
+      recordIdleTaskPerf('startup:ensureDailyWallpaper', 'end', elapsedMs);
+      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:ensureDailyWallpaper end in', Math.round(elapsedMs), 'ms');
+
+    }
 
   }
 
@@ -4161,6 +4271,14 @@ function createHealthPerfState() {
   };
 }
 
+function createMediaPerfState() {
+  return {
+    lastObjectUrlCleanup: null,
+    videoSkippedByPerformanceMode: false,
+    videoSourcesClearedByPerformanceMode: false
+  };
+}
+
 const perfState = {
   overlayEnabled: false,
   gridMode: 'idle',
@@ -4189,9 +4307,7 @@ const perfState = {
   startupRows: [],
   rawTimings: [],
   idleTasks: [],
-  media: {
-    lastObjectUrlCleanup: null
-  },
+  media: createMediaPerfState(),
   lastReportCopiedAt: null,
   lastReportCopyStatus: '',
   lastGridRenderMs: 0,
@@ -4282,7 +4398,7 @@ function recordIdleTaskPerf(name, status, ms = null) {
 
 function recordObjectUrlCleanup(details) {
   if (!perfState.media) {
-    perfState.media = { lastObjectUrlCleanup: null };
+    perfState.media = createMediaPerfState();
   }
 
   perfState.media.lastObjectUrlCleanup = {
@@ -4591,6 +4707,37 @@ function recordStartupPerfMeasure(name, ms) {
   } catch (_) {}
 }
 
+function recordStartupPerfMeasureRow(name, ms, startMs = null) {
+  if (typeof name !== 'string' || !name) return;
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return;
+
+  try {
+    if (!Array.isArray(perfState.startupRows)) {
+      perfState.startupRows = [];
+    }
+
+    const measureName = name.startsWith('hb:') ? name : `hb:${name}`;
+    const row = {
+      measure: measureName,
+      ms: Math.round(ms * 100) / 100,
+      startMs: typeof startMs === 'number' && Number.isFinite(startMs)
+        ? Math.round(startMs * 100) / 100
+        : null
+    };
+    const existingIndex = perfState.startupRows.findIndex((entry) => entry.measure === measureName);
+
+    if (existingIndex >= 0) {
+      perfState.startupRows[existingIndex] = row;
+    } else {
+      perfState.startupRows.push(row);
+    }
+
+    if (perfState.startupRows.length > 40) {
+      perfState.startupRows.splice(0, perfState.startupRows.length - 40);
+    }
+  } catch (_) {}
+}
+
 function recordBookmarkPerfTiming(label, ms) {
   if (typeof ms !== 'number' || !Number.isFinite(ms)) return;
 
@@ -4632,6 +4779,30 @@ function recordBookmarkPerfTiming(label, ms) {
 
 function formatReportValue(value) {
   return value === null || value === undefined || value === '' ? '—' : String(value);
+}
+
+function recordPerformanceModeVideoSkipped() {
+  try {
+    if (!perfState.media) perfState.media = createMediaPerfState();
+    if (!perfState.media.videoSkippedByPerformanceMode) {
+      recordStartupPerfEvent('newtab:video-skipped-performance-mode');
+    }
+    perfState.media.videoSkippedByPerformanceMode = true;
+  } catch (_) {}
+}
+
+function isPerformanceModeVideoSkippedForReport() {
+  if (!appPerformanceModePreference) return false;
+
+  try {
+    if (perfState.media && perfState.media.videoSkippedByPerformanceMode) return true;
+    if (getStartupPerfEntries().some((entry) => entry.name === 'newtab:video-skipped-performance-mode')) return true;
+    if (wallpaperTypePreference === 'video') return true;
+    if (currentWallpaperSelection && currentWallpaperSelection.videoUrl) return true;
+    return !!(lastAppliedWallpaper && lastAppliedWallpaper.type === 'video' && lastAppliedWallpaper.video);
+  } catch (_) {
+    return false;
+  }
 }
 
 function formatSortablePerfEntry(entry) {
@@ -4772,13 +4943,23 @@ function buildFullPerfReport() {
   lines.push('');
 
   lines.push('Media');
-  if (perfState.media && perfState.media.lastObjectUrlCleanup) {
-    const cleanup = perfState.media.lastObjectUrlCleanup;
+  const mediaState = perfState.media || createMediaPerfState();
+  const mediaCleanup = mediaState.lastObjectUrlCleanup;
+  const videoSkippedByPerformanceMode = isPerformanceModeVideoSkippedForReport();
+
+  if (videoSkippedByPerformanceMode) {
+    lines.push('- Performance Mode video playback: disabled');
+    lines.push('- Video skipped by Performance Mode: Yes');
+    lines.push('- Object URL cleanup: not needed / skipped by Performance Mode');
+  }
+
+  if (mediaCleanup) {
+    const cleanup = mediaCleanup;
     lines.push(`- Object URL cleanup seen: Yes`);
     lines.push(`- Active video URL: ${cleanup.videoUrlActive ? 'Yes' : 'No'}`);
     lines.push(`- Video cache key: ${cleanup.videoCacheKey}`);
     lines.push(`- Cache entries count: ${formatReportValue(cleanup.cacheEntriesCount)}`);
-  } else {
+  } else if (!videoSkippedByPerformanceMode) {
     lines.push('- Object URL cleanup seen: No');
   }
   lines.push('');
@@ -5148,12 +5329,24 @@ function updatePerfOverlay(forceCacheRefresh = false) {
     healthLines.push(`Latest: ${latestWarning}`);
   }
 
-  const mediaCleanup = perfState.media && perfState.media.lastObjectUrlCleanup;
+  const mediaState = perfState.media || createMediaPerfState();
+  const mediaCleanup = mediaState.lastObjectUrlCleanup;
+  const videoSkippedByPerformanceMode = isPerformanceModeVideoSkippedForReport();
   const mediaLines = [
-    'Media',
-    `Object URLs: ${mediaCleanup ? 'cleaned' : 'not seen'}`,
-    `Active video: ${mediaCleanup && mediaCleanup.videoUrlActive ? 'Yes' : 'No'}`
+    'Media'
   ];
+
+  if (videoSkippedByPerformanceMode) {
+    mediaLines.push('Performance Mode video: disabled');
+    mediaLines.push('Video skipped: Yes');
+    mediaLines.push('Object URLs: not needed');
+  } else {
+    mediaLines.push(`Object URLs: ${mediaCleanup ? 'cleaned' : 'not seen'}`);
+  }
+
+  if (mediaCleanup) {
+    mediaLines.push(`Active video: ${mediaCleanup.videoUrlActive ? 'Yes' : 'No'}`);
+  }
 
   const cacheLines = [
     'Cache',
@@ -5258,7 +5451,7 @@ function setPerfOverlayEnabled(enabled) {
     perfState.startupRows = [];
     perfState.rawTimings = [];
     perfState.idleTasks = [];
-    perfState.media = { lastObjectUrlCleanup: null };
+    perfState.media = createMediaPerfState();
     perfState.lastReportCopiedAt = null;
     perfState.lastReportCopyStatus = '';
     perfState.gridRenderedNodes = 0;
@@ -5463,6 +5656,7 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
   const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
 
   const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
+  const FAST_PERFORMANCE_MODE_KEY = 'fast-performance-mode';
   const APP_DEBUG_PERF_OVERLAY_KEY = 'debugPerfOverlay';
 
   const APP_BATTERY_OPTIMIZATION_KEY = 'appBatteryOptimization';
@@ -6259,7 +6453,7 @@ let appGridAnimationSpeedPreference = 0.3;
 let appGridAnimationEnabledPreference = false;
 let appGlassStylePreference = 'original';
 
-let appPerformanceModePreference = false;
+let appPerformanceModePreference = readFastPerformanceModePreference();
 let debugPerfOverlayPreference = false;
 
 let appBatteryOptimizationPreference = false;
@@ -10615,7 +10809,7 @@ async function confirmFolderPickerSelection() {
 async function loadBookmarks(activeFolderId = null) {
 
   const loadBookmarksStart =
-    DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+    typeof performance !== 'undefined' && typeof performance.now === 'function'
       ? performance.now()
       : 0;
 
@@ -10638,7 +10832,7 @@ async function loadBookmarks(activeFolderId = null) {
 
     if (storedRootId) {
       const subTreeStart =
-        DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+        typeof performance !== 'undefined' && typeof performance.now === 'function'
           ? performance.now()
           : 0;
 
@@ -10648,7 +10842,7 @@ async function loadBookmarks(activeFolderId = null) {
 
     if (!rootNode) {
       const treeStart =
-        DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+        typeof performance !== 'undefined' && typeof performance.now === 'function'
           ? performance.now()
           : 0;
 
@@ -10678,7 +10872,7 @@ async function loadBookmarks(activeFolderId = null) {
     hideBookmarksEmptyState();
     showBookmarksUI();
     const processStart =
-      DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
         ? performance.now()
         : 0;
     processBookmarks([rootNode], activeFolderId, rootNode);
@@ -12414,6 +12608,22 @@ function applyWidgetVisibility() {
 }
 
 
+function readFastPerformanceModePreference() {
+  try {
+    if (!window.localStorage) return false;
+    return localStorage.getItem(FAST_PERFORMANCE_MODE_KEY) === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+function syncFastPerformanceModeMirror(enabled) {
+  try {
+    if (!window.localStorage) return;
+    localStorage.setItem(FAST_PERFORMANCE_MODE_KEY, enabled === true ? '1' : '0');
+  } catch (e) {}
+}
+
 function isPerformanceModeEnabled() {
   return appPerformanceModePreference === true;
 }
@@ -12491,19 +12701,27 @@ function applyPerformanceModeState(enabled) {
     disableGridAnimationRuntime();
     disableGlassRuntime();
     disableCinemaModeRuntime();
-    cleanupBackgroundPlayback();
-    document.querySelectorAll('.background-video').forEach((v) => {
-      try { v.pause(); } catch (e) {}
-      try { v.currentTime = 0; } catch (e) {}
+    const backgroundVideos = Array.from(document.querySelectorAll('.background-video'));
+    const hadVideoSources = backgroundVideos.some((v) => {
       try {
-        if (v.src) v.src = v.src;
         const source = v.querySelector('source');
-        if (source && source.src) source.src = source.src;
-      } catch (e) {}
-      v.classList.remove('is-active');
-      v.classList.remove('with-transition');
-      v.classList.remove('on-top');
+        return !!(
+          v.getAttribute('src') ||
+          v.currentSrc ||
+          v.src ||
+          (source && (source.getAttribute('src') || source.src))
+        );
+      } catch (e) {
+        return false;
+      }
     });
+    cleanupBackgroundPlayback();
+    clearBackgroundVideos();
+    if (hadVideoSources) {
+      if (!perfState.media) perfState.media = createMediaPerfState();
+      perfState.media.videoSourcesClearedByPerformanceMode = true;
+      recordStartupPerfEvent('newtab:video-sources-cleared-performance-mode');
+    }
     return;
   }
 
@@ -12873,13 +13091,22 @@ async function loadAppSettingsFromStorage() {
     ]);
 
     appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
+    syncFastPerformanceModeMirror(appPerformanceModePreference);
     debugPerfOverlayPreference = stored[APP_DEBUG_PERF_OVERLAY_KEY] === true;
     appBatteryOptimizationPreference = stored[APP_BATTERY_OPTIMIZATION_KEY] === true;
     appCinemaModePreference = stored[APP_CINEMA_MODE_KEY] === true;
 
+    if (appPerformanceModePreference) {
+      applyPerformanceModeState(appPerformanceModePreference);
+    }
+
     // Load style preferences from the existing startup settings batch
-    applyGridAnimation(stored[APP_GRID_ANIMATION_KEY] || 'default');
-    applyGlassStyle(stored[APP_GLASS_STYLE_KEY] || 'original');
+    appGridAnimationPreference = stored[APP_GRID_ANIMATION_KEY] || 'default';
+    appGlassStylePreference = stored[APP_GLASS_STYLE_KEY] || 'original';
+    if (!appPerformanceModePreference) {
+      applyGridAnimation(appGridAnimationPreference);
+      applyGlassStyle(appGlassStylePreference);
+    }
 
     applyTimeFormatPreference(stored[APP_TIME_FORMAT_KEY] || '12-hour');
 
@@ -12950,11 +13177,17 @@ async function loadAppSettingsFromStorage() {
 
     // Load Animation enabled toggle (default false)
     const animEnabled = stored[APP_GRID_ANIMATION_ENABLED_KEY] === true;
-    applyGridAnimationEnabled(animEnabled);
+    appGridAnimationEnabledPreference = animEnabled;
+    if (!appPerformanceModePreference) {
+      applyGridAnimationEnabled(animEnabled);
+    }
 
     // Load Animation Speed
     const savedSpeed = stored[APP_GRID_ANIMATION_SPEED_KEY];
-    applyGridAnimationSpeed(savedSpeed !== undefined ? savedSpeed : 0.3);
+    appGridAnimationSpeedPreference = parseFloat(savedSpeed !== undefined ? savedSpeed : 0.3) || 0.3;
+    if (!appPerformanceModePreference) {
+      applyGridAnimationSpeed(appGridAnimationSpeedPreference);
+    }
 
     const savedBackgroundDim = stored.hasOwnProperty(APP_BACKGROUND_DIM_KEY) ? stored[APP_BACKGROUND_DIM_KEY] : 0;
 
@@ -12978,7 +13211,9 @@ async function loadAppSettingsFromStorage() {
 
     applyBookmarkFolderColor(appBookmarkFolderColorPreference);
 
-    applyPerformanceModeState(appPerformanceModePreference);
+    if (!appPerformanceModePreference) {
+      applyPerformanceModeState(appPerformanceModePreference);
+    }
     setPerfOverlayEnabled(debugPerfOverlayPreference || isStartupPerfDebugEnabled());
     resetCinemaMode();
 
@@ -13683,6 +13918,7 @@ function syncAppSettingsForm() {
     // (CSS also handles this via body.performance-mode selector)
     perfToggle.addEventListener('change', async () => {
       const nextValue = perfToggle.checked;
+      syncFastPerformanceModeMirror(nextValue);
       applyPerformanceModeState(nextValue);
       try {
         await browser.storage.local.set({ [APP_PERFORMANCE_MODE_KEY]: nextValue });
@@ -21718,7 +21954,11 @@ function logInitSettled(name, result) {
 
   setupSearchEnginesModal();
 
-  scheduleIdleTask(() => warmGalleryPosterHydration(), 'warmGalleryPosterHydration');
+  if (!isPerformanceModeEnabled()) {
+    scheduleIdleTask(() => warmGalleryPosterHydration(), 'warmGalleryPosterHydration');
+  } else {
+    recordStartupPerfEventOnce('newtab:gallery-warmup-skipped-performance-mode');
+  }
 
   
 
@@ -22804,6 +23044,11 @@ function extractAverageColor(imgUrl) {
 
 async function updateDynamicAccent() {
 
+  if (isPerformanceModeEnabled()) {
+    recordStartupPerfEventOnce('newtab:dynamic-accent-skipped-performance-mode');
+    return;
+  }
+
   if (!document || !document.body || !document.documentElement) return;
 
   try {
@@ -22823,7 +23068,11 @@ async function updateDynamicAccent() {
 
 
 
-scheduleIdleTask(() => updateDynamicAccent(), 'startup:updateDynamicAccent');
+if (!isPerformanceModeEnabled()) {
+  scheduleIdleTask(() => updateDynamicAccent(), 'startup:updateDynamicAccent');
+} else {
+  recordStartupPerfEventOnce('newtab:dynamic-accent-skipped-performance-mode');
+}
 
 
 
@@ -23337,6 +23586,10 @@ function applyWallpaperByType(selection, type = 'video') {
   if (isPerformanceModeEnabled() && finalType === 'video') {
     cleanupBackgroundPlayback();
     applyWallpaperBackground(poster);
+    recordPerformanceModeVideoSkipped();
+    recordStartupPerfEvent('newtab:wallpaper-poster-applied', {
+      source: poster ? 'performance-mode-poster' : 'performance-mode-none'
+    });
     lastAppliedWallpaper = {
       id: selection.id || null,
       poster,

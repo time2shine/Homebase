@@ -6628,9 +6628,9 @@ body.performance-mode .popover-dialog {
 /* Fallback backgrounds for readability when blur is gone */
 body.performance-mode .glass-box,
 body.performance-mode #quick-actions-bar {
-  /* 40% transparent black for lighter performance-mode glass */
-  background-color: rgba(0, 0, 0, 0.4) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  /* Light translucent fallback for performance-mode glass without blur */
+  background-color: rgba(255, 255, 255, 0.16) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
 }
 
 /* Force Context Menus to be solid white in Performance Mode */
@@ -6651,7 +6651,10 @@ body.performance-mode .context-menu .menu-item:hover {
 }
 
 /* Re-add borders so elements keep definition without shadows */
-body.performance-mode .dock-item, 
+body.performance-mode .dock-item {
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+}
+
 body.performance-mode .widget-search,
 body.performance-mode .bookmark-folder-tab,
 body.performance-mode .gallery-card,
@@ -6697,9 +6700,9 @@ body.performance-mode #grid-animation-sub-settings {
 }
 
 body.performance-mode .dock {
-  /* Match other glass elements at 40% transparency */
-  background-color: rgba(0, 0, 0, 0.4) !important;
-  border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+  /* Light translucent fallback for performance-mode dock without blur */
+  background-color: rgba(255, 255, 255, 0.14) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.18) !important;
 }
 
 body.performance-mode .result-header {

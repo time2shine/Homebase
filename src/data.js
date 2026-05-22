@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.11.3',
-  date: '2026-05-21',
+  version: '0.12.0',
+  date: '2026-05-22',
   items: [
     {
       type: 'IMPROVED',
+      title: 'Performance Mode',
+      desc: 'Performance Mode now disables video wallpapers, animations, blur, and cinema mode to reduce CPU/GPU use.'
+    },
+    {
+      type: 'IMPROVED',
       title: 'Faster startup',
-      desc: 'Wallpaper previews now appear sooner while video backgrounds finish loading in the background.'
+      desc: 'Performance Mode now skips heavier wallpaper, gallery warmup, and accent-color work during startup.'
     },
     {
       type: 'IMPROVED',
-      title: 'Video backgrounds',
-      desc: 'Video wallpapers now hand off more smoothly from the poster image to playback.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Performance report',
-      desc: 'The copyable performance report now includes startup timeline, script, and drag setup details.'
+      title: 'Video wallpapers',
+      desc: 'Video wallpapers now show a lightweight poster or fallback image instead of starting playback in Performance Mode.'
     },
     {
       type: 'FIX',
-      title: 'Poster cache',
-      desc: 'Oversized saved poster previews are cleaned up so startup wallpaper fallback stays reliable.'
+      title: 'Performance visuals',
+      desc: 'No-blur glass and dock surfaces now keep clearer contrast and borders in Performance Mode.'
     }
   ]
 };

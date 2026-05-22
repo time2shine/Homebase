@@ -2,6 +2,19 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.12.0 — 2026-05-22
+### Added
+- Performance Mode now covers video wallpaper playback, grid animations, glass blur, and cinema mode from the same setting.
+
+### Improved
+- New-tab startup in Performance Mode now skips heavier wallpaper poster encoding, gallery warmup, and dynamic accent work.
+- Video wallpapers now fall back to a poster or fallback image in Performance Mode instead of starting playback.
+- The performance overlay and copyable report now show skipped video work and clearer startup timing.
+- Performance Mode glass and dock surfaces now keep clearer contrast and borders when blur is disabled.
+
+### Fixed
+- Performance Mode no longer starts avoidable video and wallpaper work during startup.
+
 ## v0.11.3 — 2026-05-21
 ### Improved
 - Wallpaper startup now shows saved poster previews sooner while video backgrounds finish loading in the background.

@@ -2,6 +2,12 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.12.2 — 2026-05-23
+### Improved
+- New-tab settings, search settings, backup/import, material color picker, and performance diagnostics now load through dedicated first-party modules.
+- The main new-tab script is smaller, with settings and diagnostic code separated to keep dashboard startup easier to maintain.
+- Backup/import restore handling now uses stable storage-key names inside its extracted module so instant-start preference mirrors continue to refresh correctly.
+
 ## v0.12.1 — 2026-05-22
 ### Improved
 - Wallpaper startup now reuses saved poster previews more consistently in Performance Mode.

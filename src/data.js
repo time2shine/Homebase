@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.12.1',
-  date: '2026-05-22',
+  version: '0.12.2',
+  date: '2026-05-23',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Wallpaper startup',
-      desc: 'Saved wallpaper posters now appear more consistently during Performance Mode startup.'
-    },
-    {
-      type: 'FIX',
-      title: 'Poster previews',
-      desc: 'Performance Mode now keeps cached poster previews available instead of falling back too early.'
+      title: 'New-tab loading',
+      desc: 'Settings, search, backup/import, color picker, and diagnostics now load from focused Homebase modules.'
     },
     {
       type: 'IMPROVED',
-      title: 'Video previews',
-      desc: 'Video wallpapers now reuse saved poster previews more reliably before playback starts.'
+      title: 'Settings workflow',
+      desc: 'Personalization controls keep the same behavior while running from smaller focused scripts.'
     },
     {
-      type: 'FIX',
-      title: 'Search selector',
-      desc: 'The search engine button now keeps a tighter, steadier size on first paint.'
+      type: 'IMPROVED',
+      title: 'Diagnostics',
+      desc: 'Performance reporting is separated from the main dashboard script while preserving privacy-safe reports.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Backup import',
+      desc: 'Backup restore handling now uses stable storage-key names inside its extracted module.'
     }
   ]
 };

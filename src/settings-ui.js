@@ -1,99 +1,24 @@
 window.SettingsUI = (() => {
   let initialized = false;
-  const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'support', 'whats-new', 'pro-tips', 'about', 'privacy']);
+  const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'feedback', 'whats-new', 'pro-tips', 'about', 'privacy']);
   const WHATS_NEW_SECTION = 'whats-new';
   const PRO_TIPS_SECTION = 'pro-tips';
   const WHATS_NEW_STORAGE_KEY = 'lastSeenWhatsNewVersion';
   const WHATS_NEW_LATEST_STORAGE_KEY = 'latestKnownWhatsNewVersion';
   const HOMEBASE_TIPS_DISABLED_KEY = 'homebaseTipsDisabled';
-  const QR_MODAL_ANIM_MS = 220;
+  const FEEDBACK_GITHUB_PROJECT_URL = 'https://github.com/time2shine/Homebase';
+  const FEEDBACK_BUG_URL = 'https://github.com/time2shine/Homebase/issues/new?labels=bug';
+  const FEEDBACK_FEATURE_URL = 'https://github.com/time2shine/Homebase/issues/new?labels=enhancement';
+  const FEEDBACK_CHANGELOG_URL = 'https://github.com/time2shine/Homebase/blob/main/src/CHANGELOG.md';
+  const FEEDBACK_PRIVACY_URL = 'https://github.com/time2shine/Homebase/blob/main/src/PRIVACY.md';
+  const FEEDBACK_FIREFOX_LISTING_URL = 'https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/';
+  const FEEDBACK_CHROME_LISTING_URL = 'https://chromewebstore.google.com/detail/homebase/ejfdeilhncacmmbdfmgpolpoldpllbmc?authuser=0&hl=en';
   const appHomebaseTipsToggle = document.getElementById('app-show-homebase-tips-toggle');
-  const supportQrModal = document.getElementById('support-qr-modal');
-  const supportQrModalDialog = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__dialog') : null;
-  const supportQrModalImg = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__img') : null;
-  const supportQrModalClose = supportQrModal ? supportQrModal.querySelector('.support-qr-modal__close') : null;
-  let supportQrModalTimer = null;
-  let lastSupportQrEl = null;
   let whatsNewChangelogCache = null;
   let whatsNewChangelogPromise = null;
   let privacyPolicyCache = null;
   let privacyPolicyFetchPromise = null;
   let openProTipId = '';
-
-  function setSupportQrModalVars(qrEl) {
-    if (!supportQrModal || !supportQrModalDialog || !qrEl) return;
-    const rect = qrEl.getBoundingClientRect();
-    const dialogRect = supportQrModalDialog.getBoundingClientRect();
-    const dialogWidth = dialogRect.width || 1;
-    const dialogHeight = dialogRect.height || 1;
-    const qrCenterX = rect.left + rect.width / 2;
-    const qrCenterY = rect.top + rect.height / 2;
-    const dialogCenterX = dialogRect.left + dialogRect.width / 2;
-    const dialogCenterY = dialogRect.top + dialogRect.height / 2;
-    const translateX = qrCenterX - dialogCenterX;
-    const translateY = qrCenterY - dialogCenterY;
-    const scaleX = rect.width / dialogWidth;
-    const scaleY = rect.height / dialogHeight;
-    const scale = Math.max(Math.min(scaleX, scaleY, 1), 0.1);
-
-    supportQrModal.style.setProperty('--qr-x', `${translateX}px`);
-    supportQrModal.style.setProperty('--qr-y', `${translateY}px`);
-    supportQrModal.style.setProperty('--qr-w', `${rect.width}px`);
-    supportQrModal.style.setProperty('--qr-h', `${rect.height}px`);
-    supportQrModal.style.setProperty('--qr-scale', `${scale}`);
-    supportQrModal.style.setProperty('--qr-modal-duration', `${QR_MODAL_ANIM_MS}ms`);
-  }
-
-  function openSupportQrModal(qrEl) {
-    if (!supportQrModal || !supportQrModalImg || !qrEl) return;
-    const src = qrEl.getAttribute('src');
-    if (!src) return;
-    const alt = qrEl.getAttribute('alt');
-
-    if (supportQrModalTimer) {
-      window.clearTimeout(supportQrModalTimer);
-      supportQrModalTimer = null;
-    }
-
-    lastSupportQrEl = qrEl;
-    supportQrModalImg.src = src;
-    supportQrModalImg.alt = alt || 'Support QR code';
-    supportQrModal.classList.remove('is-hidden', 'is-closing', 'is-open');
-    supportQrModal.classList.add('is-opening');
-
-    requestAnimationFrame(() => {
-      setSupportQrModalVars(qrEl);
-      requestAnimationFrame(() => {
-        supportQrModal.classList.remove('is-opening');
-        supportQrModal.classList.add('is-open');
-      });
-    });
-  }
-
-  function closeSupportQrModal() {
-    if (!supportQrModal || supportQrModal.classList.contains('is-hidden')) return;
-
-    if (supportQrModalTimer) {
-      window.clearTimeout(supportQrModalTimer);
-      supportQrModalTimer = null;
-    }
-
-    if (lastSupportQrEl) {
-      setSupportQrModalVars(lastSupportQrEl);
-    }
-
-    supportQrModal.classList.remove('is-opening', 'is-open');
-    supportQrModal.classList.add('is-closing');
-
-    supportQrModalTimer = window.setTimeout(() => {
-      supportQrModal.classList.add('is-hidden');
-      supportQrModal.classList.remove('is-closing');
-      if (supportQrModalImg) {
-        supportQrModalImg.removeAttribute('src');
-        supportQrModalImg.removeAttribute('alt');
-      }
-    }, QR_MODAL_ANIM_MS);
-  }
 
   function getWhatsNewData() {
     if (typeof WHATS_NEW !== 'object' || !WHATS_NEW) return null;
@@ -861,11 +786,107 @@ window.SettingsUI = (() => {
     btn.textContent = 'Show';
   }
 
+  async function getFeedbackStoreUrl() {
+    try {
+      if (typeof isFirefoxBrowser === 'function' && await isFirefoxBrowser()) {
+        return FEEDBACK_FIREFOX_LISTING_URL;
+      }
+    } catch (err) {
+      // Fall back to a user-agent check below.
+    }
+
+    const userAgent = navigator.userAgent || '';
+    return /\bFirefox\//.test(userAgent) ? FEEDBACK_FIREFOX_LISTING_URL : FEEDBACK_CHROME_LISTING_URL;
+  }
+
+  async function openFeedbackUrl(url) {
+    if (!url) return;
+
+    try {
+      if (typeof browser !== 'undefined' && browser?.tabs?.create) {
+        await browser.tabs.create({ url, active: true });
+        return;
+      }
+    } catch (err) {
+      console.warn('Failed to open feedback link in a new tab', err);
+    }
+
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (opened) {
+      opened.opener = null;
+    }
+    if (!opened) {
+      window.location.href = url;
+    }
+  }
+
+  function setFeedbackButtonTemporaryText(button, text) {
+    if (!button || !text) return;
+    const originalText = button.dataset.originalText || button.textContent;
+    button.dataset.originalText = originalText;
+    button.textContent = text;
+    window.setTimeout(() => {
+      button.textContent = button.dataset.originalText || originalText;
+    }, 1000);
+  }
+
+  async function shareHomebaseFeedbackLink(button) {
+    const shareData = {
+      title: 'Homebase',
+      text: 'Homebase new tab dashboard',
+      url: FEEDBACK_GITHUB_PROJECT_URL
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(FEEDBACK_GITHUB_PROJECT_URL);
+        setFeedbackButtonTemporaryText(button, 'Copied');
+        return;
+      } catch (err) {
+        // Fall through to opening the project page.
+      }
+    }
+
+    await openFeedbackUrl(FEEDBACK_GITHUB_PROJECT_URL);
+  }
+
+  async function handleFeedbackAction(button) {
+    if (!button) return;
+    const action = button.dataset.feedbackAction || '';
+    const staticUrls = {
+      bug: FEEDBACK_BUG_URL,
+      feature: FEEDBACK_FEATURE_URL,
+      changelog: FEEDBACK_CHANGELOG_URL,
+      privacy: FEEDBACK_PRIVACY_URL
+    };
+
+    if (action === 'rate') {
+      await openFeedbackUrl(await getFeedbackStoreUrl());
+      return;
+    }
+
+    if (action === 'share') {
+      await shareHomebaseFeedbackLink(button);
+      return;
+    }
+
+    await openFeedbackUrl(staticUrls[action]);
+  }
+
   function ensureSettingsSectionOrder() {
     const appSettingsContent = document.querySelector('.app-settings-content');
     if (!appSettingsNav || !appSettingsContent) return;
 
-    const navOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, 'support', 'privacy', 'about'];
+    const navOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, 'feedback', 'privacy', 'about'];
     const navItems = new Map();
 
     navOrder.forEach((section) => {
@@ -891,7 +912,7 @@ window.SettingsUI = (() => {
     const navDivider = appSettingsNav.querySelector('.nav-divider');
     appSettingsNav.insertBefore(navFragment, navDivider ? navDivider.nextSibling : null);
 
-    const panelOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, 'support', 'privacy', 'about'];
+    const panelOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, 'feedback', 'privacy', 'about'];
     const panelItems = new Map();
 
     panelOrder.forEach((section) => {
@@ -1080,35 +1101,12 @@ window.SettingsUI = (() => {
           return;
         }
 
-        const qrImage = e.target.closest('.app-settings-support-qr');
-        if (qrImage) {
-          openSupportQrModal(qrImage);
+        const feedbackActionBtn = e.target.closest('[data-feedback-action]');
+        if (feedbackActionBtn) {
+          handleFeedbackAction(feedbackActionBtn);
           return;
         }
-
-        const copyButton = e.target.closest('.app-settings-support-copy');
-        if (!copyButton) return;
-
-        const copyValue = copyButton.dataset.copy;
-        if (!copyValue || !navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
-
-        navigator.clipboard.writeText(copyValue).then(() => {
-          copyButton.textContent = 'Copied';
-          window.setTimeout(() => {
-            copyButton.textContent = 'Copy';
-          }, 900);
-        }).catch(() => {});
       });
-    }
-    if (supportQrModal) {
-      supportQrModal.addEventListener('click', (e) => {
-        if (e.target === supportQrModal) {
-          closeSupportQrModal();
-        }
-      });
-    }
-    if (supportQrModalClose) {
-      supportQrModalClose.addEventListener('click', closeSupportQrModal);
     }
     if (appSettingsNav) {
       ensureSettingsSectionOrder();
@@ -1509,10 +1507,6 @@ window.SettingsUI = (() => {
 
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (supportQrModal && !supportQrModal.classList.contains('is-hidden')) {
-        closeSupportQrModal();
-        return;
-      }
       if (!appSettingsModal.classList.contains('hidden')) {
         closeAppSettingsModal();
       }

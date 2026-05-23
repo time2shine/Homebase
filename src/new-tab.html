@@ -1105,15 +1105,15 @@
 
           </button>
 
-          <button class="app-settings-nav-item" data-section="support">
+          <button class="app-settings-nav-item" data-section="feedback">
 
             <span class="nav-icon">
 
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>
 
             </span>
 
-            <span class="nav-label">Support</span>
+            <span class="nav-label">Feedback</span>
 
           </button>
 
@@ -1960,93 +1960,56 @@
 
           </section>
 
-          <section class="app-settings-section" data-section="support">
+          <section class="app-settings-section" data-section="feedback">
 
-            <div class="app-settings-support-block">
-              <div class="app-settings-support-title">Support Homebase</div>
-              <p class="app-settings-support-intro">Homebase is independently maintained and kept lightweight and fast. If it helps you, you can support development with a small donation—totally optional. Payment options are limited in Bangladesh, so local (bKash/Nagad) and low-fee global (crypto) methods are offered.</p>
+            <div class="app-settings-feedback-block">
+              <div class="app-settings-feedback-section">
+                <div class="app-settings-feedback-title">Help &amp; Feedback</div>
+                <p class="app-settings-feedback-intro">Found a bug or have an idea? Help improve Homebase by reporting issues, requesting features, or sharing feedback.</p>
 
-              <div class="app-settings-support-section">
-                <div class="app-settings-support-section-header">
-                  <div class="app-settings-support-section-title">Local Support</div>
-                  <div class="app-settings-support-section-sub">Bangladesh</div>
-                </div>
+                <div class="app-settings-feedback-grid">
+                  <div class="app-settings-feedback-card">
+                    <div class="app-settings-feedback-card-title">Report Bug</div>
+                    <p class="app-settings-feedback-card-text">Report a bug or broken behavior on GitHub.</p>
+                    <button class="gallery-secondary-btn app-settings-feedback-action" type="button" data-feedback-action="bug">Report Bug</button>
+                  </div>
 
-                <div class="app-settings-support-card app-settings-support-card--local">
-                  <div class="app-settings-support-card-content">
-                    <div class="app-settings-support-local-row">
-                      <div class="app-settings-support-local-left">
-                        <div class="app-settings-support-card-title">bKash / Nagad</div>
-                        <div class="app-settings-support-actions">
-                          <span class="app-settings-support-address">+8801738787448</span>
-                        </div>
-                      </div>
-                      <div class="app-settings-support-local-right">
-                        <span class="app-settings-support-badge app-settings-support-badge--bd">Best for BD users</span>
-                        <button class="app-settings-support-copy" data-copy="+8801738787448" type="button">Copy</button>
-                      </div>
-                    </div>
+                  <div class="app-settings-feedback-card">
+                    <div class="app-settings-feedback-card-title">Request Feature</div>
+                    <p class="app-settings-feedback-card-text">Suggest a new feature or improvement for Homebase.</p>
+                    <button class="gallery-secondary-btn app-settings-feedback-action" type="button" data-feedback-action="feature">Request Feature</button>
+                  </div>
+
+                  <div class="app-settings-feedback-card">
+                    <div class="app-settings-feedback-card-title">View Changelog</div>
+                    <p class="app-settings-feedback-card-text">See what changed in recent Homebase releases.</p>
+                    <button class="gallery-secondary-btn app-settings-feedback-action" type="button" data-feedback-action="changelog">View Changelog</button>
                   </div>
                 </div>
               </div>
 
-              <div class="app-settings-support-section">
-                <div class="app-settings-support-section-header">
-                  <div class="app-settings-support-section-title">Stablecoin Support</div>
-                  <div class="app-settings-support-section-sub">USDT</div>
-                </div>
+              <div class="app-settings-feedback-section">
+                <div class="app-settings-feedback-title">Support Homebase</div>
+                <p class="app-settings-feedback-intro">If Homebase is useful to you, you can support the project by rating it, sharing it, or sending feedback.</p>
 
-                <div class="app-settings-support-cards app-settings-support-cards--two">
-                  <div class="app-settings-support-card">
-                    <div class="app-settings-support-card-content">
-                      <div class="app-settings-support-card-header">
-                        <div class="app-settings-support-card-title">USDT (BEP20)</div>
-                        <span class="app-settings-support-badge app-settings-support-badge--bep">BSC network</span>
-                      </div>
-                      <div class="app-settings-support-actions">
-                        <span class="app-settings-support-address">0xc110Fa1Ac19e30C63B090a6673e72AFCf5bAc1C1</span>
-                        <button class="app-settings-support-copy" data-copy="0xc110Fa1Ac19e30C63B090a6673e72AFCf5bAc1C1" type="button">Copy</button>
-                        <div class="app-settings-support-hint">⚠️ Send only USDT on BEP20.</div>
-                      </div>
-                    </div>
-                    <img class="app-settings-support-qr" src="qr/usdt-bep20.png" alt="USDT BEP20 QR">
+                <div class="app-settings-feedback-grid">
+                  <div class="app-settings-feedback-card">
+                    <div class="app-settings-feedback-card-title">Rate Extension</div>
+                    <p class="app-settings-feedback-card-text">Open the correct browser store listing so users can rate Homebase.</p>
+                    <button class="gallery-secondary-btn app-settings-feedback-action" type="button" data-feedback-action="rate">Rate Extension</button>
                   </div>
 
-                  <div class="app-settings-support-card">
-                    <div class="app-settings-support-card-content">
-                      <div class="app-settings-support-card-header">
-                        <div class="app-settings-support-card-title">USDT (TRC20)</div>
-                        <span class="app-settings-support-badge app-settings-support-badge--trc">Tron network</span>
-                      </div>
-                      <div class="app-settings-support-actions">
-                        <span class="app-settings-support-address">TE67okqpRgex3tdRHs4Dkv9tZEB4pt4TMw</span>
-                        <button class="app-settings-support-copy" data-copy="TE67okqpRgex3tdRHs4Dkv9tZEB4pt4TMw" type="button">Copy</button>
-                        <div class="app-settings-support-hint">⚠️ Send only USDT on TRC20.</div>
-                      </div>
-                    </div>
-                    <img class="app-settings-support-qr" src="qr/usdt-trc20.png" alt="USDT TRC20 QR">
+                  <div class="app-settings-feedback-card">
+                    <div class="app-settings-feedback-card-title">Share Homebase</div>
+                    <p class="app-settings-feedback-card-text">Copy or share the Homebase project/store link.</p>
+                    <button class="gallery-secondary-btn app-settings-feedback-action" type="button" data-feedback-action="share">Share Homebase</button>
                   </div>
-                </div>
-              </div>
 
-              <div class="app-settings-support-section">
-                <div class="app-settings-support-section-header">
-                  <div class="app-settings-support-section-title">Crypto Support</div>
-                  <div class="app-settings-support-section-sub">Bitcoin</div>
-                </div>
-
-                <div class="app-settings-support-card">
-                  <div class="app-settings-support-card-content">
-                    <div class="app-settings-support-card-header">
-                      <div class="app-settings-support-card-title">Bitcoin (BTC)</div>
-                      <span class="app-settings-support-badge app-settings-support-badge--btc">BTC only</span>
-                    </div>
-                    <div class="app-settings-support-actions">
-                      <span class="app-settings-support-address">bc1qj0may5thdqyxgmztlfvuszq47rjhemw4n870em</span>
-                      <button class="app-settings-support-copy" data-copy="bc1qj0may5thdqyxgmztlfvuszq47rjhemw4n870em" type="button">Copy</button>
-                    </div>
+                  <div class="app-settings-feedback-card">
+                    <div class="app-settings-feedback-card-title">Privacy Policy</div>
+                    <p class="app-settings-feedback-card-text">Review Homebase's privacy policy.</p>
+                    <button class="gallery-secondary-btn app-settings-feedback-action" type="button" data-feedback-action="privacy">Privacy Policy</button>
                   </div>
-                  <img class="app-settings-support-qr" src="qr/btc.png" alt="Bitcoin QR">
                 </div>
               </div>
 
@@ -3345,24 +3308,25 @@
     </div>
   </div>
 
-  <div id="support-qr-modal" class="support-qr-modal is-hidden" role="dialog" aria-modal="true" aria-label="QR code preview">
-    <div class="support-qr-modal__dialog">
-      <button class="support-qr-modal__close" type="button" aria-label="Close QR preview">&times;</button>
-      <img class="support-qr-modal__img" src="" alt="">
-    </div>
-  </div>
-
   <div id="tip-card" class="homebase-tips-card" hidden></div>
 
   <script src="instant_load.js" defer></script>
   <script src="assets/js/Sortable.min.js" defer></script>
   <script src="data.js" defer></script>
   <script src="tips.js" defer></script>
+  <script src="newtab/tips/homebase-tips-ui.js" defer></script>
   <script src="newtab/core/perf-report.js" defer></script>
   <script src="newtab/settings/search-engine-settings.js" defer></script>
+  <script src="newtab/widgets/time.js" defer></script>
   <script src="newtab/settings/settings-preferences.js" defer></script>
   <script src="newtab/settings/material-color-picker.js" defer></script>
+  <script src="newtab/widgets/todo.js" defer></script>
   <script src="newtab/settings/backup-import.js" defer></script>
+  <script src="newtab/settings/visual-effects-settings.js" defer></script>
+  <script src="newtab/integrations/app-launcher.js" defer></script>
+  <script src="newtab/widgets/quote.js" defer></script>
+  <script src="newtab/widgets/weather.js" defer></script>
+  <script src="newtab/widgets/news.js" defer></script>
   <script src="new-tab.js" defer></script>
 </body>
 

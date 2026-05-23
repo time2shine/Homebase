@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.12.2',
-  date: '2026-05-23',
+  version: '0.13.0',
+  date: '2026-05-24',
   items: [
     {
-      type: 'IMPROVED',
-      title: 'New-tab loading',
-      desc: 'Settings, search, backup/import, color picker, and diagnostics now load from focused Homebase modules.'
+      type: 'NEW',
+      title: 'Help & Feedback',
+      desc: 'Settings now includes quick actions for bug reports, feature requests, changelog, rating, sharing, and privacy policy.'
     },
     {
       type: 'IMPROVED',
-      title: 'Settings workflow',
-      desc: 'Personalization controls keep the same behavior while running from smaller focused scripts.'
+      title: 'Project support',
+      desc: 'Support Homebase now focuses on ratings, sharing, and feedback from one place.'
     },
     {
       type: 'IMPROVED',
-      title: 'Diagnostics',
-      desc: 'Performance reporting is separated from the main dashboard script while preserving privacy-safe reports.'
+      title: 'Store links',
+      desc: 'The rating action opens the right Chrome Web Store or Firefox Add-ons listing for your browser.'
     },
     {
       type: 'IMPROVED',
-      title: 'Backup import',
-      desc: 'Backup restore handling now uses stable storage-key names inside its extracted module.'
+      title: 'New-tab modules',
+      desc: 'Tips, widgets, app launcher, and visual settings now load from focused first-party modules.'
     }
   ]
 };

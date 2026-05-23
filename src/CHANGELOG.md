@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.13.0 — 2026-05-24
+### Added
+- Added a Help & Feedback settings section with quick actions for bug reports, feature requests, changelog, rating, sharing, and privacy policy.
+
+### Improved
+- Reworked project support so users can rate, share, or send feedback from Settings.
+- Rate Extension now opens the appropriate Chrome Web Store or Firefox Add-ons listing.
+- Homebase Tips, app launcher, visual effects, and sidebar widgets now load through dedicated first-party new-tab modules while preserving behavior.
+
 ## v0.12.2 — 2026-05-23
 ### Improved
 - New-tab settings, search settings, backup/import, material color picker, and performance diagnostics now load through dedicated first-party modules.

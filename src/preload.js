@@ -4,6 +4,9 @@
   const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
   const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
   const FAST_PERFORMANCE_MODE_KEY = 'fast-performance-mode';
+  const FAST_WIDGET_ORDER_KEY = 'fast-widget-order';
+  const DEFAULT_WIDGET_ORDER = ['weather', 'quote', 'todo', 'news'];
+  const WIDGET_ORDER_SET = new Set(DEFAULT_WIDGET_ORDER);
   const SKIP_STARTUP_WALLPAPER_FALLBACK_ATTR = 'data-skip-startup-wallpaper-fallback';
   // Refuse oversized data URLs here; new-tab.js must write startup poster data URLs below this limit.
   const MAX_PRELOAD_POSTER_DATA_URL_LENGTH = 250000;
@@ -70,6 +73,143 @@
 
   function setSkipStartupWallpaperFallback(enabled) {
     document.documentElement.toggleAttribute(SKIP_STARTUP_WALLPAPER_FALLBACK_ATTR, !!enabled);
+  }
+
+  function normalizeWidgetOrder(order) {
+    const normalized = [];
+    const seen = new Set();
+
+    if (!Array.isArray(order)) return DEFAULT_WIDGET_ORDER.slice();
+
+    order.forEach((value) => {
+      if (typeof value !== 'string') return;
+      const key = value.trim();
+      if (!WIDGET_ORDER_SET.has(key) || seen.has(key)) return;
+      seen.add(key);
+      normalized.push(key);
+    });
+
+    DEFAULT_WIDGET_ORDER.forEach((key) => {
+      if (seen.has(key)) return;
+      seen.add(key);
+      normalized.push(key);
+    });
+
+    return normalized;
+  }
+
+  function applyFastWidgetOrder() {
+    try {
+      if (!window.localStorage) {
+        hbStartupPerfMark('preload:widget-order-skipped', { reason: 'no-localStorage' });
+        return 'skipped';
+      }
+
+      const rawOrder = localStorage.getItem(FAST_WIDGET_ORDER_KEY) || '';
+      if (!rawOrder) {
+        hbStartupPerfMark('preload:widget-order-skipped', { reason: 'empty' });
+        return 'skipped';
+      }
+
+      let parsedOrder;
+      try {
+        parsedOrder = JSON.parse(rawOrder);
+      } catch (e) {
+        hbStartupPerfMark('preload:widget-order-skipped', { reason: 'parse' });
+        return 'skipped';
+      }
+
+      if (!Array.isArray(parsedOrder)) {
+        hbStartupPerfMark('preload:widget-order-skipped', { reason: 'invalid' });
+        return 'skipped';
+      }
+
+      const normalized = normalizeWidgetOrder(parsedOrder);
+      const sidebarEl = document.querySelector('.sidebar');
+      if (!sidebarEl) {
+        return 'pending';
+      }
+
+      const timeWidget = sidebarEl.querySelector('.widget-time');
+      const widgets = {
+        weather: sidebarEl.querySelector('.widget-weather'),
+        quote: sidebarEl.querySelector('.widget-quote'),
+        todo: sidebarEl.querySelector('#todo-widget') || sidebarEl.querySelector('.widget-todo'),
+        news: sidebarEl.querySelector('.widget-news')
+      };
+
+      if (!DEFAULT_WIDGET_ORDER.every((key) => widgets[key])) {
+        return 'pending';
+      }
+
+      const fragment = document.createDocumentFragment();
+      let movedCount = 0;
+      normalized.forEach((key) => {
+        const widget = widgets[key];
+        if (!widget) return;
+        fragment.appendChild(widget);
+        movedCount += 1;
+      });
+
+      if (!movedCount) {
+        hbStartupPerfMark('preload:widget-order-skipped', { reason: 'no-widgets' });
+        return 'skipped';
+      }
+
+      if (timeWidget && timeWidget.parentElement === sidebarEl) {
+        sidebarEl.insertBefore(fragment, timeWidget.nextSibling);
+      } else {
+        sidebarEl.appendChild(fragment);
+      }
+
+      hbStartupPerfMark('preload:widget-order-applied', { count: movedCount });
+      return 'applied';
+    } catch (e) {
+      hbStartupPerfMark('preload:widget-order-skipped', { reason: 'error' });
+      return 'skipped';
+    }
+  }
+
+  function applyFastWidgetOrderWhenReady() {
+    const firstResult = applyFastWidgetOrder();
+    if (firstResult !== 'pending') return;
+
+    let settled = false;
+    let observer = null;
+
+    const cleanup = () => {
+      settled = true;
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+      document.removeEventListener('readystatechange', retry);
+      document.removeEventListener('DOMContentLoaded', finish);
+    };
+
+    const retry = () => {
+      if (settled) return;
+      const result = applyFastWidgetOrder();
+      if (result === 'pending') return;
+      cleanup();
+    };
+
+    const finish = () => {
+      if (settled) return;
+      const result = applyFastWidgetOrder();
+      if (result === 'pending') {
+        hbStartupPerfMark('preload:widget-order-skipped', { reason: 'dom-not-ready' });
+      }
+      cleanup();
+    };
+
+    if (typeof MutationObserver === 'function' && document.documentElement) {
+      observer = new MutationObserver(retry);
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
+    document.addEventListener('readystatechange', retry);
+    document.addEventListener('DOMContentLoaded', finish);
   }
 
   function clearInitialWallpaper() {
@@ -178,6 +318,8 @@
   } catch (e) {
     // Ignore; instant mirror is best-effort only
   }
+
+  applyFastWidgetOrderWhenReady();
 
   function applyInitial(url) {
     if (!url) return;

@@ -1,5 +1,7 @@
 const WIDGET_ORDER_KEY = 'widgetOrder';
 
+const FAST_WIDGET_ORDER_KEY = 'fast-widget-order';
+
 const DEFAULT_WIDGET_ORDER = ['weather', 'quote', 'todo', 'news'];
 
 const WIDGET_ORDER_SET = new Set(DEFAULT_WIDGET_ORDER);
@@ -73,6 +75,16 @@ function areWidgetOrdersEqual(left, right) {
   return true;
 }
 
+function writeFastWidgetOrderMirror(order) {
+  try {
+    if (window.localStorage) {
+      localStorage.setItem(FAST_WIDGET_ORDER_KEY, JSON.stringify(order));
+    }
+  } catch (e) {
+    // Ignore; instant mirror is best-effort only
+  }
+}
+
 function applyWidgetOrderToSidebar(order = widgetOrderPreference) {
   const sidebarEl = sidebar || document.querySelector('.sidebar');
   if (!sidebarEl) return;
@@ -119,6 +131,8 @@ function setWidgetOrderPreference(order, options = {}) {
   const shouldUpdateSettings = options.updateSettings !== false;
 
   widgetOrderPreference = normalized;
+
+  writeFastWidgetOrderMirror(normalized);
 
   if (shouldApply) {
     applyWidgetOrderToSidebar(normalized);

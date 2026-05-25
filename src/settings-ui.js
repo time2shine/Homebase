@@ -962,6 +962,12 @@ window.SettingsUI = (() => {
         return;
       }
 
+      try {
+        if (window.localStorage) {
+          localStorage.setItem('fast-widget-order', JSON.stringify(order));
+        }
+      } catch (e) {}
+
       if (browser?.storage?.local) {
         browser.storage.local
           .set({ widgetOrder: order })

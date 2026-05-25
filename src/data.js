@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.13.0',
-  date: '2026-05-24',
+  version: '0.14.0',
+  date: '2026-05-25',
   items: [
     {
       type: 'NEW',
-      title: 'Help & Feedback',
-      desc: 'Settings now includes quick actions for bug reports, feature requests, changelog, rating, sharing, and privacy policy.'
+      title: 'Folder picker',
+      desc: 'Bookmark editing now includes a searchable folder picker for choosing where saved bookmarks go.'
+    },
+    {
+      type: 'NEW',
+      title: 'Text backgrounds',
+      desc: 'Bookmark labels can now use custom background color, opacity, and blur settings for easier reading.'
     },
     {
       type: 'IMPROVED',
-      title: 'Project support',
-      desc: 'Support Homebase now focuses on ratings, sharing, and feedback from one place.'
+      title: 'Folder tabs',
+      desc: 'Long folder tab rows now scroll more smoothly and keep the active folder in view.'
     },
     {
-      type: 'IMPROVED',
-      title: 'Store links',
-      desc: 'The rating action opens the right Chrome Web Store or Firefox Add-ons listing for your browser.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'New-tab modules',
-      desc: 'Tips, widgets, app launcher, and visual settings now load from focused first-party modules.'
+      type: 'FIX',
+      title: 'Widget order',
+      desc: 'Sidebar widgets now keep your saved order during instant preload to avoid first-load reorder flashes.'
     }
   ]
 };

@@ -2,6 +2,19 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.14.0 — 2026-05-25
+### Added
+- Added a searchable bookmark folder picker so users can choose save destinations more easily.
+- Added bookmark text background controls for color, opacity, and blur to improve label readability.
+
+### Improved
+- Long bookmark folder tab rows now scroll more smoothly and keep the active folder in view.
+- Dock shortcuts, browser-store links, and settings helpers now load through focused first-party modules while preserving the existing experience.
+- Startup performance reporting now captures clearer timeline and sortable setup details.
+
+### Fixed
+- Sidebar widgets now keep the saved order during preload to avoid first-load reorder flashes.
+
 ## v0.13.0 — 2026-05-24
 ### Added
 - Added a Help & Feedback settings section with quick actions for bug reports, feature requests, changelog, rating, sharing, and privacy policy.

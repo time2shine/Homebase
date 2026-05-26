@@ -140,6 +140,8 @@ For normal edits, run:
 
 ```powershell
 node --check <changed-js-file>
+node scripts/check-newtab-static.mjs
+node scripts/smoke-newtab-file.mjs
 npm.cmd run build:chrome
 ```
 

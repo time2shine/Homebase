@@ -529,7 +529,7 @@ async function openBookmarkIconPicker(context = {}) {
 }
 
 async function ensureGalleryUi() {
-  await loadScriptOnce('gallery-ui.js');
+  await loadScriptOnce('newtab/wallpaper/gallery-ui.js');
 
   if (
     !window.HomebaseGallery ||

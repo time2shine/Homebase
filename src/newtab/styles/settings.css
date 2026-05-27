@@ -1,0 +1,783 @@
+/* Settings modal styles. Lazy-loaded by src/newtab/core/dock-navigation.js before opening Settings. */
+
+.settings-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+/* Nested widget settings */
+.sub-settings-container {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+  margin-left: 24px;
+  padding-left: 20px;
+  border-left: 2px solid #e2e8f0;
+  transition: grid-template-rows 200ms ease, opacity 200ms ease, transform 200ms ease;
+}
+
+.sub-settings-container.expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  margin-top: 10px;
+  padding-bottom: 10px;
+}
+
+.sub-settings-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.setting-sub-row {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  transition: all 0.25s ease;
+}
+
+.setting-sub-row.visible {
+  max-height: 100px;
+  opacity: 1;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.app-settings-dialog {
+  width: min(960px, 92vw);
+  height: 72vh;
+  min-height: 520px;
+  border-radius: 20px;
+}
+
+.app-settings-body {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+}
+
+.app-settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-right: 1px solid #e5e7eb;
+  padding-right: 10px;
+}
+
+.app-settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #111827;
+  font-weight: 600;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.app-settings-nav-item .nav-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+}
+
+.app-settings-nav-item.is-active {
+  background: #f1f5f9;
+  color: #0f172a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.app-settings-nav-item.is-active .nav-icon {
+  color: #0f172a;
+}
+
+.app-settings-nav-badge {
+  margin-left: auto;
+  font-size: 0.65em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+}
+
+.app-settings-nav-badge.is-hidden {
+  display: none;
+}
+
+.app-settings-nav .nav-divider {
+  width: 100%;
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+.app-settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.app-settings-section {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  color: #0f172a;
+  min-height: 0;
+}
+
+.app-settings-section.active {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  box-sizing: border-box;
+  padding-right: 16px;
+}
+
+.app-settings-section[data-section="about"] {
+  gap: 16px;
+}
+
+.app-settings-section[data-section="whats-new"] {
+  gap: 14px;
+}
+
+.app-settings-section[data-section="pro-tips"] {
+  gap: 14px;
+}
+
+.app-settings-whatsnew-header {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-whatsnew-title {
+  font-size: 1.2em;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.app-settings-whatsnew-meta {
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9em;
+  color: #64748b;
+}
+
+.app-settings-whatsnew-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-settings-whatsnew-label {
+  font-weight: 600;
+  color: #475569;
+}
+
+.app-settings-whatsnew-value {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-whatsnew-list,
+#whats-new-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-settings-whatsnew-item {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-whatsnew-badge {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  width: 78px;
+  align-self: start;
+  line-height: 1;
+  text-align: center;
+}
+
+.app-settings-whatsnew-badge--new {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.app-settings-whatsnew-badge--improved {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.app-settings-whatsnew-badge--fix {
+  background: #ffedd5;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.app-settings-whatsnew-content {
+  min-width: 0;
+}
+
+.app-settings-whatsnew-item-title {
+  font-weight: 700;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.app-settings-whatsnew-item-desc {
+  margin-top: 4px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.app-settings-whatsnew-empty {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed #e2e8f0;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.app-settings-protips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-settings-protip-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.app-settings-protip-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  padding: 12px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.app-settings-protip-toggle:hover {
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.app-settings-protip-title {
+  line-height: 1.35;
+}
+
+.app-settings-protip-indicator {
+  min-width: 12px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.app-settings-protip-body {
+  border-top: 1px solid #e2e8f0;
+  padding: 10px 14px 12px;
+  color: #475569;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.app-settings-about-header {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-about-title {
+  font-size: 1.2em;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.app-settings-about-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.9em;
+}
+
+.app-settings-about-version {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-about-tagline {
+  margin-top: 6px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.app-settings-about-block {
+  padding: 4px 0 10px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.app-settings-about-block:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.app-settings-about-heading {
+  margin-bottom: 6px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-about-block p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.app-settings-about-block p + p {
+  margin-top: 8px;
+}
+
+.app-settings-about-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+  display: grid;
+  gap: 6px;
+}
+
+.app-settings-about-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.app-settings-about-link {
+  color: #2ca5ff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-settings-about-link:hover {
+  text-decoration: underline;
+}
+
+.app-settings-feedback-block {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.app-settings-feedback-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #eef1f5;
+}
+
+.app-settings-feedback-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.app-settings-feedback-title {
+  font-size: 1.1em;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.app-settings-feedback-intro {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.app-settings-feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.app-settings-feedback-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-feedback-card-title {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-settings-feedback-card-text {
+  margin: 0;
+  color: #475569;
+  font-size: 0.92em;
+  line-height: 1.5;
+}
+
+.app-settings-feedback-action {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+@media (max-width: 900px) {
+  .app-settings-feedback-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.settings-group:last-child {
+  border-bottom: none;
+}
+
+.settings-group-header {
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 1em;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.setting-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #0f172a;
+}
+
+.setting-sub {
+  color: #6b7280;
+  font-size: 0.9em;
+}
+
+.settings-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  min-width: 150px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.app-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef1f5;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.app-setting-row:last-child {
+  border-bottom: none;
+}
+
+.widget-setting-row .app-setting-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.widget-setting-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.app-setting-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-setting-label .title {
+  font-weight: 700;
+  font-size: 1em;
+  color: #0f172a;
+}
+
+.app-setting-label .hint {
+  color: #6b7280;
+  font-size: 0.9em;
+}
+
+.app-setting-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  min-width: 150px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.app-switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+}
+
+.app-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.app-switch-track {
+  position: absolute;
+  inset: 0;
+  background: #e5e7eb;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.app-switch-track::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  left: 3px;
+  top: 3px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.app-switch input:checked + .app-switch-track {
+  background: #2ca5ff;
+}
+
+.app-switch input:checked + .app-switch-track::after {
+  transform: translateX(20px);
+}
+
+.app-settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #eef1f5;
+}
+
+.app-link-btn {
+  background: transparent;
+  border: none;
+  color: #2ca5ff;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.app-save-btn {
+  min-width: 90px;
+}
+
+.app-settings-placeholder {
+  color: #6b7280;
+  font-size: 0.95em;
+  padding: 8px 0;
+}
+
+.settings-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.engine-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.engine-toggle-item:hover {
+  background: #f9fafb;
+}
+
+.engine-toggle-item span {
+  font-weight: 500;
+  color: #333;
+}
+
+.engine-toggle-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.engine-toggle-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* --- Fix for Search Engines Modal --- */
+
+/* 1. Ensure it sits ON TOP of the main Settings modal (which is z-index 2000) */
+#search-engines-modal {
+  z-index: 2100;
+}
+
+/* 2. Make the dialog white (like the other settings dialogs) */
+#search-engines-dialog {
+  background-color: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+/* 3. Style the buttons for a white background (Dark Text) */
+#search-engines-dialog .dialog-btn {
+  background-color: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #0f172a;
+}
+
+#search-engines-dialog .dialog-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* 4. Style the Primary (Save) button */
+#search-engines-dialog .dialog-btn.primary-btn {
+  background-color: #2ca5ff;
+  border: none;
+  color: #0b1b2e;
+}
+
+#search-engines-dialog .dialog-btn.primary-btn:hover {
+  background-color: #59baff;
+  border-color: transparent;
+}
+
+/* 5. Tweak the list container inside the modal */
+#search-engines-modal-list {
+  background-color: #f8fafc !important; /* Light gray background */
+  border-color: #e2e8f0 !important;
+}
+
+.settings-list-grid .engine-toggle-item {
+  background-color: #ffffff;
+  border-color: #e2e8f0;
+}
+
+/* --- Search Engine Reordering Styles --- */
+
+/* Style the drag handle (hamburger menu icon) */
+.engine-drag-handle {
+  cursor: grab;
+  color: #94a3b8; /* Slate-400 */
+  font-size: 1.2em;
+  margin-right: 10px;
+  line-height: 1;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.engine-toggle-item:hover .engine-drag-handle {
+  color: #475569; /* Darker on hover */
+}
+
+.engine-toggle-item:active .engine-drag-handle {
+  cursor: grabbing;
+}
+
+/* Ghost class applied by Sortable.js while dragging */
+.sortable-ghost-engine {
+  background-color: #e2e8f0 !important; /* Light gray background */
+  border: 1px dashed #94a3b8 !important;
+  opacity: 0.5;
+}
+
+/* Ensure the row looks clickable for dragging */
+.engine-toggle-main {
+  cursor: grab;
+  flex: 1; /* Take up remaining space so you can drag from anywhere in the text area */
+}

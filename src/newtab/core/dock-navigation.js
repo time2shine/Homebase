@@ -52,6 +52,7 @@ function setupLazySettingsButton() {
 
   mainSettingsBtn.addEventListener('click', async () => {
     try {
+      await loadStylesheetOnce('newtab/styles/settings.css');
       await loadScriptOnce('newtab/settings/settings-ui.js');
       const widgetList = document.getElementById('widget-sub-settings');
       if (widgetList && widgetList.dataset.dragReady !== '1') {

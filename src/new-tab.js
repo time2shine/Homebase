@@ -481,6 +481,7 @@ function scheduleIdleChunkedTask(label, stepFn, initialState) {
 }
 
 const scriptLoadPromises = new Map();
+const stylesheetLoadPromises = new Map();
 
 function loadScriptOnce(src) {
   if (!src) {
@@ -509,6 +510,41 @@ function loadScriptOnce(src) {
   return promise;
 }
 
+function loadStylesheetOnce(href) {
+  if (!href) {
+    return Promise.reject(new Error('Stylesheet href is required'));
+  }
+
+  if (stylesheetLoadPromises.has(href)) {
+    return stylesheetLoadPromises.get(href);
+  }
+
+  const promise = new Promise((resolve, reject) => {
+    const existingLink = Array.from(document.head.querySelectorAll('link[rel="stylesheet"]'))
+      .find((link) => link.getAttribute('href') === href);
+
+    if (existingLink) {
+      resolve();
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.onload = () => resolve();
+    link.onerror = (err) => reject(err || new Error(`Failed to load stylesheet: ${href}`));
+    document.head.appendChild(link);
+  });
+
+  stylesheetLoadPromises.set(href, promise);
+
+  promise.catch(() => {
+    stylesheetLoadPromises.delete(href);
+  });
+
+  return promise;
+}
+
 async function openBookmarkIconPicker(context = {}) {
   try {
     await loadScriptOnce('assets/js/icon-picker.js');
@@ -529,6 +565,7 @@ async function openBookmarkIconPicker(context = {}) {
 }
 
 async function ensureGalleryUi() {
+  await loadStylesheetOnce('newtab/styles/gallery.css');
   await loadScriptOnce('newtab/wallpaper/gallery-ui.js');
 
   if (

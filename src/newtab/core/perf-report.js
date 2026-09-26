@@ -134,6 +134,73 @@ function getPerfTimestamp() {
   }
 }
 
+/**
+ * In-memory circular buffer for performance diagnostic metrics.
+ * Capped at 20 records.
+ */
+const PERF_METRIC_BUFFER_MAX_SIZE = 20;
+const perfMetricBuffer = [];
+
+/**
+ * Records a performance metric into the diagnostic buffer.
+ * Capped at 20 entries.
+ * Stores strictly { name, durationMs }.
+ * Never stores page data, user data, or network information.
+ *
+ * @param {string|Object} nameOrObj
+ * @param {number} [durationMs]
+ * @returns {Object|null}
+ */
+function recordPerformanceMetric(nameOrObj, durationMs) {
+  try {
+    let name = 'unknown';
+    let duration = 0;
+
+    if (nameOrObj && typeof nameOrObj === 'object' && !Array.isArray(nameOrObj)) {
+      name = typeof nameOrObj.name === 'string' ? nameOrObj.name.slice(0, 100) : 'unknown';
+      duration = typeof nameOrObj.durationMs === 'number' && Number.isFinite(nameOrObj.durationMs)
+        ? Math.max(0, Math.round(nameOrObj.durationMs))
+        : 0;
+    } else {
+      name = typeof nameOrObj === 'string' ? nameOrObj.slice(0, 100) : 'unknown';
+      duration = typeof durationMs === 'number' && Number.isFinite(durationMs)
+        ? Math.max(0, Math.round(durationMs))
+        : 0;
+    }
+
+    const metric = {
+      name,
+      durationMs: duration
+    };
+
+    perfMetricBuffer.push(metric);
+
+    if (perfMetricBuffer.length > PERF_METRIC_BUFFER_MAX_SIZE) {
+      perfMetricBuffer.shift();
+    }
+
+    return metric;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Returns a copy of the recorded performance metrics buffer.
+ *
+ * @returns {Array<Object>}
+ */
+function getPerformanceMetrics() {
+  return [...perfMetricBuffer];
+}
+
+/**
+ * Clears the performance metrics buffer.
+ */
+function clearPerformanceMetrics() {
+  perfMetricBuffer.length = 0;
+}
+
 function recordRawPerfTiming(label, ms) {
   if (!Array.isArray(perfState.rawTimings)) {
     perfState.rawTimings = [];
@@ -148,6 +215,12 @@ function recordRawPerfTiming(label, ms) {
   if (perfState.rawTimings.length > 80) {
     perfState.rawTimings.shift();
   }
+
+  try {
+    if (typeof label === 'string' && typeof ms === 'number' && Number.isFinite(ms)) {
+      recordPerformanceMetric(label, ms);
+    }
+  } catch (_) {}
 }
 
 function recordIdleTaskPerf(name, status, ms = null) {
@@ -165,6 +238,12 @@ function recordIdleTaskPerf(name, status, ms = null) {
   if (perfState.idleTasks.length > 120) {
     perfState.idleTasks.shift();
   }
+
+  try {
+    if (typeof name === 'string' && typeof ms === 'number' && Number.isFinite(ms)) {
+      recordPerformanceMetric(`idle:${name}`, ms);
+    }
+  } catch (_) {}
 }
 
 function recordObjectUrlCleanup(details) {
@@ -188,6 +267,12 @@ function recordWidgetPerfTiming(key, ms, status = 'done') {
   perfState.widgets[key].ms =
     typeof ms === 'number' && Number.isFinite(ms) ? ms : null;
   perfState.widgets[key].status = status || 'done';
+
+  try {
+    if (typeof key === 'string' && typeof ms === 'number' && Number.isFinite(ms)) {
+      recordPerformanceMetric(`widget:${key}`, ms);
+    }
+  } catch (_) {}
 
   if (perfState.overlayEnabled) {
     updatePerfOverlay(false);
@@ -511,6 +596,10 @@ function recordStartupPerfMeasureRow(name, ms, startMs = null) {
 
 function recordBookmarkPerfTiming(label, ms) {
   if (typeof ms !== 'number' || !Number.isFinite(ms)) return;
+
+  try {
+    recordPerformanceMetric(`bookmark:${label}`, ms);
+  } catch (_) {}
 
   try {
     switch (label) {
@@ -1234,6 +1323,33 @@ function setPerfOverlayEnabled(enabled) {
 
   }
 
+}
+
+// Register performance diagnostics and anomaly adapter
+if (typeof window !== 'undefined') {
+  window.HomebaseDiagnostics = window.HomebaseDiagnostics || {};
+
+  // If storage-diagnostics.js is loaded, wrap recordValidationAnomaly to accept { key, action, category }
+  const existingRecordAnomaly = window.HomebaseDiagnostics.recordValidationAnomaly;
+  if (typeof existingRecordAnomaly === 'function') {
+    window.HomebaseDiagnostics.recordValidationAnomaly = function(keyOrRecord, action, category) {
+      if (keyOrRecord && typeof keyOrRecord === 'object' && !Array.isArray(keyOrRecord)) {
+        return existingRecordAnomaly(
+          keyOrRecord.key || 'unknown',
+          keyOrRecord.action || keyOrRecord.category || 'unspecified',
+          keyOrRecord.category || keyOrRecord.detail || null
+        );
+      }
+      return existingRecordAnomaly(keyOrRecord, action, category);
+    };
+    window.recordValidationAnomaly = window.HomebaseDiagnostics.recordValidationAnomaly;
+  }
+
+  window.HomebaseDiagnostics.recordPerformanceMetric = recordPerformanceMetric;
+  window.HomebaseDiagnostics.getPerformanceMetrics = getPerformanceMetrics;
+  window.HomebaseDiagnostics.clearPerformanceMetrics = clearPerformanceMetrics;
+  window.recordPerformanceMetric = recordPerformanceMetric;
+  window.getPerformanceMetrics = getPerformanceMetrics;
 }
 
 

@@ -4,6 +4,8 @@
 
 const CURRENT_SCHEMA_VERSION = 1;
 const SCHEMA_VERSION_KEY = 'schemaVersion';
+const MIGRATION_HISTORY_KEY = 'migrationHistory';
+const MAX_MIGRATION_HISTORY_RECORDS = 20;
 
 /**
  * Migration registry for sequential schema transformations.
@@ -23,6 +25,59 @@ const SCHEMA_MIGRATIONS = [
 let migrationExecutionPromise = null;
 
 /**
+ * Categorizes a migration error into a privacy-safe standardized category string.
+ * Never includes user data, file paths, or variable contents.
+ *
+ * @param {Error|*} err
+ * @returns {string}
+ */
+function categorizeMigrationError(err) {
+  if (!err) return 'UNKNOWN_ERROR';
+  const msg = String(err.message || '').toLowerCase();
+  const name = String(err.name || '').toLowerCase();
+  if (name.includes('quota') || msg.includes('quota')) return 'QUOTA_EXCEEDED';
+  if (msg.includes('storage') || name.includes('storage')) return 'STORAGE_IO_ERROR';
+  if (msg.includes('sanitize') || msg.includes('validation')) return 'VALIDATION_ERROR';
+  if (err instanceof TypeError) return 'TYPE_ERROR';
+  if (err instanceof RangeError) return 'RANGE_ERROR';
+  return 'MIGRATION_STEP_ERROR';
+}
+
+/**
+ * Appends a migration record to history and limits array size to maximum 20 entries.
+ *
+ * @param {Array<Object>} history
+ * @param {Object} record
+ * @returns {Array<Object>}
+ */
+function appendHistoryRecord(history, record) {
+  const safeHistory = Array.isArray(history) ? [...history] : [];
+  safeHistory.push(record);
+  if (safeHistory.length > MAX_MIGRATION_HISTORY_RECORDS) {
+    return safeHistory.slice(safeHistory.length - MAX_MIGRATION_HISTORY_RECORDS);
+  }
+  return safeHistory;
+}
+
+/**
+ * Reads the persistent migration history array from browser storage.
+ * Strictly read-only; never writes or modifies storage.
+ *
+ * @param {Object} [customBrowserApi] - Optional mock browser API for testing
+ * @returns {Promise<Array<Object>>}
+ */
+async function getMigrationHistory(customBrowserApi = null) {
+  const browserInstance = customBrowserApi || (typeof window !== 'undefined' ? (window.browser || window.chrome) : null);
+  if (!browserInstance?.storage?.local) return [];
+  try {
+    const res = await browserInstance.storage.local.get(MIGRATION_HISTORY_KEY);
+    return Array.isArray(res?.[MIGRATION_HISTORY_KEY]) ? res[MIGRATION_HISTORY_KEY] : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
  * Executes storage schema validation and sequential migrations.
  * Idempotent, non-blocking, and guarded against multi-tab concurrency.
  *
@@ -39,6 +94,9 @@ async function runSchemaMigrations(customBrowserApi = null) {
     if (!browserInstance?.storage?.local) {
       return { status: 'skipped', reason: 'storage_unavailable', version: 0 };
     }
+
+    let currentVer = undefined;
+    let migrationStartTime = 0;
 
     try {
       const storedVersionResult = await browserInstance.storage.local.get(SCHEMA_VERSION_KEY);
@@ -67,14 +125,39 @@ async function runSchemaMigrations(customBrowserApi = null) {
       }
 
       // Case 4: Outdated profile requiring sequential upgrades (storedVersion < CURRENT_SCHEMA_VERSION)
-      let currentVer = storedVersion;
+      currentVer = storedVersion;
+      migrationStartTime = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now();
+
+      let existingHistory = [];
+      try {
+        const histResult = await browserInstance.storage.local.get(MIGRATION_HISTORY_KEY);
+        if (Array.isArray(histResult?.[MIGRATION_HISTORY_KEY])) {
+          existingHistory = histResult[MIGRATION_HISTORY_KEY];
+        }
+      } catch (_) {
+        existingHistory = [];
+      }
+
       while (currentVer < CURRENT_SCHEMA_VERSION) {
         const nextVer = currentVer + 1;
         const migrationStep = SCHEMA_MIGRATIONS.find(
           (m) => m.fromVersion === currentVer && m.toVersion === nextVer
         );
 
+        const stepRecord = {
+          fromVersion: currentVer,
+          toVersion: nextVer,
+          status: 'success',
+          durationMs: 0,
+          timestamp: new Date().toISOString()
+        };
+
         if (migrationStep && typeof migrationStep.migrate === 'function') {
+          const stepStartTime = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
           const snapshot = await browserInstance.storage.local.get(null);
           const transformedUpdates = await migrationStep.migrate(snapshot, browserInstance);
           const batchSanitizer = (typeof window !== 'undefined' && window.HomebaseValidator?.sanitizeStorageBatch) ||
@@ -82,14 +165,31 @@ async function runSchemaMigrations(customBrowserApi = null) {
           const sanitizedUpdates = batchSanitizer
             ? batchSanitizer(transformedUpdates || {}, { fallbackToDefault: true })
             : (transformedUpdates || {});
+
+          const stepEndTime = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
+          stepRecord.durationMs = Math.max(0, Math.round(stepEndTime - stepStartTime));
+
+          existingHistory = appendHistoryRecord(existingHistory, stepRecord);
+
           await browserInstance.storage.local.set({
             ...(sanitizedUpdates || {}),
-            [SCHEMA_VERSION_KEY]: nextVer
+            [SCHEMA_VERSION_KEY]: nextVer,
+            [MIGRATION_HISTORY_KEY]: existingHistory
           });
         } else {
           // If no specific transformation needed for intermediate step, advance version marker
+          const stepEndTime = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
+          stepRecord.durationMs = Math.max(0, Math.round(stepEndTime - migrationStartTime));
+
+          existingHistory = appendHistoryRecord(existingHistory, stepRecord);
+
           await browserInstance.storage.local.set({
-            [SCHEMA_VERSION_KEY]: nextVer
+            [SCHEMA_VERSION_KEY]: nextVer,
+            [MIGRATION_HISTORY_KEY]: existingHistory
           });
         }
         currentVer = nextVer;
@@ -98,6 +198,36 @@ async function runSchemaMigrations(customBrowserApi = null) {
       return { status: 'migrated', version: CURRENT_SCHEMA_VERSION };
     } catch (err) {
       console.error('[Homebase Migrations] Migration execution failed safely:', err);
+      try {
+        if (typeof currentVer === 'number') {
+          let existingHistory = [];
+          try {
+            const histResult = await browserInstance.storage.local.get(MIGRATION_HISTORY_KEY);
+            if (Array.isArray(histResult?.[MIGRATION_HISTORY_KEY])) {
+              existingHistory = histResult[MIGRATION_HISTORY_KEY];
+            }
+          } catch (_) {}
+
+          const failedRecord = {
+            fromVersion: currentVer,
+            targetVersion: currentVer + 1,
+            status: 'failed',
+            errorCategory: categorizeMigrationError(err),
+            durationMs: Math.max(0, Math.round(
+              ((typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now()) -
+              (migrationStartTime || Date.now())
+            )),
+            timestamp: new Date().toISOString()
+          };
+
+          const updatedHistory = appendHistoryRecord(existingHistory, failedRecord);
+          await browserInstance.storage.local.set({
+            [MIGRATION_HISTORY_KEY]: updatedHistory
+          });
+        }
+      } catch (_) {
+        // Safe containment: failure to write history must never mask the original error
+      }
       return { status: 'error', error: err, version: 0 };
     } finally {
       if (!customBrowserApi) {
@@ -118,11 +248,15 @@ async function runSchemaMigrations(customBrowserApi = null) {
 if (typeof window !== 'undefined') {
   window.CURRENT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
   window.SCHEMA_VERSION_KEY = SCHEMA_VERSION_KEY;
+  window.MIGRATION_HISTORY_KEY = MIGRATION_HISTORY_KEY;
   window.runSchemaMigrations = runSchemaMigrations;
+  window.getMigrationHistory = getMigrationHistory;
   window.HomebaseMigrations = {
     CURRENT_SCHEMA_VERSION,
     SCHEMA_VERSION_KEY,
+    MIGRATION_HISTORY_KEY,
     SCHEMA_MIGRATIONS,
-    runSchemaMigrations
+    runSchemaMigrations,
+    getMigrationHistory
   };
 }

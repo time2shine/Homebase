@@ -157,6 +157,42 @@ Before an AI-generated change is merged into `main` or included in a release bui
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-04]: Cycle #5 — Storage Health Diagnostics Architecture & Observability Engine
+
+- **Date**: 2026-09-27
+- **AI Agent**: Gemini (Antigravity Paired AI)
+- **Task**: Implement Homebase Improvement Cycle #5: Storage Health Diagnostics Architecture & Observability Engine per `docs/26-cycle5-storage-health-plan.md`.
+- **Prompt summary**: Implement core storage diagnostics module `window.HomebaseDiagnostics` with `auditStorageHealth()` and `auditBackupHealth()`, register in `src/new-tab.html` under Core Runtime, add `migrationHistory` tracking in `src/newtab/core/schema-migrations.js`, hook `sanitizeKey()` anomalies in `src/newtab/core/schema-validator.js`, connect `recordPerformanceMetric()` in `src/newtab/core/perf-report.js`, create comprehensive unit tests in `tests/unit/storage-diagnostics.test.mjs`, maintain zero network calls, zero telemetry, absolute privacy, and 0ms startup overhead; do not modify `src/new-tab.js`, manifests, CSS, or `dist/`.
+- **Files changed**:
+  - `src/newtab/core/storage-diagnostics.js` (Added: storage health diagnostics engine, backup pre-flight auditor, in-memory 50-entry anomaly buffer, report generation & export APIs)
+  - `src/new-tab.html` (Modified: registered `storage-diagnostics.js` under Core Runtime directly after `schema-migrations.js`)
+  - `src/newtab/core/schema-migrations.js` (Modified: integrated atomic `migrationHistory` tracking capped at 20 entries and `getMigrationHistory()` accessor)
+  - `src/newtab/core/schema-validator.js` (Modified: hooked `sanitizeKey()` to record validation anomalies categorized as clamped, defaulted, normalized, rejected)
+  - `src/newtab/core/perf-report.js` (Modified: added `recordPerformanceMetric()` with in-memory 20-entry circular buffer and timing dispatch hooks)
+  - `tests/unit/storage-diagnostics.test.mjs` (Added: 19 unit tests verifying health classification, backup pre-flight, anomaly/perf FIFO buffers, privacy redaction, and exception safety)
+  - `docs/26-cycle5-storage-health-plan.md` (Added: Cycle #5 architecture plan and performance invariants)
+  - `docs/27-cycle5-implementation-report.md` (Added: Cycle #5 implementation verification report)
+  - `docs/00-project-state.md` (Modified: updated system state, test counts to 69, and Cycle #6 roadmap)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry `2026-09-27-04`)
+- **Reason**: Resolves the storage observability black box, provides pre-flight backup auditing, enables user bug report generation, and tracks schema migration history with zero network calls and zero telemetry.
+- **Testing**:
+  - `node --check src/newtab/core/storage-diagnostics.js`: Exit 0 (Valid)
+  - `node --check src/newtab/core/schema-migrations.js`: Exit 0 (Valid)
+  - `node --check src/newtab/core/schema-validator.js`: Exit 0 (Valid)
+  - `node --check src/newtab/core/perf-report.js`: Exit 0 (Valid)
+  - `node --check tests/unit/storage-diagnostics.test.mjs`: Exit 0 (Valid)
+  - `node scripts/check-newtab-static.mjs`: Exit 0 (Valid, 40 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: Exit 0 (4/4 stages passed, 69 unit tests pass)
+  - `npm.cmd run build`: Exit 0 (Chrome and Firefox dist builds succeeded)
+- **Constraint confirmation**:
+  - `git diff src/new-tab.js`: Completely empty
+  - `git diff manifests/`: Completely empty
+  - `git diff src/new-tab.css src/css/`: Completely empty
+  - No ES modules or bundlers added
+  - No new npm runtime dependencies added
+  - Classic `<script defer>` script execution preserved
+- **Human review**: Pending Human Review
+
 ### Entry [2026-09-27-03]: Cycle #4 — Central Storage Validation Architecture, Schema Validators & Non-Destructive Backup Sanitization
 
 - **Date**: 2026-09-27

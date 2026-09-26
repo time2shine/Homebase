@@ -672,6 +672,70 @@ function validateKey(key, value) {
 }
 
 /**
+ * Determines the category of validation anomaly when a value is changed during sanitization.
+ * Allowed categories: 'clamped', 'defaulted', 'normalized', 'rejected'.
+ * Strictly metadata categorization; never inspects or outputs sensitive user payloads.
+ *
+ * @param {string} key
+ * @param {*} originalVal
+ * @param {*} sanitizedVal
+ * @param {Object} def
+ * @returns {'clamped'|'defaulted'|'normalized'|'rejected'}
+ */
+function classifyAnomalyCategory(key, originalVal, sanitizedVal, def) {
+  if (sanitizedVal === undefined && originalVal !== undefined) {
+    return 'rejected';
+  }
+
+  const defDefault = def?.default;
+  const isDefaultVal = (sanitizedVal === defDefault) ||
+    (isPlainObject(sanitizedVal) && isPlainObject(defDefault) && JSON.stringify(sanitizedVal) === JSON.stringify(defDefault)) ||
+    (Array.isArray(sanitizedVal) && Array.isArray(defDefault) && JSON.stringify(sanitizedVal) === JSON.stringify(defDefault));
+
+  // Numeric clamping check
+  if ((typeof originalVal === 'number' && Number.isFinite(originalVal)) ||
+      (typeof originalVal === 'string' && originalVal.trim() !== '' && Number.isFinite(Number(originalVal)))) {
+    if (typeof sanitizedVal === 'number' && Number.isFinite(sanitizedVal)) {
+      if (typeof def?.validate === 'function' && !def.validate(originalVal)) {
+        return 'clamped';
+      }
+    }
+  }
+
+  // Value was replaced with default
+  if (isDefaultVal && (originalVal === null || originalVal === undefined || (typeof def?.validate === 'function' && !def.validate(originalVal)))) {
+    return 'defaulted';
+  }
+
+  // Otherwise, it was structural or formatting normalization
+  return 'normalized';
+}
+
+/**
+ * Safe notification helper that reports validation anomalies to HomebaseDiagnostics.
+ * Never throws if diagnostics is unavailable.
+ * Never logs actual user content or payloads.
+ *
+ * @param {string} key
+ * @param {string} action
+ * @param {string} category
+ */
+function notifyValidationAnomaly(key, action, category) {
+  try {
+    const diag = (typeof window !== 'undefined' && window.HomebaseDiagnostics) || null;
+    if (diag && typeof diag.recordValidationAnomaly === 'function') {
+      diag.recordValidationAnomaly({
+        key,
+        action,
+        category
+      });
+    }
+  } catch (_) {
+    // Fail-safe: continue normally without throwing
+  }
+}
+
+/**
  * Sanitizes a value for a specific storage key against its schema definition.
  * Pure synchronous function.
  *
@@ -689,7 +753,33 @@ function sanitizeKey(key, value, options = {}) {
     // Non-destructive: unknown future keys preserved as-is
     return value !== undefined ? value : (fallback ? null : undefined);
   }
-  return def.sanitize(value, fallback);
+  const sanitized = def.sanitize(value, fallback);
+
+  // Check if value was modified during sanitization
+  let changed = false;
+  if (value !== sanitized) {
+    if (value && sanitized && typeof value === 'object' && typeof sanitized === 'object') {
+      try {
+        changed = JSON.stringify(value) !== JSON.stringify(sanitized);
+      } catch (_) {
+        changed = true;
+      }
+    } else {
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    try {
+      const category = classifyAnomalyCategory(key, value, sanitized, def);
+      const action = category;
+      notifyValidationAnomaly(key, action, category);
+    } catch (_) {
+      // Continue normally without throwing
+    }
+  }
+
+  return sanitized;
 }
 
 /**
@@ -737,6 +827,7 @@ if (typeof window !== 'undefined') {
     validateKey,
     sanitizeKey,
     sanitizeStorageBatch,
+    classifyAnomalyCategory,
     isPlainObject,
     isValidHexColor,
     clampNumber,

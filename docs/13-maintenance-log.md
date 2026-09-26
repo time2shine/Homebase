@@ -150,6 +150,38 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-04]: Cycle #5 — Storage Health Diagnostics Architecture & Observability Engine
+
+- **Date**: 2026-09-27
+- **Change**: Created `src/newtab/core/storage-diagnostics.js` defining `window.HomebaseDiagnostics` with `auditStorageHealth()`, `auditBackupHealth()`, in-memory 50-entry anomaly ring buffer, and `generateHealthReport()` / `exportHealthReport()`. Registered `storage-diagnostics.js` in `src/new-tab.html` under Core Runtime directly after `schema-migrations.js`. Added `migrationHistory` tracking (capped at 20 entries) and `getMigrationHistory()` to `src/newtab/core/schema-migrations.js`. Connected `sanitizeKey()` anomalies in `src/newtab/core/schema-validator.js` to dispatch `{ key, action, category }` into `HomebaseDiagnostics`. Added `recordPerformanceMetric()` with in-memory 20-entry circular buffer in `src/newtab/core/perf-report.js`. Implemented 19 automated unit tests in `tests/unit/storage-diagnostics.test.mjs`, expanding repository test coverage to 69/69 passing tests.
+- **Reason**: Implements Homebase Improvement Cycle #5 planned in `docs/26-cycle5-storage-health-plan.md` to eliminate the storage observability black box, provide pre-flight backup auditing, enable user bug report generation, and track schema migration history with zero network calls and zero telemetry.
+- **Files affected**:
+  - `src/newtab/core/storage-diagnostics.js` (Added: storage health diagnostics engine and anomaly ring buffer)
+  - `src/new-tab.html` (Modified: registered `storage-diagnostics.js` under Core Runtime)
+  - `src/newtab/core/schema-migrations.js` (Modified: integrated atomic `migrationHistory` tracking and retrieval API)
+  - `src/newtab/core/schema-validator.js` (Modified: hooked `sanitizeKey()` to record validation anomalies)
+  - `src/newtab/core/perf-report.js` (Modified: added `recordPerformanceMetric()` and timing dispatch hooks)
+  - `tests/unit/storage-diagnostics.test.mjs` (Added: 19 automated unit tests covering health, backups, buffers, privacy, and history)
+  - `docs/26-cycle5-storage-health-plan.md` (Added: Cycle #5 architecture plan and performance invariants)
+  - `docs/27-cycle5-implementation-report.md` (Added: Cycle #5 implementation verification report)
+- **Developer/AI model**: Gemini (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/core/storage-diagnostics.js`: PASS
+  - `node --check src/newtab/core/schema-migrations.js`: PASS
+  - `node --check src/newtab/core/schema-validator.js`: PASS
+  - `node --check src/newtab/core/perf-report.js`: PASS
+  - `node --check tests/unit/storage-diagnostics.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (40 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 69 unit tests pass)
+  - `npm.cmd run build`: PASS (Built chrome -> dist\chrome, Built firefox -> dist\firefox)
+- **Impact**:
+  - **User-Facing**: Users can export clean, privacy-redacted diagnostic health reports for troubleshooting; zero layout changes or UI disruption.
+  - **Performance**: 0ms cold-boot startup overhead; diagnostics run on-demand or in-memory.
+  - **Storage**: Lightweight `migrationHistory` array (max 20 entries) persisted in `browser.storage.local`. All anomaly and performance metric buffers remain strictly in-memory.
+  - **Privacy**: Absolute zero telemetry, zero analytics, zero network calls. All sensitive tokens (URLs, bookmark titles, todo notes, wallpaper payloads) are automatically redacted.
+  - **Compatibility**: Fully compatible with Chrome and Firefox under classic `<script defer>` architecture; no ES modules or bundlers.
+- **Rollback plan**: Revert commits cleanly with `git revert <commit-sha>`. All storage data remains backward-compatible.
+
 ### Entry [2026-09-27-03]: Cycle #4 — Central Storage Validation Architecture, Schema Validators & Non-Destructive Backup Sanitization
 
 - **Date**: 2026-09-27

@@ -60,6 +60,7 @@ const HOMEBASE_OWNED_STORAGE_KEYS = [
   'folderCustomMetadata',
   'domainIconMap',
   'lastUsedBookmarkFolderId',
+  'homebaseRecentSaveFolders',
   'quoteUpdateFrequency',
   'quoteLocalIndexV1',
   'quoteTags',
@@ -187,13 +188,24 @@ async function importHomebaseState(file) {
 
   const incoming = parsed.storageLocal;
   const updates = {};
-  const removals = [];
+
+  // Backward-compatible fallback: migrate legacy popup folder key if canonical key is missing
+  if (
+    Object.prototype.hasOwnProperty.call(incoming, 'homebaseLastUsedFolderId') &&
+    !Object.prototype.hasOwnProperty.call(incoming, 'lastUsedBookmarkFolderId')
+  ) {
+    if (typeof incoming['homebaseLastUsedFolderId'] === 'string') {
+      incoming['lastUsedBookmarkFolderId'] = incoming['homebaseLastUsedFolderId'];
+    }
+  }
 
   HOMEBASE_OWNED_STORAGE_KEYS.forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(incoming, key)) {
       if (key === 'todoItems') {
         if (Array.isArray(incoming[key])) {
-          updates[key] = normalizeTodoItems(incoming[key]);
+          updates[key] = typeof normalizeTodoItems === 'function'
+            ? normalizeTodoItems(incoming[key])
+            : incoming[key];
         }
         return;
       }
@@ -209,64 +221,65 @@ async function importHomebaseState(file) {
         }
         return;
       }
+      if (key === 'homebaseRecentSaveFolders') {
+        if (Array.isArray(incoming[key])) {
+          updates[key] = incoming[key]
+            .map((id) => (typeof id === 'string' ? id.trim() : ''))
+            .filter(Boolean)
+            .slice(0, 6);
+        }
+        return;
+      }
       updates[key] = incoming[key];
-      return;
     }
-    if (key === 'todoItems' || key === 'todoHideDone' || key === 'myWallpapers') {
-      return;
-    }
-    removals.push(key);
   });
 
   if (Object.keys(updates).length) {
     await browser.storage.local.set(updates);
   }
-  if (removals.length) {
-    await browser.storage.local.remove(removals);
-  }
 
   try {
     if (window.localStorage) {
-      const dimValue = incoming['appBackgroundDim'];
-      if (Object.prototype.hasOwnProperty.call(incoming, 'appBackgroundDim') && Number.isFinite(dimValue)) {
-        localStorage.setItem('fast-bg-dim', String(dimValue));
-      } else {
-        localStorage.removeItem('fast-bg-dim');
+      if (Object.prototype.hasOwnProperty.call(incoming, 'appBackgroundDim')) {
+        const dimValue = incoming['appBackgroundDim'];
+        if (Number.isFinite(dimValue)) {
+          localStorage.setItem('fast-bg-dim', String(dimValue));
+        }
       }
 
-      const sidebarValue = incoming['appShowSidebar'];
-      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowSidebar') && typeof sidebarValue === 'boolean') {
-        localStorage.setItem('fast-show-sidebar', sidebarValue ? '1' : '0');
-      } else {
-        localStorage.removeItem('fast-show-sidebar');
+      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowSidebar')) {
+        const sidebarValue = incoming['appShowSidebar'];
+        if (typeof sidebarValue === 'boolean') {
+          localStorage.setItem('fast-show-sidebar', sidebarValue ? '1' : '0');
+        }
       }
 
-      const weatherValue = incoming['appShowWeather'];
-      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowWeather') && typeof weatherValue === 'boolean') {
-        localStorage.setItem('fast-show-weather', weatherValue ? '1' : '0');
-      } else {
-        localStorage.removeItem('fast-show-weather');
+      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowWeather')) {
+        const weatherValue = incoming['appShowWeather'];
+        if (typeof weatherValue === 'boolean') {
+          localStorage.setItem('fast-show-weather', weatherValue ? '1' : '0');
+        }
       }
 
-      const quoteValue = incoming['appShowQuote'];
-      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowQuote') && typeof quoteValue === 'boolean') {
-        localStorage.setItem('fast-show-quote', quoteValue ? '1' : '0');
-      } else {
-        localStorage.removeItem('fast-show-quote');
+      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowQuote')) {
+        const quoteValue = incoming['appShowQuote'];
+        if (typeof quoteValue === 'boolean') {
+          localStorage.setItem('fast-show-quote', quoteValue ? '1' : '0');
+        }
       }
 
-      const newsValue = incoming['appShowNews'];
-      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowNews') && typeof newsValue === 'boolean') {
-        localStorage.setItem('fast-show-news', newsValue ? '1' : '0');
-      } else {
-        localStorage.removeItem('fast-show-news');
+      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowNews')) {
+        const newsValue = incoming['appShowNews'];
+        if (typeof newsValue === 'boolean') {
+          localStorage.setItem('fast-show-news', newsValue ? '1' : '0');
+        }
       }
 
-      const todoValue = incoming['appShowTodo'];
-      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowTodo') && typeof todoValue === 'boolean') {
-        localStorage.setItem('fast-show-todo', todoValue ? '1' : '0');
-      } else {
-        localStorage.removeItem('fast-show-todo');
+      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowTodo')) {
+        const todoValue = incoming['appShowTodo'];
+        if (typeof todoValue === 'boolean') {
+          localStorage.setItem('fast-show-todo', todoValue ? '1' : '0');
+        }
       }
     }
   } catch (err) {
@@ -276,7 +289,9 @@ async function importHomebaseState(file) {
   if (typeof showCustomDialog === 'function') {
     showCustomDialog('Import complete', 'Homebase settings have been restored. Reloading...');
   }
-  window.location.reload();
+  if (typeof window.location?.reload === 'function') {
+    window.location.reload();
+  }
 }
 
 window.HomebaseBackup = {

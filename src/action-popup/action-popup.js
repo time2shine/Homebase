@@ -1,11 +1,20 @@
-﻿(() => {
+(() => {
   'use strict';
 
   const ROOT_FOLDER_KEY = 'homebaseBookmarkRootId';
   // Recently selected save targets within the configured root scope (max 6).
   const RECENT_FOLDERS_KEY = 'homebaseRecentSaveFolders';
-  const LAST_USED_FOLDER_KEY = 'homebaseLastUsedFolderId';
+  const LAST_USED_FOLDER_KEY = 'lastUsedBookmarkFolderId';
+  const LEGACY_LAST_USED_FOLDER_KEY = 'homebaseLastUsedFolderId';
   const RECENT_LIMIT = 6;
+
+  function resolveLastUsedFolderId(stored = {}) {
+    if (!stored || typeof stored !== 'object') return '';
+    const canonical = typeof stored[LAST_USED_FOLDER_KEY] === 'string' ? stored[LAST_USED_FOLDER_KEY].trim() : '';
+    if (canonical) return canonical;
+    const legacy = typeof stored[LEGACY_LAST_USED_FOLDER_KEY] === 'string' ? stored[LEGACY_LAST_USED_FOLDER_KEY].trim() : '';
+    return legacy;
+  }
   const FOLDER_RENDER_LIMIT = 100;
   const SAVE_SUCCESS_DELAY_MS = 500;
   const ALREADY_SAVED_DELAY_MS = 600;
@@ -116,8 +125,12 @@
     state.activeBookmarkable = Boolean(activeTab && isBookmarkableUrl(activeTab.url || ''));
 
     state.rootId = normalizeId(stored[ROOT_FOLDER_KEY]);
-    const lastUsedFolderId = normalizeId(stored[LAST_USED_FOLDER_KEY]);
+    const lastUsedFolderId = normalizeId(resolveLastUsedFolderId(stored));
     state.recentFolderIds = normalizeRecentFolderIds(stored[RECENT_FOLDERS_KEY]);
+
+    if (!stored[LAST_USED_FOLDER_KEY] && lastUsedFolderId) {
+      api.storage.local.set({ [LAST_USED_FOLDER_KEY]: lastUsedFolderId }).catch(() => {});
+    }
 
     if (!state.rootId) {
       state.rootReady = false;
@@ -226,7 +239,12 @@
 
   async function loadPopupStorageState() {
     try {
-      return await api.storage.local.get([ROOT_FOLDER_KEY, RECENT_FOLDERS_KEY, LAST_USED_FOLDER_KEY]);
+      return await api.storage.local.get([
+        ROOT_FOLDER_KEY,
+        RECENT_FOLDERS_KEY,
+        LAST_USED_FOLDER_KEY,
+        LEGACY_LAST_USED_FOLDER_KEY
+      ]);
     } catch (err) {
       console.warn('Failed to load popup storage state', err);
       return {};
@@ -803,7 +821,10 @@
 
   async function persistLastUsedFolderId(folderId) {
     try {
-      await api.storage.local.set({ [LAST_USED_FOLDER_KEY]: folderId || '' });
+      await api.storage.local.set({
+        [LAST_USED_FOLDER_KEY]: folderId || '',
+        [LEGACY_LAST_USED_FOLDER_KEY]: folderId || ''
+      });
     } catch (err) {
       console.warn('Failed to persist last used folder id', err);
     }
@@ -973,5 +994,16 @@
 
   function closePopup() {
     window.close();
+  }
+
+  const popupGlobals = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+  if (popupGlobals) {
+    popupGlobals.HomebaseActionPopup = {
+      ROOT_FOLDER_KEY,
+      RECENT_FOLDERS_KEY,
+      LAST_USED_FOLDER_KEY,
+      LEGACY_LAST_USED_FOLDER_KEY,
+      resolveLastUsedFolderId
+    };
   }
 })();

@@ -150,6 +150,30 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-01]: Cycle #3A — Backup Completeness & Storage Key Alignment
+
+- **Date**: 2026-09-27
+- **Change**: Fixed destructive backup import vulnerability in `src/newtab/settings/backup-import.js` by completely removing bulk deletion (`browser.storage.local.remove(removals)`) of omitted keys and guarding fast `localStorage` mirror updates. Registered missing storage keys (`homebaseRecentSaveFolders` and `lastUsedBookmarkFolderId`) in `HOMEBASE_OWNED_STORAGE_KEYS` with sanitization logic. Resolved action popup key mismatch between `homebaseLastUsedFolderId` and canonical `lastUsedBookmarkFolderId` with bidirectional fallback, forward migration on popup load, dual-write on persist, and automatic backup import migration. Expanded unit test suite `tests/unit/backup-validation.test.mjs` with 5 new automated tests verifying non-destructive import, legacy key fallback, and sanitization.
+- **Reason**: Resolves Critical Code Review Issue S1 (Destructive backup import deletes missing keys), S2 (Missing owned keys in backup whitelist), and S3 (Action popup storage key mismatch `homebaseLastUsedFolderId` vs `lastUsedBookmarkFolderId`) identified in `docs/04-code-review.md` and planned in `docs/20-third-improvement-plan.md`.
+- **Files affected**:
+  - `src/newtab/settings/backup-import.js` (Modified: eliminated destructive removals array, added `homebaseRecentSaveFolders` to whitelist with sanitization, added fallback migration for `homebaseLastUsedFolderId`, guarded localStorage fast mirrors)
+  - `src/action-popup/action-popup.js` (Modified: migrated to canonical `lastUsedBookmarkFolderId`, added `resolveLastUsedFolderId` helper, forward migration on initialization, dual-write on folder selection, exported `window.HomebaseActionPopup`)
+  - `tests/unit/backup-validation.test.mjs` (Modified: added 5 new unit tests for partial backup retention, action popup key migration, optional key preservation, and folder list sanitization; updated VM sandbox context with JSON global)
+- **Developer/AI model**: Gemini (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/settings/backup-import.js`: PASS
+  - `node --check src/action-popup/action-popup.js`: PASS
+  - `node --check tests/unit/backup-validation.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (37 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed: 51 syntax checks, static invariants, 32 unit tests)
+  - `npm.cmd run build`: PASS (Built chrome -> dist\chrome, Built firefox -> dist\firefox)
+- **Impact**:
+  - **User-Facing**: Restoring partial or older backups will never wipe untouched user data or settings. Action popup and main dashboard now share synchronized bookmark save folder state seamlessly.
+  - **Performance**: Zero performance impact; non-destructive backup reduces storage delete operations to 0.
+  - **Storage**: Non-destructive updates only; aligns `lastUsedBookmarkFolderId` across dashboard and popup with dual-write fallback.
+  - **Compatibility**: Fully backward compatible with Chrome and Firefox; legacy backups containing `homebaseLastUsedFolderId` are automatically migrated on import.
+- **Rollback plan**: Revert commits or restore `backup-import.js` and `action-popup.js` using `git checkout HEAD -- src/newtab/settings/backup-import.js src/action-popup/action-popup.js tests/unit/backup-validation.test.mjs`.
+
 ### Entry [2026-09-26-04]: Unified Automated Testing Baseline & Test Runner (`npm test`)
 
 - **Date**: 2026-09-26

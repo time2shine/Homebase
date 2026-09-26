@@ -12,7 +12,61 @@ const backupScriptCode = fs.readFileSync(backupScriptPath, 'utf8');
 const todoScriptPath = path.join(rootDir, 'src/newtab/widgets/todo.js');
 const todoScriptCode = fs.readFileSync(todoScriptPath, 'utf8');
 
-function createBackupContext() {
+const actionPopupScriptPath = path.join(rootDir, 'src/action-popup/action-popup.js');
+const actionPopupScriptCode = fs.readFileSync(actionPopupScriptPath, 'utf8');
+
+function createMockStorage(initialData = {}) {
+  const data = { ...initialData };
+  const calls = {
+    get: [],
+    set: [],
+    remove: []
+  };
+
+  return {
+    data,
+    calls,
+    api: {
+      get: async (keys) => {
+        calls.get.push(keys);
+        if (!keys) return { ...data };
+        const result = {};
+        const keyList = Array.isArray(keys) ? keys : [keys];
+        keyList.forEach((k) => {
+          if (data[k] !== undefined) result[k] = data[k];
+        });
+        return result;
+      },
+      set: async (items) => {
+        calls.set.push(items);
+        Object.assign(data, items);
+      },
+      remove: async (keys) => {
+        calls.remove.push(keys);
+        const keyList = Array.isArray(keys) ? keys : [keys];
+        keyList.forEach((k) => {
+          delete data[k];
+        });
+      }
+    }
+  };
+}
+
+function createMockLocalStorage(initial = {}) {
+  const store = new Map(Object.entries(initial));
+  return {
+    store,
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, val) => store.set(key, String(val)),
+    removeItem: (key) => store.delete(key),
+    clear: () => store.clear()
+  };
+}
+
+function createBackupContext(storageMock = null, localStorageMock = null) {
+  const effectiveStorage = storageMock || createMockStorage();
+  const effectiveLocalStorage = localStorageMock || createMockLocalStorage();
+
   const sandbox = {
     Object,
     Array,
@@ -21,12 +75,16 @@ function createBackupContext() {
     Number,
     Date,
     Math,
-    browser: { storage: { local: {} } }
+    JSON,
+    browser: { storage: { local: effectiveStorage.api } },
+    localStorage: effectiveLocalStorage,
+    location: { reload: () => {} },
+    showCustomDialog: () => {}
   };
   sandbox.window = sandbox;
   const context = vm.createContext(sandbox);
   vm.runInContext(backupScriptCode, context);
-  return context;
+  return { context, storageMock: effectiveStorage, localStorageMock: effectiveLocalStorage };
 }
 
 function createTodoContext() {
@@ -49,8 +107,39 @@ function createTodoContext() {
   return context;
 }
 
+function createActionPopupContext() {
+  const storageMock = createMockStorage();
+  const sandbox = {
+    Object,
+    Array,
+    Map,
+    Set,
+    String,
+    Number,
+    Date,
+    Math,
+    document: {
+      addEventListener: () => {},
+      getElementById: () => ({
+        addEventListener: () => {},
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} }
+      })
+    },
+    browser: {
+      storage: { local: storageMock.api },
+      bookmarks: {},
+      tabs: {},
+      runtime: { getURL: () => '' }
+    }
+  };
+  sandbox.window = sandbox;
+  const context = vm.createContext(sandbox);
+  vm.runInContext(actionPopupScriptCode, context);
+  return { context, storageMock };
+}
+
 test('isPlainObject() - validates plain objects correctly', () => {
-  const ctx = createBackupContext();
+  const { context: ctx } = createBackupContext();
   assert.strictEqual(ctx.isPlainObject({}), true);
   assert.strictEqual(ctx.isPlainObject({ a: 1 }), true);
   assert.strictEqual(ctx.isPlainObject(Object.create(null)), true);
@@ -62,18 +151,20 @@ test('isPlainObject() - validates plain objects correctly', () => {
 });
 
 test('HOMEBASE_OWNED_STORAGE_KEYS contains myWallpapers and critical keys', () => {
-  const ctx = createBackupContext();
+  const { context: ctx } = createBackupContext();
   const keys = vm.runInContext('HOMEBASE_OWNED_STORAGE_KEYS', ctx);
   assert.strictEqual(Array.isArray(keys), true);
   assert.strictEqual(keys.includes('myWallpapers'), true);
   assert.strictEqual(keys.includes('wallpaperSelection'), true);
   assert.strictEqual(keys.includes('todoItems'), true);
   assert.strictEqual(keys.includes('widgetOrder'), true);
-  assert.strictEqual(keys.length >= 72, true);
+  assert.strictEqual(keys.includes('lastUsedBookmarkFolderId'), true);
+  assert.strictEqual(keys.includes('homebaseRecentSaveFolders'), true);
+  assert.strictEqual(keys.length >= 73, true);
 });
 
 test('normalizeMyWallpapersItems() - sanitizes and sorts custom wallpapers', () => {
-  const ctx = createBackupContext();
+  const { context: ctx } = createBackupContext();
   const raw = [
     {
       id: 'wp-1',
@@ -111,7 +202,7 @@ test('normalizeMyWallpapersItems() - sanitizes and sorts custom wallpapers', () 
 });
 
 test('normalizeMyWallpapersItems() - handles empty and non-array inputs', () => {
-  const ctx = createBackupContext();
+  const { context: ctx } = createBackupContext();
   const cases = [[], null, undefined, 'not an array'];
   for (const input of cases) {
     const res = ctx.normalizeMyWallpapersItems(input);
@@ -160,4 +251,168 @@ test('normalizeTodoItems() - handles empty and non-array inputs', () => {
     assert.strictEqual(Array.isArray(res), true);
     assert.strictEqual(res.length, 0);
   }
+});
+
+test('partial backup does not delete missing keys during import', async () => {
+  const initialStorage = {
+    bookmarkCustomMetadata: { 'bm-1': { icon: 'custom-icon.png' } },
+    folderCustomMetadata: { 'f-1': { color: '#ff0000' } },
+    domainIconMap: { 'example.com': 'data:image/png;base64,abc' },
+    appBackgroundDim: 40,
+    widgetOrder: ['quote', 'weather'],
+    homebaseRecentSaveFolders: ['f-1', 'f-2'],
+    myWallpapers: [{ id: 'w-1', title: 'Wallpaper 1' }]
+  };
+
+  const storageMock = createMockStorage(initialStorage);
+  const localStorageMock = createMockLocalStorage({ 'fast-bg-dim': '40' });
+  const { context: ctx } = createBackupContext(storageMock, localStorageMock);
+
+  // Partial backup contains only todoItems and appShowWeather
+  const partialBackup = {
+    schema: 'homebase.export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageLocal: {
+      todoItems: [{ id: 'td-1', text: 'Important task', done: false }],
+      appShowWeather: false
+    }
+  };
+
+  await ctx.HomebaseBackup.importState({
+    text: async () => JSON.stringify(partialBackup)
+  });
+
+  // Verify that storage.local.remove was NEVER invoked
+  assert.strictEqual(storageMock.calls.remove.length, 0);
+
+  // Verify that all pre-existing unrepresented keys remain intact
+  assert.deepStrictEqual(storageMock.data.bookmarkCustomMetadata, { 'bm-1': { icon: 'custom-icon.png' } });
+  assert.deepStrictEqual(storageMock.data.folderCustomMetadata, { 'f-1': { color: '#ff0000' } });
+  assert.deepStrictEqual(storageMock.data.domainIconMap, { 'example.com': 'data:image/png;base64,abc' });
+  assert.strictEqual(storageMock.data.appBackgroundDim, 40);
+  assert.deepStrictEqual(storageMock.data.widgetOrder, ['quote', 'weather']);
+  assert.deepStrictEqual(storageMock.data.homebaseRecentSaveFolders, ['f-1', 'f-2']);
+  assert.deepStrictEqual(storageMock.data.myWallpapers, [{ id: 'w-1', title: 'Wallpaper 1' }]);
+
+  // Verify that keys explicitly present in the backup were updated
+  assert.strictEqual(storageMock.data.appShowWeather, false);
+  assert.strictEqual(storageMock.data.todoItems.length, 1);
+  assert.strictEqual(storageMock.data.todoItems[0].id, 'td-1');
+});
+
+test('action popup legacy key migration - resolveLastUsedFolderId fallback', () => {
+  const { context: ctx } = createActionPopupContext();
+  const popup = ctx.HomebaseActionPopup;
+
+  assert.ok(popup, 'HomebaseActionPopup must be exposed');
+  assert.strictEqual(popup.LAST_USED_FOLDER_KEY, 'lastUsedBookmarkFolderId');
+  assert.strictEqual(popup.LEGACY_LAST_USED_FOLDER_KEY, 'homebaseLastUsedFolderId');
+
+  // Case 1: When only legacy key exists in stored data
+  const legacyOnly = { homebaseLastUsedFolderId: 'folder-legacy-42' };
+  assert.strictEqual(popup.resolveLastUsedFolderId(legacyOnly), 'folder-legacy-42');
+
+  // Case 2: When canonical key exists, it takes precedence
+  const bothKeys = {
+    lastUsedBookmarkFolderId: 'folder-canonical-10',
+    homebaseLastUsedFolderId: 'folder-legacy-42'
+  };
+  assert.strictEqual(popup.resolveLastUsedFolderId(bothKeys), 'folder-canonical-10');
+
+  // Case 3: When neither exists or input is invalid
+  assert.strictEqual(popup.resolveLastUsedFolderId({}), '');
+  assert.strictEqual(popup.resolveLastUsedFolderId(null), '');
+  assert.strictEqual(popup.resolveLastUsedFolderId(undefined), '');
+  assert.strictEqual(popup.resolveLastUsedFolderId({ lastUsedBookmarkFolderId: '   ' }), '');
+});
+
+test('action popup legacy key migration - backup import migrates homebaseLastUsedFolderId', async () => {
+  const storageMock = createMockStorage({});
+  const { context: ctx } = createBackupContext(storageMock);
+
+  // Backup generated on an older version containing only the legacy key
+  const legacyBackup = {
+    schema: 'homebase.export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageLocal: {
+      homebaseLastUsedFolderId: 'folder-legacy-99'
+    }
+  };
+
+  await ctx.HomebaseBackup.importState({
+    text: async () => JSON.stringify(legacyBackup)
+  });
+
+  // Verify that the canonical key was populated from the legacy key
+  assert.strictEqual(storageMock.data.lastUsedBookmarkFolderId, 'folder-legacy-99');
+});
+
+test('missing optional keys are preserved during backup restoration', async () => {
+  const storageMock = createMockStorage({
+    homebaseRecentSaveFolders: ['folder-a', 'folder-b'],
+    domainIconMap: { 'test.org': 'data:icon' },
+    appBackgroundDim: 25,
+    quoteTags: ['inspiration']
+  });
+
+  const localStorageMock = createMockLocalStorage({
+    'fast-bg-dim': '25',
+    'fast-show-sidebar': '1'
+  });
+
+  const { context: ctx } = createBackupContext(storageMock, localStorageMock);
+
+  // Incoming backup omits optional keys
+  const incomingBackup = {
+    schema: 'homebase.export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageLocal: {
+      appTimeFormatPreference: '24-hour'
+    }
+  };
+
+  await ctx.HomebaseBackup.importState({
+    text: async () => JSON.stringify(incomingBackup)
+  });
+
+  // Storage local preserved optional keys
+  assert.deepStrictEqual(storageMock.data.homebaseRecentSaveFolders, ['folder-a', 'folder-b']);
+  assert.deepStrictEqual(storageMock.data.domainIconMap, { 'test.org': 'data:icon' });
+  assert.strictEqual(storageMock.data.appBackgroundDim, 25);
+  assert.deepStrictEqual(storageMock.data.quoteTags, ['inspiration']);
+  assert.strictEqual(storageMock.data.appTimeFormatPreference, '24-hour');
+
+  // localStorage fast mirrors preserved
+  assert.strictEqual(localStorageMock.getItem('fast-bg-dim'), '25');
+  assert.strictEqual(localStorageMock.getItem('fast-show-sidebar'), '1');
+});
+
+test('homebaseRecentSaveFolders is sanitized on backup import', async () => {
+  const storageMock = createMockStorage({});
+  const { context: ctx } = createBackupContext(storageMock);
+
+  const backup = {
+    schema: 'homebase.export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageLocal: {
+      homebaseRecentSaveFolders: ['f1', '  f2  ', '', null, 'f3', 'f4', 'f5', 'f6', 'f7-overflow']
+    }
+  };
+
+  await ctx.HomebaseBackup.importState({
+    text: async () => JSON.stringify(backup)
+  });
+
+  assert.deepStrictEqual(storageMock.data.homebaseRecentSaveFolders, [
+    'f1',
+    'f2',
+    'f3',
+    'f4',
+    'f5',
+    'f6'
+  ]);
 });

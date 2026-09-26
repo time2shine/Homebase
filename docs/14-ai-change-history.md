@@ -157,6 +157,29 @@ Before an AI-generated change is merged into `main` or included in a release bui
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-01]: Cycle #3A — Backup Completeness & Storage Key Alignment
+
+- **Date**: 2026-09-27
+- **AI Agent**: Gemini 3.8 Flash (Antigravity)
+- **Task**: Implement Homebase Improvement Cycle #3A: Backup Completeness & Storage Key Alignment per `docs/20-third-improvement-plan.md`.
+- **Prompt summary**: Fix backup retention vulnerability in `src/newtab/settings/backup-import.js` so partial/older backups never delete existing user data; add missing owned storage keys (`homebaseRecentSaveFolders` and `lastUsedBookmarkFolderId`) to `HOMEBASE_OWNED_STORAGE_KEYS`; fix action popup key mismatch migrating from `homebaseLastUsedFolderId` to `lastUsedBookmarkFolderId` with backward-compatible fallback; add comprehensive unit tests to `tests/unit/backup-validation.test.mjs`; verify with `npm test` and `npm run build`; do not modify `new-tab.js`, CSS, HTML, manifests, or `dist/`.
+- **Files changed**:
+  - `src/newtab/settings/backup-import.js` (Modified: eliminated `removals` array and `browser.storage.local.remove(removals)` entirely, added `homebaseRecentSaveFolders` to `HOMEBASE_OWNED_STORAGE_KEYS` with sanitization, added fallback migration for `homebaseLastUsedFolderId` to `lastUsedBookmarkFolderId`, guarded localStorage fast mirror updates)
+  - `src/action-popup/action-popup.js` (Modified: migrated canonical key to `lastUsedBookmarkFolderId`, preserved legacy constant, added `resolveLastUsedFolderId` fallback reader, forward migration on initialization, dual-write in `persistLastUsedFolderId`, exported `window.HomebaseActionPopup`)
+  - `tests/unit/backup-validation.test.mjs` (Modified: added 5 unit tests for partial backup retention, action popup key migration, optional key preservation, and folder list sanitization; added `JSON` to VM sandbox)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry `2026-09-27-01`)
+  - `docs/14-ai-change-history.md` (Modified: logged AI change history entry `2026-09-27-01`)
+  - `docs/21-cycle3a-implementation-report.md` (Added: detailed Cycle #3A implementation report)
+- **Reason**: Resolves Critical Code Review Issue S1 (Destructive backup import deletes missing keys), S2 (Missing owned keys in backup whitelist), and S3 (Action popup storage key mismatch `homebaseLastUsedFolderId` vs `lastUsedBookmarkFolderId`) identified in `docs/04-code-review.md` and planned in `docs/20-third-improvement-plan.md`.
+- **Testing**:
+  - `node --check src/newtab/settings/backup-import.js`: Exit 0 (Valid)
+  - `node --check src/action-popup/action-popup.js`: Exit 0 (Valid)
+  - `node --check tests/unit/backup-validation.test.mjs`: Exit 0 (Valid)
+  - `node scripts/check-newtab-static.mjs`: Exit 0 (37 scripts, 33 module paths, 87 declarations passed)
+  - `npm.cmd test`: Exit 0 (4/4 stages passed: 51 syntax checks, static invariants, 32 unit tests pass, smoke test pass/skip)
+  - `npm.cmd run build`: Exit 0 (Chrome and Firefox dists built successfully)
+- **Human review**: `Pending Human Review`
+
 ### Entry [2026-09-26-04]: Unified Automated Testing Baseline & Test Runner (`npm test`)
 
 - **Date**: 2026-09-26

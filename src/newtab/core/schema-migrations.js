@@ -77,8 +77,13 @@ async function runSchemaMigrations(customBrowserApi = null) {
         if (migrationStep && typeof migrationStep.migrate === 'function') {
           const snapshot = await browserInstance.storage.local.get(null);
           const transformedUpdates = await migrationStep.migrate(snapshot, browserInstance);
+          const batchSanitizer = (typeof window !== 'undefined' && window.HomebaseValidator?.sanitizeStorageBatch) ||
+            (typeof sanitizeStorageBatch === 'function' ? sanitizeStorageBatch : null);
+          const sanitizedUpdates = batchSanitizer
+            ? batchSanitizer(transformedUpdates || {}, { fallbackToDefault: true })
+            : (transformedUpdates || {});
           await browserInstance.storage.local.set({
-            ...(transformedUpdates || {}),
+            ...(sanitizedUpdates || {}),
             [SCHEMA_VERSION_KEY]: nextVer
           });
         } else {

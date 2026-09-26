@@ -150,6 +150,35 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-03]: Cycle #4 — Central Storage Validation Architecture, Schema Validators & Non-Destructive Backup Sanitization
+
+- **Date**: 2026-09-27
+- **Change**: Created `src/newtab/core/schema-validator.js` defining `window.HomebaseValidator`, `validateKey()`, `sanitizeKey()`, `sanitizeStorageBatch()`, and authoritative schema definitions covering all 74 canonical storage keys with type validation, number/integer clamping, enum checking, 3/6-digit hex color expansion, array bounds, object prototype inspection, and prototype pollution defense. Registered `schema-validator.js` in `src/new-tab.html` under Core Runtime before `schema-migrations.js`. Updated `src/newtab/settings/backup-import.js` to replace unchecked key copying with non-destructive `sanitizeStorageBatch(incoming, { fallbackToDefault: false })`. Updated `src/newtab/core/schema-migrations.js` to run `sanitizeStorageBatch(transformedUpdates, { fallbackToDefault: true })` prior to committing atomic storage updates. Created `tests/unit/schema-validator.test.mjs` with 9 automated unit tests verifying clamping, color normalization, enum bounds, array recovery, object pollution defense, corrupted backup payloads, performance budgets (<3ms), and immutability of valid values.
+- **Reason**: Implements Homebase Improvement Cycle #4 planned in `docs/24-cycle4-storage-validation-plan.md` to resolve unvalidated storage writes, malformed backup imports, and migration corruption risks.
+- **Files affected**:
+  - `src/newtab/core/schema-validator.js` (Added: central storage schema validator and sanitization engine)
+  - `src/new-tab.html` (Modified: registered `newtab/core/schema-validator.js` before `schema-migrations.js`)
+  - `src/newtab/settings/backup-import.js` (Modified: integrated `sanitizeStorageBatch` for non-destructive, safe backup restoration)
+  - `src/newtab/core/schema-migrations.js` (Modified: sanitized transformed updates prior to `browser.storage.local.set`)
+  - `tests/unit/schema-validator.test.mjs` (Added: 9 unit tests for schema validation, clamping, backup recovery, and performance)
+  - `docs/24-cycle4-storage-validation-plan.md` (Added: Cycle #4 architecture plan and performance invariants)
+  - `docs/25-cycle4-implementation-report.md` (Added: Cycle #4 implementation verification report)
+- **Developer/AI model**: Gemini (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/core/schema-validator.js`: PASS
+  - `node --check src/newtab/settings/backup-import.js`: PASS
+  - `node --check src/newtab/core/schema-migrations.js`: PASS
+  - `node --check tests/unit/schema-validator.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (39 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 50 unit tests pass)
+  - `npm.cmd run build`: PASS (Built chrome -> dist\chrome, Built firefox -> dist\firefox)
+- **Impact**:
+  - **User-Facing**: Restoring corrupted or third-party backup files will never break the dashboard UI or cause unhandled exceptions.
+  - **Performance**: Zero startup latency penalty; batch validation of all 74 keys completes in ~0.15ms purely in-memory with zero network or repeated storage reads.
+  - **Storage**: Clean data types guaranteed in `browser.storage.local`. Non-destructive: unknown future keys preserved, existing user keys never deleted.
+  - **Compatibility**: Compatible with both Chrome and Firefox; classic `<script defer>` architecture preserved without ES modules or bundlers.
+- **Rollback plan**: Revert commits cleanly with `git revert <commit-sha>`. Storage values remain backward-compatible.
+
 ### Entry [2026-09-27-02]: Cycle #3B — Storage Schema Versioning Foundation & Migration Runner Skeleton
 
 - **Date**: 2026-09-27

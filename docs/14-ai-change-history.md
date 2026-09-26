@@ -157,6 +157,38 @@ Before an AI-generated change is merged into `main` or included in a release bui
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-03]: Cycle #4 — Central Storage Validation Architecture, Schema Validators & Non-Destructive Backup Sanitization
+
+- **Date**: 2026-09-27
+- **AI Agent**: Gemini 3.8 Flash (Antigravity)
+- **Task**: Implement Homebase Improvement Cycle #4: Storage Validation Architecture, Schema Validators & Backup Sanitization per `docs/24-cycle4-storage-validation-plan.md`.
+- **Prompt summary**: Implement central storage schema validator `window.HomebaseValidator` (`validateKey`, `sanitizeKey`, `sanitizeStorageBatch`), register before `schema-migrations.js` in `src/new-tab.html`, sanitize backup imports non-destructively in `backup-import.js`, sanitize migration writes in `schema-migrations.js`, write comprehensive unit tests in `tests/unit/schema-validator.test.mjs`, maintain sub-millisecond synchronous performance, do not modify `src/new-tab.js`, manifests, CSS, or dist.
+- **Files changed**:
+  - `src/newtab/core/schema-validator.js` (Added: central storage schema validator covering all 74 storage keys with clamping, enum checks, hex normalization, array validation, object inspection, prototype pollution prevention)
+  - `src/new-tab.html` (Modified: registered `newtab/core/schema-validator.js` under Core Runtime before `schema-migrations.js`)
+  - `src/newtab/settings/backup-import.js` (Modified: replaced raw key copying with non-destructive `sanitizeStorageBatch(incoming, { fallbackToDefault: false })`)
+  - `src/newtab/core/schema-migrations.js` (Modified: ran `sanitizeStorageBatch(transformedUpdates, { fallbackToDefault: true })` before atomic storage write)
+  - `tests/unit/schema-validator.test.mjs` (Added: 9 unit tests verifying clamping, hex color validation, enum checks, array normalization, object prototype safety, corrupted backup recovery, and <3ms latency budget)
+  - `docs/24-cycle4-storage-validation-plan.md` (Added: storage validation audit and architecture plan)
+  - `docs/25-cycle4-implementation-report.md` (Added: Cycle #4 implementation verification report)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry `2026-09-27-03`)
+- **Reason**: Eliminates malformed data risks across storage read/write paths, prevents corrupt backup file injections, and guarantees clean migration transforms while maintaining strictly non-destructive preservation of valid and future unknown storage keys.
+- **Testing**:
+  - `node --check src/newtab/core/schema-validator.js`: Exit 0 (Valid)
+  - `node --check src/newtab/settings/backup-import.js`: Exit 0 (Valid)
+  - `node --check src/newtab/core/schema-migrations.js`: Exit 0 (Valid)
+  - `node --check tests/unit/schema-validator.test.mjs`: Exit 0 (Valid)
+  - `node scripts/check-newtab-static.mjs`: Exit 0 (Valid, 39 deferred scripts checked)
+  - `npm.cmd test`: Exit 0 (4/4 stages passed, 50 unit tests pass)
+  - `npm.cmd run build`: Exit 0 (Chrome and Firefox dist builds succeeded)
+- **Constraint confirmation**:
+  - `git diff src/new-tab.js`: Completely empty
+  - No ES modules or bundlers added
+  - No new npm runtime dependencies added
+  - Classic `<script defer>` script execution preserved
+  - Existing normalization functions untouched
+- **Human review**: Pending Human Review
+
 ### Entry [2026-09-27-02]: Cycle #3B — Storage Schema Versioning Foundation & Migration Runner Skeleton
 
 - **Date**: 2026-09-27

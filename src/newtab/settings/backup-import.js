@@ -188,7 +188,7 @@ async function importHomebaseState(file) {
   }
 
   const incoming = parsed.storageLocal;
-  const updates = {};
+  let updates = {};
 
   // Backward-compatible fallback: migrate legacy popup folder key if canonical key is missing
   if (
@@ -200,46 +200,65 @@ async function importHomebaseState(file) {
     }
   }
 
-  HOMEBASE_OWNED_STORAGE_KEYS.forEach((key) => {
-    if (Object.prototype.hasOwnProperty.call(incoming, key)) {
-      if (key === 'todoItems') {
-        if (Array.isArray(incoming[key])) {
-          updates[key] = typeof normalizeTodoItems === 'function'
-            ? normalizeTodoItems(incoming[key])
-            : incoming[key];
-        }
-        return;
+  const batchSanitizer = (typeof window !== 'undefined' && window.HomebaseValidator?.sanitizeStorageBatch) ||
+    (typeof sanitizeStorageBatch === 'function' ? sanitizeStorageBatch : null);
+
+  if (batchSanitizer) {
+    // Sanitize incoming keys without assigning defaults for omitted keys (non-destructive)
+    const sanitizedCandidate = batchSanitizer(incoming, { fallbackToDefault: false });
+    HOMEBASE_OWNED_STORAGE_KEYS.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(sanitizedCandidate, key)) {
+        updates[key] = sanitizedCandidate[key];
       }
-      if (key === 'todoHideDone') {
-        if (typeof incoming[key] === 'boolean') {
-          updates[key] = incoming[key];
-        }
-        return;
+    });
+    // Non-destructive: preserve unknown future keys that passed validation
+    for (const [key, val] of Object.entries(sanitizedCandidate)) {
+      if (!HOMEBASE_OWNED_STORAGE_KEYS.includes(key) && val !== undefined) {
+        updates[key] = val;
       }
-      if (key === 'myWallpapers') {
-        if (Array.isArray(incoming[key])) {
-          updates[key] = normalizeMyWallpapersItems(incoming[key]);
-        }
-        return;
-      }
-      if (key === 'homebaseRecentSaveFolders') {
-        if (Array.isArray(incoming[key])) {
-          updates[key] = incoming[key]
-            .map((id) => (typeof id === 'string' ? id.trim() : ''))
-            .filter(Boolean)
-            .slice(0, 6);
-        }
-        return;
-      }
-      if (key === 'schemaVersion') {
-        if (typeof incoming[key] === 'number' && Number.isInteger(incoming[key]) && incoming[key] > 0) {
-          updates[key] = incoming[key];
-        }
-        return;
-      }
-      updates[key] = incoming[key];
     }
-  });
+  } else {
+    HOMEBASE_OWNED_STORAGE_KEYS.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(incoming, key)) {
+        if (key === 'todoItems') {
+          if (Array.isArray(incoming[key])) {
+            updates[key] = typeof normalizeTodoItems === 'function'
+              ? normalizeTodoItems(incoming[key])
+              : incoming[key];
+          }
+          return;
+        }
+        if (key === 'todoHideDone') {
+          if (typeof incoming[key] === 'boolean') {
+            updates[key] = incoming[key];
+          }
+          return;
+        }
+        if (key === 'myWallpapers') {
+          if (Array.isArray(incoming[key])) {
+            updates[key] = normalizeMyWallpapersItems(incoming[key]);
+          }
+          return;
+        }
+        if (key === 'homebaseRecentSaveFolders') {
+          if (Array.isArray(incoming[key])) {
+            updates[key] = incoming[key]
+              .map((id) => (typeof id === 'string' ? id.trim() : ''))
+              .filter(Boolean)
+              .slice(0, 6);
+          }
+          return;
+        }
+        if (key === 'schemaVersion') {
+          if (typeof incoming[key] === 'number' && Number.isInteger(incoming[key]) && incoming[key] > 0) {
+            updates[key] = incoming[key];
+          }
+          return;
+        }
+        updates[key] = incoming[key];
+      }
+    });
+  }
 
   if (Object.keys(updates).length) {
     await browser.storage.local.set(updates);
@@ -247,15 +266,15 @@ async function importHomebaseState(file) {
 
   try {
     if (window.localStorage) {
-      if (Object.prototype.hasOwnProperty.call(incoming, 'appBackgroundDim')) {
-        const dimValue = incoming['appBackgroundDim'];
+      if (Object.prototype.hasOwnProperty.call(updates, 'appBackgroundDim')) {
+        const dimValue = updates['appBackgroundDim'];
         if (Number.isFinite(dimValue)) {
           localStorage.setItem('fast-bg-dim', String(dimValue));
         }
       }
 
-      if (Object.prototype.hasOwnProperty.call(incoming, 'appShowSidebar')) {
-        const sidebarValue = incoming['appShowSidebar'];
+      if (Object.prototype.hasOwnProperty.call(updates, 'appShowSidebar')) {
+        const sidebarValue = updates['appShowSidebar'];
         if (typeof sidebarValue === 'boolean') {
           localStorage.setItem('fast-show-sidebar', sidebarValue ? '1' : '0');
         }

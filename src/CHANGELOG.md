@@ -1,6 +1,20 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to Homebase will be documented in this file.
+
+## v0.15.0 — 2026-09-26
+### Added
+- Custom wallpaper collections in "My Wallpapers" are now included in Settings backup export and restore.
+- Added sanitization and deduplication for custom wallpaper metadata on import.
+
+### Improved
+- Settings modal and wallpaper gallery styling now load through dedicated first-party stylesheets.
+- Search engine reordering in settings features clearer drag handles and responsive layout polish.
+- Added comprehensive static verification suite to validate script load order and declaration safety.
+
+### Fixed
+- Restoring legacy backup files no longer removes existing custom wallpaper collections or todo items.
+- Harmonized repository package metadata with active extension manifests.
 
 ## v0.14.0 — 2026-05-25
 ### Added

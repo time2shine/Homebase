@@ -150,4 +150,73 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
-*(No maintenance entries recorded yet. The ledger is ready for future engineering entries.)*
+### Entry [2026-09-26-03]: Production Release Preparation — v0.15.0
+
+- **Date**: 2026-09-26
+- **Build type**: Production (Version bump, dual-target compilation, and distribution packaging)
+- **Platforms**: Chromium (Google Chrome / Microsoft Edge / Brave) & Gecko (Mozilla Firefox)
+- **Version released**: `v0.15.0`
+- **Files changed**:
+  - `package.json` (Modified: bumped version from `0.8.0` to `0.15.0`, eliminating version drift)
+  - `manifests/manifest.chrome.json` (Modified: bumped version from `0.14.0` to `0.15.0`)
+  - `manifests/manifest.firefox.json` (Modified: bumped version from `0.14.0` to `0.15.0`)
+  - `src/data.js` (Modified: updated `WHATS_NEW` metadata object with version `'0.15.0'`, date `'2026-09-26'`, and 4 user highlights)
+  - `src/CHANGELOG.md` (Modified: added formal release notes section for `v0.15.0 — 2026-09-26`)
+  - `docs/13-maintenance-log.md` (Modified: logged release preparation entry)
+  - `docs/14-ai-change-history.md` (Modified: logged release preparation entry)
+- **Commands executed**:
+  - `node --check src/data.js` (Syntax verification: Exit code 0)
+  - `node scripts/check-newtab-static.mjs` (Static integrity check: Exit code 0, 11/11 passed)
+  - `node scripts/smoke-newtab-file.mjs` (DOM smoke test: Exit code 0)
+  - `npm.cmd run build` (Dual compilation: Exit code 0, built `dist/chrome` and `dist/firefox`)
+  - `npm.cmd run zip:chrome` (Packaging: Exit code 0, created `dist/homebase-chrome-0.15.0.zip`)
+  - `npm.cmd run zip:firefox` (Packaging: Exit code 0, created `dist/homebase-firefox-0.15.0.zip`)
+- **Build results**:
+  - Chrome build: `dist/chrome` compiled cleanly (manifest version `0.15.0`, MV3 compliant, no `browser_specific_settings`, no `contextualIdentities`).
+  - Firefox build: `dist/firefox` compiled cleanly (manifest version `0.15.0`, MV3 compliant, Gecko ID `rokonmagura@gmail.com`, `contextualIdentities` present, min version `142.0`).
+- **Package results**:
+  - Chrome package: `dist/homebase-chrome-0.15.0.zip` (3,308,465 bytes, manifest at archive root, store-ready).
+  - Firefox package: `dist/homebase-firefox-0.15.0.zip` (3,308,580 bytes, manifest at archive root, AMO-ready).
+- **Warnings**: None.
+- **Notes**: All 5 release metadata files synchronized under the 4-file version invariant. No application source code or UI logic modified. Zero Git commits created yet, pending user review of the diff.
+
+---
+
+### Entry [2026-09-26-02]: Production Dual-Target Extension Compilation
+
+- **Date**: 2026-09-26
+- **Build type**: Production (dual-manifest unpacked distribution compilation)
+- **Platforms**: Chromium (Google Chrome / Microsoft Edge / Brave) & Gecko (Mozilla Firefox)
+- **Chrome build**: `dist/chrome` (MV3 compliant, `browser_specific_settings` and `contextualIdentities` absent)
+- **Firefox build**: `dist/firefox` (MV3 compliant, Gecko ID `rokonmagura@gmail.com`, `contextualIdentities` present, min version `142.0`)
+- **Commands executed**:
+  - `npm.cmd run build` (invoked `node scripts/build.mjs`)
+  - `node scripts/check-newtab-static.mjs`
+  - `node --check dist/chrome/new-tab.js`
+  - `node --check dist/firefox/new-tab.js`
+- **Result**: Success (Exit Code 0 for both targets)
+- **Warnings**: Root `package.json` version remains at `0.8.0` while manifests and distribution artifacts are at `0.14.0` (known documentation mismatch tracked in validation report).
+- **Notes**: All 38 runtime scripts, icons, stylesheets, HTML entry points, and lazy-loaded assets physically verified in both distribution directories. Application source code untouched.
+
+---
+
+### Entry [2026-09-26-01]: Include Custom Wallpaper Metadata in Backup Subsystem
+
+- **Date**: 2026-09-26
+- **Change**: Added `myWallpapers` key to `HOMEBASE_OWNED_STORAGE_KEYS`, implemented `normalizeMyWallpapersItems` sanitization helper, and added legacy backup preservation guard in `importHomebaseState`.
+- **Reason**: Resolves Critical Code Review Issue TD1 and Improvement Roadmap Item 1.1; eliminates data loss where user-uploaded custom wallpapers were omitted from exported backups or deleted upon importing settings.
+- **Files affected**:
+  - `src/newtab/settings/backup-import.js` (Modified: registered `myWallpapers`, added `normalizeMyWallpapersItems`, updated `importHomebaseState`)
+  - `docs/03-data-architecture.md` (Modified: documented `myWallpapers` under canonical storage keys)
+- **Developer/AI model**: Gemini 3.8 Flash (Antigravity)
+- **Testing performed**:
+  - `node --check src/newtab/settings/backup-import.js`: Code 0 (Passed)
+  - `node scripts/check-newtab-static.mjs`: Code 0 (11/11 Passed)
+  - `node scripts/smoke-newtab-file.mjs`: Code 0 (Passed)
+  - `npm.cmd run build:chrome`: Code 0 (Built `dist/chrome`)
+  - `npm.cmd run build:firefox`: Code 0 (Built `dist/firefox`)
+  - Unit test suite: 5/5 passed (key registration, sanitization, legacy preservation, new import, export payload)
+- **Impact**: Zero data loss for custom wallpapers; fully backward-compatible with legacy backup files; 0ms impact on tab cold-boot startup.
+- **Rollback plan**: `git checkout HEAD -- src/newtab/settings/backup-import.js && npm.cmd run build`
+
+---

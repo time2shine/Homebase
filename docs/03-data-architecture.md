@@ -153,6 +153,7 @@ These keys represent the canonical source of truth managed primarily in [src/new
 | `weatherLon` | `Number` | `null` | `weather.js` | No | Yes | Longitude coordinates configured for weather lookups. |
 | `weatherCityName` | `String` | `""` | `weather.js` | No | Yes | Manually configured or reverse-geocoded city string. |
 | `weatherUnits` | `String` | `'celsius'`| `weather.js` | No | Yes | Selected measurement unit for weather queries. |
+| `myWallpapers` | `Array<Object>` | `[]` | `gallery-ui.js` | No | Yes | Array of user-uploaded custom wallpaper metadata descriptors (`{ id, title, type, mimeType, cacheKey, posterCacheKey, size, posterSize, createdAt, lastUsedAt, originalName }`). |
 
 ---
 
@@ -172,7 +173,6 @@ The following keys are actively read or written to `browser.storage.local` in so
 | `homebaseOnboardingDismissed` | `Boolean` | `src/newtab/tips/homebase-tips-ui.js` | State tracking onboarding completion. Resets on restore. |
 | `homebaseTipDismissedDate` | `String` | `src/newtab/tips/homebase-tips-ui.js` | Date stamp when daily tip was closed. Resets on restore. |
 | `homebaseTipLastIndex` | `Number` | `src/newtab/tips/homebase-tips-ui.js` | Carousel rotation pointer for tips. Resets on restore. |
-| `myWallpapers` | `Array<Object>` | `src/newtab/wallpaper/gallery-ui.js` | **Critical Defect**: Metadata array of custom user-uploaded wallpapers. Completely lost during backup! |
 | `fav:meta:<url>` | `Object` | `src/new-tab.js` | Metadata record (TTL, status, ETag) for cached favicons. |
 
 ---

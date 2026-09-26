@@ -157,4 +157,89 @@ Before an AI-generated change is merged into `main` or included in a release bui
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
-*(No AI modifications recorded yet. The tracking system is active and ready for future AI-assisted engineering changes.)*
+### Entry [2026-09-26-03]: Production Release Preparation — v0.15.0
+
+- **Date**: 2026-09-26
+- **AI Agent**: Gemini 3.8 Flash (Antigravity)
+- **Task**: Prepare the next production release v0.15.0 in accordance with `docs/17-release-plan.md` and `docs/12-release-process.md`.
+- **Version released**: `v0.15.0`
+- **Prompt summary**: Update version metadata across package.json, manifests, data.js, and CHANGELOG.md; verify syntax and static integrity; compile and package production distribution archives for Chrome and Firefox; update maintenance logs and AI history; do not commit yet; show complete diff.
+- **Files changed**:
+  - `package.json` (Modified: bumped version from `0.8.0` to `0.15.0`)
+  - `manifests/manifest.chrome.json` (Modified: bumped version from `0.14.0` to `0.15.0`)
+  - `manifests/manifest.firefox.json` (Modified: bumped version from `0.14.0` to `0.15.0`)
+  - `src/data.js` (Modified: updated `WHATS_NEW` metadata object for `0.15.0`)
+  - `src/CHANGELOG.md` (Modified: prepended changelog entry for `v0.15.0 — 2026-09-26`)
+  - `docs/13-maintenance-log.md` (Modified: logged release maintenance entry)
+  - `docs/14-ai-change-history.md` (Modified: logged release AI tracking entry)
+- **Reason**: Official production release v0.15.0 incorporating custom wallpaper backup export/import, modular settings and gallery styling, automated static verification harnesses, and repository metadata synchronization.
+- **Testing**:
+  - `node --check src/data.js`: Exit Code 0 (Passed)
+  - `node scripts/check-newtab-static.mjs`: Exit Code 0 (11/11 checks passed)
+  - `node scripts/smoke-newtab-file.mjs`: Exit Code 0 (Passed)
+  - `npm.cmd run build`: Exit Code 0 (Compiled `dist/chrome` and `dist/firefox`)
+  - `npm.cmd run zip:chrome`: Exit Code 0 (Created `dist/homebase-chrome-0.15.0.zip`)
+  - `npm.cmd run zip:firefox`: Exit Code 0 (Created `dist/homebase-firefox-0.15.0.zip`)
+- **Build results**:
+  - `dist/chrome`: Clean compilation, MV3 compliant, manifest version `0.15.0`.
+  - `dist/firefox`: Clean compilation, MV3 compliant, manifest version `0.15.0`.
+- **Package results**:
+  - `dist/homebase-chrome-0.15.0.zip`: 3.31 MB, root-level manifest verified via `tar -tf`.
+  - `dist/homebase-firefox-0.15.0.zip`: 3.31 MB, root-level manifest verified via `tar -tf`.
+- **Human review**:
+  - Reviewer: User / Maintainer
+  - Status: Pending Diff Review & Acceptance
+  - Review Date: 2026-09-26
+  - Notes: Metadata changes only; zero runtime code altered during release prep. Awaiting approval to commit.
+
+---
+
+### Entry [2026-09-26-02]: Production Dual-Target Extension Compilation
+
+- **Date**: 2026-09-26
+- **AI Agent**: Gemini 3.8 Flash (Antigravity)
+- **Task**: Release engineering execution: Create clean production builds for Google Chrome and Mozilla Firefox extensions under MV3.
+- **Build verification**:
+  - Chrome distribution: `dist/chrome` (manifest version 0.14.0, MV3 compliant, no `browser_specific_settings`, no `contextualIdentities`).
+  - Firefox distribution: `dist/firefox` (manifest version 0.14.0, MV3 compliant, gecko ID `rokonmagura@gmail.com`, `contextualIdentities` enabled, min version 142.0).
+  - Script inclusion: 38 scripts verified in static check.
+  - Assets: All icons (16, 32, 48, 128px), action popup, and fallback media verified present in output directories.
+- **Files changed**:
+  - `docs/13-maintenance-log.md` (Updated: logged release build entry)
+  - `docs/14-ai-change-history.md` (Updated: logged release build entry)
+  - *(Zero application source code modified)*
+- **Testing performed**:
+  - `npm.cmd run build`: Success (Exit code 0)
+  - `node scripts/check-newtab-static.mjs`: Success (11/11 passed)
+  - `node --check dist/chrome/new-tab.js`: Success (Exit code 0)
+  - `node --check dist/firefox/new-tab.js`: Success (Exit code 0)
+- **Result**: Success. Both Chrome and Firefox production packages compiled cleanly into `dist/` without errors or warnings.
+
+---
+
+### Entry [2026-09-26-01]: Custom Wallpaper Metadata Support in Backup Subsystem
+
+- **Date**: 2026-09-26
+- **AI Model**: Gemini 3.8 Flash (Antigravity)
+- **Task**: Implement the first safe high-value improvement from `docs/16-first-improvement-plan.md` to prevent custom wallpaper data loss during backup/restore.
+- **Prompt summary**: Inspect `backup-import.js` against plan, verify no hidden/conflicting dependencies, implement `myWallpapers` backup export and sanitized import with legacy preservation guard, update documentation (`03-data-architecture.md`, `13-maintenance-log.md`, `14-ai-change-history.md`), run static and build verification, and report.
+- **Files changed**:
+  - `src/newtab/settings/backup-import.js` (Modified: registered `myWallpapers` key, added `normalizeMyWallpapersItems()` helper, updated `importHomebaseState()` with validation and legacy preservation guard)
+  - `docs/03-data-architecture.md` (Modified: updated canonical keys and unowned keys tables)
+  - `docs/13-maintenance-log.md` (Modified: logged engineering change entry)
+  - `docs/14-ai-change-history.md` (Modified: logged AI change tracking entry)
+- **Reason**: Fixes Critical Code Review Issue TD1 and Improvement Roadmap Item 1.1; eliminates data loss where user-uploaded custom wallpapers were omitted from exported backups or deleted upon importing settings.
+- **Testing**:
+  - `node --check src/newtab/settings/backup-import.js`: Exit Code 0 (Passed)
+  - `node scripts/check-newtab-static.mjs`: Exit Code 0 (11/11 checks passed)
+  - `node scripts/smoke-newtab-file.mjs`: Exit Code 0 (Passed)
+  - `npm.cmd run build:chrome`: Exit Code 0 (Built `dist/chrome`)
+  - `npm.cmd run build:firefox`: Exit Code 0 (Built `dist/firefox`)
+  - Unit test suite (`verify_backup_mywallpapers.js`): 5/5 passed (key registration, sanitization, legacy preservation, new import, export payload)
+- **Human review**:
+  - Reviewer: Pending
+  - Status: Pending Human Review
+  - Review Date: Pending
+  - Notes: Implementation strictly additive; verified with sandbox unit tests and static integrity harness.
+
+---

@@ -1,4 +1,11 @@
 async function loadAppSettingsFromStorage() {
+  try {
+    if (typeof runSchemaMigrations === 'function') {
+      await runSchemaMigrations();
+    }
+  } catch (migErr) {
+    console.error('Schema migration run failed safely:', migErr);
+  }
 
   try {
 

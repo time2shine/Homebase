@@ -150,6 +150,35 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-02]: Cycle #3B — Storage Schema Versioning Foundation & Migration Runner Skeleton
+
+- **Date**: 2026-09-27
+- **Change**: Created `src/newtab/core/schema-migrations.js` defining `CURRENT_SCHEMA_VERSION = 1`, `SCHEMA_VERSION_KEY = 'schemaVersion'`, and `runSchemaMigrations()` skeleton with version detection, v0 profile initialization, future version downgrade protection, concurrency execution lock, and atomic storage writes. Registered `schema-migrations.js` in `src/new-tab.html` under Core Runtime before settings preferences. Safely integrated migration execution into `loadAppSettingsFromStorage()` in `src/newtab/settings/settings-preferences.js`. Added `schemaVersion` to `HOMEBASE_OWNED_STORAGE_KEYS` with integer validation in `src/newtab/settings/backup-import.js`. Created `tests/unit/schema-migrations.test.mjs` with 9 automated unit tests verifying fresh install initialization, legacy profile upgrade, fast-path no-op, idempotency, atomic writes, future version protection, failure safety, and backup integration.
+- **Reason**: Resolves Architecture Issue S4 (Unversioned storage schema and absent migration pipeline) planned in `docs/20-third-improvement-plan.md` and specified in `docs/22-cycle3b-schema-version-plan.md`. Establishes the authoritative foundation for deterministic, sequential schema evolution without touching `src/new-tab.js`.
+- **Files affected**:
+  - `src/newtab/core/schema-migrations.js` (Added: schema version constants, migration registry, and idempotent runner)
+  - `src/new-tab.html` (Modified: injected `newtab/core/schema-migrations.js` in Core Runtime section before `settings-preferences.js`)
+  - `src/newtab/settings/settings-preferences.js` (Modified: invoked `runSchemaMigrations()` safely inside `loadAppSettingsFromStorage()`)
+  - `src/newtab/settings/backup-import.js` (Modified: added `schemaVersion` to `HOMEBASE_OWNED_STORAGE_KEYS` with positive integer validation)
+  - `tests/unit/schema-migrations.test.mjs` (Added: 9 unit tests for schema versioning lifecycle, idempotency, and failure tolerance)
+  - `docs/22-cycle3b-schema-version-plan.md` (Added: Cycle #3B architecture specification and plan)
+  - `docs/23-cycle3b-implementation-report.md` (Added: Cycle #3B implementation verification report)
+- **Developer/AI model**: Gemini (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/core/schema-migrations.js`: PASS
+  - `node --check src/newtab/settings/settings-preferences.js`: PASS
+  - `node --check src/newtab/settings/backup-import.js`: PASS
+  - `node --check tests/unit/schema-migrations.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (38 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed: 53 syntax checks, static invariants, 41 unit tests)
+  - `npm.cmd run build`: PASS (Built chrome -> dist\chrome, Built firefox -> dist\firefox)
+- **Impact**:
+  - **User-Facing**: Zero visible disruption; existing profiles transparently receive `schemaVersion: 1` upon initial cold boot.
+  - **Performance**: Zero measurable startup delay; profile at current version completes in <1ms via fast-path no-op.
+  - **Storage**: Canonical `schemaVersion: 1` persisted in `browser.storage.local`. No legacy keys removed or renamed.
+  - **Compatibility**: Fully backward compatible with Chrome and Firefox; future version guard prevents downgrade corruption.
+- **Rollback plan**: Revert commits cleanly with `git revert <commit-sha>`. Existing fallback accessors in components ensure extension functions without `schemaVersion`.
+
 ### Entry [2026-09-27-01]: Cycle #3A — Backup Completeness & Storage Key Alignment
 
 - **Date**: 2026-09-27

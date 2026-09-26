@@ -74,7 +74,8 @@ const HOMEBASE_OWNED_STORAGE_KEYS = [
   'weatherLon',
   'weatherCityName',
   'weatherUnits',
-  'myWallpapers'
+  'myWallpapers',
+  'schemaVersion'
 ];
 
 function isPlainObject(value) {
@@ -227,6 +228,12 @@ async function importHomebaseState(file) {
             .map((id) => (typeof id === 'string' ? id.trim() : ''))
             .filter(Boolean)
             .slice(0, 6);
+        }
+        return;
+      }
+      if (key === 'schemaVersion') {
+        if (typeof incoming[key] === 'number' && Number.isInteger(incoming[key]) && incoming[key] > 0) {
+          updates[key] = incoming[key];
         }
         return;
       }

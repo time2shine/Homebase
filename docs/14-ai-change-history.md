@@ -157,6 +157,32 @@ Before an AI-generated change is merged into `main` or included in a release bui
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-02]: Cycle #3B — Storage Schema Versioning Foundation & Migration Runner Skeleton
+
+- **Date**: 2026-09-27
+- **AI Agent**: Gemini 3.8 Flash (Antigravity)
+- **Task**: Implement Homebase Improvement Cycle #3B: Storage Schema Versioning Foundation & Migration Runner Skeleton per `docs/22-cycle3b-schema-version-plan.md`.
+- **Prompt summary**: Implement only the schemaVersion foundation, migration runner skeleton, and unit tests; do not remove old keys, rename storage structures, clean deprecated data, rewrite backup system, or refactor settings architecture; do not modify new-tab.js, manifests, CSS, or dist.
+- **Files changed**:
+  - `src/newtab/core/schema-migrations.js` (Added: canonical constants, migration registry, and idempotent migration runner skeleton)
+  - `src/new-tab.html` (Modified: injected `newtab/core/schema-migrations.js` under Core Runtime before settings preferences)
+  - `src/newtab/settings/settings-preferences.js` (Modified: called `runSchemaMigrations()` safely at entry of `loadAppSettingsFromStorage()`)
+  - `src/newtab/settings/backup-import.js` (Modified: added `schemaVersion` to `HOMEBASE_OWNED_STORAGE_KEYS` with integer validation)
+  - `tests/unit/schema-migrations.test.mjs` (Added: 9 unit tests verifying initialization, upgrade, fast-path no-op, idempotency, atomic write, downgrade protection, failure containment, and backup validation)
+  - `docs/22-cycle3b-schema-version-plan.md` (Added: Cycle #3B plan)
+  - `docs/23-cycle3b-implementation-report.md` (Added: Cycle #3B implementation report)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry `2026-09-27-02`)
+- **Reason**: Resolves Architecture Issue S4 (Unversioned storage schema and absent migration pipeline) planned in `docs/20-third-improvement-plan.md` and specified in `docs/22-cycle3b-schema-version-plan.md`.
+- **Testing**:
+  - `node --check src/newtab/core/schema-migrations.js`: Exit 0 (Valid)
+  - `node --check src/newtab/settings/settings-preferences.js`: Exit 0 (Valid)
+  - `node --check src/newtab/settings/backup-import.js`: Exit 0 (Valid)
+  - `node --check tests/unit/schema-migrations.test.mjs`: Exit 0 (Valid)
+  - `node scripts/check-newtab-static.mjs`: Exit 0 (38 scripts, 33 module paths, 87 declarations passed)
+  - `npm.cmd test`: Exit 0 (4/4 stages passed: 53 syntax checks, static invariants, 41 unit tests pass)
+  - `npm.cmd run build`: Exit 0 (Chrome and Firefox dists built successfully)
+- **Human review**: `Pending Human Review`
+
 ### Entry [2026-09-27-01]: Cycle #3A — Backup Completeness & Storage Key Alignment
 
 - **Date**: 2026-09-27

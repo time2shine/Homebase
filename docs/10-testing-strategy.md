@@ -66,10 +66,9 @@ This document establishes the official QA strategy, critical user flow architect
 ---
 
 ## 2. Current Testing
-
 ### 2.1 Existing Automated Tests
 
-The Homebase repository currently includes three automated testing and verification mechanisms:
+The Homebase repository includes a unified multi-tier automated test harness driven by `npm test` (`node scripts/test.mjs`) organizing verification into four deterministic stages:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -78,6 +77,11 @@ The Homebase repository currently includes three automated testing and verificat
 │                  ┌──────────────────────────────┐                      │
 │                  │  Browser Smoke Test (CDP)    │  smoke-newtab-file   │
 │                  │  DOM mounting, console errs  │                      │
+│                  └──────────────┬───────────────┘                      │
+│                                 │                                      │
+│                  ┌──────────────┴───────────────┐                      │
+│                  │  Algorithmic Unit Tests      │  node:test           │
+│                  │  Math, units, URLs, schema   │  tests/unit/         │
 │                  └──────────────┬───────────────┘                      │
 │                                 │                                      │
 │                  ┌──────────────┴───────────────┐                      │
@@ -92,38 +96,30 @@ The Homebase repository currently includes three automated testing and verificat
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### 1. V8 Syntax Validation (`node --check`)
-- **Command**: `node --check <changed-file.js>`
-- **Scope**: Validates that modified JavaScript files parse cleanly into the V8 Abstract Syntax Tree (AST) without syntax errors, unclosed tokens, or invalid escape sequences.
-- **Limitation**: Does not execute code or verify runtime semantics, variable resolution, or API compatibility.
+#### 1. Unified Test Runner ([scripts/test.mjs](file:///c:/Users/Administrator/Desktop/Homebase/scripts/test.mjs))
+- **Command**: `npm.cmd test` (or `node scripts/test.mjs`)
+- **Flags**: `--syntax`, `--static`, `--unit`, `--smoke`
+- **Scope**: Orchestrates all four verification tiers sequentially, tracks stage execution time, reports clear pass/fail status, and sets a non-zero exit code if any stage fails.
 
-#### 2. Static Structural Checker ([scripts/check-newtab-static.mjs](file:///c:/Users/Administrator/Desktop/Homebase/scripts/check-newtab-static.mjs))
-- **Command**: `node scripts/check-newtab-static.mjs`
-- **Scope**: A custom 431-line Node.js script enforcing 11 architectural invariants:
-  1. Verifies that all 37 deferred local scripts in `src/new-tab.html` physically exist on disk.
-  2. Asserts that `preload.js` appears exactly once in `<head>`.
-  3. Asserts that `preload.js` remains strictly synchronous (no `defer`, `async`, or `type="module"`).
-  4. Asserts that `preload.js` physically exists at `src/preload.js`.
-  5. Asserts that `new-tab.js` is the final deferred script in `new-tab.html`.
-  6. Verifies that 33 extracted module paths in `src/newtab/` exist.
-  7. Ensures no legacy flat `src/newtab/*.js` path references exist.
-  8. Ensures no root-level `src/newtab/*.js` files linger.
-  9. Validates that lazy-loaded paths (`settings-ui.js`, `gallery-ui.js`) have no stale references.
-  10. Performs AST/regex scanning on 87 critical global declarations to assert that moved functions and constants exist exactly once and are not duplicated across files.
-  11. Confirms correct script load order between provider modules and consumer scripts.
+#### 2. V8 Syntax Validation (`node --check`)
+- **Command**: `npm.cmd test -- --syntax` (or `node --check <file>`)
+- **Scope**: Validates that all 50+ JavaScript and MJS source, script, and test files parse cleanly into the V8 Abstract Syntax Tree (AST) without syntax errors, unclosed tokens, or invalid escape sequences.
 
-#### 3. Browser Smoke Test Harness ([scripts/smoke-newtab-file.mjs](file:///c:/Users/Administrator/Desktop/Homebase/scripts/smoke-newtab-file.mjs))
-- **Command**: `node scripts/smoke-newtab-file.mjs`
-- **Scope**: A 946-line zero-dependency integration test harness that:
-  - Discovers local Google Chrome or Microsoft Edge binaries.
-  - Launches an isolated headless browser instance via `--remote-debugging-port` with a clean temporary profile (`--user-data-dir`).
-  - Starts an ephemeral Node.js HTTP server delivering `src/new-tab.html`.
-  - Injects a lightweight mock extension API shim simulating `chrome.storage.local`, `chrome.storage.onChanged`, `chrome.bookmarks`, `chrome.tabs`, and `chrome.runtime`.
-  - Injects realistic mock bookmark hierarchies and pre-seeded `localStorage` fast-keys.
-  - Monitors the Chrome DevTools Protocol (CDP) WebSocket for unhandled exceptions (`Runtime.exceptionThrown`) and severe console errors (`consoleAPICalled` matching `ReferenceError`, `TypeError`, `SyntaxError`, `RangeError`).
-  - Asserts that critical DOM surfaces successfully mount (`searchInput`, `sidebar`, `weatherWidget`, `quoteWidget`, `todoWidget`, `newsWidget`, `bookmarksGrid`, `dock`).
-  - Verifies that `preload.js` fast widget ordering successfully applies.
-  - Times out deterministically at 12,000ms.
+#### 3. Static Structural Checker ([scripts/check-newtab-static.mjs](file:///c:/Users/Administrator/Desktop/Homebase/scripts/check-newtab-static.mjs))
+- **Command**: `npm.cmd test -- --static` (or `node scripts/check-newtab-static.mjs`)
+- **Scope**: A custom Node.js script enforcing 11 architectural invariants: script tags existence, single synchronous `preload.js` in `<head>`, `new-tab.js` as terminal script, absence of flat `newtab/*.js` references, declaration uniqueness across 87 symbols, and provider-before-consumer script loading order.
+
+#### 4. Algorithmic Unit Test Suite (`tests/unit/*.test.mjs`)
+- **Command**: `npm.cmd test -- --unit` (or `node --test tests/unit/**/*.test.mjs`)
+- **Scope**: 27 automated unit tests leveraging Node.js native `node:test` and `node:assert/strict` with zero third-party dependencies:
+  - `tests/unit/search-utils.test.mjs`: Tests `evaluateMath()` (operators, precedence, divide-by-zero protection), `evaluateUnits()` (temperature, length, weight), and `isLikelyUrl()` heuristics.
+  - `tests/unit/backup-validation.test.mjs`: Tests `isPlainObject()`, `HOMEBASE_OWNED_STORAGE_KEYS` registry, `normalizeMyWallpapersItems()`, and `normalizeTodoItems()`.
+  - `tests/unit/widget-order.test.mjs`: Tests `normalizeWidgetOrder()` and `areWidgetOrdersEqual()`.
+  - `tests/unit/core-utils.test.mjs`: Tests `escapeHtml()` XSS sanitization, `shuffleArray()`, `debounce()`, and `throttle()`.
+
+#### 5. Browser Smoke Test Harness ([scripts/smoke-newtab-file.mjs](file:///c:/Users/Administrator/Desktop/Homebase/scripts/smoke-newtab-file.mjs))
+- **Command**: `npm.cmd test -- --smoke` (or `node scripts/smoke-newtab-file.mjs`)
+- **Scope**: Integration test harness connecting via Chrome DevTools Protocol (CDP) to a headless browser. Asserts DOM surface mounting, startup perf events, and exception freedom. Gracefully skips when no browser binary is available.
 
 ---
 
@@ -135,35 +131,35 @@ The Homebase repository currently includes three automated testing and verificat
 │                                                                         │
 │  Developer CLI (pwsh)                                                   │
 │    │                                                                    │
-│    ├──> node --check src/**/*.js                                        │
-│    │      (Fast AST syntax check)                                       │
-│    │                                                                    │
-│    ├──> node scripts/check-newtab-static.mjs                            │
-│    │      (Static AST/regex scanner: order, duplicates, paths)          │
-│    │                                                                    │
-│    └──> node scripts/smoke-newtab-file.mjs                              │
+│    └──> npm.cmd test (node scripts/test.mjs)                            │
 │           │                                                             │
-│           ├──> Node HTTP Server (ephemeral port)                        │
-│           │      Serves src/new-tab.html + mock harness                 │
+│           ├──> [Stage 1] Syntax Check: node --check src/**/*.js         │
 │           │                                                             │
-│           └──> Spawns Headless Chrome/Edge                              │
-│                  │                                                      │
-│                  ├──> CDP Client (WebSocket)                            │
-│                  │      Page.navigate                                   │
-│                  │      Runtime.enable                                  │
-│                  │      Console / Exception traps                       │
-│                  │                                                      │
-│                  └──> Mock Harness Injection                            │
-│                         chrome.storage.local (in-memory)                │
-│                         chrome.bookmarks (mock tree)                    │
-│                         chrome.tabs / chrome.runtime                    │
+│           ├──> [Stage 2] Static Invariants: check-newtab-static.mjs     │
+│           │                                                             │
+│           ├──> [Stage 3] Unit Tests: node:test (tests/unit/*.test.mjs)  │
+│           │                                                             │
+│           └──> [Stage 4] Smoke Test: smoke-newtab-file.mjs (CDP)        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 The test infrastructure is deliberately engineered to require **zero external dependencies**:
-- Network communication utilizes native Node.js `node:http` and `node:net`.
-- CDP communication uses the native Node.js `WebSocket` API.
-- Process orchestration uses `node:child_process` (`spawn`).
+- Uses native Node.js `node:test`, `node:assert`, `node:vm`, `node:child_process`, `node:http`, and `node:net`.
+- Classic browser `<script defer>` files are virtualized in isolated `node:vm` contexts without converting to ES modules.
+
+---
+
+### 2.3 Test Coverage Assessment
+
+| Quality Dimension | Current Coverage Level | Current Verification Mechanism | Gaps / Vulnerabilities |
+|:---|:---:|:---|:---|
+| **Syntax & Token Validity** | **100%** | `node --check` via `npm test` | Syntax only; runtime semantics tested in unit/smoke tiers |
+| **Structural Integrity** | **95%** | `check-newtab-static.mjs` via `npm test` | High confidence in script order and duplicate globals |
+| **DOM Mounting & Boot** | **85%** (Chrome/Edge) | `smoke-newtab-file.mjs` via `npm test` | Verifies container mounting; skips gracefully in headless CI |
+| **Unit Test Coverage** | **65%** | `node:test` via `npm test` | Pure utilities covered (math, units, URLs, backup, widgets, core); complex DOM renderers tested via CDP |
+| **Integration Test Coverage** | **20%** | CDP Smoke Harness | Synthetic mocks; does not test real browser storage or real bookmark engines |
+| **End-to-End User Flows** | **Manual** | Manual QA Checklists | Fully reliant on human testing; high regression risk on refactoring |
+| **Firefox Compatibility** | **Manual** | Manual QA Checklists | CDP harness does not run against Firefox; Gecko behavior is unverified by automation |de:child_process` (`spawn`).
 - Filesystem operations use `node:fs` promises.
 
 ---

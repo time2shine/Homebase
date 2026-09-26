@@ -150,6 +150,34 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-26-04]: Unified Automated Testing Baseline & Test Runner (`npm test`)
+
+- **Date**: 2026-09-26
+- **Change**: Added unified test orchestrator `scripts/test.mjs`, configured `"test": "node scripts/test.mjs"` in `package.json`, created native unit test suites in `tests/unit/` covering search utilities, backup sanitization, widget ordering, and core utilities using Node.js built-in `node:test` and `node:assert`, and updated testing strategy documentation.
+- **Reason**: Resolves Critical Code Review Issue T1 (0% unit test coverage), Improvement Roadmap Phase 1 Item 1.8, and Documentation Validation Opportunity #2; establishes a dependable automated verification baseline before Phase 2 high-risk modular extractions.
+- **Files affected**:
+  - `package.json` (Modified: added `"test": "node scripts/test.mjs"`)
+  - `scripts/test.mjs` (Added: multi-tier test runner supporting `--syntax`, `--static`, `--unit`, `--smoke` CLI flags)
+  - `tests/unit/search-utils.test.mjs` (Added: 12 unit tests for math evaluation, unit conversion, and URL heuristics)
+  - `tests/unit/backup-validation.test.mjs` (Added: 6 unit tests for backup payload validation, custom wallpaper sanitization, and todo normalization)
+  - `tests/unit/widget-order.test.mjs` (Added: 4 unit tests for widget order normalization and equality comparison)
+  - `tests/unit/core-utils.test.mjs` (Added: 5 unit tests for HTML entity escaping, array shuffling, debounce, and throttle)
+  - `docs/10-testing-strategy.md` (Modified: updated Section 2 to document test runner and unit test coverage)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry)
+  - `docs/14-ai-change-history.md` (Modified: logged AI change history entry)
+- **Developer/AI model**: Gemini 3.8 Flash (Antigravity)
+- **Testing performed**:
+  - `npm.cmd test`: Exit code 0 (All 4 stages passed: 51 JS files checked, 11/11 static invariants, 27/27 unit tests, smoke test cleanly handled)
+  - `npm.cmd test -- --syntax`: Exit code 0 (51 files verified)
+  - `npm.cmd test -- --static`: Exit code 0 (11/11 invariant checks passed)
+  - `npm.cmd test -- --unit`: Exit code 0 (27/27 unit assertions passed)
+  - `npm.cmd test -- --smoke`: Exit code 0 (Headless smoke test handled)
+  - `npm.cmd run build`: Exit code 0 (Built `dist/chrome` and `dist/firefox`)
+- **Impact**: Zero runtime behavior changes, zero new npm dependencies, zero manifest changes; establishes an automated <2.5s regression testing baseline for all future development.
+- **Rollback plan**: `git checkout HEAD -- package.json docs/10-testing-strategy.md && rm -rf scripts/test.mjs tests/`
+
+---
+
 ### Entry [2026-09-26-03]: Production Release Preparation — v0.15.0
 
 - **Date**: 2026-09-26

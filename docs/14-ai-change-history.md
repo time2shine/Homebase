@@ -157,6 +157,38 @@ Before an AI-generated change is merged into `main` or included in a release bui
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-26-04]: Unified Automated Testing Baseline & Test Runner (`npm test`)
+
+- **Date**: 2026-09-26
+- **AI Agent**: Gemini 3.8 Flash (Antigravity)
+- **Task**: Implement the Second Controlled Improvement Cycle: Unified Automated Testing Baseline per `docs/19-second-improvement-plan.md`.
+- **Prompt summary**: Implement unified `npm test` command, `scripts/test.mjs` orchestrator supporting `--syntax`, `--static`, `--unit`, `--smoke` flags, add unit tests in `tests/unit/` for search utils, backup validation, widget ordering, and core utils using `node:test` and `node:assert`, update documentation, and verify with `npm test` and `npm.cmd run build`.
+- **Files changed**:
+  - `package.json` (Modified: added `"test": "node scripts/test.mjs"`)
+  - `scripts/test.mjs` (Added: multi-tier test runner)
+  - `tests/unit/search-utils.test.mjs` (Added: 12 unit tests for math evaluation, units, and URL heuristics)
+  - `tests/unit/backup-validation.test.mjs` (Added: 6 unit tests for backup payload validation, custom wallpaper sanitization, and todo normalization)
+  - `tests/unit/widget-order.test.mjs` (Added: 4 unit tests for widget order normalization and equality comparison)
+  - `tests/unit/core-utils.test.mjs` (Added: 5 unit tests for HTML entity escaping, array shuffling, debounce, and throttle)
+  - `docs/10-testing-strategy.md` (Modified: updated Section 2 to document test runner and unit test coverage)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry)
+  - `docs/14-ai-change-history.md` (Modified: logged AI change history entry)
+- **Reason**: Fulfills Improvement Roadmap Phase 1 Item 1.8, Code Review Issue T1 (Critical Severity — 0% unit test coverage), and Documentation Validation Opportunity #2, establishing an automated testing baseline before Phase 2 modular extractions.
+- **Testing**:
+  - `npm.cmd test`: Exit code 0 (All 4 stages passed: 51 JS files checked, 11/11 static invariants, 27/27 unit tests, smoke test cleanly handled)
+  - `npm.cmd test -- --syntax`: Exit code 0 (51 files verified)
+  - `npm.cmd test -- --static`: Exit code 0 (11/11 invariant checks passed)
+  - `npm.cmd test -- --unit`: Exit code 0 (27/27 unit assertions passed)
+  - `npm.cmd test -- --smoke`: Exit code 0 (Headless smoke test handled)
+  - `npm.cmd run build`: Exit code 0 (Built `dist/chrome` and `dist/firefox`)
+- **Human review**:
+  - Reviewer: Pending
+  - Status: Pending Human Review
+  - Review Date: Pending
+  - Notes: Implementation complete with zero runtime source changes; diff ready for review.
+
+---
+
 ### Entry [2026-09-26-03]: Production Release Preparation — v0.15.0
 
 - **Date**: 2026-09-26

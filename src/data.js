@@ -147,28 +147,28 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.14.0',
-  date: '2026-05-25',
+  version: '0.15.0',
+  date: '2026-09-26',
   items: [
     {
       type: 'NEW',
-      title: 'Folder picker',
-      desc: 'Bookmark editing now includes a searchable folder picker for choosing where saved bookmarks go.'
-    },
-    {
-      type: 'NEW',
-      title: 'Text backgrounds',
-      desc: 'Bookmark labels can now use custom background color, opacity, and blur settings for easier reading.'
+      title: 'Wallpaper backup',
+      desc: 'Settings backup and export now preserves your custom uploaded wallpaper collection across profiles.'
     },
     {
       type: 'IMPROVED',
-      title: 'Folder tabs',
-      desc: 'Long folder tab rows now scroll more smoothly and keep the active folder in view.'
+      title: 'Settings styling',
+      desc: 'Settings modals now feature smoother search engine reordering and refined responsive layout.'
     },
     {
       type: 'FIX',
-      title: 'Widget order',
-      desc: 'Sidebar widgets now keep your saved order during instant preload to avoid first-load reorder flashes.'
+      title: 'Import protection',
+      desc: 'Importing settings backups now protects your active custom wallpapers and tasks from accidental deletion.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Module architecture',
+      desc: 'Core settings and gallery systems load from streamlined, verified first-party modules.'
     }
   ]
 };

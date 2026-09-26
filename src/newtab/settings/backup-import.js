@@ -72,13 +72,54 @@ const HOMEBASE_OWNED_STORAGE_KEYS = [
   'weatherLat',
   'weatherLon',
   'weatherCityName',
-  'weatherUnits'
+  'weatherUnits',
+  'myWallpapers'
 ];
 
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
+}
+
+function normalizeMyWallpapersItems(items) {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set();
+
+  return items
+    .map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+      const id = typeof item.id === 'string' ? item.id.trim() : '';
+      if (!id || seen.has(id)) return null;
+      seen.add(id);
+
+      const title = typeof item.title === 'string' ? item.title.slice(0, 120) : 'My Wallpaper';
+      const type = item.type === 'video' ? 'video' : 'image';
+      const mimeType = typeof item.mimeType === 'string' ? item.mimeType.slice(0, 64) : '';
+      const cacheKey = typeof item.cacheKey === 'string' ? item.cacheKey.slice(0, 256) : '';
+      const posterCacheKey = typeof item.posterCacheKey === 'string' ? item.posterCacheKey.slice(0, 256) : '';
+      const size = Number.isFinite(item.size) && item.size >= 0 ? Math.floor(item.size) : 0;
+      const posterSize = Number.isFinite(item.posterSize) && item.posterSize >= 0 ? Math.floor(item.posterSize) : 0;
+      const createdAt = Number.isFinite(item.createdAt) ? item.createdAt : Date.now();
+      const lastUsedAt = Number.isFinite(item.lastUsedAt) ? item.lastUsedAt : 0;
+      const originalName = typeof item.originalName === 'string' ? item.originalName.slice(0, 180) : '';
+
+      return {
+        id,
+        title,
+        type,
+        mimeType,
+        cacheKey,
+        posterCacheKey,
+        size,
+        posterSize,
+        createdAt,
+        lastUsedAt,
+        originalName
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 async function exportHomebaseState() {
@@ -162,10 +203,16 @@ async function importHomebaseState(file) {
         }
         return;
       }
+      if (key === 'myWallpapers') {
+        if (Array.isArray(incoming[key])) {
+          updates[key] = normalizeMyWallpapersItems(incoming[key]);
+        }
+        return;
+      }
       updates[key] = incoming[key];
       return;
     }
-    if (key === 'todoItems' || key === 'todoHideDone') {
+    if (key === 'todoItems' || key === 'todoHideDone' || key === 'myWallpapers') {
       return;
     }
     removals.push(key);

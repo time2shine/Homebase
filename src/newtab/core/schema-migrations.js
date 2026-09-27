@@ -25,6 +25,32 @@ const SCHEMA_MIGRATIONS = [
 let migrationExecutionPromise = null;
 
 /**
+ * In-memory migration transaction state tracker.
+ */
+let currentMigrationTransaction = {
+  state: 'idle',
+  fromVersion: null,
+  targetVersion: null,
+  checkpoint: null,
+  startedAt: null
+};
+
+/**
+ * Returns a read-only snapshot of current migration transaction state.
+ *
+ * @returns {Object}
+ */
+function getMigrationTransactionState() {
+  return {
+    state: currentMigrationTransaction.state,
+    fromVersion: currentMigrationTransaction.fromVersion,
+    targetVersion: currentMigrationTransaction.targetVersion,
+    checkpoint: currentMigrationTransaction.checkpoint ? { ...currentMigrationTransaction.checkpoint } : null,
+    startedAt: currentMigrationTransaction.startedAt
+  };
+}
+
+/**
  * Categorizes a migration error into a privacy-safe standardized category string.
  * Never includes user data, file paths, or variable contents.
  *
@@ -92,11 +118,27 @@ async function runSchemaMigrations(customBrowserApi = null) {
   const runner = async () => {
     const browserInstance = customBrowserApi || (typeof window !== 'undefined' ? (window.browser || window.chrome) : null);
     if (!browserInstance?.storage?.local) {
+      currentMigrationTransaction = {
+        state: 'idle',
+        fromVersion: null,
+        targetVersion: null,
+        checkpoint: null,
+        startedAt: null
+      };
       return { status: 'skipped', reason: 'storage_unavailable', version: 0 };
     }
 
+    currentMigrationTransaction = {
+      state: 'starting',
+      fromVersion: null,
+      targetVersion: null,
+      checkpoint: null,
+      startedAt: new Date().toISOString()
+    };
+
     let currentVer = undefined;
     let migrationStartTime = 0;
+    let preStepSnapshot = null;
 
     try {
       const storedVersionResult = await browserInstance.storage.local.get(SCHEMA_VERSION_KEY);
@@ -104,6 +146,9 @@ async function runSchemaMigrations(customBrowserApi = null) {
 
       // Case 1: Profile is already at CURRENT_SCHEMA_VERSION (Fast-path: no writes)
       if (typeof storedVersion === 'number' && storedVersion === CURRENT_SCHEMA_VERSION) {
+        currentMigrationTransaction.state = 'completed';
+        currentMigrationTransaction.fromVersion = CURRENT_SCHEMA_VERSION;
+        currentMigrationTransaction.targetVersion = CURRENT_SCHEMA_VERSION;
         return { status: 'noop', version: CURRENT_SCHEMA_VERSION };
       }
 
@@ -112,20 +157,28 @@ async function runSchemaMigrations(customBrowserApi = null) {
         console.warn(
           `[Homebase Migrations] Stored schemaVersion (${storedVersion}) is higher than current extension version (${CURRENT_SCHEMA_VERSION}). Bypassing migrations.`
         );
+        currentMigrationTransaction.state = 'completed';
+        currentMigrationTransaction.fromVersion = storedVersion;
+        currentMigrationTransaction.targetVersion = storedVersion;
         return { status: 'future_version_bypassed', version: storedVersion };
       }
 
       // Case 3: Unversioned profile (Fresh install or legacy v0 profile)
       if (typeof storedVersion === 'undefined' || storedVersion === null) {
+        currentMigrationTransaction.fromVersion = 0;
+        currentMigrationTransaction.targetVersion = CURRENT_SCHEMA_VERSION;
         // Initialize baseline schemaVersion without removing old keys or structures
         await browserInstance.storage.local.set({
           [SCHEMA_VERSION_KEY]: CURRENT_SCHEMA_VERSION
         });
+        currentMigrationTransaction.state = 'completed';
         return { status: 'initialized', version: CURRENT_SCHEMA_VERSION };
       }
 
       // Case 4: Outdated profile requiring sequential upgrades (storedVersion < CURRENT_SCHEMA_VERSION)
       currentVer = storedVersion;
+      currentMigrationTransaction.fromVersion = currentVer;
+      currentMigrationTransaction.targetVersion = CURRENT_SCHEMA_VERSION;
       migrationStartTime = (typeof performance !== 'undefined' && typeof performance.now === 'function')
         ? performance.now()
         : Date.now();
@@ -146,6 +199,15 @@ async function runSchemaMigrations(customBrowserApi = null) {
           (m) => m.fromVersion === currentVer && m.toVersion === nextVer
         );
 
+        const checkpoint = {
+          checkpointId: `ckpt_${Date.now()}_v${currentVer}_to_v${nextVer}`,
+          fromVersion: currentVer,
+          targetVersion: nextVer,
+          timestamp: new Date().toISOString()
+        };
+        currentMigrationTransaction.state = 'checkpoint';
+        currentMigrationTransaction.checkpoint = checkpoint;
+
         const stepRecord = {
           fromVersion: currentVer,
           toVersion: nextVer,
@@ -158,7 +220,15 @@ async function runSchemaMigrations(customBrowserApi = null) {
           const stepStartTime = (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
-          const snapshot = await browserInstance.storage.local.get(null);
+
+          // Capture pre-step snapshot for recovery-safe rollback
+          try {
+            preStepSnapshot = await browserInstance.storage.local.get(null);
+          } catch (_) {
+            preStepSnapshot = null;
+          }
+
+          const snapshot = preStepSnapshot || (await browserInstance.storage.local.get(null));
           const transformedUpdates = await migrationStep.migrate(snapshot, browserInstance);
           const batchSanitizer = (typeof window !== 'undefined' && window.HomebaseValidator?.sanitizeStorageBatch) ||
             (typeof sanitizeStorageBatch === 'function' ? sanitizeStorageBatch : null);
@@ -195,9 +265,22 @@ async function runSchemaMigrations(customBrowserApi = null) {
         currentVer = nextVer;
       }
 
+      currentMigrationTransaction.state = 'completed';
       return { status: 'migrated', version: CURRENT_SCHEMA_VERSION };
     } catch (err) {
       console.error('[Homebase Migrations] Migration execution failed safely:', err);
+      currentMigrationTransaction.state = 'failed';
+
+      // Recovery-safe rollback: restore pre-step snapshot if an intermediate migration failed
+      if (preStepSnapshot && browserInstance?.storage?.local?.set) {
+        try {
+          await browserInstance.storage.local.set(preStepSnapshot);
+          currentMigrationTransaction.state = 'rolled_back';
+        } catch (_) {
+          // Fail-safe containment
+        }
+      }
+
       try {
         if (typeof currentVer === 'number') {
           let existingHistory = [];
@@ -251,12 +334,14 @@ if (typeof window !== 'undefined') {
   window.MIGRATION_HISTORY_KEY = MIGRATION_HISTORY_KEY;
   window.runSchemaMigrations = runSchemaMigrations;
   window.getMigrationHistory = getMigrationHistory;
+  window.getMigrationTransactionState = getMigrationTransactionState;
   window.HomebaseMigrations = {
     CURRENT_SCHEMA_VERSION,
     SCHEMA_VERSION_KEY,
     MIGRATION_HISTORY_KEY,
     SCHEMA_MIGRATIONS,
     runSchemaMigrations,
-    getMigrationHistory
+    getMigrationHistory,
+    getMigrationTransactionState
   };
 }

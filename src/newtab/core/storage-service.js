@@ -28,7 +28,12 @@
     appSearchAlignment: 'fast-search-align',
     appBookmarkTextBg: 'fast-bookmark-bg',
     appCustomColor: 'fast-custom-color',
-    appPerformanceMode: 'fast-perf-mode'
+    appPerformanceMode: 'fast-perf-mode',
+    appShowSidebar: 'fast-show-sidebar',
+    appShowWeather: 'fast-show-weather',
+    appShowQuote: 'fast-show-quote',
+    appShowNews: 'fast-show-news',
+    appShowTodo: 'fast-show-todo'
   });
 
   /**
@@ -96,6 +101,8 @@
     try {
       if (value === undefined || value === null) {
         window.localStorage.removeItem(mirrorKey);
+      } else if (typeof value === 'boolean') {
+        window.localStorage.setItem(mirrorKey, value ? '1' : '0');
       } else if (typeof value === 'object') {
         window.localStorage.setItem(mirrorKey, JSON.stringify(value));
       } else {

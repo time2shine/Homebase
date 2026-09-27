@@ -150,6 +150,31 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-05]: Cycle #6 (Phase 1) — Developer Debug Panel & Diagnostic UI Foundation
+
+- **Date**: 2026-09-27
+- **Change**: Created `src/newtab/settings/diagnostic-ui.js` exposing `window.HomebaseDiagnosticUI` with modular architecture for rendering the Developer Debug Panel and Diagnostic UI (`formatHealthStatus`, `createDiagnosticsNavItem`, `createDiagnosticsSection`, `renderMetricCard`, `handleCopyReport`, `renderDiagnosticsPanel`). Added scoped CSS rules for `.app-settings-diagnostic-*` in `src/newtab/styles/settings.css`. Integrated `DIAGNOSTICS_SECTION = 'diagnostics'` into `src/newtab/settings/settings-ui.js`, registering it in `PANELS_WITHOUT_ACTIONS`, `ensureSettingsSectionOrder()`, and `setActiveAppSettingsSection()`. Loaded `diagnostic-ui.js` lazily only when Settings opens, guaranteeing zero startup impact on cold boot. Connected UI strictly to existing APIs (`window.HomebaseDiagnostics.auditStorageHealth`, `auditBackupHealth`, `generateHealthReport`, and `window.getMigrationHistory`). Added 10 automated unit tests in `tests/unit/diagnostic-ui.test.mjs`, expanding test baseline to 79 passing tests.
+- **Reason**: Implements Homebase Improvement Cycle #6 Phase 1 per `docs/28-cycle6-debug-panel-plan.md` to provide a visual diagnostic interface inside the Settings modal and empower users to copy privacy-redacted diagnostic health reports for troubleshooting.
+- **Files affected**:
+  - `src/newtab/settings/diagnostic-ui.js` (Added: diagnostic UI rendering module and clipboard handler)
+  - `src/newtab/styles/settings.css` (Modified: appended scoped `.app-settings-diagnostic-*` styles)
+  - `src/newtab/settings/settings-ui.js` (Modified: integrated diagnostics navigation item, section mount, and lazy-load hook)
+  - `tests/unit/diagnostic-ui.test.mjs` (Added: 10 automated unit tests covering loading, health badge mapping, states, privacy, and clipboard)
+  - `docs/29-cycle6-phase1-implementation-report.md` (Added: Cycle #6 Phase 1 implementation report)
+- **Developer/AI model**: Gemini 3.8 Flash (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/settings/diagnostic-ui.js`: PASS
+  - `node --check src/newtab/settings/settings-ui.js`: PASS
+  - `node --check tests/unit/diagnostic-ui.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (40 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 79 unit tests pass)
+  - `npm.cmd run build`: PASS (Chrome and Firefox dist builds succeeded)
+- **Impact**:
+  - **User-Facing**: Users can navigate to Settings -> Diagnostics to view storage health status, schema alignment, metric cards, and 1-click copy diagnostic reports.
+  - **Performance**: 0ms cold-boot startup overhead; diagnostic scripts and CSS are lazy-loaded only when Settings is opened.
+  - **Storage**: Strictly read-only; 0 writes to `browser.storage.local`.
+- **Rollback plan**: Revert `src/newtab/settings/settings-ui.js`, `src/newtab/styles/settings.css`, and delete `src/newtab/settings/diagnostic-ui.js` and `tests/unit/diagnostic-ui.test.mjs`.
+
 ### Entry [2026-09-27-04]: Cycle #5 — Storage Health Diagnostics Architecture & Observability Engine
 
 - **Date**: 2026-09-27

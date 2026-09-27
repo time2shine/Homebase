@@ -1,8 +1,9 @@
 window.SettingsUI = (() => {
   let initialized = false;
-  const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'feedback', 'whats-new', 'pro-tips', 'about', 'privacy']);
+  const PANELS_WITHOUT_ACTIONS = new Set(['backup', 'feedback', 'whats-new', 'pro-tips', 'about', 'privacy', 'diagnostics']);
   const WHATS_NEW_SECTION = 'whats-new';
   const PRO_TIPS_SECTION = 'pro-tips';
+  const DIAGNOSTICS_SECTION = 'diagnostics';
   const WHATS_NEW_STORAGE_KEY = 'lastSeenWhatsNewVersion';
   const WHATS_NEW_LATEST_STORAGE_KEY = 'latestKnownWhatsNewVersion';
   const HOMEBASE_TIPS_DISABLED_KEY = 'homebaseTipsDisabled';
@@ -604,6 +605,93 @@ window.SettingsUI = (() => {
 
     if (section === PRO_TIPS_SECTION) {
       renderProTipsSection();
+      return;
+    }
+
+    if (section === DIAGNOSTICS_SECTION) {
+      renderDiagnosticsSection();
+      return;
+    }
+  }
+
+  let diagnosticUILoadPromise = null;
+
+  function ensureDiagnosticUILoaded() {
+    if (window.HomebaseDiagnosticUI) {
+      return Promise.resolve(window.HomebaseDiagnosticUI);
+    }
+    if (diagnosticUILoadPromise) {
+      return diagnosticUILoadPromise;
+    }
+    if (typeof loadScriptOnce === 'function') {
+      diagnosticUILoadPromise = loadScriptOnce('newtab/settings/diagnostic-ui.js')
+        .then(() => window.HomebaseDiagnosticUI || null)
+        .catch((err) => {
+          console.warn('Failed to load diagnostic-ui.js', err);
+          return null;
+        })
+        .finally(() => {
+          diagnosticUILoadPromise = null;
+        });
+      return diagnosticUILoadPromise;
+    }
+    return Promise.resolve(window.HomebaseDiagnosticUI || null);
+  }
+
+  function createDiagnosticsNavItem() {
+    if (window.HomebaseDiagnosticUI && typeof window.HomebaseDiagnosticUI.createDiagnosticsNavItem === 'function') {
+      return window.HomebaseDiagnosticUI.createDiagnosticsNavItem();
+    }
+    const navItem = document.createElement('button');
+    navItem.className = 'app-settings-nav-item';
+    navItem.dataset.section = DIAGNOSTICS_SECTION;
+    navItem.innerHTML = `
+      <span class="nav-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+      </span>
+      <span class="nav-label">Diagnostics</span>
+    `;
+    return navItem;
+  }
+
+  function createDiagnosticsSection() {
+    if (window.HomebaseDiagnosticUI && typeof window.HomebaseDiagnosticUI.createDiagnosticsSection === 'function') {
+      return window.HomebaseDiagnosticUI.createDiagnosticsSection();
+    }
+    const section = document.createElement('section');
+    section.className = 'app-settings-section';
+    section.dataset.section = DIAGNOSTICS_SECTION;
+
+    const header = document.createElement('div');
+    header.className = 'app-settings-about-header app-settings-diagnostic-header';
+
+    const title = document.createElement('div');
+    title.className = 'app-settings-about-title app-settings-diagnostic-title';
+    title.textContent = 'System & Storage Diagnostics';
+    header.appendChild(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'app-settings-about-meta app-settings-diagnostic-meta';
+    meta.textContent = 'Live health assessment, schema validation audit, and diagnostic reports.';
+    header.appendChild(meta);
+    section.appendChild(header);
+
+    const container = document.createElement('div');
+    container.className = 'app-settings-diagnostic-container';
+    section.appendChild(container);
+
+    return section;
+  }
+
+  async function renderDiagnosticsSection() {
+    await ensureDiagnosticUILoaded();
+    const sectionEl = document.querySelector(`.app-settings-section[data-section="${DIAGNOSTICS_SECTION}"]`);
+    if (!sectionEl) return;
+
+    if (window.HomebaseDiagnosticUI && typeof window.HomebaseDiagnosticUI.renderDiagnosticsPanel === 'function') {
+      await window.HomebaseDiagnosticUI.renderDiagnosticsPanel(sectionEl);
     }
   }
 
@@ -886,7 +974,7 @@ window.SettingsUI = (() => {
     const appSettingsContent = document.querySelector('.app-settings-content');
     if (!appSettingsNav || !appSettingsContent) return;
 
-    const navOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, 'feedback', 'privacy', 'about'];
+    const navOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, DIAGNOSTICS_SECTION, 'feedback', 'privacy', 'about'];
     const navItems = new Map();
 
     navOrder.forEach((section) => {
@@ -896,6 +984,8 @@ window.SettingsUI = (() => {
           item = createPrivacyNavItem();
         } else if (section === PRO_TIPS_SECTION) {
           item = createProTipsNavItem();
+        } else if (section === DIAGNOSTICS_SECTION) {
+          item = createDiagnosticsNavItem();
         }
       }
       if (item) {
@@ -912,7 +1002,7 @@ window.SettingsUI = (() => {
     const navDivider = appSettingsNav.querySelector('.nav-divider');
     appSettingsNav.insertBefore(navFragment, navDivider ? navDivider.nextSibling : null);
 
-    const panelOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, 'feedback', 'privacy', 'about'];
+    const panelOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, DIAGNOSTICS_SECTION, 'feedback', 'privacy', 'about'];
     const panelItems = new Map();
 
     panelOrder.forEach((section) => {
@@ -922,6 +1012,8 @@ window.SettingsUI = (() => {
           panel = createPrivacySection();
         } else if (section === PRO_TIPS_SECTION) {
           panel = createProTipsSection();
+        } else if (section === DIAGNOSTICS_SECTION) {
+          panel = createDiagnosticsSection();
         }
       }
       if (panel) {
@@ -1058,6 +1150,7 @@ window.SettingsUI = (() => {
 
     syncAppSettingsForm();
     syncHomebaseTipsToggle();
+    ensureDiagnosticUILoaded();
     setActiveAppSettingsSection('general');
 
     initialWallpaperState = {

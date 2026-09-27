@@ -172,6 +172,235 @@
     }
   }
 
+  // ===============================================
+  // In-Memory Session Cache & De-duplication State
+  // ===============================================
+  let cachedAudit = null;
+  let lastAuditTimestamp = 0;
+  let inFlightAuditPromise = null;
+  const AUDIT_CACHE_TTL_MS = 10000; // 10 seconds
+
+  /**
+   * Clears the in-memory diagnostic audit session cache.
+   */
+  function clearAuditCache() {
+    cachedAudit = null;
+    lastAuditTimestamp = 0;
+    inFlightAuditPromise = null;
+  }
+
+  /**
+   * Returns the current cached audit object or null if absent.
+   *
+   * @returns {Object|null}
+   */
+  function getCachedAudit() {
+    return cachedAudit;
+  }
+
+  /**
+   * Retrieves storage audit data with a 10-second TTL cache and in-flight request de-duplication.
+   * Strictly read-only; never writes or modifies storage.
+   *
+   * @param {boolean} [forceRefresh=false]
+   * @returns {Promise<Object>}
+   */
+  async function getOrFetchStorageAudit(forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && cachedAudit && (now - lastAuditTimestamp < AUDIT_CACHE_TTL_MS)) {
+      return cachedAudit;
+    }
+
+    if (inFlightAuditPromise) {
+      return inFlightAuditPromise;
+    }
+
+    inFlightAuditPromise = (async () => {
+      try {
+        if (window.HomebaseDiagnostics && typeof window.HomebaseDiagnostics.auditStorageHealth === 'function') {
+          cachedAudit = await window.HomebaseDiagnostics.auditStorageHealth();
+          lastAuditTimestamp = Date.now();
+          return cachedAudit;
+        }
+        return {
+          status: 'UNKNOWN',
+          counts: { total: 0, valid: 0, recoverable: 0, corrupted: 0 },
+          schemaVersion: { stored: 'unknown', expected: 1, status: 'ERROR' }
+        };
+      } catch (err) {
+        return {
+          status: 'UNKNOWN',
+          counts: { total: 0, valid: 0, recoverable: 0, corrupted: 0 },
+          schemaVersion: { stored: 'unknown', expected: 1, status: 'ERROR' }
+        };
+      } finally {
+        inFlightAuditPromise = null;
+      }
+    })();
+
+    return inFlightAuditPromise;
+  }
+
+  /**
+   * Safely constructs the Schema Architecture detail card via DOM APIs.
+   *
+   * @param {Object} [audit]
+   * @returns {HTMLElement}
+   */
+  function createSchemaDetailBlock(audit) {
+    const block = document.createElement('div');
+    block.className = 'app-settings-diagnostic-detail-item';
+
+    const title = document.createElement('div');
+    title.className = 'app-settings-diagnostic-detail-title';
+    title.textContent = 'Schema Architecture';
+    block.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className = 'app-settings-diagnostic-detail-body';
+
+    const storedVer = audit?.schemaVersion?.stored ?? 'unknown';
+    const expectedVer = audit?.schemaVersion?.expected ?? 1;
+    const alignStatus = audit?.schemaVersion?.status ?? 'UNKNOWN';
+
+    body.appendChild(document.createTextNode('Storage Schema: '));
+
+    const storedCode = document.createElement('span');
+    storedCode.className = 'app-settings-diagnostic-detail-code';
+    storedCode.textContent = `Version ${storedVer}`;
+    body.appendChild(storedCode);
+
+    body.appendChild(document.createTextNode(' (Target: '));
+
+    const expectedCode = document.createElement('span');
+    expectedCode.className = 'app-settings-diagnostic-detail-code';
+    expectedCode.textContent = `Version ${expectedVer}`;
+    body.appendChild(expectedCode);
+
+    body.appendChild(document.createTextNode(') — Status: '));
+
+    const statusStrong = document.createElement('strong');
+    statusStrong.textContent = alignStatus;
+    body.appendChild(statusStrong);
+
+    block.appendChild(body);
+    return block;
+  }
+
+  /**
+   * Safely constructs the Validation Anomalies detail card via DOM APIs.
+   * Completely eliminates template-literal innerHTML injection (Remediates Review Finding F-01).
+   *
+   * @param {Array<Object>} anomalies
+   * @returns {HTMLElement}
+   */
+  function createAnomalyDetailBlock(anomalies) {
+    const block = document.createElement('div');
+    block.className = 'app-settings-diagnostic-detail-item';
+
+    const title = document.createElement('div');
+    title.className = 'app-settings-diagnostic-detail-title';
+    const hasAnomalies = Array.isArray(anomalies) && anomalies.length > 0;
+    title.textContent = hasAnomalies
+      ? `Recent Validation Normalizations (${anomalies.length} in buffer)`
+      : 'Validation Anomalies';
+    block.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className = 'app-settings-diagnostic-detail-body';
+
+    if (hasAnomalies) {
+      const ul = document.createElement('ul');
+      ul.className = 'app-settings-diagnostic-anomaly-list';
+
+      anomalies.slice(-5).forEach((a) => {
+        const li = document.createElement('li');
+
+        const codeSpan = document.createElement('span');
+        codeSpan.className = 'app-settings-diagnostic-detail-code';
+        codeSpan.textContent = typeof a.key === 'string' ? a.key.slice(0, 40) : 'key';
+        li.appendChild(codeSpan);
+
+        const actionText = typeof a.action === 'string' ? a.action : 'normalized';
+        li.appendChild(document.createTextNode(`: ${actionText}`));
+
+        ul.appendChild(li);
+      });
+
+      body.appendChild(ul);
+    } else {
+      body.classList.add('app-settings-diagnostic-empty');
+      body.textContent = 'Zero validation anomalies recorded in active memory session.';
+    }
+
+    block.appendChild(body);
+    return block;
+  }
+
+  /**
+   * Safely constructs the Migration Ledger detail card via DOM APIs.
+   *
+   * @param {Array<Object>} history
+   * @returns {HTMLElement}
+   */
+  function createMigrationDetailBlock(history) {
+    const block = document.createElement('div');
+    block.className = 'app-settings-diagnostic-detail-item';
+
+    const title = document.createElement('div');
+    title.className = 'app-settings-diagnostic-detail-title';
+    const hasHistory = Array.isArray(history) && history.length > 0;
+    title.textContent = hasHistory
+      ? `Migration Ledger (${history.length} record${history.length === 1 ? '' : 's'})`
+      : 'Migration Ledger';
+    block.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className = 'app-settings-diagnostic-detail-body';
+
+    if (hasHistory) {
+      const latest = history[history.length - 1];
+      const fromVer = latest.fromVersion != null ? latest.fromVersion : 0;
+      const toVer = latest.toVersion != null ? latest.toVersion : 1;
+      const duration = typeof latest.durationMs === 'number' ? latest.durationMs : 0;
+
+      body.appendChild(document.createTextNode(`Latest: Upgrade v${fromVer} → v${toVer} — Status: `));
+
+      const statusStrong = document.createElement('strong');
+      statusStrong.textContent = latest.status || 'unknown';
+      body.appendChild(statusStrong);
+
+      body.appendChild(document.createTextNode(` (${duration}ms)`));
+    } else {
+      body.classList.add('app-settings-diagnostic-empty');
+      body.textContent = 'No schema migrations have executed on this profile.';
+    }
+
+    block.appendChild(body);
+    return block;
+  }
+
+  /**
+   * Safely constructs the Privacy Notice block via DOM APIs.
+   *
+   * @returns {HTMLElement}
+   */
+  function createNoticeBlock() {
+    const notice = document.createElement('div');
+    notice.className = 'app-settings-diagnostic-notice';
+
+    const strong = document.createElement('strong');
+    strong.textContent = 'Privacy Guarantee: ';
+    notice.appendChild(strong);
+
+    notice.appendChild(document.createTextNode(
+      'Diagnostic reports contain structural metadata and error codes only. ' +
+      'Personal bookmark URLs, titles, todo content, search queries, and custom images are strictly excluded and never recorded.'
+    ));
+
+    return notice;
+  }
+
   /**
    * Renders the complete diagnostics panel content into a container.
    * Strictly avoids displaying sensitive personal data (URLs, bookmark titles, todo items, search text).
@@ -179,9 +408,10 @@
    * @param {HTMLElement} sectionOrContainer
    * @param {Object} [customAudit] - Optional pre-computed audit object
    * @param {Array} [customHistory] - Optional pre-computed migration history
+   * @param {boolean} [forceRefresh=false] - If true, bypasses the 10-second TTL cache
    * @returns {Promise<void>}
    */
-  async function renderDiagnosticsPanel(sectionOrContainer, customAudit = null, customHistory = null) {
+  async function renderDiagnosticsPanel(sectionOrContainer, customAudit = null, customHistory = null, forceRefresh = false) {
     if (!sectionOrContainer) return;
     const container = sectionOrContainer.classList?.contains('app-settings-diagnostic-container')
       ? sectionOrContainer
@@ -190,12 +420,8 @@
     container.innerHTML = '';
 
     let audit = customAudit;
-    if (!audit && window.HomebaseDiagnostics && typeof window.HomebaseDiagnostics.auditStorageHealth === 'function') {
-      try {
-        audit = await window.HomebaseDiagnostics.auditStorageHealth();
-      } catch (err) {
-        audit = { status: 'UNKNOWN', counts: { total: 0, valid: 0, recoverable: 0, corrupted: 0 }, schemaVersion: { stored: 'unknown', expected: 1, status: 'ERROR' } };
-      }
+    if (!audit) {
+      audit = await getOrFetchStorageAudit(forceRefresh);
     }
 
     const healthMeta = formatHealthStatus(audit?.status || 'UNKNOWN');
@@ -250,70 +476,33 @@
     scanBtn.className = 'gallery-secondary-btn app-settings-diagnostic-btn-scan';
     scanBtn.textContent = 'Run Storage Health Check';
     scanBtn.addEventListener('click', async () => {
+      if (scanBtn.disabled) return;
       scanBtn.disabled = true;
       scanBtn.textContent = 'Scanning...';
+      scanBtn.classList.add('is-loading');
       try {
-        await renderDiagnosticsPanel(sectionOrContainer);
+        await renderDiagnosticsPanel(sectionOrContainer, null, null, true);
       } finally {
         scanBtn.disabled = false;
         scanBtn.textContent = 'Run Storage Health Check';
+        scanBtn.classList.remove('is-loading');
       }
     });
     actions.appendChild(scanBtn);
     container.appendChild(actions);
 
-    // 4. Details Section (Schema, Anomalies, Migration History)
+    // 4. Details Section (Schema, Anomalies, Migration History) - Safe DOM Construction
     const details = document.createElement('div');
     details.className = 'app-settings-diagnostic-details';
 
     // 4a. Schema Version Block
-    const schemaBlock = document.createElement('div');
-    schemaBlock.className = 'app-settings-diagnostic-detail-item';
-    const storedVer = audit?.schemaVersion?.stored ?? 'unknown';
-    const expectedVer = audit?.schemaVersion?.expected ?? 1;
-    const alignStatus = audit?.schemaVersion?.status ?? 'UNKNOWN';
-
-    schemaBlock.innerHTML = `
-      <div class="app-settings-diagnostic-detail-title">Schema Architecture</div>
-      <div class="app-settings-diagnostic-detail-body">
-        Storage Schema: <span class="app-settings-diagnostic-detail-code">Version ${storedVer}</span>
-        (Target: <span class="app-settings-diagnostic-detail-code">Version ${expectedVer}</span>)
-        — Status: <strong>${alignStatus}</strong>
-      </div>
-    `;
-    details.appendChild(schemaBlock);
+    details.appendChild(createSchemaDetailBlock(audit));
 
     // 4b. Recent Anomalies Summary (In-Memory Buffer)
     const anomalies = window.HomebaseDiagnostics && typeof window.HomebaseDiagnostics.getValidationAnomalies === 'function'
       ? window.HomebaseDiagnostics.getValidationAnomalies()
       : [];
-
-    const anomalyBlock = document.createElement('div');
-    anomalyBlock.className = 'app-settings-diagnostic-detail-item';
-
-    if (anomalies.length > 0) {
-      const recent = anomalies.slice(-5);
-      const itemsHtml = recent.map((a) => {
-        const keyName = typeof a.key === 'string' ? a.key.slice(0, 40) : 'key';
-        const action = typeof a.action === 'string' ? a.action : 'normalized';
-        return `<li><span class="app-settings-diagnostic-detail-code">${keyName}</span>: ${action}</li>`;
-      }).join('');
-
-      anomalyBlock.innerHTML = `
-        <div class="app-settings-diagnostic-detail-title">Recent Validation Normalizations (${anomalies.length} in buffer)</div>
-        <div class="app-settings-diagnostic-detail-body">
-          <ul style="margin: 4px 0 0 16px; padding: 0;">${itemsHtml}</ul>
-        </div>
-      `;
-    } else {
-      anomalyBlock.innerHTML = `
-        <div class="app-settings-diagnostic-detail-title">Validation Anomalies</div>
-        <div class="app-settings-diagnostic-detail-body app-settings-diagnostic-empty">
-          Zero validation anomalies recorded in active memory session.
-        </div>
-      `;
-    }
-    details.appendChild(anomalyBlock);
+    details.appendChild(createAnomalyDetailBlock(anomalies));
 
     // 4c. Migration History Summary
     let history = customHistory;
@@ -324,38 +513,11 @@
         history = [];
       }
     }
-
-    const migrationBlock = document.createElement('div');
-    migrationBlock.className = 'app-settings-diagnostic-detail-item';
-
-    if (Array.isArray(history) && history.length > 0) {
-      const latest = history[history.length - 1];
-      migrationBlock.innerHTML = `
-        <div class="app-settings-diagnostic-detail-title">Migration Ledger (${history.length} record${history.length === 1 ? '' : 's'})</div>
-        <div class="app-settings-diagnostic-detail-body">
-          Latest: Upgrade v${latest.fromVersion} &rarr; v${latest.toVersion}
-          — Status: <strong>${latest.status}</strong> (${latest.durationMs ?? 0}ms)
-        </div>
-      `;
-    } else {
-      migrationBlock.innerHTML = `
-        <div class="app-settings-diagnostic-detail-title">Migration Ledger</div>
-        <div class="app-settings-diagnostic-detail-body app-settings-diagnostic-empty">
-          No schema migrations have executed on this profile.
-        </div>
-      `;
-    }
-    details.appendChild(migrationBlock);
+    details.appendChild(createMigrationDetailBlock(history));
     container.appendChild(details);
 
     // 5. Privacy Notice
-    const notice = document.createElement('div');
-    notice.className = 'app-settings-diagnostic-notice';
-    notice.innerHTML = `
-      <strong>Privacy Guarantee:</strong> Diagnostic reports contain structural metadata and error codes only.
-      Personal bookmark URLs, titles, todo content, search queries, and custom images are strictly excluded and never recorded.
-    `;
-    container.appendChild(notice);
+    container.appendChild(createNoticeBlock());
   }
 
   // Registration on window
@@ -365,7 +527,14 @@
     createDiagnosticsSection,
     renderMetricCard,
     handleCopyReport,
-    renderDiagnosticsPanel
+    renderDiagnosticsPanel,
+    getOrFetchStorageAudit,
+    getCachedAudit,
+    clearAuditCache,
+    createSchemaDetailBlock,
+    createAnomalyDetailBlock,
+    createMigrationDetailBlock,
+    createNoticeBlock
   };
 
   if (typeof window !== 'undefined') {

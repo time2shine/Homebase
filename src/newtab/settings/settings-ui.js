@@ -967,12 +967,51 @@ window.SettingsUI = (() => {
       return;
     }
 
+    if (action === 'diagnostic-report') {
+      if (window.HomebaseDiagnosticUI && typeof window.HomebaseDiagnosticUI.handleCopyReport === 'function') {
+        await window.HomebaseDiagnosticUI.handleCopyReport(button);
+      } else if (window.HomebaseDiagnostics && typeof window.HomebaseDiagnostics.exportHealthReport === 'function') {
+        button.disabled = true;
+        const origText = button.textContent;
+        try {
+          const res = await window.HomebaseDiagnostics.exportHealthReport();
+          button.textContent = (res && res.success) ? 'Copied to Clipboard!' : 'Copy Failed';
+        } catch (_) {
+          button.textContent = 'Copy Failed';
+        } finally {
+          setTimeout(() => {
+            button.textContent = origText;
+            button.disabled = false;
+          }, 2500);
+        }
+      }
+      return;
+    }
+
     await openFeedbackUrl(staticUrls[action]);
+  }
+
+  function ensureFeedbackDiagnosticButton() {
+    const bugActionBtn = document.querySelector('.app-settings-feedback-card [data-feedback-action="bug"]');
+    if (!bugActionBtn || !bugActionBtn.parentElement) return;
+
+    const bugCard = bugActionBtn.parentElement;
+    if (bugCard.querySelector('.app-settings-feedback-diagnostic-btn')) return;
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'gallery-secondary-btn app-settings-feedback-action app-settings-feedback-diagnostic-btn';
+    copyBtn.dataset.feedbackAction = 'diagnostic-report';
+    copyBtn.textContent = 'Copy Diagnostic Report';
+
+    bugCard.appendChild(copyBtn);
   }
 
   function ensureSettingsSectionOrder() {
     const appSettingsContent = document.querySelector('.app-settings-content');
     if (!appSettingsNav || !appSettingsContent) return;
+
+    ensureFeedbackDiagnosticButton();
 
     const navOrder = ['backup', 'whats-new', PRO_TIPS_SECTION, DIAGNOSTICS_SECTION, 'feedback', 'privacy', 'about'];
     const navItems = new Map();
@@ -1628,6 +1667,7 @@ window.SettingsUI = (() => {
 
   return {
     init,
-    open
+    open,
+    ensureFeedbackDiagnosticButton
   };
 })();

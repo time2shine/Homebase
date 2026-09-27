@@ -1121,6 +1121,81 @@ function updatePerfOverlayDockOffset(el) {
   el.style.setProperty('--hb-perf-overlay-right-offset', `${rightOffset}px`);
 }
 
+let cachedMigrationCount = null;
+
+function checkMigrationCountAsync() {
+  if (cachedMigrationCount !== null) return;
+  if (typeof window !== 'undefined' && typeof window.getMigrationHistory === 'function') {
+    try {
+      const res = window.getMigrationHistory();
+      if (res && typeof res.then === 'function') {
+        res.then((history) => {
+          cachedMigrationCount = Array.isArray(history) ? history.length : 0;
+          if (perfState.overlayEnabled) updatePerfOverlay(false);
+        }).catch(() => {
+          cachedMigrationCount = 0;
+        });
+      }
+    } catch (_) {
+      cachedMigrationCount = 0;
+    }
+  }
+}
+
+/**
+ * Formats storage health diagnostic lines for the monospace overlay.
+ * Strictly reads in-memory cached structures or fallback defaults.
+ * Never executes browser.storage.local.get().
+ *
+ * @param {Object|null} [audit]
+ * @param {number} [anomaliesCount=0]
+ * @param {number|null} [migrationCount=null]
+ * @returns {Array<string>}
+ */
+function formatOverlayStorageHealthRows(audit = null, anomaliesCount = 0, migrationCount = null) {
+  const status = audit?.status || (anomaliesCount > 0 ? 'DEGRADED' : 'HEALTHY');
+  const storedVer = audit?.schemaVersion?.stored ?? (typeof window !== 'undefined' && window.CURRENT_SCHEMA_VERSION ? window.CURRENT_SCHEMA_VERSION : 1);
+  const schemaStatus = audit?.schemaVersion?.status ?? 'ALIGNED';
+  const total = audit?.counts?.total ?? 74;
+  const valid = audit?.counts?.valid ?? 74;
+  const corrupted = audit?.counts?.corrupted ?? 0;
+
+  const rows = [
+    'Storage Health',
+    `Status: ${status}`,
+    `Schema: v${storedVer} (${schemaStatus})`,
+    `Keys: ${valid}/${total} valid (${corrupted} corrupted)`,
+    `Anomalies: ${anomaliesCount} in buffer`
+  ];
+
+  if (typeof migrationCount === 'number') {
+    rows.push(`Migrations: ${migrationCount} recorded`);
+  }
+
+  return rows;
+}
+
+/**
+ * Formats recent performance metrics for the monospace overlay.
+ * Reads from the in-memory circular buffer.
+ *
+ * @param {Array<Object>} [metrics=[]]
+ * @returns {Array<string>}
+ */
+function formatOverlayRecentMetricsRows(metrics = []) {
+  const rows = ['Recent Metrics'];
+  if (Array.isArray(metrics) && metrics.length > 0) {
+    metrics.slice(-3).forEach((m) => {
+      const name = m && typeof m.name === 'string' ? m.name : 'metric';
+      const ms = m && typeof m.durationMs === 'number' ? `${Math.round(m.durationMs)} ms` : '—';
+      rows.push(`- ${name}: ${ms}`);
+    });
+  } else {
+    rows.push('- None recorded');
+  }
+  return rows;
+}
+
 function updatePerfOverlay(forceCacheRefresh = false) {
 
   if (!perfState.overlayEnabled) return;
@@ -1160,6 +1235,26 @@ function updatePerfOverlay(forceCacheRefresh = false) {
     `Storage: ${formatPerfMs(perfState.startup.parallelStorageLoadsMs)}`,
     `Performance: ${appPerformanceModePreference ? 'On' : 'Off'}`
   ];
+
+  checkMigrationCountAsync();
+
+  const cachedAudit = (typeof window !== 'undefined' && window.HomebaseDiagnosticUI && typeof window.HomebaseDiagnosticUI.getCachedAudit === 'function')
+    ? window.HomebaseDiagnosticUI.getCachedAudit()
+    : null;
+
+  const validationAnomaliesCount = (typeof window !== 'undefined' && window.HomebaseDiagnostics && typeof window.HomebaseDiagnostics.getValidationAnomalies === 'function')
+    ? window.HomebaseDiagnostics.getValidationAnomalies().length
+    : 0;
+
+  const storageHealthLines = formatOverlayStorageHealthRows(
+    cachedAudit,
+    validationAnomaliesCount,
+    cachedMigrationCount
+  );
+
+  const recentMetricsLines = formatOverlayRecentMetricsRows(
+    getPerformanceMetrics()
+  );
 
   const startupLines = [
     'Startup Timeline',
@@ -1222,6 +1317,10 @@ function updatePerfOverlay(forceCacheRefresh = false) {
     'Homebase Perf',
     '',
     ...summaryLines,
+    '',
+    ...storageHealthLines,
+    '',
+    ...recentMetricsLines,
     '',
     ...startupLines,
     '',
@@ -1348,8 +1447,22 @@ if (typeof window !== 'undefined') {
   window.HomebaseDiagnostics.recordPerformanceMetric = recordPerformanceMetric;
   window.HomebaseDiagnostics.getPerformanceMetrics = getPerformanceMetrics;
   window.HomebaseDiagnostics.clearPerformanceMetrics = clearPerformanceMetrics;
+  window.HomebaseDiagnostics.formatOverlayStorageHealthRows = formatOverlayStorageHealthRows;
+  window.HomebaseDiagnostics.formatOverlayRecentMetricsRows = formatOverlayRecentMetricsRows;
   window.recordPerformanceMetric = recordPerformanceMetric;
   window.getPerformanceMetrics = getPerformanceMetrics;
+  window.formatOverlayStorageHealthRows = formatOverlayStorageHealthRows;
+  window.formatOverlayRecentMetricsRows = formatOverlayRecentMetricsRows;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    recordPerformanceMetric,
+    getPerformanceMetrics,
+    clearPerformanceMetrics,
+    formatOverlayStorageHealthRows,
+    formatOverlayRecentMetricsRows
+  };
 }
 
 

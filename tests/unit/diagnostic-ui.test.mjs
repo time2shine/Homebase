@@ -9,6 +9,12 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.
 const diagnosticUiScriptPath = path.join(rootDir, 'src/newtab/settings/diagnostic-ui.js');
 const diagnosticUiScriptCode = fs.readFileSync(diagnosticUiScriptPath, 'utf8');
 
+const perfReportScriptPath = path.join(rootDir, 'src/newtab/core/perf-report.js');
+const perfReportScriptCode = fs.readFileSync(perfReportScriptPath, 'utf8');
+
+const settingsUiScriptPath = path.join(rootDir, 'src/newtab/settings/settings-ui.js');
+const settingsUiScriptCode = fs.readFileSync(settingsUiScriptPath, 'utf8');
+
 /**
  * Lightweight mock element supporting standard DOM operations for unit testing.
  */
@@ -20,6 +26,7 @@ class MockElement {
     this.dataset = {};
     this.children = [];
     this.parentNode = null;
+    this.parentElement = null;
     this.listeners = {};
     this.disabled = false;
     this.type = 'button';
@@ -55,9 +62,10 @@ class MockElement {
   }
 
   get textContent() {
+    if (this.tagName === '#TEXT') return this._textContent;
     if (this._textContent) return this._textContent;
     if (this.children.length > 0) {
-      return this.children.map((c) => c.textContent).join(' ');
+      return this.children.map((c) => c.textContent).join('');
     }
     if (this._innerHTML) {
       return this._innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -84,6 +92,7 @@ class MockElement {
   appendChild(child) {
     if (!child) return child;
     child.parentNode = this;
+    child.parentElement = this;
     this.children.push(child);
     return child;
   }
@@ -107,6 +116,13 @@ class MockElement {
         const cls = selector.slice(1);
         return el.classList.contains(cls);
       }
+      if (/^[a-zA-Z]+$/.test(selector)) {
+        return el.tagName === selector.toUpperCase();
+      }
+      if (selector.includes('[data-feedback-action')) {
+        const valMatch = selector.match(/data-feedback-action="([^"]+)"/);
+        return valMatch ? el.dataset.feedbackAction === valMatch[1] : Boolean(el.dataset.feedbackAction);
+      }
       return false;
     };
 
@@ -128,6 +144,13 @@ class MockElement {
       if (selector.startsWith('.')) {
         const cls = selector.slice(1);
         return el.classList.contains(cls);
+      }
+      if (/^[a-zA-Z]+$/.test(selector)) {
+        return el.tagName === selector.toUpperCase();
+      }
+      if (selector.includes('[data-feedback-action')) {
+        const valMatch = selector.match(/data-feedback-action="([^"]+)"/);
+        return valMatch ? el.dataset.feedbackAction === valMatch[1] : Boolean(el.dataset.feedbackAction);
       }
       return false;
     };
@@ -171,6 +194,11 @@ function createMockEnvironment(overrides = {}) {
       createElement(tag) {
         return new MockElement(tag);
       },
+      createTextNode(text) {
+        const el = new MockElement('#TEXT');
+        el._textContent = String(text);
+        return el;
+      },
       querySelector(sel) {
         return null;
       }
@@ -192,6 +220,56 @@ function createMockEnvironment(overrides = {}) {
   sandbox.window = sandbox;
   const context = vm.createContext(sandbox);
   vm.runInContext(diagnosticUiScriptCode, context);
+  return sandbox;
+}
+
+/**
+ * Creates an isolated mock environment with perf-report.js loaded.
+ *
+ * @param {Object} [overrides={}]
+ * @returns {Object}
+ */
+function createPerfReportEnvironment(overrides = {}) {
+  const sandbox = {
+    Object,
+    Array,
+    Set,
+    String,
+    Number,
+    Boolean,
+    Date,
+    Math,
+    RegExp,
+    JSON,
+    console,
+    parseInt,
+    parseFloat,
+    WALLPAPER_CACHE_NAME: 'test-wallpapers',
+    GALLERY_POSTERS_CACHE_NAME: 'test-posters',
+    appPerformanceModePreference: false,
+    setTimeout: (fn, ms) => 1,
+    clearTimeout: () => {},
+    document: {
+      createElement(tag) {
+        return new MockElement(tag);
+      },
+      createTextNode(text) {
+        const el = new MockElement('#TEXT');
+        el._textContent = String(text);
+        return el;
+      },
+      querySelector(sel) {
+        return null;
+      }
+    },
+    window: null,
+    module: { exports: {} },
+    ...overrides
+  };
+
+  sandbox.window = sandbox;
+  const context = vm.createContext(sandbox);
+  vm.runInContext(perfReportScriptCode, context);
   return sandbox;
 }
 
@@ -417,3 +495,195 @@ test('diagnostic-ui: handleCopyReport fallback and failure handling', async () =
   assert.equal(result, false);
   assert.equal(button.textContent, 'Copy Failed');
 });
+
+test('diagnostic-ui: TTL cache behavior avoids redundant audit calls', async () => {
+  let auditCallCount = 0;
+  const mockAudit = {
+    status: 'HEALTHY',
+    timestamp: new Date().toISOString(),
+    counts: { total: 74, valid: 74, recoverable: 0, corrupted: 0 },
+    schemaVersion: { stored: 1, expected: 1, status: 'ALIGNED' }
+  };
+
+  const env = createMockEnvironment({
+    HomebaseDiagnostics: {
+      auditStorageHealth: async () => {
+        auditCallCount += 1;
+        return { ...mockAudit, callId: auditCallCount };
+      }
+    }
+  });
+
+  const { getOrFetchStorageAudit, getCachedAudit, clearAuditCache } = env.window.HomebaseDiagnosticUI;
+  clearAuditCache();
+
+  // First call fetches from API
+  const audit1 = await getOrFetchStorageAudit(false);
+  assert.equal(auditCallCount, 1);
+  assert.equal(audit1.callId, 1);
+  assert.equal(getCachedAudit()?.callId, 1);
+
+  // Second immediate call uses TTL cache (10s)
+  const audit2 = await getOrFetchStorageAudit(false);
+  assert.equal(auditCallCount, 1, 'Should not re-fetch while cache is valid within TTL');
+  assert.equal(audit2.callId, 1);
+});
+
+test('diagnostic-ui: in-flight request de-duplication collapses concurrent audit calls', async () => {
+  let auditCallCount = 0;
+  let resolveAuditPromise;
+  const pendingPromise = new Promise((resolve) => {
+    resolveAuditPromise = resolve;
+  });
+
+  const env = createMockEnvironment({
+    HomebaseDiagnostics: {
+      auditStorageHealth: () => {
+        auditCallCount += 1;
+        return pendingPromise;
+      }
+    }
+  });
+
+  const { getOrFetchStorageAudit, clearAuditCache } = env.window.HomebaseDiagnosticUI;
+  clearAuditCache();
+
+  // Launch two concurrent audit requests
+  const p1 = getOrFetchStorageAudit(false);
+  const p2 = getOrFetchStorageAudit(false);
+
+  // Verify only one underlying audit was triggered
+  assert.equal(auditCallCount, 1);
+
+  resolveAuditPromise({ status: 'HEALTHY', counts: { total: 74, valid: 74, recoverable: 0, corrupted: 0 } });
+  const [res1, res2] = await Promise.all([p1, p2]);
+
+  assert.equal(res1.status, 'HEALTHY');
+  assert.equal(res2.status, 'HEALTHY');
+  assert.equal(auditCallCount, 1);
+});
+
+test('diagnostic-ui: force refresh bypasses TTL cache', async () => {
+  let auditCallCount = 0;
+  const env = createMockEnvironment({
+    HomebaseDiagnostics: {
+      auditStorageHealth: async () => {
+        auditCallCount += 1;
+        return { status: 'HEALTHY', callId: auditCallCount };
+      }
+    }
+  });
+
+  const { getOrFetchStorageAudit, clearAuditCache } = env.window.HomebaseDiagnosticUI;
+  clearAuditCache();
+
+  await getOrFetchStorageAudit(false);
+  assert.equal(auditCallCount, 1);
+
+  // Force refresh
+  const refreshed = await getOrFetchStorageAudit(true);
+  assert.equal(auditCallCount, 2, 'Force refresh must bypass TTL cache');
+  assert.equal(refreshed.callId, 2);
+});
+
+test('diagnostic-ui: safe DOM construction protects against malicious anomaly names (Fix F-01)', () => {
+  const env = createMockEnvironment();
+  const { createAnomalyDetailBlock } = env.window.HomebaseDiagnosticUI;
+
+  const maliciousAnomalies = [
+    {
+      key: '<img src=x onerror="alert(1)">',
+      action: '<script>alert(2)</script>'
+    }
+  ];
+
+  const block = createAnomalyDetailBlock(maliciousAnomalies);
+
+  // Must not create executable HTML elements
+  assert.equal(block.querySelector('img'), null, 'Malicious key name must not create img elements');
+  assert.equal(block.querySelector('script'), null, 'Malicious action must not create script elements');
+
+  // Text content must contain literal string characters
+  const codeSpan = block.querySelector('.app-settings-diagnostic-detail-code');
+  assert.ok(codeSpan);
+  assert.equal(codeSpan.textContent, '<img src=x onerror="alert(1)">');
+  assert.match(block.textContent, /<script>alert\(2\)<\/script>/);
+});
+
+test('diagnostic-ui: HUD overlay storage health formatting', () => {
+  const env = createPerfReportEnvironment();
+  const { formatOverlayStorageHealthRows, formatOverlayRecentMetricsRows } = env.module.exports;
+
+  const healthyAudit = {
+    status: 'HEALTHY',
+    schemaVersion: { stored: 1, expected: 1, status: 'ALIGNED' },
+    counts: { total: 74, valid: 74, recoverable: 0, corrupted: 0 }
+  };
+
+  const healthyRows = formatOverlayStorageHealthRows(healthyAudit, 0, 1);
+  assert.ok(Array.isArray(healthyRows));
+  assert.equal(healthyRows[0], 'Storage Health');
+  assert.equal(healthyRows[1], 'Status: HEALTHY');
+  assert.equal(healthyRows[2], 'Schema: v1 (ALIGNED)');
+  assert.equal(healthyRows[3], 'Keys: 74/74 valid (0 corrupted)');
+  assert.equal(healthyRows[4], 'Anomalies: 0 in buffer');
+  assert.equal(healthyRows[5], 'Migrations: 1 recorded');
+
+  const degradedAudit = {
+    status: 'DEGRADED',
+    schemaVersion: { stored: 0, expected: 1, status: 'LEGACY_UNVERSIONED' },
+    counts: { total: 74, valid: 71, recoverable: 3, corrupted: 0 }
+  };
+  const degradedRows = formatOverlayStorageHealthRows(degradedAudit, 3, null);
+  assert.equal(degradedRows[1], 'Status: DEGRADED');
+  assert.equal(degradedRows[4], 'Anomalies: 3 in buffer');
+
+  // Recent metrics
+  const sampleMetrics = [
+    { name: 'idle:weather', durationMs: 4.8 },
+    { name: 'bookmarks:load', durationMs: 14.2 }
+  ];
+  const metricRows = formatOverlayRecentMetricsRows(sampleMetrics);
+  assert.equal(metricRows[0], 'Recent Metrics');
+  assert.equal(metricRows[1], '- idle:weather: 5 ms');
+  assert.equal(metricRows[2], '- bookmarks:load: 14 ms');
+
+  const emptyMetricRows = formatOverlayRecentMetricsRows([]);
+  assert.equal(emptyMetricRows[0], 'Recent Metrics');
+  assert.equal(emptyMetricRows[1], '- None recorded');
+});
+
+test('diagnostic-ui: feedback bridge adds copy button and triggers copy', async () => {
+  const env = createMockEnvironment();
+
+  // Create a mock card representing the Report Bug card in Settings -> Feedback
+  const feedbackCard = env.document.createElement('div');
+  feedbackCard.className = 'app-settings-feedback-card';
+
+  const bugBtn = env.document.createElement('button');
+  bugBtn.className = 'gallery-secondary-btn app-settings-feedback-action';
+  bugBtn.dataset.feedbackAction = 'bug';
+  bugBtn.textContent = 'Report Bug';
+  feedbackCard.appendChild(bugBtn);
+
+  // Inject feedback diagnostic copy button
+  const copyBtn = env.document.createElement('button');
+  copyBtn.className = 'gallery-secondary-btn app-settings-feedback-action app-settings-feedback-diagnostic-btn';
+  copyBtn.dataset.feedbackAction = 'diagnostic-report';
+  copyBtn.textContent = 'Copy Diagnostic Report';
+  feedbackCard.appendChild(copyBtn);
+
+  let exportCalled = false;
+  env.window.HomebaseDiagnostics = {
+    exportHealthReport: async () => {
+      exportCalled = true;
+      return { success: true };
+    }
+  };
+
+  const success = await env.window.HomebaseDiagnosticUI.handleCopyReport(copyBtn);
+  assert.equal(success, true);
+  assert.equal(exportCalled, true);
+  assert.equal(copyBtn.textContent, 'Copied to Clipboard!');
+});
+

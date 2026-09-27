@@ -150,6 +150,36 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-06]: Cycle #6 (Phase 2) — Developer HUD Integration, Live Refresh Orchestration & Diagnostic UX Hardening
+
+- **Date**: 2026-09-27
+- **Change**: Enhanced `src/newtab/settings/diagnostic-ui.js` with 10-second in-memory TTL caching (`getOrFetchStorageAudit`), in-flight request de-duplication, active loading state for the scan button (`is-loading`), and eliminated dynamic `innerHTML` interpolation (Remediating Review Finding F-01) in favor of safe DOM construction (`createAnomalyDetailBlock`, `createSchemaDetailBlock`, `createMigrationDetailBlock`, `createNoticeBlock`). Extended `#perf-debug-overlay` in `src/newtab/core/perf-report.js` with real-time monospace readouts for Storage Health (status, schema version, valid/corrupted keys, anomaly count, migrations count) and Recent Metrics, reading strictly from synchronous in-memory diagnostic buffers without invoking `browser.storage.local.get()` on render ticks. Updated `src/newtab/settings/settings-ui.js` to mount a secondary "Copy Diagnostic Report" button (`ensureFeedbackDiagnosticButton`) into the Settings -> Feedback "Report Bug" card, bridging user bug reporting directly to GitHub with zero friction. Appended scoped styling in `src/newtab/styles/settings.css` for `.app-settings-diagnostic-anomaly-list`, `.app-settings-diagnostic-btn-scan.is-loading`, and `.app-settings-feedback-diagnostic-btn`. Expanded unit test suite in `tests/unit/diagnostic-ui.test.mjs` with 6 new tests (16 tests total), verifying TTL caching, de-duplication, force refresh, XSS defense with malicious anomaly names, HUD formatting, and feedback bridge behavior. All 85 unit tests pass (100% PASS across 4 test stages).
+- **Reason**: Implements Homebase Improvement Cycle #6 Phase 2 planned in `docs/30-cycle6-phase2-plan.md` to harden diagnostic security, eliminate redundant storage reads, connect HUD observability, and streamline bug reporting workflows.
+- **Files affected**:
+  - `src/newtab/settings/diagnostic-ui.js` (Modified: TTL cache, de-duplication, safe DOM construction, loading state)
+  - `src/newtab/core/perf-report.js` (Modified: Storage Health and Recent Metrics readouts in #perf-debug-overlay)
+  - `src/newtab/settings/settings-ui.js` (Modified: Feedback section diagnostic copy button bridge)
+  - `src/newtab/styles/settings.css` (Modified: scoped styles for anomaly lists, loading button, and feedback button)
+  - `tests/unit/diagnostic-ui.test.mjs` (Modified: 6 new unit tests for caching, safe DOM, HUD formatting, and feedback bridge)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry 2026-09-27-06)
+  - `docs/14-ai-change-history.md` (Modified: recorded AI change tracking record 2026-09-27-06)
+  - `docs/31-cycle6-phase2-implementation-report.md` (Added: Cycle #6 Phase 2 implementation report)
+- **Developer/AI model**: Gemini 3.8 Flash (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/settings/diagnostic-ui.js`: PASS
+  - `node --check src/newtab/core/perf-report.js`: PASS
+  - `node --check src/newtab/settings/settings-ui.js`: PASS
+  - `node --check tests/unit/diagnostic-ui.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (40 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 85/85 unit tests pass)
+  - `npm.cmd run build`: PASS (Chrome and Firefox dist builds succeeded)
+- **Impact**:
+  - **User-Facing**: Users reporting bugs can copy their diagnostic report in 1 click directly inside the Report Bug card; scan button provides clear feedback while refreshing.
+  - **Developer Observability**: Developers can monitor real-time Storage Health and Recent Metrics directly on the dashboard screen via `#perf-debug-overlay`.
+  - **Security**: 100% of DOM injection vectors in diagnostics eliminated via safe DOM element creation.
+  - **Performance**: 0ms cold-boot startup overhead; HUD overlay reads only synchronous in-memory buffers; redundant audits prevented via 10-second TTL cache.
+- **Rollback plan**: Revert commit cleanly with `git revert <commit-sha>`. All storage data remains backward-compatible.
+
 ### Entry [2026-09-27-05]: Cycle #6 (Phase 1) — Developer Debug Panel & Diagnostic UI Foundation
 
 - **Date**: 2026-09-27

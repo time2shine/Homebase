@@ -150,6 +150,41 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-07]: Cycle #6 (Phase 3) — Subsystem Health Matrix, Storage Auto-Remediation & Developer Ergonomics
+
+- **Date**: 2026-09-27
+- **Change**: Enhanced `src/newtab/settings/diagnostic-ui.js` with:
+  1. Subsystem Health Matrix mapping all 74 canonical storage keys into 5 core domains (`System & Core`, `Bookmarks & Grid`, `Wallpapers & Media`, `Widgets & Dock`, and `Search Panel`) with domain-level health evaluation (`computeSubsystemHealth`) and safe DOM rendering (`createSubsystemMatrixBlock`).
+  2. Safe Storage Auto-Remediation (`handleAutoRepairStorage`) adhering to the Minimal Mutation Write Invariant; executes in-memory sanitization via `HomebaseValidator.sanitizeStorageBatch()`, computes a deep structural diff against existing keys, and commits ONLY changed keys to `browser.storage.local.set()`, leaving healthy and unknown keys untouched.
+  3. Storage Quota Telemetry (`getStorageQuotaTelemetry`) providing aggregate-only byte consumption and quota utilization metrics via `browser.storage.local.getBytesInUse()` with serialized fallback estimation, strictly shielding individual key sizes and user content.
+  4. Resilient Diagnostic JSON File Download (`handleDownloadReport`) generating and downloading a sanitized offline diagnostic report via `Blob` and `URL.createObjectURL()` without network calls or telemetry.
+  Enhanced `src/newtab/core/perf-report.js` with a collapsible minimized HUD pill mode (`HB PERF: OK | <time>ms`) persisted exclusively in `window.sessionStorage` (`homebasePerfOverlayMinimized`), strictly forbidding `browser.storage.local/sync`.
+  Appended scoped styles in `src/newtab/styles/settings.css` for subsystem cards, status chips, repair button, and responsive metric grid layouts.
+  Expanded unit tests in `tests/unit/diagnostic-ui.test.mjs` with 9 new tests (25 tests total), covering subsystem coverage, domain health classification, matrix DOM rendering, quota privacy, minimal mutation writes, offline JSON export, and HUD minimization session storage persistence. All 94 unit assertions pass (100% PASS across 4 test stages).
+- **Reason**: Implements Homebase Improvement Cycle #6 Phase 3 planned in `docs/32-cycle6-phase3-plan.md` to transition the diagnostic suite into an active, self-healing developer power tool with zero data risk and privacy preservation.
+- **Files affected**:
+  - `src/newtab/settings/diagnostic-ui.js` (Modified: subsystem matrix, auto-repair with minimal mutation writes, quota telemetry, JSON export)
+  - `src/newtab/core/perf-report.js` (Modified: collapsible minimized HUD pill mode with sessionStorage persistence)
+  - `src/newtab/styles/settings.css` (Modified: scoped styles for subsystem matrix, chips, and auto-repair button)
+  - `tests/unit/diagnostic-ui.test.mjs` (Modified: 9 new unit tests, expanding test suite to 25 tests)
+  - `docs/33-cycle6-phase3-implementation-report.md` (Added: Cycle #6 Phase 3 implementation report)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry 2026-09-27-07)
+  - `docs/14-ai-change-history.md` (Modified: recorded AI change tracking record 2026-09-27-07)
+- **Developer/AI model**: Gemini 3.8 Flash (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/settings/diagnostic-ui.js`: PASS
+  - `node --check src/newtab/core/perf-report.js`: PASS
+  - `node --check tests/unit/diagnostic-ui.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (40 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 94/94 unit assertions pass)
+  - `npm.cmd run build`: PASS (Chrome and Firefox dist builds succeeded)
+- **Impact**:
+  - **User-Facing**: Self-healing 1-click storage auto-repair resolves schema anomalies safely without data loss; subsystem cards provide immediate clarity on domain health; resilient JSON download allows bug reporting even if clipboard is restricted.
+  - **Developer Observability**: Collapsible HUD pill mode minimizes screen clutter during active development while preserving real-time performance feedback.
+  - **Storage Safety**: Minimal mutation invariant guarantees zero accidental overwrites or unknown key deletions.
+  - **Privacy**: Quota telemetry and JSON exports remain aggregate-only with zero user values exposed.
+- **Rollback plan**: Run `git checkout HEAD -- src/newtab/settings/diagnostic-ui.js src/newtab/core/perf-report.js src/newtab/styles/settings.css tests/unit/diagnostic-ui.test.mjs docs/`. No storage schema modifications or migrations were introduced.
+
 ### Entry [2026-09-27-06]: Cycle #6 (Phase 2) — Developer HUD Integration, Live Refresh Orchestration & Diagnostic UX Hardening
 
 - **Date**: 2026-09-27

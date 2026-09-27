@@ -24,6 +24,9 @@ class MockElement {
     this.className = '';
     this._classes = new Set();
     this.dataset = {};
+    this.style = {
+      setProperty: (k, v) => { this.style[k] = v; }
+    };
     this.children = [];
     this.parentNode = null;
     this.parentElement = null;
@@ -97,6 +100,21 @@ class MockElement {
     return child;
   }
 
+  removeChild(child) {
+    if (!child) return child;
+    const idx = this.children.indexOf(child);
+    if (idx !== -1) {
+      this.children.splice(idx, 1);
+      child.parentNode = null;
+      child.parentElement = null;
+    }
+    return child;
+  }
+
+  click() {
+    return this.dispatchEvent('click');
+  }
+
   addEventListener(event, fn) {
     if (!this.listeners[event]) this.listeners[event] = [];
     this.listeners[event].push(fn);
@@ -116,12 +134,21 @@ class MockElement {
         const cls = selector.slice(1);
         return el.classList.contains(cls);
       }
+      if (selector.startsWith('#')) {
+        return el.id === selector.slice(1);
+      }
       if (/^[a-zA-Z]+$/.test(selector)) {
         return el.tagName === selector.toUpperCase();
       }
-      if (selector.includes('[data-feedback-action')) {
-        const valMatch = selector.match(/data-feedback-action="([^"]+)"/);
-        return valMatch ? el.dataset.feedbackAction === valMatch[1] : Boolean(el.dataset.feedbackAction);
+      if (selector.startsWith('[data-') && selector.endsWith(']')) {
+        const attrMatch = selector.slice(1, -1).match(/^data-([a-zA-Z0-9-]+)(?:="([^"]+)")?$/);
+        if (attrMatch) {
+          const rawAttr = attrMatch[1];
+          const camelAttr = rawAttr.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+          const expectedVal = attrMatch[2];
+          const val = el.dataset[camelAttr] !== undefined ? el.dataset[camelAttr] : el.dataset[rawAttr];
+          return expectedVal !== undefined ? val === expectedVal : val !== undefined;
+        }
       }
       return false;
     };
@@ -145,12 +172,21 @@ class MockElement {
         const cls = selector.slice(1);
         return el.classList.contains(cls);
       }
+      if (selector.startsWith('#')) {
+        return el.id === selector.slice(1);
+      }
       if (/^[a-zA-Z]+$/.test(selector)) {
         return el.tagName === selector.toUpperCase();
       }
-      if (selector.includes('[data-feedback-action')) {
-        const valMatch = selector.match(/data-feedback-action="([^"]+)"/);
-        return valMatch ? el.dataset.feedbackAction === valMatch[1] : Boolean(el.dataset.feedbackAction);
+      if (selector.startsWith('[data-') && selector.endsWith(']')) {
+        const attrMatch = selector.slice(1, -1).match(/^data-([a-zA-Z0-9-]+)(?:="([^"]+)")?$/);
+        if (attrMatch) {
+          const rawAttr = attrMatch[1];
+          const camelAttr = rawAttr.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+          const expectedVal = attrMatch[2];
+          const val = el.dataset[camelAttr] !== undefined ? el.dataset[camelAttr] : el.dataset[rawAttr];
+          return expectedVal !== undefined ? val === expectedVal : val !== undefined;
+        }
       }
       return false;
     };
@@ -175,6 +211,15 @@ class MockElement {
  */
 function createMockEnvironment(overrides = {}) {
   let clipboardText = '';
+  const bodyEl = new MockElement('BODY');
+
+  const sessionStorageMock = {
+    _data: new Map(),
+    getItem(k) { return this._data.has(k) ? this._data.get(k) : null; },
+    setItem(k, v) { this._data.set(k, String(v)); },
+    removeItem(k) { this._data.delete(k); },
+    clear() { this._data.clear(); }
+  };
 
   const sandbox = {
     Object,
@@ -188,9 +233,23 @@ function createMockEnvironment(overrides = {}) {
     RegExp,
     JSON,
     console,
+    Blob: class MockBlob {
+      constructor(chunks, options) {
+        this.chunks = chunks;
+        this.options = options;
+        this.size = (chunks || []).join('').length;
+        this.type = options?.type || '';
+      }
+    },
+    URL: {
+      createObjectURL: (blob) => `blob:mock-${Math.random()}`,
+      revokeObjectURL: () => {}
+    },
+    sessionStorage: sessionStorageMock,
     setTimeout: (fn, ms) => 1,
     clearTimeout: () => {},
     document: {
+      body: bodyEl,
       createElement(tag) {
         return new MockElement(tag);
       },
@@ -230,6 +289,15 @@ function createMockEnvironment(overrides = {}) {
  * @returns {Object}
  */
 function createPerfReportEnvironment(overrides = {}) {
+  const bodyEl = new MockElement('BODY');
+  const sessionStorageMock = {
+    _data: new Map(),
+    getItem(k) { return this._data.has(k) ? this._data.get(k) : null; },
+    setItem(k, v) { this._data.set(k, String(v)); },
+    removeItem(k) { this._data.delete(k); },
+    clear() { this._data.clear(); }
+  };
+
   const sandbox = {
     Object,
     Array,
@@ -244,12 +312,14 @@ function createPerfReportEnvironment(overrides = {}) {
     console,
     parseInt,
     parseFloat,
+    sessionStorage: sessionStorageMock,
     WALLPAPER_CACHE_NAME: 'test-wallpapers',
     GALLERY_POSTERS_CACHE_NAME: 'test-posters',
     appPerformanceModePreference: false,
     setTimeout: (fn, ms) => 1,
     clearTimeout: () => {},
     document: {
+      body: bodyEl,
       createElement(tag) {
         return new MockElement(tag);
       },
@@ -361,10 +431,10 @@ test('diagnostic-ui: renders HEALTHY storage state accurately', async () => {
   assert.ok(badge.classList.contains('app-settings-diagnostic-badge--healthy'));
 
   const cards = container.querySelectorAll('.app-settings-diagnostic-card');
-  assert.equal(cards.length, 4, 'Should render 4 metric cards');
+  assert.equal(cards.length, 5, 'Should render 5 metric cards including quota');
 
   const cardValues = cards.map((c) => c.querySelector('.app-settings-diagnostic-card-value')?.textContent);
-  assert.deepEqual(cardValues, ['74', '74', '0', '0'], 'Metric card values should match audit counts');
+  assert.deepEqual(cardValues, ['74', '74', '0', '0', '0.0 KB / 5.0 MB (0%)'], 'Metric card values should match audit counts');
 
   assert.match(container.textContent, /Version 1/);
   assert.match(container.textContent, /ALIGNED/);
@@ -390,8 +460,9 @@ test('diagnostic-ui: renders DEGRADED storage state accurately', async () => {
   assert.ok(badge.classList.contains('app-settings-diagnostic-badge--degraded'));
 
   const cards = container.querySelectorAll('.app-settings-diagnostic-card');
+  assert.equal(cards.length, 5);
   const cardValues = cards.map((c) => c.querySelector('.app-settings-diagnostic-card-value')?.textContent);
-  assert.deepEqual(cardValues, ['74', '71', '3', '0']);
+  assert.deepEqual(cardValues, ['74', '71', '3', '0', '0.0 KB / 5.0 MB (0%)']);
 
   assert.match(container.textContent, /LEGACY_UNVERSIONED/);
 });
@@ -416,8 +487,9 @@ test('diagnostic-ui: renders CORRUPTED storage state accurately', async () => {
   assert.ok(badge.classList.contains('app-settings-diagnostic-badge--corrupted'));
 
   const cards = container.querySelectorAll('.app-settings-diagnostic-card');
+  assert.equal(cards.length, 5);
   const cardValues = cards.map((c) => c.querySelector('.app-settings-diagnostic-card-value')?.textContent);
-  assert.deepEqual(cardValues, ['74', '70', '0', '4']);
+  assert.deepEqual(cardValues, ['74', '70', '0', '4', '0.0 KB / 5.0 MB (0%)']);
 });
 
 test('diagnostic-ui: privacy redaction guarantees zero personal data in rendered DOM', async () => {
@@ -686,4 +758,327 @@ test('diagnostic-ui: feedback bridge adds copy button and triggers copy', async 
   assert.equal(exportCalled, true);
   assert.equal(copyBtn.textContent, 'Copied to Clipboard!');
 });
+
+test('diagnostic-ui: all 74 canonical keys map to SUBSYSTEM_CATEGORIES without duplicates or orphans', () => {
+  const env = createMockEnvironment();
+  const { SUBSYSTEM_CATEGORIES } = env.window.HomebaseDiagnosticUI;
+
+  const expectedCategories = ['system', 'bookmarks', 'wallpapers', 'widgets', 'search'];
+  assert.deepEqual(Object.keys(SUBSYSTEM_CATEGORIES).sort(), expectedCategories.sort());
+
+  // Collect all categorized keys
+  const allCategorizedKeys = [];
+  for (const cat of Object.values(SUBSYSTEM_CATEGORIES)) {
+    assert.ok(cat.label, 'Category must have a label');
+    assert.ok(Array.isArray(cat.keys) && cat.keys.length > 0, 'Category must contain keys');
+    cat.keys.forEach((k) => allCategorizedKeys.push(k));
+  }
+
+  // Exactly 74 canonical keys
+  assert.equal(allCategorizedKeys.length, 74, 'Must map all 74 registered storage keys');
+
+  // Verify zero duplicates
+  const uniqueKeys = new Set(allCategorizedKeys);
+  assert.equal(uniqueKeys.size, 74, 'Categories must have zero duplicate key mappings');
+});
+
+test('diagnostic-ui: computeSubsystemHealth maps healthy, degraded, and corrupted domains accurately', () => {
+  const env = createMockEnvironment();
+  const { computeSubsystemHealth } = env.window.HomebaseDiagnosticUI;
+
+  // 1. Healthy Audit
+  const healthyAudit = {
+    status: 'HEALTHY',
+    counts: { total: 74, valid: 74, recoverable: 0, corrupted: 0 },
+    keys: { valid: ['schemaVersion', 'widgetOrder', 'wallpaperSelection'], recoverable: [], corrupted: [] }
+  };
+  const healthySub = computeSubsystemHealth(healthyAudit);
+  assert.equal(healthySub.system.status, 'HEALTHY');
+  assert.equal(healthySub.widgets.status, 'HEALTHY');
+  assert.equal(healthySub.wallpapers.status, 'HEALTHY');
+
+  // 2. Degraded Audit (recoverable key in widgets)
+  const degradedAudit = {
+    status: 'DEGRADED',
+    counts: { total: 74, valid: 73, recoverable: 1, corrupted: 0 },
+    keys: {
+      valid: [],
+      recoverable: [{ key: 'widgetOrder', failureType: 'ARRAY_MISMATCH' }],
+      corrupted: []
+    }
+  };
+  const degradedSub = computeSubsystemHealth(degradedAudit);
+  assert.equal(degradedSub.widgets.status, 'DEGRADED');
+  assert.equal(degradedSub.widgets.recoverableCount, 1);
+  assert.equal(degradedSub.system.status, 'HEALTHY');
+
+  // 3. Corrupted Audit (corrupted key in wallpapers)
+  const corruptedAudit = {
+    status: 'CORRUPTED',
+    counts: { total: 74, valid: 73, recoverable: 0, corrupted: 1 },
+    keys: {
+      valid: [],
+      recoverable: [],
+      corrupted: [{ key: 'wallpaperSelection', failureType: 'TYPE_MISMATCH' }]
+    }
+  };
+  const corruptedSub = computeSubsystemHealth(corruptedAudit);
+  assert.equal(corruptedSub.wallpapers.status, 'CORRUPTED');
+  assert.equal(corruptedSub.wallpapers.corruptedCount, 1);
+  assert.equal(corruptedSub.bookmarks.status, 'HEALTHY');
+});
+
+test('diagnostic-ui: createSubsystemMatrixBlock renders 5 subsystem cards with status chips', () => {
+  const env = createMockEnvironment();
+  const { createSubsystemMatrixBlock } = env.window.HomebaseDiagnosticUI;
+
+  const audit = {
+    status: 'DEGRADED',
+    keys: {
+      valid: [],
+      recoverable: [{ key: 'appSearchMath', failureType: 'TYPE_MISMATCH' }],
+      corrupted: []
+    }
+  };
+
+  const block = createSubsystemMatrixBlock(audit);
+  assert.ok(block.classList.contains('app-settings-diagnostic-subsystems'));
+
+  const cards = block.querySelectorAll('.app-settings-diagnostic-subsystem-card');
+  assert.equal(cards.length, 5, 'Should render 5 subsystem cards');
+
+  const names = cards.map((c) => c.querySelector('.app-settings-diagnostic-subsystem-name')?.textContent);
+  assert.ok(names.includes('System & Core'));
+  assert.ok(names.includes('Bookmarks & Grid'));
+  assert.ok(names.includes('Wallpapers & Media'));
+  assert.ok(names.includes('Widgets & Dock'));
+  assert.ok(names.includes('Search Panel'));
+
+  // Search card should have warning chip
+  const searchCard = cards.find((c) => c.querySelector('.app-settings-diagnostic-subsystem-name')?.textContent === 'Search Panel');
+  assert.ok(searchCard);
+  const chip = searchCard.querySelector('.app-settings-diagnostic-chip');
+  assert.ok(chip);
+  assert.ok(chip.classList.contains('app-settings-diagnostic-chip--degraded'));
+  assert.match(chip.textContent, /Warning/);
+});
+
+test('diagnostic-ui: storage quota telemetry adheres to Privacy Constraint (aggregate-only)', async () => {
+  const env = createMockEnvironment();
+  const { getStorageQuotaTelemetry } = env.window.HomebaseDiagnosticUI;
+
+  // 1. With getBytesInUse available
+  const mockBrowserWithBytes = {
+    storage: {
+      local: {
+        getBytesInUse: async () => 262144 // 256 KB
+      }
+    }
+  };
+
+  const quota1 = await getStorageQuotaTelemetry(mockBrowserWithBytes);
+  assert.equal(quota1.bytesUsed, 262144);
+  assert.equal(quota1.quotaLimit, 5242880);
+  assert.equal(quota1.percentage, 5.0);
+  assert.match(quota1.formatted, /256\.0 KB \/ 5\.0 MB \(5%\)/);
+
+  // Privacy invariant: zero individual keys or user content in quota object
+  assert.equal(Object.prototype.hasOwnProperty.call(quota1, 'keys'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(quota1, 'bookmarks'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(quota1, 'wallpaper'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(quota1, 'todo'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(quota1, 'search'), false);
+
+  // 2. Fallback when getBytesInUse is absent (serialized size estimation)
+  const mockBrowserFallback = {
+    storage: {
+      local: {
+        get: async () => ({
+          settingA: 'value1',
+          settingB: [1, 2, 3]
+        })
+      }
+    }
+  };
+
+  const quota2 = await getStorageQuotaTelemetry(mockBrowserFallback);
+  assert.ok(quota2.bytesUsed > 0);
+  assert.equal(quota2.quotaLimit, 5242880);
+  assert.ok(typeof quota2.percentage === 'number');
+  assert.ok(quota2.formatted.includes('KB / 5.0 MB'));
+});
+
+test('diagnostic-ui: auto-repair enforces Minimal Mutation Write Invariant (changed keys only)', async () => {
+  const env = createMockEnvironment();
+  const { handleAutoRepairStorage } = env.window.HomebaseDiagnosticUI;
+
+  // Initial snapshot with:
+  // - appBackgroundDim: 250 (out of bounds, clamps to 80)
+  // - clockType: 'analog' (already valid, unchanged)
+  // - customThirdPartyKey: 'preserve-me' (unknown key, must be preserved)
+  const snapshot = {
+    appBackgroundDim: 250,
+    clockType: 'analog',
+    customThirdPartyKey: 'preserve-me'
+  };
+
+  let writtenPatch = null;
+  const mockBrowser = {
+    storage: {
+      local: {
+        get: async () => ({ ...snapshot }),
+        set: async (patch) => {
+          writtenPatch = patch;
+        }
+      }
+    }
+  };
+
+  const mockValidator = {
+    sanitizeStorageBatch: (raw) => ({
+      schemaVersion: 1,
+      appBackgroundDim: 80, // Clamped from 250
+      clockType: 'analog',  // Identical to raw
+      customThirdPartyKey: 'preserve-me' // Preserved
+    })
+  };
+
+  const button = env.document.createElement('button');
+  button.textContent = 'Auto-Repair Storage';
+
+  const result = await handleAutoRepairStorage(button, mockBrowser, mockValidator);
+
+  assert.equal(result.repaired, true);
+  // appBackgroundDim changed (250 -> 80) and schemaVersion added (undefined -> 1)
+  assert.equal(result.count, 2);
+
+  // Minimal Mutation Write Invariant:
+  // ONLY changed keys written!
+  assert.ok(writtenPatch, 'browser.storage.local.set must be called with a patch');
+  assert.equal(writtenPatch.appBackgroundDim, 80);
+  assert.equal(writtenPatch.schemaVersion, 1);
+
+  // Unchanged keys and unknown keys must NEVER be written to storage.local
+  assert.equal(writtenPatch.clockType, undefined, 'Unchanged keys must NOT be written');
+  assert.equal(writtenPatch.customThirdPartyKey, undefined, 'Unknown keys must NOT be rewritten');
+});
+
+test('diagnostic-ui: auto-repair does not write when storage is already healthy', async () => {
+  const env = createMockEnvironment();
+  const { handleAutoRepairStorage } = env.window.HomebaseDiagnosticUI;
+
+  const healthySnapshot = {
+    schemaVersion: 1,
+    appBackgroundDim: 80,
+    clockType: 'analog'
+  };
+
+  let writeCalled = false;
+  const mockBrowser = {
+    storage: {
+      local: {
+        get: async () => ({ ...healthySnapshot }),
+        set: async () => {
+          writeCalled = true;
+        }
+      }
+    }
+  };
+
+  const mockValidator = {
+    sanitizeStorageBatch: () => ({ ...healthySnapshot })
+  };
+
+  const button = env.document.createElement('button');
+  const result = await handleAutoRepairStorage(button, mockBrowser, mockValidator);
+
+  assert.equal(result.repaired, true);
+  assert.equal(result.count, 0, 'Zero changed keys');
+  assert.equal(writeCalled, false, 'browser.storage.local.set must NOT be called when zero keys changed');
+});
+
+test('diagnostic-ui: JSON report export generates structured offline download without user data', async () => {
+  const env = createMockEnvironment();
+  const { handleDownloadReport } = env.window.HomebaseDiagnosticUI;
+
+  let exportedObject = null;
+  let downloadedFileName = '';
+
+  // Intercept Blob and link click
+  env.window.Blob = class {
+    constructor(chunks) {
+      exportedObject = JSON.parse(chunks[0]);
+    }
+  };
+
+  const button = env.document.createElement('button');
+  button.textContent = 'Download JSON Report';
+
+  const customExport = async () => ({
+    homebaseDiagnosticsVersion: '1.0',
+    exportTimestamp: '2026-09-27T12:00:00.000Z',
+    storageHealth: { status: 'HEALTHY', schemaVersion: 1, counts: { total: 74, valid: 74, recoverable: 0, corrupted: 0 } },
+    quota: { bytesUsed: 1024, quotaLimit: 5242880, percentage: 0.1 },
+    subsystems: { system: 'HEALTHY' },
+    anomalies: [],
+    migrationHistory: []
+  });
+
+  const success = await handleDownloadReport(button, customExport);
+  assert.equal(success, true);
+  assert.ok(exportedObject, 'Report payload must be generated and parsed');
+  assert.equal(exportedObject.homebaseDiagnosticsVersion, '1.0');
+  assert.equal(exportedObject.storageHealth.status, 'HEALTHY');
+
+  // Verify zero privacy leaks
+  const serialized = JSON.stringify(exportedObject);
+  assert.equal(serialized.includes('http'), false, 'Export must never leak personal URLs');
+  assert.equal(serialized.includes('todoText'), false, 'Export must never leak todo contents');
+  assert.equal(serialized.includes('wallpaperData'), false, 'Export must never leak wallpaper images');
+});
+
+test('perf-report: HUD overlay minimization toggles between full view and compact pill', () => {
+  const env = createPerfReportEnvironment();
+  const { isPerfOverlayMinimized, setPerfOverlayMinimized } = env.module.exports;
+
+  // Default is expanded
+  assert.equal(isPerfOverlayMinimized(), false);
+
+  // Set minimized
+  setPerfOverlayMinimized(true);
+  assert.equal(isPerfOverlayMinimized(), true);
+
+  // Set expanded
+  setPerfOverlayMinimized(false);
+  assert.equal(isPerfOverlayMinimized(), false);
+});
+
+test('perf-report: HUD minimization persists strictly via sessionStorage and never uses browser.storage', () => {
+  let localStorageWriteCount = 0;
+  let syncStorageWriteCount = 0;
+
+  const env = createPerfReportEnvironment({
+    browser: {
+      storage: {
+        local: { set: () => { localStorageWriteCount++; } },
+        sync: { set: () => { syncStorageWriteCount++; } }
+      }
+    }
+  });
+
+  const { setPerfOverlayMinimized, PERF_OVERLAY_MINIMIZED_SESSION_KEY } = env.module.exports;
+
+  // Toggle HUD minimize state multiple times
+  setPerfOverlayMinimized(true);
+  setPerfOverlayMinimized(false);
+  setPerfOverlayMinimized(true);
+
+  // Verify stored strictly in sessionStorage
+  assert.equal(env.sessionStorage.getItem(PERF_OVERLAY_MINIMIZED_SESSION_KEY), 'true');
+
+  // Verify zero calls to browser.storage.local or browser.storage.sync
+  assert.equal(localStorageWriteCount, 0, 'Must NEVER write HUD minimize state to browser.storage.local');
+  assert.equal(syncStorageWriteCount, 0, 'Must NEVER write HUD minimize state to browser.storage.sync');
+});
+
 

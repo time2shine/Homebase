@@ -173,6 +173,501 @@
   }
 
   // ===============================================
+  // Subsystem Domain Categorization & Health Matrix
+  // ===============================================
+
+  /**
+   * The 74 canonical storage schema keys mapped across 5 operational domains.
+   */
+  const SUBSYSTEM_CATEGORIES = {
+    system: {
+      id: 'system',
+      label: 'System & Core',
+      keys: [
+        'schemaVersion', 'appPerformanceMode', 'debugPerfOverlay', 'appBatteryOptimization',
+        'appCinemaMode', 'appContainerMode', 'appContainerNewTab', 'appBackgroundDim',
+        'appGlassStylePref', 'appShowSidebar', 'appMaxTabsCount', 'appAutoCloseMinutes',
+        'appSingletonMode', 'appTimeFormatPreference'
+      ]
+    },
+    bookmarks: {
+      id: 'bookmarks',
+      label: 'Bookmarks & Grid',
+      keys: [
+        'appGridAnimationPref', 'appGridAnimationSpeed', 'appGridAnimationEnabled',
+        'appBookmarkOpenNewTab', 'appBookmarkTextBg', 'appBookmarkTextBgColor',
+        'appBookmarkTextBgOpacity', 'appBookmarkTextBgBlur', 'appBookmarkFallbackColor',
+        'appBookmarkFolderColor', 'bookmarkCustomMetadata', 'homebaseBookmarkRootId',
+        'folderCustomMetadata', 'domainIconMap', 'lastUsedBookmarkFolderId',
+        'homebaseRecentSaveFolders'
+      ]
+    },
+    wallpapers: {
+      id: 'wallpapers',
+      label: 'Wallpapers & Media',
+      keys: [
+        'wallpaperSelection', 'cachedAppliedPosterUrl', 'cachedAppliedPosterDataUrl',
+        'cachedAppliedPoster', 'cachedAppliedVideoUrl', 'videosManifest',
+        'videosManifestFetchedAt', 'cachedGalleryPosters', 'wallpaperPoolIds',
+        'wallpaperFallbackUsedAt', 'pendingDailyRotation', 'pendingDailyRotationSince',
+        'galleryFavorites', 'dailyWallpaperEnabled', 'wallpaperTypePreference',
+        'wallpaperQualityPreference', 'myWallpapers'
+      ]
+    },
+    widgets: {
+      id: 'widgets',
+      label: 'Widgets & Dock',
+      keys: [
+        'appShowWeather', 'appShowQuote', 'appShowNews', 'appShowTodo',
+        'widgetOrder', 'appNewsSource', 'todoItems', 'todoHideDone',
+        'quoteUpdateFrequency', 'quoteLocalIndexV1', 'quoteTags',
+        'cachedWeatherData', 'cachedCityName', 'cachedUnits',
+        'weatherFetchedAt', 'weatherLat', 'weatherLon', 'weatherCityName', 'weatherUnits'
+      ]
+    },
+    search: {
+      id: 'search',
+      label: 'Search Panel',
+      keys: [
+        'appSearchOpenNewTab', 'appSearchRememberEngine', 'appSearchDefaultEngine',
+        'appSearchMath', 'appSearchShowHistory', 'appSearchSuggestionsEnabled',
+        'currentSearchEngineId', 'searchEnginesConfig'
+      ]
+    }
+  };
+
+  /**
+   * Computes health breakdown metrics for each functional subsystem.
+   * Strictly inspects key names and error codes; never accesses user values.
+   *
+   * @param {Object} [audit]
+   * @returns {Object}
+   */
+  function computeSubsystemHealth(audit) {
+    const validKeysSet = new Set(Array.isArray(audit?.keys?.valid) ? audit.keys.valid : []);
+    const recoverableMap = new Map();
+    if (Array.isArray(audit?.keys?.recoverable)) {
+      audit.keys.recoverable.forEach((item) => {
+        const k = typeof item === 'string' ? item : item?.key;
+        if (k) recoverableMap.set(k, item);
+      });
+    }
+    const corruptedMap = new Map();
+    if (Array.isArray(audit?.keys?.corrupted)) {
+      audit.keys.corrupted.forEach((item) => {
+        const k = typeof item === 'string' ? item : item?.key;
+        if (k) corruptedMap.set(k, item);
+      });
+    }
+
+    const result = {};
+
+    for (const [catKey, catDef] of Object.entries(SUBSYSTEM_CATEGORIES)) {
+      const totalKeys = catDef.keys.length;
+      let validCount = 0;
+      let recoverableCount = 0;
+      let corruptedCount = 0;
+
+      catDef.keys.forEach((k) => {
+        if (corruptedMap.has(k)) {
+          corruptedCount += 1;
+        } else if (recoverableMap.has(k)) {
+          recoverableCount += 1;
+        } else if (validKeysSet.has(k) || (validKeysSet.size === 0 && audit?.status === 'HEALTHY')) {
+          validCount += 1;
+        } else {
+          validCount += 1;
+        }
+      });
+
+      let status = 'HEALTHY';
+      let statusLabel = 'Healthy';
+      let statusClass = 'app-settings-diagnostic-chip--healthy';
+
+      if (corruptedCount > 0) {
+        status = 'CORRUPTED';
+        statusLabel = `${corruptedCount} Corrupted`;
+        statusClass = 'app-settings-diagnostic-chip--corrupted';
+      } else if (recoverableCount > 0) {
+        status = 'DEGRADED';
+        statusLabel = `${recoverableCount} Warning`;
+        statusClass = 'app-settings-diagnostic-chip--degraded';
+      }
+
+      result[catKey] = {
+        id: catDef.id,
+        label: catDef.label,
+        status,
+        statusLabel,
+        statusClass,
+        validCount,
+        totalKeys,
+        recoverableCount,
+        corruptedCount
+      };
+    }
+
+    return result;
+  }
+
+  /**
+   * Safely constructs the Subsystem Health Matrix block via DOM APIs.
+   *
+   * @param {Object} [audit]
+   * @returns {HTMLElement}
+   */
+  function createSubsystemMatrixBlock(audit) {
+    const block = document.createElement('div');
+    block.className = 'app-settings-diagnostic-subsystems';
+
+    const title = document.createElement('div');
+    title.className = 'app-settings-diagnostic-detail-title';
+    title.textContent = 'Subsystem Health Matrix';
+    block.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'app-settings-diagnostic-subsystems-grid';
+
+    const subsystems = computeSubsystemHealth(audit);
+
+    Object.values(subsystems).forEach((sub) => {
+      const card = document.createElement('div');
+      card.className = 'app-settings-diagnostic-subsystem-card';
+
+      const header = document.createElement('div');
+      header.className = 'app-settings-diagnostic-subsystem-header';
+
+      const name = document.createElement('span');
+      name.className = 'app-settings-diagnostic-subsystem-name';
+      name.textContent = sub.label;
+      header.appendChild(name);
+
+      const chip = document.createElement('span');
+      chip.className = `app-settings-diagnostic-chip ${sub.statusClass}`;
+      chip.textContent = sub.statusLabel;
+      header.appendChild(chip);
+
+      card.appendChild(header);
+
+      const counts = document.createElement('div');
+      counts.className = 'app-settings-diagnostic-subsystem-counts';
+      counts.textContent = `${sub.validCount}/${sub.totalKeys} keys valid`;
+      card.appendChild(counts);
+
+      grid.appendChild(card);
+    });
+
+    block.appendChild(grid);
+    return block;
+  }
+
+  // ===============================================
+  // Storage Quota Telemetry (Aggregate-Only Privacy)
+  // ===============================================
+  const DEFAULT_STORAGE_QUOTA_BYTES = 5242880; // 5 MB
+
+  /**
+   * Calculates storage quota usage asynchronously.
+   * Strictly adheres to the Privacy Constraint: returns only aggregate numbers.
+   * Never exposes individual key sizes, bookmark data, wallpaper information, or user content.
+   *
+   * @param {Object} [customBrowserApi]
+   * @returns {Promise<{ bytesUsed: number, quotaLimit: number, percentage: number, formatted: string }>}
+   */
+  async function getStorageQuotaTelemetry(customBrowserApi = null) {
+    const browserInstance = customBrowserApi || (typeof window !== 'undefined' ? (window.browser || window.chrome) : null);
+    let bytesUsed = 0;
+    const quotaLimit = DEFAULT_STORAGE_QUOTA_BYTES;
+
+    if (browserInstance?.storage?.local) {
+      let resolvedBytes = null;
+      if (typeof browserInstance.storage.local.getBytesInUse === 'function') {
+        try {
+          const res = browserInstance.storage.local.getBytesInUse(null);
+          if (res && typeof res.then === 'function') {
+            const val = await res;
+            if (typeof val === 'number' && Number.isFinite(val)) {
+              resolvedBytes = val;
+            }
+          }
+        } catch (_) {}
+
+        if (resolvedBytes === null) {
+          resolvedBytes = await new Promise((resolve) => {
+            try {
+              browserInstance.storage.local.getBytesInUse(null, (val) => {
+                if (typeof val === 'number' && Number.isFinite(val)) {
+                  resolve(val);
+                } else {
+                  resolve(null);
+                }
+              });
+            } catch (_) {
+              resolve(null);
+            }
+          });
+        }
+      }
+
+      if (resolvedBytes !== null) {
+        bytesUsed = resolvedBytes;
+      } else if (typeof browserInstance.storage.local.get === 'function') {
+        try {
+          const allItems = (await browserInstance.storage.local.get(null)) || {};
+          let totalBytes = 0;
+          for (const [k, v] of Object.entries(allItems)) {
+            try {
+              const json = JSON.stringify(v);
+              totalBytes += (k.length + (json ? json.length : 0)) * 2;
+            } catch (_) {}
+          }
+          bytesUsed = totalBytes;
+        } catch (_) {
+          bytesUsed = 0;
+        }
+      }
+    }
+
+    const percentage = quotaLimit > 0 ? Math.min(100, Math.round((bytesUsed / quotaLimit) * 1000) / 10) : 0;
+    const usedKb = (bytesUsed / 1024).toFixed(1);
+    const limitMb = (quotaLimit / (1024 * 1024)).toFixed(1);
+
+    return {
+      bytesUsed,
+      quotaLimit,
+      percentage,
+      formatted: `${usedKb} KB / ${limitMb} MB (${percentage}%)`
+    };
+  }
+
+  // ===============================================
+  // Storage Auto-Remediation (Minimal Mutation Invariant)
+  // ===============================================
+
+  /**
+   * Helper to check deep structural equality of two JSON values.
+   *
+   * @param {*} a
+   * @param {*} b
+   * @returns {boolean}
+   */
+  function areValuesIdentical(a, b) {
+    if (a === b) return true;
+    if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+    try {
+      return JSON.stringify(a) === JSON.stringify(b);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
+   * Safely auto-repairs degraded or unaligned storage items without data loss.
+   * Adheres strictly to the Minimal Mutation Write Invariant:
+   * 1. Read existing storage snapshot.
+   * 2. Sanitize in memory.
+   * 3. Compare original and sanitized values.
+   * 4. Create minimal patch object containing only changed keys.
+   * 5. Write only changed keys using browser.storage.local.set().
+   * Unchanged keys and unknown keys must never be written or deleted.
+   *
+   * @param {HTMLButtonElement} button
+   * @param {Object} [customBrowserApi]
+   * @param {Object} [customValidator]
+   * @returns {Promise<{ repaired: boolean, count: number, patch?: Object, error?: string }>}
+   */
+  async function handleAutoRepairStorage(button, customBrowserApi = null, customValidator = null) {
+    if (button && button.disabled) return { repaired: false, count: 0 };
+    let originalText = '';
+    if (button) {
+      button.disabled = true;
+      originalText = button.textContent;
+      if (button.dataset) {
+        button.dataset.originalText = originalText;
+      }
+      button.textContent = 'Repairing...';
+    }
+
+    const browserInstance = customBrowserApi || (typeof window !== 'undefined' ? (window.browser || window.chrome) : null);
+    const validator = customValidator || (typeof window !== 'undefined' ? window.HomebaseValidator : null);
+
+    if (!browserInstance?.storage?.local || !validator?.sanitizeStorageBatch) {
+      if (button) {
+        button.textContent = 'Repair Unavailable';
+        setTimeout(() => {
+          button.textContent = (button.dataset && button.dataset.originalText) || originalText || 'Auto-Repair Storage';
+          button.disabled = false;
+        }, 2500);
+      }
+      return { repaired: false, count: 0 };
+    }
+
+    try {
+      // 1. Read existing storage snapshot
+      const snapshot = (await browserInstance.storage.local.get(null)) || {};
+
+      // 2. Sanitize in memory (fallbackToDefault: false ensures unrecoverable/unknown keys are preserved)
+      const sanitized = validator.sanitizeStorageBatch(snapshot, { fallbackToDefault: false });
+
+      // Ensure valid schemaVersion if missing or corrupted
+      const targetVersion = (typeof window !== 'undefined' && window.CURRENT_SCHEMA_VERSION) || 1;
+      if (sanitized.schemaVersion === undefined && (snapshot.schemaVersion === undefined || snapshot.schemaVersion === null || !Number.isInteger(snapshot.schemaVersion) || snapshot.schemaVersion < 1)) {
+        sanitized.schemaVersion = targetVersion;
+      }
+
+      // 3. Compare original and sanitized values
+      // 4. Create minimal patch object containing ONLY changed keys
+      const patch = {};
+      for (const [key, cleanVal] of Object.entries(sanitized)) {
+        if (!areValuesIdentical(snapshot[key], cleanVal)) {
+          patch[key] = cleanVal;
+        }
+      }
+
+      const changedCount = Object.keys(patch).length;
+
+      // 5. Write ONLY changed keys using browser.storage.local.set()
+      if (changedCount > 0) {
+        await browserInstance.storage.local.set(patch);
+      }
+
+      clearAuditCache();
+
+      if (button) {
+        button.textContent = changedCount > 0
+          ? `Repaired (${changedCount} key${changedCount === 1 ? '' : 's'})`
+          : 'Storage Already Healthy';
+      }
+
+      return { repaired: true, count: changedCount, patch };
+    } catch (err) {
+      if (button) {
+        button.textContent = 'Repair Failed';
+      }
+      return { repaired: false, count: 0, error: err?.message || String(err) };
+    } finally {
+      if (button) {
+        setTimeout(() => {
+          button.textContent = (button.dataset && button.dataset.originalText) || originalText || 'Auto-Repair Storage';
+          button.disabled = false;
+        }, 2500);
+      }
+    }
+  }
+
+  // ===============================================
+  // Resilient Diagnostic JSON Report Download
+  // ===============================================
+
+  /**
+   * Downloads a local JSON diagnostic report via Blob and URL.createObjectURL.
+   * Operates completely offline with zero telemetry or network calls.
+   *
+   * @param {HTMLButtonElement} button
+   * @param {Function} [customExportFn]
+   * @returns {Promise<boolean>}
+   */
+  async function handleDownloadReport(button, customExportFn = null) {
+    if (button && button.disabled) return false;
+    let originalText = '';
+    if (button) {
+      button.disabled = true;
+      originalText = button.textContent;
+      if (button.dataset) {
+        button.dataset.originalText = originalText;
+      }
+      button.textContent = 'Generating...';
+    }
+
+    try {
+      let reportObj = null;
+      if (typeof customExportFn === 'function') {
+        reportObj = await customExportFn();
+      } else {
+        const audit = await getOrFetchStorageAudit(false);
+        const anomalies = (window.HomebaseDiagnostics && typeof window.HomebaseDiagnostics.getValidationAnomalies === 'function')
+          ? window.HomebaseDiagnostics.getValidationAnomalies()
+          : [];
+        let history = [];
+        if (typeof window.getMigrationHistory === 'function') {
+          try {
+            history = await window.getMigrationHistory();
+          } catch (_) {}
+        }
+        const perfMetrics = (window.HomebaseDiagnostics && typeof window.HomebaseDiagnostics.getPerformanceMetrics === 'function')
+          ? window.HomebaseDiagnostics.getPerformanceMetrics()
+          : [];
+
+        const quota = await getStorageQuotaTelemetry();
+
+        reportObj = {
+          homebaseDiagnosticsVersion: '1.0',
+          exportTimestamp: new Date().toISOString(),
+          environment: {
+            platform: typeof navigator !== 'undefined' ? (navigator.userAgentData?.platform || navigator.platform || 'unknown') : 'unknown',
+            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
+          },
+          storageHealth: {
+            status: audit?.status || 'UNKNOWN',
+            schemaVersion: audit?.schemaVersion?.stored ?? 1,
+            counts: audit?.counts || { total: 0, valid: 0, recoverable: 0, corrupted: 0 }
+          },
+          quota: {
+            bytesUsed: quota.bytesUsed,
+            quotaLimit: quota.quotaLimit,
+            percentage: quota.percentage
+          },
+          subsystems: computeSubsystemHealth(audit),
+          anomalies,
+          migrationHistory: history,
+          recentPerformanceMetrics: perfMetrics
+        };
+      }
+
+      const jsonStr = JSON.stringify(reportObj, null, 2);
+
+      const blobCtor = (typeof window !== 'undefined' && window.Blob) || (typeof Blob !== 'undefined' ? Blob : null);
+      const urlHelper = (typeof window !== 'undefined' && window.URL) || (typeof URL !== 'undefined' ? URL : null);
+
+      if (blobCtor && urlHelper && typeof urlHelper.createObjectURL === 'function') {
+        const blob = new blobCtor([jsonStr], { type: 'application/json' });
+        const url = urlHelper.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `homebase-diagnostic-report-${Date.now()}.json`;
+        if (a.style) a.style.display = 'none';
+        if (document.body) {
+          document.body.appendChild(a);
+          if (typeof a.click === 'function') {
+            a.click();
+          }
+          setTimeout(() => {
+            if (a.parentNode) a.parentNode.removeChild(a);
+            urlHelper.revokeObjectURL(url);
+          }, 1000);
+        }
+      }
+
+      if (button) {
+        button.textContent = 'Downloaded JSON!';
+      }
+      return true;
+    } catch (_) {
+      if (button) {
+        button.textContent = 'Download Failed';
+      }
+      return false;
+    } finally {
+      if (button) {
+        setTimeout(() => {
+          button.textContent = (button.dataset && button.dataset.originalText) || originalText || 'Download JSON Report';
+          button.disabled = false;
+        }, 2500);
+      }
+    }
+  }
+
+  // ===============================================
   // In-Memory Session Cache & De-duplication State
   // ===============================================
   let cachedAudit = null;
@@ -452,13 +947,22 @@
     container.appendChild(banner);
 
     // 2. Metric Grid
+    let quota = { formatted: '0.0 KB / 5.0 MB (0%)', bytesUsed: 0, quotaLimit: DEFAULT_STORAGE_QUOTA_BYTES, percentage: 0 };
+    try {
+      quota = await getStorageQuotaTelemetry();
+    } catch (_) {}
+
     const grid = document.createElement('div');
     grid.className = 'app-settings-diagnostic-grid';
     grid.appendChild(renderMetricCard('Total Keys', audit?.counts?.total ?? 0, 'Schema Registry'));
     grid.appendChild(renderMetricCard('Valid Keys', audit?.counts?.valid ?? 0, 'Passed Checks'));
     grid.appendChild(renderMetricCard('Recoverable', audit?.counts?.recoverable ?? 0, 'Auto-Normalized'));
     grid.appendChild(renderMetricCard('Corrupted', audit?.counts?.corrupted ?? 0, 'Requires Attention'));
+    grid.appendChild(renderMetricCard('Storage Quota', quota.formatted, 'Quota Usage'));
     container.appendChild(grid);
+
+    // 2b. Subsystem Health Matrix
+    container.appendChild(createSubsystemMatrixBlock(audit));
 
     // 3. Action Toolbar
     const actions = document.createElement('div');
@@ -470,6 +974,25 @@
     copyBtn.textContent = 'Copy Diagnostic Report';
     copyBtn.addEventListener('click', () => handleCopyReport(copyBtn));
     actions.appendChild(copyBtn);
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.type = 'button';
+    downloadBtn.className = 'gallery-secondary-btn app-settings-diagnostic-btn-download';
+    downloadBtn.textContent = 'Download JSON Report';
+    downloadBtn.addEventListener('click', () => handleDownloadReport(downloadBtn));
+    actions.appendChild(downloadBtn);
+
+    const repairBtn = document.createElement('button');
+    repairBtn.type = 'button';
+    repairBtn.className = 'gallery-secondary-btn app-settings-diagnostic-btn-repair';
+    repairBtn.textContent = 'Auto-Repair Storage';
+    repairBtn.addEventListener('click', async () => {
+      const res = await handleAutoRepairStorage(repairBtn);
+      if (res?.repaired && res.count > 0) {
+        await renderDiagnosticsPanel(sectionOrContainer, null, null, true);
+      }
+    });
+    actions.appendChild(repairBtn);
 
     const scanBtn = document.createElement('button');
     scanBtn.type = 'button';
@@ -527,6 +1050,14 @@
     createDiagnosticsSection,
     renderMetricCard,
     handleCopyReport,
+    handleDownloadReport,
+    handleAutoRepairStorage,
+    getStorageQuotaTelemetry,
+    computeSubsystemHealth,
+    createSubsystemMatrixBlock,
+    areValuesIdentical,
+    SUBSYSTEM_CATEGORIES,
+    DEFAULT_STORAGE_QUOTA_BYTES,
     renderDiagnosticsPanel,
     getOrFetchStorageAudit,
     getCachedAudit,

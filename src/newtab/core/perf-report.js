@@ -1,5 +1,35 @@
 const PERF_OVERLAY_CACHE_THROTTLE_MS = 5000;
 const PERF_HEALTH_SESSION_KEY = 'homebasePerfHealthSession';
+const PERF_OVERLAY_MINIMIZED_SESSION_KEY = 'homebasePerfOverlayMinimized';
+
+/**
+ * Returns whether the performance overlay HUD is minimized into a status pill.
+ * Strictly checks sessionStorage only; never accesses browser.storage.local/sync.
+ *
+ * @returns {boolean}
+ */
+function isPerfOverlayMinimized() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      return sessionStorage.getItem(PERF_OVERLAY_MINIMIZED_SESSION_KEY) === 'true';
+    }
+  } catch (_) {}
+  return false;
+}
+
+/**
+ * Persists the minimized/expanded state of the performance overlay HUD in sessionStorage.
+ * Strictly forbidden to use browser.storage.local or browser.storage.sync.
+ *
+ * @param {boolean} minimized
+ */
+function setPerfOverlayMinimized(minimized) {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(PERF_OVERLAY_MINIMIZED_SESSION_KEY, minimized ? 'true' : 'false');
+    }
+  } catch (_) {}
+}
 
 const SCRIPT_TIMING_TARGETS = [
   { label: 'script:instant-load', file: 'instant_load.js' },
@@ -1030,6 +1060,24 @@ function ensurePerfOverlayElement() {
     gap: 8px;
   `;
 
+  const pillEl = document.createElement('div');
+  pillEl.dataset.role = 'perf-overlay-pill';
+  pillEl.style.cssText = `
+    display: none;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    user-select: none;
+    line-height: 1.4;
+  `;
+  pillEl.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setPerfOverlayMinimized(false);
+    updatePerfOverlay(false);
+  });
+
   const textEl = document.createElement('div');
   textEl.dataset.role = 'perf-overlay-text';
   textEl.style.cssText = `
@@ -1039,12 +1087,19 @@ function ensurePerfOverlayElement() {
     word-break: break-word;
   `;
 
+  const actionsRow = document.createElement('div');
+  actionsRow.dataset.role = 'perf-overlay-actions';
+  actionsRow.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  `;
+
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
   copyBtn.dataset.role = 'perf-copy-report';
   copyBtn.textContent = 'Copy report';
   copyBtn.style.cssText = `
-    align-self: flex-start;
     border: 1px solid rgba(255,255,255,0.28);
     border-radius: 6px;
     background: rgba(255,255,255,0.12);
@@ -1062,8 +1117,36 @@ function ensurePerfOverlayElement() {
     copyFullPerfReport();
   });
 
+  const minimizeBtn = document.createElement('button');
+  minimizeBtn.type = 'button';
+  minimizeBtn.dataset.role = 'perf-toggle-minimize';
+  minimizeBtn.textContent = 'Minimize';
+  minimizeBtn.title = 'Minimize performance overlay to status pill';
+  minimizeBtn.style.cssText = `
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.2;
+    padding: 4px 7px;
+    cursor: pointer;
+    flex-shrink: 0;
+  `;
+  minimizeBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setPerfOverlayMinimized(true);
+    updatePerfOverlay(false);
+  });
+
+  actionsRow.appendChild(copyBtn);
+  actionsRow.appendChild(minimizeBtn);
+
+  el.appendChild(pillEl);
   el.appendChild(textEl);
-  el.appendChild(copyBtn);
+  el.appendChild(actionsRow);
 
   perfOverlayEl = el;
 
@@ -1335,12 +1418,31 @@ function updatePerfOverlay(forceCacheRefresh = false) {
   ].join('\n');
 
   const textEl = el.querySelector('[data-role="perf-overlay-text"]');
-  if (textEl) {
-    textEl.textContent = overlayText;
-  } else {
-    el.textContent = overlayText;
-  }
+  const pillEl = el.querySelector('[data-role="perf-overlay-pill"]');
+  const actionsRow = el.querySelector('[data-role="perf-overlay-actions"]');
+  const isMinimized = isPerfOverlayMinimized();
 
+  if (isMinimized) {
+    if (pillEl) {
+      pillEl.style.display = 'block';
+      const statusIcon = cachedAudit?.status === 'CORRUPTED' ? '🔴' : (cachedAudit?.status === 'DEGRADED' || validationAnomaliesCount > 0 ? '🟡' : '🟢');
+      const readyText = perfState.startup.readyClassMs != null ? `${Math.round(perfState.startup.readyClassMs)}ms` : 'Active';
+      pillEl.textContent = `${statusIcon} HB Perf: ${readyText} | Storage: ${cachedAudit?.status || 'OK'} (Click to expand)`;
+    }
+    if (textEl) textEl.style.display = 'none';
+    if (actionsRow) actionsRow.style.display = 'none';
+    el.style.padding = '6px 12px';
+  } else {
+    if (pillEl) pillEl.style.display = 'none';
+    if (textEl) {
+      textEl.style.display = 'block';
+      textEl.textContent = overlayText;
+    } else {
+      el.textContent = overlayText;
+    }
+    if (actionsRow) actionsRow.style.display = 'flex';
+    el.style.padding = '10px 12px';
+  }
 }
 
 function setPerfOverlayEnabled(enabled) {
@@ -1449,10 +1551,15 @@ if (typeof window !== 'undefined') {
   window.HomebaseDiagnostics.clearPerformanceMetrics = clearPerformanceMetrics;
   window.HomebaseDiagnostics.formatOverlayStorageHealthRows = formatOverlayStorageHealthRows;
   window.HomebaseDiagnostics.formatOverlayRecentMetricsRows = formatOverlayRecentMetricsRows;
+  window.HomebaseDiagnostics.isPerfOverlayMinimized = isPerfOverlayMinimized;
+  window.HomebaseDiagnostics.setPerfOverlayMinimized = setPerfOverlayMinimized;
+  window.HomebaseDiagnostics.PERF_OVERLAY_MINIMIZED_SESSION_KEY = PERF_OVERLAY_MINIMIZED_SESSION_KEY;
   window.recordPerformanceMetric = recordPerformanceMetric;
   window.getPerformanceMetrics = getPerformanceMetrics;
   window.formatOverlayStorageHealthRows = formatOverlayStorageHealthRows;
   window.formatOverlayRecentMetricsRows = formatOverlayRecentMetricsRows;
+  window.isPerfOverlayMinimized = isPerfOverlayMinimized;
+  window.setPerfOverlayMinimized = setPerfOverlayMinimized;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -1461,7 +1568,10 @@ if (typeof module !== 'undefined' && module.exports) {
     getPerformanceMetrics,
     clearPerformanceMetrics,
     formatOverlayStorageHealthRows,
-    formatOverlayRecentMetricsRows
+    formatOverlayRecentMetricsRows,
+    isPerfOverlayMinimized,
+    setPerfOverlayMinimized,
+    PERF_OVERLAY_MINIMIZED_SESSION_KEY
   };
 }
 

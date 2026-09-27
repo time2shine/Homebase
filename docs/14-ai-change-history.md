@@ -157,6 +157,34 @@ Before an AI-generated change is merged into `main` or included in a release bui
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-07]: Cycle #6 (Phase 3) — Subsystem Health Matrix, Storage Auto-Remediation & Developer Ergonomics
+
+- **Date**: 2026-09-27
+- **AI Agent**: Gemini 3.8 Flash (Antigravity Paired AI)
+- **Task**: Implement Homebase Improvement Cycle #6 — Phase 3: Subsystem Health Matrix, Safe Storage Auto-Repair, Storage Quota Telemetry, Resilient JSON Export, and Performance HUD Minimization per `docs/32-cycle6-phase3-plan.md`.
+- **Prompt summary**: Implement Phase 3 of Cycle #6 following AGENTS.md strictly. Add 74-key subsystem categorization (System & Core, Bookmarks & Grid, Wallpapers & Media, Widgets & Dock, Search Panel) with safe DOM rendering in `diagnostic-ui.js`; implement safe Storage Auto-Repair adhering to Minimal Mutation Write Invariant (in-memory sanitizeBatch, deep equality diff, write only changed keys via `browser.storage.local.set()`); implement storage quota telemetry (aggregate bytes and % only, zero private data); add resilient offline JSON report download using `Blob` and `URL.createObjectURL()`; add collapsible minimized pill mode to `#perf-debug-overlay` in `perf-report.js` with state persisted exclusively in `sessionStorage`; add scoped styles in `settings.css`; add unit tests in `tests/unit/diagnostic-ui.test.mjs`; run validations and builds; create implementation report `docs/33-cycle6-phase3-implementation-report.md`; update maintenance and AI change logs.
+- **Files changed**:
+  - `src/newtab/settings/diagnostic-ui.js` (Modified: subsystem health matrix, minimal mutation auto-repair, storage quota telemetry, offline JSON export)
+  - `src/newtab/core/perf-report.js` (Modified: collapsible minimized HUD pill mode with sessionStorage persistence)
+  - `src/newtab/styles/settings.css` (Modified: scoped styles for subsystem matrix, chips, auto-repair button, and metric grid)
+  - `tests/unit/diagnostic-ui.test.mjs` (Modified: added 9 new unit tests, expanding suite to 25 tests)
+  - `docs/33-cycle6-phase3-implementation-report.md` (Added: Cycle #6 Phase 3 implementation report)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry `2026-09-27-07`)
+  - `docs/14-ai-change-history.md` (Modified: logged AI change entry `2026-09-27-07`)
+- **Reason**: Equips Homebase with self-healing storage capabilities, granular domain visibility, privacy-compliant quota telemetry, fail-safe diagnostic export, and developer HUD minimization without adding dependencies or modifying high-risk areas.
+- **Testing**:
+  - `node --check src/newtab/settings/diagnostic-ui.js`: Exit 0 (Valid)
+  - `node --check src/newtab/core/perf-report.js`: Exit 0 (Valid)
+  - `node --check tests/unit/diagnostic-ui.test.mjs`: Exit 0 (Valid)
+  - `node scripts/check-newtab-static.mjs`: Exit 0 (Valid: 40 defer scripts, 33 modules, 87 declarations)
+  - `npm.cmd test`: Exit 0 (Valid: 4/4 stages passed, 94/94 unit tests pass)
+  - `npm.cmd run build`: Exit 0 (Valid: Chrome and Firefox dist outputs built cleanly)
+- **Human review**:
+  - Reviewer: Pending
+  - Status: Pending Human Review
+  - Review Date: Pending
+  - Notes: Awaiting review of Minimal Mutation Write Invariant implementation, quota privacy boundaries, and offline JSON export. Manual verification in Firefox recommended.
+
 ### Entry [2026-09-27-06]: Cycle #6 (Phase 2) — Developer HUD Integration, Live Refresh Orchestration & Diagnostic UX Hardening
 
 - **Date**: 2026-09-27

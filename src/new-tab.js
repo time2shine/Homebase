@@ -6830,6 +6830,9 @@ function setupHomebaseRootListeners() {
 // ===============================================
 
 function readFastPerformanceModePreference() {
+  if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.readFastPerformanceModePreference === 'function') {
+    return window.HomebasePerformanceController.readFastPerformanceModePreference();
+  }
   try {
     if (!window.localStorage) return false;
     return localStorage.getItem(FAST_PERFORMANCE_MODE_KEY) === '1';
@@ -6839,6 +6842,9 @@ function readFastPerformanceModePreference() {
 }
 
 function syncFastPerformanceModeMirror(enabled) {
+  if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.syncFastPerformanceModeMirror === 'function') {
+    return window.HomebasePerformanceController.syncFastPerformanceModeMirror(enabled);
+  }
   try {
     if (!window.localStorage) return;
     localStorage.setItem(FAST_PERFORMANCE_MODE_KEY, enabled === true ? '1' : '0');
@@ -6846,12 +6852,17 @@ function syncFastPerformanceModeMirror(enabled) {
 }
 
 function isPerformanceModeEnabled() {
+  if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.isPerformanceModeEnabled === 'function') {
+    return window.HomebasePerformanceController.isPerformanceModeEnabled();
+  }
   return appPerformanceModePreference === true;
 }
 
 function disableGridAnimationRuntime() {
+  if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.disableGridAnimationRuntime === 'function') {
+    return window.HomebasePerformanceController.disableGridAnimationRuntime();
+  }
   document.body.classList.remove('grid-animation-enabled');
-
   let styleEl = document.getElementById('dynamic-grid-animation');
   if (!styleEl) {
     styleEl = document.createElement('style');
@@ -6859,32 +6870,28 @@ function disableGridAnimationRuntime() {
     document.head.appendChild(styleEl);
   }
   styleEl.innerHTML = '';
-
-  const container = document.getElementById('grid-animation-sub-settings');
-  if (container) setSubSettingsExpanded(container, false);
-
-  document.querySelectorAll('.bookmark-item.newly-rendered').forEach((item) => {
-    item.classList.remove('newly-rendered');
-    item.style.animation = 'none';
-  });
 }
 
 function disableGlassRuntime() {
+  if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.disableGlassRuntime === 'function') {
+    return window.HomebasePerformanceController.disableGlassRuntime();
+  }
   let styleEl = document.getElementById('dynamic-glass-style');
   if (!styleEl) {
     styleEl = document.createElement('style');
     styleEl.id = 'dynamic-glass-style';
     document.head.appendChild(styleEl);
   }
-
   styleEl.innerHTML = '';
-
   document.documentElement.style.setProperty('--glass-blur', '0px');
   document.documentElement.style.setProperty('--glass-bg', 'transparent');
   document.documentElement.style.setProperty('--overlay-blur', '0px');
 }
 
 function enableGlassRuntimeFromPreference() {
+  if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.enableGlassRuntimeFromPreference === 'function') {
+    return window.HomebasePerformanceController.enableGlassRuntimeFromPreference(appGlassStylePreference);
+  }
   document.documentElement.style.removeProperty('--glass-blur');
   document.documentElement.style.removeProperty('--glass-bg');
   document.documentElement.style.removeProperty('--overlay-blur');
@@ -6893,59 +6900,55 @@ function enableGlassRuntimeFromPreference() {
 
 function applyPerformanceModeState(enabled) {
   const isOn = !!enabled;
-
   appPerformanceModePreference = isOn;
 
-  document.body.classList.toggle('performance-mode', isOn);
+  if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.applyPerformanceMode === 'function') {
+    return window.HomebasePerformanceController.applyPerformanceMode(isOn, {
+      appGlassStylePreference,
+      appGridAnimationPreference,
+      appGridAnimationSpeedPreference,
+      appGridAnimationEnabledPreference,
+      onVideoCleanup: () => {
+        const backgroundVideos = Array.from(document.querySelectorAll('.background-video'));
+        const hadVideoSources = backgroundVideos.some((v) => {
+          try {
+            const source = v.querySelector('source');
+            return !!(
+              v.getAttribute('src') ||
+              v.currentSrc ||
+              v.src ||
+              (source && (source.getAttribute('src') || source.src))
+            );
+          } catch (e) {
+            return false;
+          }
+        });
+        cleanupBackgroundPlayback();
+        clearBackgroundVideos();
+        if (hadVideoSources) {
+          if (!perfState.media) perfState.media = createMediaPerfState();
+          perfState.media.videoSourcesClearedByPerformanceMode = true;
+          recordStartupPerfEvent('newtab:video-sources-cleared-performance-mode');
+        }
+      },
+      onCinemaModeReset: () => {
+        setupCinemaModeListeners();
+        resetCinemaMode();
+      }
+    });
+  }
 
+  document.body.classList.toggle('performance-mode', isOn);
   const perfToggle = document.getElementById('app-performance-mode-toggle');
   if (perfToggle) perfToggle.checked = isOn;
-
-  const rowsToHide = [
-    document.getElementById('app-grid-animation-row'),
-    document.getElementById('app-glass-style-row'),
-    document.getElementById('app-cinema-mode-row'),
-    document.getElementById('grid-animation-sub-settings')
-  ];
-
-  rowsToHide.forEach((row) => {
-    if (row) row.style.display = isOn ? 'none' : '';
-  });
-
   if (isOn) {
     disableGridAnimationRuntime();
     disableGlassRuntime();
-    disableCinemaModeRuntime();
-    const backgroundVideos = Array.from(document.querySelectorAll('.background-video'));
-    const hadVideoSources = backgroundVideos.some((v) => {
-      try {
-        const source = v.querySelector('source');
-        return !!(
-          v.getAttribute('src') ||
-          v.currentSrc ||
-          v.src ||
-          (source && (source.getAttribute('src') || source.src))
-        );
-      } catch (e) {
-        return false;
-      }
-    });
     cleanupBackgroundPlayback();
     clearBackgroundVideos();
-    if (hadVideoSources) {
-      if (!perfState.media) perfState.media = createMediaPerfState();
-      perfState.media.videoSourcesClearedByPerformanceMode = true;
-      recordStartupPerfEvent('newtab:video-sources-cleared-performance-mode');
-    }
-    return;
+  } else {
+    enableGlassRuntimeFromPreference();
   }
-
-  enableGlassRuntimeFromPreference();
-  applyGridAnimation(appGridAnimationPreference);
-  applyGridAnimationSpeed(appGridAnimationSpeedPreference);
-  applyGridAnimationEnabled(appGridAnimationEnabledPreference);
-  setupCinemaModeListeners();
-  resetCinemaMode();
 }
 
 

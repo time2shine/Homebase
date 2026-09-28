@@ -1099,7 +1099,9 @@ window.SettingsUI = (() => {
         }
       } catch (e) {}
 
-      if (browser?.storage?.local) {
+      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+        HomebaseStorage.set('widgetOrder', order).catch((err) => console.warn('Failed to save widget order', err));
+      } else if (browser?.storage?.local) {
         browser.storage.local
           .set({ widgetOrder: order })
           .catch((err) => console.warn('Failed to save widget order', err));
@@ -1311,7 +1313,11 @@ window.SettingsUI = (() => {
           // Ignore; instant mirror is best-effort only
         }
         try {
-          await browser.storage.local.set({ [APP_BACKGROUND_DIM_KEY]: appBackgroundDimPreference });
+          if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+            await HomebaseStorage.set(APP_BACKGROUND_DIM_KEY, appBackgroundDimPreference);
+          } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+            await browser.storage.local.set({ [APP_BACKGROUND_DIM_KEY]: appBackgroundDimPreference });
+          }
         } catch (err) {
           console.warn('Failed to save background dim preference', err);
         }
@@ -1576,50 +1582,64 @@ window.SettingsUI = (() => {
         };
         const wallpaperChanged = JSON.stringify(initialWallpaperState) !== JSON.stringify(nextWallpaperState);
 
+        const settingsBatch = {
+          [APP_TIME_FORMAT_KEY]: nextFormat,
+          [APP_MAX_TABS_KEY]: nextMaxTabs,
+          [APP_AUTOCLOSE_KEY]: nextAutoClose,
+          [APP_BACKGROUND_DIM_KEY]: appBackgroundDimPreference,
+          [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
+          [APP_BOOKMARK_OPEN_NEW_TAB_KEY]: nextBookmarkNewTab,
+          [APP_CONTAINER_MODE_KEY]: nextContainerMode,
+          [APP_CONTAINER_NEW_TAB_KEY]: nextContainerNewTab,
+          [DAILY_ROTATION_KEY]: nextDailyRotation,
+          [WALLPAPER_TYPE_KEY]: nextWallpaperType,
+          [WALLPAPER_QUALITY_KEY]: nextWallpaperQuality,
+          [APP_BOOKMARK_TEXT_BG_KEY]: nextBookmarkTextBg,
+          [APP_BOOKMARK_TEXT_BG_COLOR_KEY]: nextTextBgColor,
+          [APP_BOOKMARK_TEXT_OPACITY_KEY]: nextOpacity,
+          [APP_BOOKMARK_TEXT_BLUR_KEY]: nextBlur,
+          [APP_BOOKMARK_FALLBACK_COLOR_KEY]: nextFallbackColor,
+          [APP_BOOKMARK_FOLDER_COLOR_KEY]: nextFolderColor,
+          [APP_GRID_ANIMATION_ENABLED_KEY]: nextGridAnimEnabled,
+          [APP_GRID_ANIMATION_SPEED_KEY]: nextSpeed,
+          [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
+          [APP_SEARCH_MATH_KEY]: nextMath,
+          [APP_SEARCH_SHOW_HISTORY_KEY]: nextSearchHistory,
+          [APP_SEARCH_SUGGESTIONS_KEY]: nextSearchSuggestions,
+          [APP_SEARCH_DEFAULT_ENGINE_KEY]: nextDefaultEngine,
+          [APP_SINGLETON_MODE_KEY]: nextSingletonMode,
+          [APP_PERFORMANCE_MODE_KEY]: nextPerformanceMode,
+          [APP_DEBUG_PERF_OVERLAY_KEY]: nextDebugPerfOverlay,
+          [APP_BATTERY_OPTIMIZATION_KEY]: nextBatteryOptimization,
+          [APP_CINEMA_MODE_KEY]: nextCinemaMode
+        };
+
         try {
-          await browser.storage.local.set({
-            [APP_TIME_FORMAT_KEY]: nextFormat,
-            [APP_MAX_TABS_KEY]: nextMaxTabs,
-            [APP_AUTOCLOSE_KEY]: nextAutoClose,
-            [APP_BACKGROUND_DIM_KEY]: appBackgroundDimPreference,
-            [APP_SEARCH_OPEN_NEW_TAB_KEY]: nextSearchOpenNewTab,
-            [APP_BOOKMARK_OPEN_NEW_TAB_KEY]: nextBookmarkNewTab,
-            [APP_CONTAINER_MODE_KEY]: nextContainerMode,
-            [APP_CONTAINER_NEW_TAB_KEY]: nextContainerNewTab,
-            [DAILY_ROTATION_KEY]: nextDailyRotation,
-            [WALLPAPER_TYPE_KEY]: nextWallpaperType,
-            [WALLPAPER_QUALITY_KEY]: nextWallpaperQuality,
-            [APP_BOOKMARK_TEXT_BG_KEY]: nextBookmarkTextBg,
-            [APP_BOOKMARK_TEXT_BG_COLOR_KEY]: nextTextBgColor,
-            [APP_BOOKMARK_TEXT_OPACITY_KEY]: nextOpacity,
-            [APP_BOOKMARK_TEXT_BLUR_KEY]: nextBlur,
-            [APP_BOOKMARK_FALLBACK_COLOR_KEY]: nextFallbackColor,
-            [APP_BOOKMARK_FOLDER_COLOR_KEY]: nextFolderColor,
-            [APP_GRID_ANIMATION_ENABLED_KEY]: nextGridAnimEnabled,
-            [APP_GRID_ANIMATION_SPEED_KEY]: nextSpeed,
-            [APP_SEARCH_REMEMBER_ENGINE_KEY]: nextRememberEngine,
-            [APP_SEARCH_MATH_KEY]: nextMath,
-            [APP_SEARCH_SHOW_HISTORY_KEY]: nextSearchHistory,
-            [APP_SEARCH_SUGGESTIONS_KEY]: nextSearchSuggestions,
-            [APP_SEARCH_DEFAULT_ENGINE_KEY]: nextDefaultEngine,
-            [APP_SINGLETON_MODE_KEY]: nextSingletonMode,
-            [APP_PERFORMANCE_MODE_KEY]: nextPerformanceMode,
-            [APP_DEBUG_PERF_OVERLAY_KEY]: nextDebugPerfOverlay,
-            [APP_BATTERY_OPTIMIZATION_KEY]: nextBatteryOptimization,
-            [APP_CINEMA_MODE_KEY]: nextCinemaMode
-          });
+          if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
+            await HomebaseStorage.setMany(settingsBatch);
+          } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+            await browser.storage.local.set(settingsBatch);
+          }
 
           if (perfOverlayChanged) {
             setPerfOverlayEnabled(nextDebugPerfOverlay);
           }
 
           if (wallpaperChanged && updatedWallpaperSelection) {
-            await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: updatedWallpaperSelection });
+            if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+              await HomebaseStorage.set(WALLPAPER_SELECTION_KEY, updatedWallpaperSelection);
+            } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+              await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: updatedWallpaperSelection });
+            }
             await applyWallpaperByType(updatedWallpaperSelection, wallpaperTypePreference);
           }
 
           if (!nextRememberEngine) {
-            await browser.storage.local.remove('currentSearchEngineId');
+            if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.remove) {
+              await HomebaseStorage.remove('currentSearchEngineId');
+            } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+              await browser.storage.local.remove('currentSearchEngineId');
+            }
             updateSearchUI(nextDefaultEngine);
           }
         } catch (err) {

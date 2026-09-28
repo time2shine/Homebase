@@ -9,83 +9,53 @@ async function loadAppSettingsFromStorage() {
 
   try {
 
-    const stored = await browser.storage.local.get([
-
+    const preferenceKeys = [
       APP_TIME_FORMAT_KEY,
-
       APP_SHOW_SIDEBAR_KEY,
-
       APP_SHOW_WEATHER_KEY,
-
       APP_SHOW_QUOTE_KEY,
-
       APP_SHOW_NEWS_KEY,
-
       APP_SHOW_TODO_KEY,
-
       WIDGET_ORDER_KEY,
-
       APP_NEWS_SOURCE_KEY,
-
       APP_MAX_TABS_KEY,
-
       APP_AUTOCLOSE_KEY,
-
       APP_SINGLETON_MODE_KEY,
-
       APP_SEARCH_OPEN_NEW_TAB_KEY,
-
       APP_SEARCH_REMEMBER_ENGINE_KEY,
-
       APP_SEARCH_DEFAULT_ENGINE_KEY,
-
       APP_SEARCH_MATH_KEY,
-
       APP_SEARCH_SHOW_HISTORY_KEY,
-
       APP_SEARCH_SUGGESTIONS_KEY,
-
       APP_BOOKMARK_OPEN_NEW_TAB_KEY,
-
       APP_BOOKMARK_TEXT_BG_KEY,
-
       APP_BOOKMARK_TEXT_BG_COLOR_KEY,
-
       APP_BOOKMARK_TEXT_OPACITY_KEY,
-
       APP_BOOKMARK_TEXT_BLUR_KEY,
-
       APP_BOOKMARK_FALLBACK_COLOR_KEY,
-
       APP_BOOKMARK_FOLDER_COLOR_KEY,
-
       APP_BACKGROUND_DIM_KEY,
-
       APP_PERFORMANCE_MODE_KEY,
       APP_DEBUG_PERF_OVERLAY_KEY,
-
       APP_BATTERY_OPTIMIZATION_KEY,
       APP_CINEMA_MODE_KEY,
-
       APP_CONTAINER_MODE_KEY,
-
       APP_CONTAINER_NEW_TAB_KEY,
-
       APP_GRID_ANIMATION_KEY,
-
       APP_GRID_ANIMATION_ENABLED_KEY,
-
       APP_GRID_ANIMATION_SPEED_KEY,
-
       APP_GLASS_STYLE_KEY,
-
       WALLPAPER_QUALITY_KEY,
-
       WALLPAPER_TYPE_KEY,
-
       DAILY_ROTATION_KEY
+    ];
 
-    ]);
+    let stored = {};
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.getMany) {
+      stored = await HomebaseStorage.getMany(preferenceKeys);
+    } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      stored = await browser.storage.local.get(preferenceKeys);
+    }
 
     appPerformanceModePreference = stored[APP_PERFORMANCE_MODE_KEY] === true;
     syncFastPerformanceModeMirror(appPerformanceModePreference);
@@ -553,7 +523,11 @@ function syncAppSettingsForm() {
       syncFastPerformanceModeMirror(nextValue);
       applyPerformanceModeState(nextValue);
       try {
-        await browser.storage.local.set({ [APP_PERFORMANCE_MODE_KEY]: nextValue });
+        if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+          await HomebaseStorage.set(APP_PERFORMANCE_MODE_KEY, nextValue);
+        } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+          await browser.storage.local.set({ [APP_PERFORMANCE_MODE_KEY]: nextValue });
+        }
       } catch (err) {
         console.warn('Failed to persist performance mode toggle', err);
       }
@@ -578,13 +552,13 @@ function syncAppSettingsForm() {
         setPerfOverlayEnabled(nextValue);
 
         try {
-
-          await browser.storage.local.set({ [APP_DEBUG_PERF_OVERLAY_KEY]: nextValue });
-
+          if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+            await HomebaseStorage.set(APP_DEBUG_PERF_OVERLAY_KEY, nextValue);
+          } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+            await browser.storage.local.set({ [APP_DEBUG_PERF_OVERLAY_KEY]: nextValue });
+          }
         } catch (err) {
-
           console.warn('Failed to persist perf overlay toggle', err);
-
         }
 
       });

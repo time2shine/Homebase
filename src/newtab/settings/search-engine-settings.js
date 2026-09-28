@@ -238,13 +238,13 @@ function setupSearchEnginesModal() {
 
 
     try {
-
-      await browser.storage.local.set({ [SEARCH_ENGINES_PREF_KEY]: storageData });
-
+      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+        await HomebaseStorage.set(SEARCH_ENGINES_PREF_KEY, storageData);
+      } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+        await browser.storage.local.set({ [SEARCH_ENGINES_PREF_KEY]: storageData });
+      }
     } catch (err) {
-
       console.warn('Failed to save search engines', err);
-
     }
 
 
@@ -256,13 +256,13 @@ function setupSearchEnginesModal() {
     if (defaultEngineId && previousDefaultEngineId !== defaultEngineId) {
 
       try {
-
-        await browser.storage.local.set({ [APP_SEARCH_DEFAULT_ENGINE_KEY]: defaultEngineId });
-
+        if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+          await HomebaseStorage.set(APP_SEARCH_DEFAULT_ENGINE_KEY, defaultEngineId);
+        } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+          await browser.storage.local.set({ [APP_SEARCH_DEFAULT_ENGINE_KEY]: defaultEngineId });
+        }
       } catch (err) {
-
         console.warn('Failed to persist default search engine', err);
-
       }
 
     }
@@ -292,17 +292,17 @@ function setupSearchEnginesModal() {
       updateSearchUI(firstEnabled.id);
 
       if (appSearchRememberEnginePreference) {
+        const persistPromise = (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set)
+          ? HomebaseStorage.set('currentSearchEngineId', firstEnabled.id)
+          : (typeof browser !== 'undefined' && browser.storage && browser.storage.local
+              ? browser.storage.local.set({ currentSearchEngineId: firstEnabled.id })
+              : Promise.resolve());
 
-        browser.storage.local.set({ currentSearchEngineId: firstEnabled.id }).then(() => {
-
+        persistPromise.then(() => {
           writeFastSearchCache(firstEnabled);
-
         }).catch((err) => {
-
           console.warn('Failed to persist search engine selection', err);
-
         });
-
       }
 
     } else {

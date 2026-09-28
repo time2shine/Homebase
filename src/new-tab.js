@@ -2980,11 +2980,6 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
 // Map to store per-folder customization (id -> { color, icon })
 // Map to store per-bookmark customization (id -> { icon })
 
-const BOOKMARK_META_KEY = 'bookmarkCustomMetadata';
-const HOMEBASE_BOOKMARK_ROOT_ID_KEY = 'homebaseBookmarkRootId';
-const FOLDER_META_KEY = 'folderCustomMetadata';
-const LAST_USED_BOOKMARK_FOLDER_KEY = 'lastUsedBookmarkFolderId';
-
 // ==========================
 // FAVICON PERF CACHE (NEW)
 // ==========================
@@ -3655,32 +3650,6 @@ function showDeleteConfirm(message, options = {}) {
 
 
 let bookmarkTreeFetchPromise = null;
-
-async function getHomebaseRootId() {
-  try {
-    const stored = await browser.storage.local.get(HOMEBASE_BOOKMARK_ROOT_ID_KEY);
-    return stored[HOMEBASE_BOOKMARK_ROOT_ID_KEY] || '';
-  } catch (err) {
-    console.warn('Failed to read homebase root id', err);
-    return '';
-  }
-}
-
-async function setHomebaseRootId(id) {
-  try {
-    await browser.storage.local.set({ [HOMEBASE_BOOKMARK_ROOT_ID_KEY]: id || '' });
-  } catch (err) {
-    console.warn('Failed to persist homebase root id', err);
-  }
-}
-
-async function clearHomebaseRootId() {
-  try {
-    await browser.storage.local.remove(HOMEBASE_BOOKMARK_ROOT_ID_KEY);
-  } catch (err) {
-    console.warn('Failed to clear homebase root id', err);
-  }
-}
 
 async function bookmarkNodeExists(id) {
   if (!id || !browser.bookmarks || typeof browser.bookmarks.get !== 'function') return null;
@@ -7153,30 +7122,17 @@ function processBookmarks(nodes, activeFolderId = null, rootNodeOverride = null)
 
 
 async function loadBookmarkMetadata() {
-
   try {
-
-    const stored = await browser.storage.local.get(BOOKMARK_META_KEY);
-
-    bookmarkMetadata = stored[BOOKMARK_META_KEY] || {};
-
+    bookmarkMetadata = (await getBookmarkMetadata()) || {};
   } catch (e) {
-
     console.warn('Failed to load bookmark metadata', e);
-
     bookmarkMetadata = {};
-
   }
-
 }
-
-
-
 
 async function loadLastUsedFolderId() {
   try {
-    const stored = await browser.storage.local.get(LAST_USED_BOOKMARK_FOLDER_KEY);
-    lastUsedBookmarkFolderId = stored[LAST_USED_BOOKMARK_FOLDER_KEY] || null;
+    lastUsedBookmarkFolderId = (await getLastUsedFolderId()) || null;
   } catch (e) {
     console.warn('Failed to load last used bookmark folder id', e);
     lastUsedBookmarkFolderId = null;
@@ -7186,28 +7142,23 @@ async function loadLastUsedFolderId() {
 async function setLastUsedFolderId(id) {
   lastUsedBookmarkFolderId = id || null;
   try {
-    await browser.storage.local.set({ [LAST_USED_BOOKMARK_FOLDER_KEY]: lastUsedBookmarkFolderId });
+    if (typeof window !== 'undefined' && window.HomebaseBookmarkStorage && typeof window.HomebaseBookmarkStorage.setLastUsedFolderId === 'function') {
+      await window.HomebaseBookmarkStorage.setLastUsedFolderId(lastUsedBookmarkFolderId);
+    } else if (typeof setBookmarkLastUsedFolderId === 'function') {
+      await setBookmarkLastUsedFolderId(lastUsedBookmarkFolderId);
+    }
   } catch (e) {
     console.warn('Failed to persist last used folder id', e);
   }
 }
 
 async function loadFolderMetadata() {
-
   try {
-
-    const stored = await browser.storage.local.get(FOLDER_META_KEY);
-
-    folderMetadata = stored[FOLDER_META_KEY] || {};
-
+    folderMetadata = (await getFolderMetadata()) || {};
   } catch (e) {
-
     console.warn('Failed to load folder metadata', e);
-
     folderMetadata = {};
-
   }
-
 }
 
 

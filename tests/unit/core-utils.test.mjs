@@ -13,6 +13,7 @@ function createCoreUtilsContext() {
   const sandbox = {
     Object,
     Array,
+    Set,
     String,
     Number,
     Math,
@@ -24,6 +25,7 @@ function createCoreUtilsContext() {
   vm.runInContext(scriptCode, context);
   return context;
 }
+
 
 test('escapeHtml() - properly escapes dangerous HTML characters', () => {
   const { escapeHtml } = createCoreUtilsContext();
@@ -102,4 +104,26 @@ test('throttle() - throttles rapid calls within interval', async () => {
 
   fn();
   assert.strictEqual(callCount, 2);
+});
+
+test('normalizeWidgetOrder() - canonical utility in utils.js normalizes and preserves order', () => {
+  const { normalizeWidgetOrder } = createCoreUtilsContext();
+  const input = ['todo', 'news', 'weather', 'quote'];
+  assert.deepStrictEqual(Array.from(normalizeWidgetOrder(input)), ['todo', 'news', 'weather', 'quote']);
+
+  // Deduplication and appending missing
+  assert.deepStrictEqual(Array.from(normalizeWidgetOrder(['todo', 'todo'])), ['todo', 'weather', 'quote', 'news']);
+
+  // Non-array input fallback
+  assert.deepStrictEqual(Array.from(normalizeWidgetOrder(null)), ['weather', 'quote', 'todo', 'news']);
+});
+
+
+test('areWidgetOrdersEqual() - canonical utility in utils.js correctly evaluates equality', () => {
+  const { areWidgetOrdersEqual } = createCoreUtilsContext();
+  assert.strictEqual(areWidgetOrdersEqual(['a', 'b'], ['a', 'b']), true);
+  assert.strictEqual(areWidgetOrdersEqual(['a', 'b'], ['b', 'a']), false);
+  assert.strictEqual(areWidgetOrdersEqual(['a'], ['a', 'b']), false);
+  assert.strictEqual(areWidgetOrdersEqual(null, ['a']), false);
+  assert.strictEqual(areWidgetOrdersEqual(undefined, undefined), false);
 });

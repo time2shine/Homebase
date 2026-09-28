@@ -117,8 +117,10 @@ async function loadAppSettingsFromStorage() {
     appNewsSourcePreference = resolveNewsSourceId(stored[APP_NEWS_SOURCE_KEY]);
 
     const storedWidgetOrder = stored[WIDGET_ORDER_KEY];
-    const normalizedWidgetOrder = normalizeWidgetOrder(storedWidgetOrder);
-    const shouldPersistWidgetOrder = !areWidgetOrdersEqual(storedWidgetOrder, normalizedWidgetOrder);
+    const orderNormalizer = typeof normalizeWidgetOrder === 'function' ? normalizeWidgetOrder : (typeof window !== 'undefined' ? window.normalizeWidgetOrder : null);
+    const orderComparator = typeof areWidgetOrdersEqual === 'function' ? areWidgetOrdersEqual : (typeof window !== 'undefined' ? window.areWidgetOrdersEqual : null);
+    const normalizedWidgetOrder = orderNormalizer ? orderNormalizer(storedWidgetOrder) : storedWidgetOrder;
+    const shouldPersistWidgetOrder = orderComparator ? !orderComparator(storedWidgetOrder, normalizedWidgetOrder) : false;
     setWidgetOrderPreference(normalizedWidgetOrder, { persist: shouldPersistWidgetOrder });
 
     setWeatherPreference(storedShowWeather, { persist: false, applyVisibility: false, updateUI: false });

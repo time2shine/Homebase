@@ -2,11 +2,7 @@ const WIDGET_ORDER_KEY = 'widgetOrder';
 
 const FAST_WIDGET_ORDER_KEY = 'fast-widget-order';
 
-const DEFAULT_WIDGET_ORDER = ['weather', 'quote', 'todo', 'news'];
-
-const WIDGET_ORDER_SET = new Set(DEFAULT_WIDGET_ORDER);
-
-let widgetOrderPreference = DEFAULT_WIDGET_ORDER.slice();
+let widgetOrderPreference = ((typeof window !== 'undefined' && window.DEFAULT_WIDGET_ORDER) || ['weather', 'quote', 'todo', 'news']).slice();
 
 let widgetSettingsSortable = null;
 
@@ -43,37 +39,6 @@ function applySidebarVisibility(showSidebar = true) {
 
 }
 
-function normalizeWidgetOrder(order) {
-  const normalized = [];
-  const seen = new Set();
-
-  if (Array.isArray(order)) {
-    order.forEach((value) => {
-      if (typeof value !== 'string') return;
-      const key = value.trim();
-      if (!WIDGET_ORDER_SET.has(key) || seen.has(key)) return;
-      seen.add(key);
-      normalized.push(key);
-    });
-  }
-
-  DEFAULT_WIDGET_ORDER.forEach((key) => {
-    if (seen.has(key)) return;
-    seen.add(key);
-    normalized.push(key);
-  });
-
-  return normalized;
-}
-
-function areWidgetOrdersEqual(left, right) {
-  if (!Array.isArray(left) || !Array.isArray(right)) return false;
-  if (left.length !== right.length) return false;
-  for (let i = 0; i < left.length; i += 1) {
-    if (left[i] !== right[i]) return false;
-  }
-  return true;
-}
 
 function writeFastWidgetOrderMirror(order) {
   try {

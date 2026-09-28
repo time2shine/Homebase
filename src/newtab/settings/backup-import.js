@@ -282,7 +282,7 @@ async function exportHomebaseState() {
   if (typeof window !== 'undefined' && window.HomebaseStorage?.snapshot) {
     stored = await window.HomebaseStorage.snapshot();
   } else if (storageApi?.get) {
-    stored = await storageApi.get(HOMEBASE_OWNED_STORAGE_KEYS);
+    stored = await storageApi.get(null);
   } else {
     throw new Error('Storage is unavailable.');
   }
@@ -293,6 +293,17 @@ async function exportHomebaseState() {
       storageLocal[key] = stored[key];
     }
   });
+
+  // Preserve non-colliding unknown safe keys (e.g. forward compatibility, migrationHistory)
+  if (stored && typeof stored === 'object') {
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+    for (const [key, val] of Object.entries(stored)) {
+      if (!HOMEBASE_OWNED_STORAGE_KEYS.includes(key) && val !== undefined && !dangerousKeys.includes(key)) {
+        storageLocal[key] = val;
+      }
+    }
+  }
+
 
   const payload = {
     schema: HOMEBASE_BACKUP_SCHEMA,
@@ -613,5 +624,6 @@ window.HomebaseBackup = {
   importState: importHomebaseState,
   computeStorageDelta,
   getBackupTransactionState,
+  getTransactionState: getBackupTransactionState,
   categorizeTransactionError
 };

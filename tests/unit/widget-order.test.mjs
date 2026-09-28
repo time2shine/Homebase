@@ -6,8 +6,10 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const scriptPath = path.join(rootDir, 'src/newtab/widgets/widget-visibility.js');
-const scriptCode = fs.readFileSync(scriptPath, 'utf8');
+const utilsScriptPath = path.join(rootDir, 'src/newtab/core/utils.js');
+const utilsScriptCode = fs.readFileSync(utilsScriptPath, 'utf8');
+const visibilityScriptPath = path.join(rootDir, 'src/newtab/widgets/widget-visibility.js');
+const visibilityScriptCode = fs.readFileSync(visibilityScriptPath, 'utf8');
 
 function createWidgetContext() {
   const sandbox = {
@@ -17,6 +19,7 @@ function createWidgetContext() {
     String,
     Number,
     Boolean,
+    Math,
     document: {
       querySelector: () => null,
       querySelectorAll: () => []
@@ -28,9 +31,11 @@ function createWidgetContext() {
   };
   sandbox.window = sandbox;
   const context = vm.createContext(sandbox);
-  vm.runInContext(scriptCode, context);
+  vm.runInContext(utilsScriptCode, context);
+  vm.runInContext(visibilityScriptCode, context);
   return context;
 }
+
 
 test('normalizeWidgetOrder() - preserves valid complete order', () => {
   const ctx = createWidgetContext();

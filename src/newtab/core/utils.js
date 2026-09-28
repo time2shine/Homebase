@@ -171,3 +171,47 @@ function throttle(fn, limit) {
     setTimeout(() => { inThrottle = false; }, limit);
   };
 }
+
+const CANONICAL_DEFAULT_WIDGET_ORDER = Object.freeze(['weather', 'quote', 'todo', 'news']);
+const CANONICAL_WIDGET_ORDER_SET = new Set(CANONICAL_DEFAULT_WIDGET_ORDER);
+
+function normalizeWidgetOrder(order) {
+  const defaultOrder = (typeof window !== 'undefined' && window.DEFAULT_WIDGET_ORDER) || CANONICAL_DEFAULT_WIDGET_ORDER;
+  const orderSet = (typeof window !== 'undefined' && window.WIDGET_ORDER_SET) || CANONICAL_WIDGET_ORDER_SET;
+  const normalized = [];
+  const seen = new Set();
+
+  if (Array.isArray(order)) {
+    order.forEach((value) => {
+      if (typeof value !== 'string') return;
+      const key = value.trim();
+      if (!orderSet.has(key) || seen.has(key)) return;
+      seen.add(key);
+      normalized.push(key);
+    });
+  }
+
+  defaultOrder.forEach((key) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    normalized.push(key);
+  });
+
+  return normalized;
+}
+
+function areWidgetOrdersEqual(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) return false;
+  }
+  return true;
+}
+
+if (typeof window !== 'undefined') {
+  window.DEFAULT_WIDGET_ORDER = window.DEFAULT_WIDGET_ORDER || CANONICAL_DEFAULT_WIDGET_ORDER;
+  window.WIDGET_ORDER_SET = window.WIDGET_ORDER_SET || CANONICAL_WIDGET_ORDER_SET;
+  window.normalizeWidgetOrder = normalizeWidgetOrder;
+  window.areWidgetOrdersEqual = areWidgetOrdersEqual;
+}

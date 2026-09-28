@@ -508,8 +508,17 @@ async function fetchAndRenderNews(options = {}) {
   const abortController = new AbortController();
   newsFetchAbortController = abortController;
 
+  let isWatchdogTimeout = false;
+  const timeoutId = setTimeout(() => {
+    isWatchdogTimeout = true;
+    try {
+      abortController.abort();
+    } catch (_) {}
+  }, 7000);
+
   try {
     const response = await fetch(source.url, { signal: abortController.signal });
+    clearTimeout(timeoutId);
     if (!response.ok) {
       throw new Error(`News feed unavailable: ${response.status}`);
     }
@@ -552,7 +561,8 @@ async function fetchAndRenderNews(options = {}) {
       // Ignore; fast cache is best-effort only
     }
   } catch (err) {
-    if (err && err.name === 'AbortError') return;
+    clearTimeout(timeoutId);
+    if (err && err.name === 'AbortError' && !isWatchdogTimeout) return;
     const hasCache = !!(cached && cached.items && cached.items.length);
     if (shouldRender && !hasCache) {
       renderNewsItems([]);
@@ -560,10 +570,15 @@ async function fetchAndRenderNews(options = {}) {
       updateNewsUpdated(null);
     }
     if (!newsFetchWarningLogged) {
-      console.warn('News fetch failed', err);
+      if (isWatchdogTimeout) {
+        console.warn('News fetch timed out (7s watchdog):', source.url || source.id);
+      } else {
+        console.warn('News fetch failed', err);
+      }
       newsFetchWarningLogged = true;
     }
   } finally {
+    clearTimeout(timeoutId);
     if (newsFetchAbortController === abortController) {
       newsFetchAbortController = null;
     }
@@ -770,4 +785,8 @@ function setNewsPreference(show = true, options = {}) {
   if (options.updateUI !== false) {
     updateWidgetSettingsUI();
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.fetchAndRenderNews = fetchAndRenderNews;
 }

@@ -10,18 +10,6 @@ const ANOMALY_BUFFER_MAX_SIZE = 50;
 const validationAnomalyBuffer = [];
 
 /**
- * Strict prototype inspection to ensure value is a plain JavaScript object.
- *
- * @param {*} value
- * @returns {boolean}
- */
-function isPlainObject(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const proto = Object.getPrototypeOf(value);
-  return proto === null || proto === Object.prototype || (proto !== null && Object.getPrototypeOf(proto) === null);
-}
-
-/**
  * Sanitizes an anomaly detail payload to guarantee zero PII leakage.
  * Replaces any detected URLs, bookmark titles, todo text, or query parameters.
  *

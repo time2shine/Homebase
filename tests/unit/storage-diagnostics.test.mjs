@@ -6,11 +6,13 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const utilsScriptPath = path.join(rootDir, 'src/newtab/core/utils.js');
 const validatorScriptPath = path.join(rootDir, 'src/newtab/core/schema-validator.js');
 const migrationsScriptPath = path.join(rootDir, 'src/newtab/core/schema-migrations.js');
 const diagnosticsScriptPath = path.join(rootDir, 'src/newtab/core/storage-diagnostics.js');
 const perfReportScriptPath = path.join(rootDir, 'src/newtab/core/perf-report.js');
 
+const utilsScriptCode = fs.readFileSync(utilsScriptPath, 'utf8');
 const validatorScriptCode = fs.readFileSync(validatorScriptPath, 'utf8');
 const migrationsScriptCode = fs.readFileSync(migrationsScriptPath, 'utf8');
 const diagnosticsScriptCode = fs.readFileSync(diagnosticsScriptPath, 'utf8');
@@ -113,6 +115,7 @@ function createDiagnosticsEnvironment(initialStorage = {}, storageOptions = {}) 
   sandbox.window = sandbox;
 
   const context = vm.createContext(sandbox);
+  vm.runInContext(utilsScriptCode, context);
   vm.runInContext(validatorScriptCode, context);
   vm.runInContext(migrationsScriptCode, context);
   vm.runInContext(diagnosticsScriptCode, context);

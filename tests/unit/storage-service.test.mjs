@@ -6,11 +6,13 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const utilsScriptPath = path.join(rootDir, 'src/newtab/core/utils.js');
 const validatorScriptPath = path.join(rootDir, 'src/newtab/core/schema-validator.js');
 const migrationsScriptPath = path.join(rootDir, 'src/newtab/core/schema-migrations.js');
 const diagnosticsScriptPath = path.join(rootDir, 'src/newtab/core/storage-diagnostics.js');
 const storageServiceScriptPath = path.join(rootDir, 'src/newtab/core/storage-service.js');
 
+const utilsScriptCode = fs.readFileSync(utilsScriptPath, 'utf8');
 const validatorScriptCode = fs.readFileSync(validatorScriptPath, 'utf8');
 const migrationsScriptCode = fs.readFileSync(migrationsScriptPath, 'utf8');
 const diagnosticsScriptCode = fs.readFileSync(diagnosticsScriptPath, 'utf8');
@@ -127,6 +129,7 @@ function createStorageEnvironment(initialStorage = {}, storageOptions = {}) {
   sandbox.window = sandbox;
 
   const context = vm.createContext(sandbox);
+  vm.runInContext(utilsScriptCode, context);
   vm.runInContext(validatorScriptCode, context);
   vm.runInContext(migrationsScriptCode, context);
   vm.runInContext(diagnosticsScriptCode, context);
@@ -152,6 +155,10 @@ test('storage-service: API export and required methods', () => {
   assert.equal(typeof HomebaseStorage.health, 'function', 'health must be a function');
   assert.ok(HomebaseStorage.FAST_MIRROR_MAP, 'FAST_MIRROR_MAP must be exported');
   assert.equal(HomebaseStorage.FAST_MIRROR_MAP.appBackgroundDim, 'fast-bg-dim');
+  assert.equal(HomebaseStorage.FAST_MIRROR_MAP.appTimeFormatPreference, 'fast-time-format');
+  assert.equal(HomebaseStorage.FAST_MIRROR_MAP.clockFormat, undefined, 'clockFormat must be removed');
+  assert.equal(HomebaseStorage.FAST_MIRROR_MAP.appSearchAlignment, undefined, 'appSearchAlignment phantom key must be removed');
+  assert.equal(HomebaseStorage.FAST_MIRROR_MAP.appCustomColor, undefined, 'appCustomColor phantom key must be removed');
 });
 
 test('storage-service: get reads and sanitizes valid value from storage.local', async () => {
@@ -456,4 +463,23 @@ test('storage-service: health reports DEGRADED when storage.get fails', async ()
   const report = await HomebaseStorage.health();
   assert.equal(report.status, 'DEGRADED');
   assert.ok(report.error.includes('Simulated storage.local.get failure'));
+});
+
+test('storage-service: appTimeFormatPreference correctly synchronizes to fast-time-format mirror', async () => {
+  const { HomebaseStorage, storageMock } = createStorageEnvironment();
+
+  // Test set synchronizes fast-time-format
+  await HomebaseStorage.set('appTimeFormatPreference', '24-hour');
+  assert.equal(storageMock.data['appTimeFormatPreference'], '24-hour');
+  assert.equal(storageMock.localStorageData['fast-time-format'], '24-hour');
+
+  // Test update
+  await HomebaseStorage.set('appTimeFormatPreference', '12-hour');
+  assert.equal(storageMock.data['appTimeFormatPreference'], '12-hour');
+  assert.equal(storageMock.localStorageData['fast-time-format'], '12-hour');
+
+  // Test remove clears fast-time-format
+  await HomebaseStorage.remove('appTimeFormatPreference');
+  assert.equal(storageMock.data['appTimeFormatPreference'], undefined);
+  assert.equal(storageMock.localStorageData['fast-time-format'], undefined);
 });

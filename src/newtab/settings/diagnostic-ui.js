@@ -452,6 +452,9 @@
    * @returns {boolean}
    */
   function areValuesIdentical(a, b) {
+    if (typeof window !== 'undefined' && typeof window.areValuesIdentical === 'function') {
+      return window.areValuesIdentical(a, b);
+    }
     if (a === b) return true;
     if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
     try {

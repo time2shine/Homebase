@@ -6,7 +6,9 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const utilsScriptPath = path.join(rootDir, 'src/newtab/core/utils.js');
 const validatorScriptPath = path.join(rootDir, 'src/newtab/core/schema-validator.js');
+const utilsScriptCode = fs.readFileSync(utilsScriptPath, 'utf8');
 const validatorScriptCode = fs.readFileSync(validatorScriptPath, 'utf8');
 
 const backupScriptPath = path.join(rootDir, 'src/newtab/settings/backup-import.js');
@@ -26,6 +28,7 @@ function createValidatorContext() {
   };
   sandbox.window = sandbox;
   const context = vm.createContext(sandbox);
+  vm.runInContext(utilsScriptCode, context);
   vm.runInContext(validatorScriptCode, context);
   return sandbox;
 }

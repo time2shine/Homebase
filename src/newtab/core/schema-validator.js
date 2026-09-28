@@ -2,18 +2,6 @@
 // Homebase — Storage Schema Validation Architecture
 // ===============================================
 
-/**
- * Strict prototype inspection to ensure value is a plain JavaScript object.
- * Rejects null, primitives, arrays, DOM nodes, and instances with custom prototypes.
- *
- * @param {*} value
- * @returns {boolean}
- */
-function isPlainObject(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const proto = Object.getPrototypeOf(value);
-  return proto === null || proto === Object.prototype || (proto !== null && Object.getPrototypeOf(proto) === null);
-}
 
 /**
  * Validates whether a value is a valid 3 or 6 character hexadecimal color code.
@@ -42,35 +30,6 @@ function normalizeHexColor(value, defaultVal) {
   return trimmed;
 }
 
-/**
- * Clamps a numeric value within [min, max].
- *
- * @param {*} val
- * @param {number} min
- * @param {number} max
- * @param {number} defaultVal
- * @returns {number}
- */
-function clampNumber(val, min, max, defaultVal) {
-  const num = typeof val === 'number' ? val : Number(val);
-  if (!Number.isFinite(num)) return defaultVal;
-  return Math.min(Math.max(num, min), max);
-}
-
-/**
- * Clamps an integer value within [min, max].
- *
- * @param {*} val
- * @param {number} min
- * @param {number} max
- * @param {number} defaultVal
- * @returns {number}
- */
-function clampInteger(val, min, max, defaultVal) {
-  const num = typeof val === 'number' ? val : Number(val);
-  if (!Number.isFinite(num)) return defaultVal;
-  return Math.min(Math.max(Math.round(num), min), max);
-}
 
 /**
  * Default widget ordering array.
@@ -828,10 +787,10 @@ if (typeof window !== 'undefined') {
     sanitizeKey,
     sanitizeStorageBatch,
     classifyAnomalyCategory,
-    isPlainObject,
+    isPlainObject: (typeof isPlainObject === 'function' ? isPlainObject : window.isPlainObject),
     isValidHexColor,
-    clampNumber,
-    clampInteger,
+    clampNumber: (typeof clampNumber === 'function' ? clampNumber : window.clampNumber),
+    clampInteger: (typeof clampInteger === 'function' ? clampInteger : window.clampInteger),
     SCHEMA_DEFINITIONS
   };
 }

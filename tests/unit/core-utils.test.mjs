@@ -17,6 +17,7 @@ function createCoreUtilsContext() {
     String,
     Number,
     Math,
+    JSON,
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout
   };
@@ -126,4 +127,71 @@ test('areWidgetOrdersEqual() - canonical utility in utils.js correctly evaluates
   assert.strictEqual(areWidgetOrdersEqual(['a'], ['a', 'b']), false);
   assert.strictEqual(areWidgetOrdersEqual(null, ['a']), false);
   assert.strictEqual(areWidgetOrdersEqual(undefined, undefined), false);
+});
+
+test('isPlainObject() - correctly identifies plain objects vs primitives/instances', () => {
+  const { isPlainObject } = createCoreUtilsContext();
+  assert.strictEqual(isPlainObject({}), true);
+  assert.strictEqual(isPlainObject({ a: 1, b: 'two' }), true);
+  assert.strictEqual(isPlainObject(Object.create(null)), true);
+  assert.strictEqual(isPlainObject(new Object()), true);
+
+  // Non-plain objects or primitives
+  assert.strictEqual(isPlainObject(null), false);
+  assert.strictEqual(isPlainObject(undefined), false);
+  assert.strictEqual(isPlainObject([]), false);
+  assert.strictEqual(isPlainObject([1, 2, 3]), false);
+  assert.strictEqual(isPlainObject('string'), false);
+  assert.strictEqual(isPlainObject(123), false);
+  assert.strictEqual(isPlainObject(true), false);
+  assert.strictEqual(isPlainObject(new Date()), false);
+  assert.strictEqual(isPlainObject(/regex/), false);
+  assert.strictEqual(isPlainObject(() => {}), false);
+
+  class CustomClass {}
+  assert.strictEqual(isPlainObject(new CustomClass()), false);
+});
+
+test('areValuesIdentical() - deep equality check across primitives, arrays, and objects', () => {
+  const { areValuesIdentical } = createCoreUtilsContext();
+  // Primitives
+  assert.strictEqual(areValuesIdentical(1, 1), true);
+  assert.strictEqual(areValuesIdentical('abc', 'abc'), true);
+  assert.strictEqual(areValuesIdentical(true, true), true);
+  assert.strictEqual(areValuesIdentical(null, null), true);
+  assert.strictEqual(areValuesIdentical(undefined, undefined), true);
+  assert.strictEqual(areValuesIdentical(NaN, NaN), true);
+  assert.strictEqual(areValuesIdentical(1, 2), false);
+  assert.strictEqual(areValuesIdentical('a', 'b'), false);
+  assert.strictEqual(areValuesIdentical(null, undefined), false);
+
+  // Objects and arrays
+  assert.strictEqual(areValuesIdentical([1, 2], [1, 2]), true);
+  assert.strictEqual(areValuesIdentical([1, 2], [2, 1]), false);
+  assert.strictEqual(areValuesIdentical({ a: 1, b: 2 }, { a: 1, b: 2 }), true);
+  assert.strictEqual(areValuesIdentical({ a: 1, b: 2 }, { a: 1, b: 3 }), false);
+  assert.strictEqual(areValuesIdentical({ a: 1 }, null), false);
+  assert.strictEqual(areValuesIdentical(null, { a: 1 }), false);
+  assert.strictEqual(areValuesIdentical({ a: 1 }, 123), false);
+});
+
+test('clampNumber() - numeric bounds enforcement with fallback', () => {
+  const { clampNumber } = createCoreUtilsContext();
+  assert.strictEqual(clampNumber(5, 0, 10, 0), 5);
+  assert.strictEqual(clampNumber(-5, 0, 10, 0), 0);
+  assert.strictEqual(clampNumber(15, 0, 10, 0), 10);
+  assert.strictEqual(clampNumber('7.5', 0, 10, 0), 7.5);
+  assert.strictEqual(clampNumber('invalid', 0, 10, 3), 3);
+  assert.strictEqual(clampNumber(NaN, 0, 10, 3), 3);
+  assert.strictEqual(clampNumber(Infinity, 0, 10, 3), 3);
+});
+
+test('clampInteger() - integer rounding and bounds enforcement with fallback', () => {
+  const { clampInteger } = createCoreUtilsContext();
+  assert.strictEqual(clampInteger(5.6, 0, 10, 0), 6);
+  assert.strictEqual(clampInteger(5.4, 0, 10, 0), 5);
+  assert.strictEqual(clampInteger(-3, 0, 10, 0), 0);
+  assert.strictEqual(clampInteger(12.8, 0, 10, 0), 10);
+  assert.strictEqual(clampInteger('invalid', 0, 10, 4), 4);
+  assert.strictEqual(clampInteger(NaN, 0, 10, 4), 4);
 });

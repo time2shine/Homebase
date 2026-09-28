@@ -209,9 +209,75 @@ function areWidgetOrdersEqual(left, right) {
   return true;
 }
 
+/**
+ * Strict prototype inspection to ensure value is a plain JavaScript object.
+ * Rejects null, primitives, arrays, DOM nodes, and instances with custom prototypes.
+ *
+ * @param {*} value
+ * @returns {boolean}
+ */
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === null || proto === Object.prototype || (proto !== null && Object.getPrototypeOf(proto) === null);
+}
+
+/**
+ * Deep equality check for values (primitives, arrays, plain objects).
+ * Uses fast reference equality first, then defensive JSON serialization comparison.
+ *
+ * @param {*} a
+ * @param {*} b
+ * @returns {boolean}
+ */
+function areValuesIdentical(a, b) {
+  if (a === b) return true;
+  if (typeof a === 'number' && typeof b === 'number' && Number.isNaN(a) && Number.isNaN(b)) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Clamps a numeric value within [min, max].
+ *
+ * @param {*} val
+ * @param {number} min
+ * @param {number} max
+ * @param {number} defaultVal
+ * @returns {number}
+ */
+function clampNumber(val, min, max, defaultVal) {
+  const num = typeof val === 'number' ? val : Number(val);
+  if (!Number.isFinite(num)) return defaultVal;
+  return Math.min(Math.max(num, min), max);
+}
+
+/**
+ * Clamps an integer value within [min, max].
+ *
+ * @param {*} val
+ * @param {number} min
+ * @param {number} max
+ * @param {number} defaultVal
+ * @returns {number}
+ */
+function clampInteger(val, min, max, defaultVal) {
+  const num = typeof val === 'number' ? val : Number(val);
+  if (!Number.isFinite(num)) return defaultVal;
+  return Math.min(Math.max(Math.round(num), min), max);
+}
+
 if (typeof window !== 'undefined') {
   window.DEFAULT_WIDGET_ORDER = window.DEFAULT_WIDGET_ORDER || CANONICAL_DEFAULT_WIDGET_ORDER;
   window.WIDGET_ORDER_SET = window.WIDGET_ORDER_SET || CANONICAL_WIDGET_ORDER_SET;
   window.normalizeWidgetOrder = normalizeWidgetOrder;
   window.areWidgetOrdersEqual = areWidgetOrdersEqual;
+  window.isPlainObject = isPlainObject;
+  window.areValuesIdentical = areValuesIdentical;
+  window.clampNumber = clampNumber;
+  window.clampInteger = clampInteger;
 }

@@ -6,12 +6,14 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const utilsScriptPath = path.join(rootDir, 'src/newtab/core/utils.js');
 const validatorScriptPath = path.join(rootDir, 'src/newtab/core/schema-validator.js');
 const migrationsScriptPath = path.join(rootDir, 'src/newtab/core/schema-migrations.js');
 const diagnosticsScriptPath = path.join(rootDir, 'src/newtab/core/storage-diagnostics.js');
 const storageServiceScriptPath = path.join(rootDir, 'src/newtab/core/storage-service.js');
 const backupScriptPath = path.join(rootDir, 'src/newtab/settings/backup-import.js');
 
+const utilsScriptCode = fs.readFileSync(utilsScriptPath, 'utf8');
 const validatorScriptCode = fs.readFileSync(validatorScriptPath, 'utf8');
 const migrationsScriptCode = fs.readFileSync(migrationsScriptPath, 'utf8');
 const diagnosticsScriptCode = fs.readFileSync(diagnosticsScriptPath, 'utf8');
@@ -109,6 +111,7 @@ function createMockEnvironment(initialStorage = {}, options = {}) {
   const context = vm.createContext(sandbox);
 
   // Load stack in canonical runtime order
+  vm.runInContext(utilsScriptCode, context);
   vm.runInContext(validatorScriptCode, context);
   vm.runInContext(migrationsScriptCode, context);
   vm.runInContext(diagnosticsScriptCode, context);
@@ -158,6 +161,7 @@ test('backup-transaction: successful transaction applies delta, verifies, and sy
 
   // Verify fast mirrors synchronized
   assert.equal(env.localStorageStore.get('fast-bg-dim'), '50');
+  assert.equal(env.localStorageStore.get('fast-time-format'), '24-hour');
   assert.equal(env.localStorageStore.get('fast-show-weather'), '0');
 
   // Verify transaction state

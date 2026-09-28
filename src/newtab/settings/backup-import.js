@@ -126,17 +126,6 @@ function categorizeTransactionError(err) {
   return 'TRANSACTION_ERROR';
 }
 
-/**
- * Strict prototype inspection ensuring value is a plain JavaScript object.
- *
- * @param {*} value
- * @returns {boolean}
- */
-function isPlainObject(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const proto = Object.getPrototypeOf(value);
-  return proto === null || proto === Object.prototype || (proto !== null && Object.getPrototypeOf(proto) === null);
-}
 
 /**
  * Normalizes custom uploaded wallpaper entries from backup.
@@ -195,18 +184,30 @@ function computeStorageDelta(currentSnapshot, candidateUpdates) {
   const delta = {};
   if (!candidateUpdates || typeof candidateUpdates !== 'object') return delta;
 
+  const areIdentical = (typeof areValuesIdentical === 'function')
+    ? areValuesIdentical
+    : (typeof window !== 'undefined' && typeof window.areValuesIdentical === 'function'
+        ? window.areValuesIdentical
+        : null);
+
   for (const [key, val] of Object.entries(candidateUpdates)) {
     if (!Object.prototype.hasOwnProperty.call(currentSnapshot, key)) {
       delta[key] = val;
     } else {
       const currentVal = currentSnapshot[key];
-      if (currentVal !== val) {
-        if (typeof val === 'object' && val !== null) {
-          if (JSON.stringify(currentVal) !== JSON.stringify(val)) {
+      if (areIdentical) {
+        if (!areIdentical(currentVal, val)) {
+          delta[key] = val;
+        }
+      } else {
+        if (currentVal !== val) {
+          if (typeof val === 'object' && val !== null) {
+            if (JSON.stringify(currentVal) !== JSON.stringify(val)) {
+              delta[key] = val;
+            }
+          } else {
             delta[key] = val;
           }
-        } else {
-          delta[key] = val;
         }
       }
     }
@@ -225,10 +226,8 @@ function captureFastMirrorSnapshot() {
     const keys = [
       'fast-bg-dim',
       'fast-widget-order',
-      'fast-clock-format',
-      'fast-search-align',
+      'fast-time-format',
       'fast-bookmark-bg',
-      'fast-custom-color',
       'fast-perf-mode',
       'fast-show-sidebar',
       'fast-show-weather',
@@ -517,6 +516,8 @@ async function importHomebaseState(file) {
         for (const [k, v] of Object.entries(deltaUpdates)) {
           if (k === 'appBackgroundDim' && Number.isFinite(v)) {
             try { localStorage.setItem('fast-bg-dim', String(v)); } catch (_) {}
+          } else if (k === 'appTimeFormatPreference' && typeof v === 'string') {
+            try { localStorage.setItem('fast-time-format', v); } catch (_) {}
           } else if (k === 'appShowSidebar' && typeof v === 'boolean') {
             try { localStorage.setItem('fast-show-sidebar', v ? '1' : '0'); } catch (_) {}
           } else if (k === 'appShowWeather' && typeof v === 'boolean') {

@@ -6,6 +6,9 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const utilsScriptPath = path.join(rootDir, 'src/newtab/core/utils.js');
+const utilsScriptCode = fs.readFileSync(utilsScriptPath, 'utf8');
+
 const migrationsScriptPath = path.join(rootDir, 'src/newtab/core/schema-migrations.js');
 const migrationsScriptCode = fs.readFileSync(migrationsScriptPath, 'utf8');
 
@@ -102,6 +105,7 @@ function createBackupContext(storageMock = null) {
   };
   sandbox.window = sandbox;
   const context = vm.createContext(sandbox);
+  vm.runInContext(utilsScriptCode, context);
   vm.runInContext(backupScriptCode, context);
   return { context, storageMock: effectiveStorage };
 }

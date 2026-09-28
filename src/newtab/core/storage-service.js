@@ -24,10 +24,8 @@
   const FAST_MIRROR_MAP = Object.freeze({
     appBackgroundDim: 'fast-bg-dim',
     widgetOrder: 'fast-widget-order',
-    clockFormat: 'fast-clock-format',
-    appSearchAlignment: 'fast-search-align',
+    appTimeFormatPreference: 'fast-time-format',
     appBookmarkTextBg: 'fast-bookmark-bg',
-    appCustomColor: 'fast-custom-color',
     appPerformanceMode: 'fast-perf-mode',
     appShowSidebar: 'fast-show-sidebar',
     appShowWeather: 'fast-show-weather',
@@ -73,18 +71,6 @@
     return null;
   }
 
-  /**
-   * Strict prototype inspection ensuring value is a plain JavaScript object.
-   *
-   * @param {*} value
-   * @returns {boolean}
-   */
-  function isPlainObject(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const proto = Object.getPrototypeOf(value);
-    if (proto === null) return true;
-    return Object.getPrototypeOf(proto) === null;
-  }
 
   /**
    * Synchronizes a key-value pair to its registered localStorage fast-mirror.

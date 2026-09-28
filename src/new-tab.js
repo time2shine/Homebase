@@ -1,4 +1,4 @@
-﻿// ===============================================
+// ===============================================
 
 // --- GLOBAL ELEMENTS ---
 
@@ -2991,10 +2991,6 @@ const LAST_USED_BOOKMARK_FOLDER_KEY = 'lastUsedBookmarkFolderId';
 const FAVICON_SIZE_PX = 48;          // was effectively 64+ in some places; keep small for grid icons
 const FAVICON_NEGATIVE_TTL_MS = 10 * 60 * 1000;
 const FAVICON_RESOLVED_CACHE_LIMIT = 300;
-const FAVICON_META_PREFIX = 'fav:meta:';
-const FAVICON_META_STALE_MS = 30 * 24 * 60 * 60 * 1000;
-const FAVICON_FAIL_RETRY_WINDOW_MS = 24 * 60 * 60 * 1000;
-const FAVICON_META_MAX_ENTRIES = 5000;
 const MAX_CONCURRENT_FAVICON_TASKS = 6;
 const FAVICON_CACHE_NAME = 'favicons-v1';
 const FAVICON_OBSERVER_ROOT_MARGIN = '250px';
@@ -3255,86 +3251,6 @@ function testFaviconCandidateObjectUrl(objectUrl, acceptCandidate) {
     };
     testImg.src = objectUrl;
   });
-}
-
-function getFaviconMetaStorageKey(domainKey) {
-  return `${FAVICON_META_PREFIX}${domainKey}`;
-}
-
-async function getFaviconMeta(domainKey) {
-  if (!domainKey || !browser || !browser.storage || !browser.storage.local) return null;
-  try {
-    const key = getFaviconMetaStorageKey(domainKey);
-    const stored = await browser.storage.local.get(key);
-    const meta = stored && stored[key];
-    if (!meta || typeof meta !== 'object') return null;
-    return meta;
-  } catch (err) {
-    return null;
-  }
-}
-
-async function setFaviconMeta(domainKey, meta) {
-  if (!domainKey || !meta || !browser || !browser.storage || !browser.storage.local) return;
-  const payload = {
-    cacheKey: meta.cacheKey || null,
-    lastSeen: Number.isFinite(meta.lastSeen) ? meta.lastSeen : 0,
-    failCount: Number.isFinite(meta.failCount) ? meta.failCount : 0,
-    lastOkAt: Number.isFinite(meta.lastOkAt) ? meta.lastOkAt : 0
-  };
-  try {
-    const key = getFaviconMetaStorageKey(domainKey);
-    await browser.storage.local.set({ [key]: payload });
-  } catch (err) {}
-}
-
-async function bumpFaviconFail(domainKey) {
-  if (!domainKey) return null;
-  const now = Date.now();
-  const existing = await getFaviconMeta(domainKey);
-  const nextMeta = {
-    cacheKey: existing && existing.cacheKey ? existing.cacheKey : null,
-    lastSeen: now,
-    failCount: (existing && Number.isFinite(existing.failCount) ? existing.failCount : 0) + 1,
-    lastOkAt: existing && Number.isFinite(existing.lastOkAt) ? existing.lastOkAt : 0
-  };
-  await setFaviconMeta(domainKey, nextMeta);
-  return nextMeta;
-}
-
-function isFaviconMetaStale(meta) {
-  if (!meta || !meta.lastOkAt) return false;
-  return Date.now() - meta.lastOkAt > FAVICON_META_STALE_MS;
-}
-
-function shouldBlockFaviconMeta(meta) {
-  if (!meta) return false;
-  if (meta.failCount >= 3 && meta.lastSeen && Date.now() - meta.lastSeen < FAVICON_FAIL_RETRY_WINDOW_MS) {
-    return true;
-  }
-  return false;
-}
-
-async function pruneFaviconMetaIfNeeded() {
-  if (!browser || !browser.storage || !browser.storage.local) return;
-  try {
-    const stored = await browser.storage.local.get(null);
-    const keys = Object.keys(stored || {}).filter((key) => key.startsWith(FAVICON_META_PREFIX));
-    if (keys.length <= FAVICON_META_MAX_ENTRIES) return;
-    const entries = keys
-      .map((key) => {
-        const meta = stored[key] || {};
-        return {
-          key,
-          lastSeen: Number.isFinite(meta.lastSeen) ? meta.lastSeen : 0
-        };
-      })
-      .sort((a, b) => a.lastSeen - b.lastSeen);
-    const remove = entries.slice(0, keys.length - FAVICON_META_MAX_ENTRIES).map((entry) => entry.key);
-    if (remove.length) {
-      await browser.storage.local.remove(remove);
-    }
-  } catch (err) {}
 }
 
 function ensureFaviconObserver() {

@@ -71,53 +71,19 @@ const SIDEBAR_COLLAPSE_RATIO = 0.49;
 
 const DOCK_COLLAPSE_RATIO = 0.32;
 
-const WALLPAPER_POOL_KEY = 'wallpaperPoolIds';
-
-const WALLPAPER_SELECTION_KEY = 'wallpaperSelection';
-
-const CACHED_APPLIED_VIDEO_URL_KEY = 'cachedAppliedVideoUrl';
-
-const CACHED_APPLIED_POSTER_URL_KEY = 'cachedAppliedPosterUrl';
-const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
-
-const CACHED_APPLIED_POSTER_CACHE_KEY = 'cachedAppliedPoster';
 const TARGET_STARTUP_POSTER_DATA_URL_LENGTH = 240000;
 const STARTUP_POSTER_MAX_DIM_SEQUENCE = [1280, 960, 720];
 const STARTUP_POSTER_QUALITY_SEQUENCE = [0.76, 0.68, 0.6];
-
-const WALLPAPER_FALLBACK_USED_KEY = 'wallpaperFallbackUsedAt';
-const DAILY_ROTATION_KEY = 'dailyWallpaperEnabled';
-const PENDING_DAILY_ROTATION_KEY = 'pendingDailyRotation';
-const PENDING_DAILY_ROTATION_SINCE_KEY = 'pendingDailyRotationSince';
-const WALLPAPER_STARTUP_STATE_KEY = 'wallpaperStartupState';
 const DAILY_ROTATION_SEEN_DELAY_MS = 8000;
-
-const WALLPAPER_CACHE_NAME = 'wallpaper-assets';
-const GALLERY_POSTERS_CACHE_NAME = 'gallery-posters';
-const POSTER_CACHE_CONCURRENCY = 4;
-
-const USER_WALLPAPER_CACHE_PREFIX = 'https://user-wallpapers.local/';
-
-const REMOTE_VIDEO_REGEX = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 
 const VIDEOS_JSON_URL = 'https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/manifest.json';
 const GALLERY_ASSETS_BASE_URL = 'https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/v/';
-const VIDEOS_JSON_CACHE_KEY = 'videosManifest';
-const VIDEOS_JSON_FETCHED_AT_KEY = 'videosManifestFetchedAt';
 const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const GALLERY_MANIFEST_FETCH_TIMEOUT_MS = 7000;
-
-const GALLERY_POSTERS_CACHE_KEY = 'cachedGalleryPosters';
-const GALLERY_POSTERS_CACHE_CHECKED_AT_KEY = 'galleryPostersCacheCheckedAt';
-const GALLERY_POSTERS_CACHE_SIGNATURE_KEY = 'galleryPostersCacheSignature';
 const GALLERY_POSTERS_CACHE_CHECK_TTL_MS = 24 * 60 * 60 * 1000;
 
 let videosManifestPromise = null;
 let pendingDailyRotationTimer = null;
-
-const isRemoteHttpUrl = (url = '') => typeof url === 'string' && /^https?:\/\//i.test(url);
-
-const isRemoteVideoUrl = (url = '') => isRemoteHttpUrl(url) && REMOTE_VIDEO_REGEX.test(url);
 
 function getLocalDayStamp(ts) {
 
@@ -149,37 +115,7 @@ function isDailyWallpaperRotationDue(selection, allowDailyRotation, now = Date.n
 
 }
 
-function syncWallpaperStartupState(selection, allowDailyRotation) {
-
-  try {
-
-    if (!window.localStorage) return;
-
-    if (!selection) {
-
-      localStorage.removeItem(WALLPAPER_STARTUP_STATE_KEY);
-
-      return;
-
-    }
-
-    const selectedAt = Number(selection.selectedAt || 0);
-
-    localStorage.setItem(WALLPAPER_STARTUP_STATE_KEY, JSON.stringify({
-
-      selectedAt: Number.isFinite(selectedAt) ? selectedAt : 0,
-
-      dailyRotationEnabled: allowDailyRotation !== false
-
-    }));
-
-  } catch (err) {
-
-    // Ignore; preload mirror is best-effort only
-
-  }
-
-}
+// syncWallpaperStartupState extracted to wallpaper-storage.js
 
 const runWhenIdle = (cb, timeout = 500) => {
 
@@ -631,9 +567,7 @@ function createGalleryContext() {
     showCustomAlert,
     scheduleIdleTask,
     debounce,
-    storageLocalGet: (keys) => browser.storage.local.get(keys),
-    storageLocalSet: (items) => browser.storage.local.set(items),
-    storageLocalRemove: (keys) => browser.storage.local.remove(keys)
+    ...createGalleryStorageBridge()
   };
 }
 
@@ -767,26 +701,12 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
 
   try {
 
-    const stored = await browser.storage.local.get([
+    const stored = await getWallpaperRotationState();
 
-      WALLPAPER_SELECTION_KEY,
-
-      WALLPAPER_FALLBACK_USED_KEY,
-
-      DAILY_ROTATION_KEY,
-
-      PENDING_DAILY_ROTATION_KEY,
-
-      PENDING_DAILY_ROTATION_SINCE_KEY
-
-    ]);
-
-
-
-    let selection = stored[WALLPAPER_SELECTION_KEY];
+    let selection = stored.selection;
 
     const now = Date.now();
-    const allowDailyRotation = stored[DAILY_ROTATION_KEY] !== false;
+    const allowDailyRotation = stored.allowDailyRotation;
 
     if (selection && isDailyWallpaperRotationDue(selection, allowDailyRotation, now)) {
 
@@ -797,13 +717,7 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
 
         selection = nextSelection;
 
-        await browser.storage.local.remove([
-
-          PENDING_DAILY_ROTATION_KEY,
-
-          PENDING_DAILY_ROTATION_SINCE_KEY
-
-        ]);
+        await clearPendingDailyRotation();
 
       }
 
@@ -837,13 +751,7 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
 
 
 
-    await browser.storage.local.set({
-
-      [WALLPAPER_SELECTION_KEY]: fallbackSelection,
-
-      [WALLPAPER_FALLBACK_USED_KEY]: now
-
-    });
+    await setWallpaperSelectionWithFallback(fallbackSelection, now);
 
     syncWallpaperStartupState(fallbackSelection, allowDailyRotation);
 
@@ -945,11 +853,11 @@ function getGalleryManifestTimestamp(value) {
 
 async function loadCachedGalleryManifest() {
 
-  const stored = await browser.storage.local.get([VIDEOS_JSON_CACHE_KEY, VIDEOS_JSON_FETCHED_AT_KEY]);
+  const cached = await getVideosManifestCache();
 
-  const manifest = stored[VIDEOS_JSON_CACHE_KEY];
+  const manifest = cached.manifest;
 
-  const fetchedAt = getGalleryManifestTimestamp(stored[VIDEOS_JSON_FETCHED_AT_KEY]);
+  const fetchedAt = getGalleryManifestTimestamp(cached.fetchedAt);
 
   const hasManifest = hasUsableGalleryManifest(manifest);
 
@@ -1061,13 +969,7 @@ async function fetchVideosManifestIfNeeded() {
         throw new Error('Manifest response was empty or invalid');
       }
 
-      await browser.storage.local.set({
-
-        [VIDEOS_JSON_CACHE_KEY]: manifest,
-
-        [VIDEOS_JSON_FETCHED_AT_KEY]: now
-
-      });
+      await setVideosManifestCache(manifest, now);
 
       return manifest;
 
@@ -1129,77 +1031,6 @@ async function getVideosManifest() {
 
 }
 
-async function cacheAsset(url) {
-
-  try {
-
-    const cache = await caches.open(WALLPAPER_CACHE_NAME);
-
-    const cached = await cache.match(url);
-
-    if (cached) return;
-
-    const res = await fetch(url, { cache: 'reload' });
-
-    if (res.ok) {
-
-      await cache.put(url, res.clone());
-
-    }
-
-  } catch (err) {
-
-    console.warn('Failed caching asset', url, err);
-
-  }
-
-}
-
-
-
-function getGalleryPosterUrls(manifest = []) {
-  return Array.from(new Set(
-    (Array.isArray(manifest) ? manifest : [])
-      .map((v) => {
-        if (isGallerySelection(v)) {
-          const urls = getWallpaperUrls(v.id);
-          return urls.posterUrl || v.posterUrl || v.poster;
-        }
-        return v.posterUrl || v.poster;
-      })
-      .filter(Boolean)
-  ));
-}
-
-function getGalleryPosterCacheSignature(manifest = []) {
-  return getGalleryPosterUrls(manifest).join('|');
-}
-
-async function cacheGalleryPosters(manifest = []) {
-
-  const posters = getGalleryPosterUrls(manifest);
-
-  if (!posters.length) return;
-
-  try {
-    const cache = await caches.open(GALLERY_POSTERS_CACHE_NAME);
-    await mapLimit(posters, POSTER_CACHE_CONCURRENCY, async (url) => {
-      try {
-        const existing = await cache.match(url);
-        if (existing) return existing;
-        await cache.add(url);
-        return true;
-      } catch (e) {
-        console.warn('Failed to cache poster', url, e);
-        return e;
-      }
-    });
-  } catch (e) {
-    console.error('cacheGalleryPosters error:', e);
-  }
-
-}
-
 async function cacheGalleryPostersIfNeeded(manifest = []) {
   const signature = getGalleryPosterCacheSignature(manifest);
   if (!signature) return;
@@ -1207,13 +1038,7 @@ async function cacheGalleryPostersIfNeeded(manifest = []) {
   const now = Date.now();
 
   try {
-    const stored = await browser.storage.local.get([
-      GALLERY_POSTERS_CACHE_CHECKED_AT_KEY,
-      GALLERY_POSTERS_CACHE_SIGNATURE_KEY
-    ]);
-
-    const lastCheckedAt = stored[GALLERY_POSTERS_CACHE_CHECKED_AT_KEY] || 0;
-    const previousSignature = stored[GALLERY_POSTERS_CACHE_SIGNATURE_KEY] || '';
+    const { lastCheckedAt, signature: previousSignature } = await getGalleryPostersCacheMetadata();
     const isRecent = now - lastCheckedAt < GALLERY_POSTERS_CACHE_CHECK_TTL_MS;
 
     if (isRecent && previousSignature === signature) {
@@ -1222,10 +1047,7 @@ async function cacheGalleryPostersIfNeeded(manifest = []) {
 
     await cacheGalleryPosters(manifest);
 
-    await browser.storage.local.set({
-      [GALLERY_POSTERS_CACHE_CHECKED_AT_KEY]: now,
-      [GALLERY_POSTERS_CACHE_SIGNATURE_KEY]: signature
-    });
+    await setGalleryPostersCacheMetadata(signature, now);
   } catch (err) {
     console.warn('Failed to check gallery poster cache freshness', err);
     recordPerfFallback('galleryPosters', 'Poster cache check failed');
@@ -1235,100 +1057,6 @@ async function cacheGalleryPostersIfNeeded(manifest = []) {
 const wallpaperObjectUrlCache = new Map();
 
 let galleryHydrationWarmPromise = null;
-
-
-
-function normalizeWallpaperCacheKey(cacheKey) {
-
-  if (!cacheKey) return '';
-
-  if (/^https?:\/\//i.test(cacheKey)) {
-
-    return cacheKey;
-
-  }
-
-  return `${USER_WALLPAPER_CACHE_PREFIX}${encodeURIComponent(cacheKey)}`;
-
-}
-
-
-
-function getCacheKeyVariants(cacheKey) {
-
-  if (!cacheKey) return [];
-
-  const normalized = normalizeWallpaperCacheKey(cacheKey);
-
-  const variants = [normalized];
-
-  if (normalized !== cacheKey) {
-
-    variants.push(cacheKey);
-
-  } else if (normalized.startsWith(USER_WALLPAPER_CACHE_PREFIX)) {
-
-    const legacy = normalized.slice(USER_WALLPAPER_CACHE_PREFIX.length);
-
-    if (legacy) variants.push(legacy);
-
-  }
-
-  return variants;
-
-}
-
-
-
-async function getCachedObjectUrl(cacheKey) {
-
-  const keys = getCacheKeyVariants(cacheKey);
-
-  if (!keys.length) return null;
-
-
-
-  for (const key of keys) {
-
-    if (wallpaperObjectUrlCache.has(key)) {
-
-      return wallpaperObjectUrlCache.get(key);
-
-    }
-
-  }
-
-
-
-  try {
-
-    const cache = await caches.open(WALLPAPER_CACHE_NAME);
-
-    for (const key of keys) {
-
-      const res = await cache.match(key);
-
-      if (!res) continue;
-
-      const blob = await res.blob();
-
-      const url = URL.createObjectURL(blob);
-
-      keys.forEach((k) => wallpaperObjectUrlCache.set(k, url));
-
-      return url;
-
-    }
-
-  } catch (err) {
-
-    console.warn('Failed to read cached wallpaper', cacheKey, err);
-
-    return null;
-
-  }
-
-}
 
 
 
@@ -1354,97 +1082,6 @@ async function warmGalleryPosterHydration() {
 
 }
 
-
-
-async function deleteCachedObject(cacheKey) {
-
-  const keys = getCacheKeyVariants(cacheKey);
-
-  if (!keys.length) return;
-
-  let cache = null;
-
-  try {
-
-    cache = await caches.open(WALLPAPER_CACHE_NAME);
-
-  } catch (err) {
-
-    console.warn('Failed to delete cached wallpaper', cacheKey, err);
-
-  }
-
-
-
-  keys.forEach((key) => {
-
-    if (cache) {
-
-      cache.delete(key).catch(() => {});
-
-    }
-
-    const cachedUrl = wallpaperObjectUrlCache.get(key);
-
-    if (cachedUrl) {
-
-      URL.revokeObjectURL(cachedUrl);
-
-      wallpaperObjectUrlCache.delete(key);
-
-    }
-
-  });
-
-}
-
-
-
-async function pruneCachedVideos(keepUrl = '') {
-
-  try {
-
-    const cache = await caches.open(WALLPAPER_CACHE_NAME);
-
-    const requests = await cache.keys();
-
-    const deletions = requests
-
-      .map((req) => {
-
-        const url = req.url;
-
-        // 1. Only target video files
-        if (!isRemoteVideoUrl(url)) return null;
-
-        // 2. SAFETY CHECK: Do NOT delete user uploads
-        if (url.startsWith(USER_WALLPAPER_CACHE_PREFIX)) return null;
-
-        // 3. Keep the currently active wallpaper
-        if (keepUrl && url === keepUrl) return null;
-
-        return cache.delete(req).catch(() => {});
-
-      })
-
-      .filter(Boolean);
-
-    if (deletions.length) {
-
-      await Promise.all(deletions);
-
-    }
-
-  } catch (err) {
-
-    console.warn('Failed to prune cached videos', err);
-
-  }
-
-}
-
-
-
 async function cacheAppliedWallpaperVideo(selection) {
 
   if (!selection) return;
@@ -1462,7 +1099,7 @@ async function cacheAppliedWallpaperVideo(selection) {
     : (isRemoteVideoUrl(videoUrl) ? videoUrl : '');
 
   if (targetUrl && targetUrl.startsWith(USER_WALLPAPER_CACHE_PREFIX)) {
-    await browser.storage.local.remove(CACHED_APPLIED_VIDEO_URL_KEY);
+    await clearCachedAppliedVideoUrl();
     return;
   }
 
@@ -1478,11 +1115,11 @@ async function cacheAppliedWallpaperVideo(selection) {
 
       await cacheAsset(targetUrl);
 
-      await browser.storage.local.set({ [CACHED_APPLIED_VIDEO_URL_KEY]: targetUrl });
+      await setCachedAppliedVideoUrl(targetUrl);
 
     } else {
 
-      await browser.storage.local.remove(CACHED_APPLIED_VIDEO_URL_KEY);
+      await clearCachedAppliedVideoUrl();
 
     }
 
@@ -1496,124 +1133,11 @@ async function cacheAppliedWallpaperVideo(selection) {
 
 
 
-async function resolvePosterBlob(posterUrl, posterCacheKey = '') {
-
-  const cacheKeys = new Set();
-
-  if (posterCacheKey) {
-
-    getCacheKeyVariants(posterCacheKey).forEach((key) => cacheKeys.add(key));
-
-  }
-
-  if (posterUrl) {
-
-    cacheKeys.add(posterUrl);
-
-  }
-
-  getCacheKeyVariants(CACHED_APPLIED_POSTER_CACHE_KEY).forEach((key) => cacheKeys.add(key));
-
-
-
-  let cache = null;
-
-  try {
-
-    cache = await caches.open(WALLPAPER_CACHE_NAME);
-
-  } catch (err) {
-
-    cache = null;
-
-  }
-
-
-
-  if (cache) {
-
-    for (const key of cacheKeys) {
-
-      try {
-
-        const match = await cache.match(key);
-
-        if (match) {
-
-          return await match.blob();
-
-        }
-
-      } catch (err) {
-
-        // Ignore cache read errors
-
-      }
-
-    }
-
-  }
-
-  if (typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.getCacheName === 'function') {
-    try {
-      const myCache = await caches.open(MyWallpapers.getCacheName());
-      for (const key of cacheKeys) {
-        try {
-          const match = await myCache.match(key);
-          if (match) {
-            return await match.blob();
-          }
-        } catch (err) {
-          // ignore and continue
-        }
-      }
-    } catch (err) {
-      // ignore
-    }
-  }
-
-
-
-  if (posterUrl) {
-
-    try {
-
-      const res = await fetch(posterUrl);
-
-      if (res && res.ok) {
-
-        return await res.blob();
-
-      }
-
-    } catch (err) {
-
-      // Ignore fetch errors so caller can fall back
-
-    }
-
-  }
-
-
-
-  return null;
-
-}
-
-
-
 async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
   try {
     if (!posterUrl) {
-      await browser.storage.local.remove(CACHED_APPLIED_POSTER_URL_KEY);
-      await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+      await clearAppliedPosterMetadata();
       await deleteCachedObject(CACHED_APPLIED_POSTER_CACHE_KEY);
-      try {
-        if (window.localStorage) {
-          localStorage.removeItem('cachedAppliedPosterUrl');
-          localStorage.removeItem('cachedAppliedPosterDataUrl');
-        }
-      } catch (e) {}
       return;
     }
 
@@ -1632,12 +1156,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
     }
 
     // Store the URL placeholder
-    await browser.storage.local.set({ [CACHED_APPLIED_POSTER_URL_KEY]: urlToStore });
-    try {
-      if (window.localStorage) {
-        localStorage.setItem('cachedAppliedPosterUrl', urlToStore);
-      }
-    } catch (e) {}
+    await setCachedAppliedPosterUrl(urlToStore);
 
     const cacheKeyToUse = posterCacheKey || posterUrl;
 
@@ -1650,9 +1169,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
 
         if (state.phase === 0) {
 
-          const storedUrlResult = await browser.storage.local.get(CACHED_APPLIED_POSTER_URL_KEY);
-
-          const storedUrl = storedUrlResult && storedUrlResult[CACHED_APPLIED_POSTER_URL_KEY];
+          const storedUrl = await getCachedAppliedPosterUrl();
 
           if (storedUrl !== urlToStore) {
 
@@ -1682,9 +1199,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
 
         if (state.phase === 2) {
 
-          const latestStored = await browser.storage.local.get(CACHED_APPLIED_POSTER_URL_KEY);
-
-          const latestUrl = latestStored && latestStored[CACHED_APPLIED_POSTER_URL_KEY];
+          const latestUrl = await getCachedAppliedPosterUrl();
 
           if (latestUrl !== urlToStore) {
 
@@ -1694,31 +1209,11 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
 
           if (state.dataUrl && state.dataUrl.length <= TARGET_STARTUP_POSTER_DATA_URL_LENGTH) {
 
-            await browser.storage.local.set({ [CACHED_APPLIED_POSTER_DATA_URL_KEY]: state.dataUrl });
-
-            try {
-
-              if (window.localStorage) {
-
-                localStorage.setItem('cachedAppliedPosterDataUrl', state.dataUrl);
-
-              }
-
-            } catch (e) {}
+            await setCachedAppliedPosterDataUrl(state.dataUrl);
 
           } else {
 
-            await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
-
-            try {
-
-              if (window.localStorage) {
-
-                localStorage.removeItem('cachedAppliedPosterDataUrl');
-
-              }
-
-            } catch (e) {}
+            await clearCachedAppliedPosterDataUrl();
 
           }
 
@@ -2254,9 +1749,7 @@ async function pickNextWallpaper(manifest) {
 
   if (!manifest || !manifest.length) return null;
 
-  const stored = await browser.storage.local.get([WALLPAPER_POOL_KEY]);
-
-  let pool = Array.isArray(stored[WALLPAPER_POOL_KEY]) ? stored[WALLPAPER_POOL_KEY] : [];
+  let pool = await getWallpaperPool();
 
   if (!pool.length) {
 
@@ -2268,7 +1761,7 @@ async function pickNextWallpaper(manifest) {
 
   const entry = manifest.find(item => item.id === nextId);
 
-  await browser.storage.local.set({ [WALLPAPER_POOL_KEY]: pool });
+  await setWallpaperPool(pool);
 
   if (!entry) return null;
 
@@ -2308,7 +1801,7 @@ async function pickNextWallpaper(manifest) {
 
   };
 
-  await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: selection });
+  await setWallpaperSelection(selection);
 
   return selection;
 
@@ -2360,37 +1853,21 @@ function schedulePendingDailyRotationAttempt() {
 
     try {
 
-      const stored = await browser.storage.local.get([
-
-        PENDING_DAILY_ROTATION_KEY,
-
-        PENDING_DAILY_ROTATION_SINCE_KEY,
-
-        DAILY_ROTATION_KEY,
-
-        WALLPAPER_SELECTION_KEY
-
-      ]);
+      const stored = await getWallpaperRotationState();
 
       const now = Date.now();
 
-      const pending = stored[PENDING_DAILY_ROTATION_KEY] === true;
+      const pending = stored.pending;
 
-      const allowDailyRotation = stored[DAILY_ROTATION_KEY] !== false;
+      const allowDailyRotation = stored.allowDailyRotation;
 
-      const current = stored[WALLPAPER_SELECTION_KEY];
+      const current = stored.selection;
 
       const selectedAt = current && current.selectedAt ? current.selectedAt : 0;
 
       if (!current || !Number.isFinite(selectedAt) || selectedAt <= 0) {
 
-        await browser.storage.local.remove([
-
-          PENDING_DAILY_ROTATION_KEY,
-
-          PENDING_DAILY_ROTATION_SINCE_KEY
-
-        ]);
+        await clearPendingDailyRotation();
 
         return;
 
@@ -2402,25 +1879,13 @@ function schedulePendingDailyRotationAttempt() {
 
       if (!allowDailyRotation || !dueByDayChange) {
 
-        await browser.storage.local.remove([
-
-          PENDING_DAILY_ROTATION_KEY,
-
-          PENDING_DAILY_ROTATION_SINCE_KEY
-
-        ]);
+        await clearPendingDailyRotation();
 
         return;
 
       }
 
-      await browser.storage.local.remove([
-
-        PENDING_DAILY_ROTATION_KEY,
-
-        PENDING_DAILY_ROTATION_SINCE_KEY
-
-      ]);
+      await clearPendingDailyRotation();
 
     } catch (err) {
 
@@ -2469,19 +1934,19 @@ async function ensureDailyWallpaper(forceNext = false) {
     return;
   }
 
-  const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY, DAILY_ROTATION_KEY, WALLPAPER_QUALITY_KEY, PENDING_DAILY_ROTATION_KEY, PENDING_DAILY_ROTATION_SINCE_KEY]);
+  const stored = await getWallpaperRotationState();
 
   const now = Date.now();
 
-  const storedFallbackUsedAt = stored[WALLPAPER_FALLBACK_USED_KEY] || 0;
-  const storedQuality = stored[WALLPAPER_QUALITY_KEY];
+  const storedFallbackUsedAt = stored.fallbackUsedAt || 0;
+  const storedQuality = stored.quality;
   if (storedQuality) {
     wallpaperQualityPreference = storedQuality === 'high' ? 'high' : 'low';
   }
 
 
 
-  let current = stored[WALLPAPER_SELECTION_KEY];
+  let current = stored.selection;
 
   let fallbackUsedAt = storedFallbackUsedAt || now;
 
@@ -2493,13 +1958,7 @@ async function ensureDailyWallpaper(forceNext = false) {
 
     currentWallpaperSelection = fallbackSelection;
 
-    await browser.storage.local.set({
-
-      [WALLPAPER_SELECTION_KEY]: fallbackSelection,
-
-      [WALLPAPER_FALLBACK_USED_KEY]: fallbackUsedAt
-
-    });
+    await setWallpaperSelectionWithFallback(fallbackSelection, fallbackUsedAt);
 
   } else {
 
@@ -2509,14 +1968,14 @@ async function ensureDailyWallpaper(forceNext = false) {
 
 
 
-  const allowDailyRotation = stored[DAILY_ROTATION_KEY] !== false;
-  const pendingAlreadySet = stored[PENDING_DAILY_ROTATION_KEY] === true;
-  const pendingSince = stored[PENDING_DAILY_ROTATION_SINCE_KEY] || 0;
+  const allowDailyRotation = stored.allowDailyRotation;
+  const pendingAlreadySet = stored.pending;
+  const pendingSince = stored.pendingSince || 0;
   const dueByDayChange = isDailyWallpaperRotationDue(current, allowDailyRotation, now);
 
   if (pendingAlreadySet && !dueByDayChange) {
 
-    await browser.storage.local.remove([PENDING_DAILY_ROTATION_KEY, PENDING_DAILY_ROTATION_SINCE_KEY]);
+    await clearPendingDailyRotation();
 
   }
 
@@ -2526,21 +1985,11 @@ async function ensureDailyWallpaper(forceNext = false) {
 
     if (!pendingAlreadySet) {
 
-      await browser.storage.local.set({
-
-        [PENDING_DAILY_ROTATION_KEY]: true,
-
-        [PENDING_DAILY_ROTATION_SINCE_KEY]: now
-
-      });
+      await setPendingDailyRotation(true, now);
 
     } else if (!pendingSince) {
 
-      await browser.storage.local.set({
-
-        [PENDING_DAILY_ROTATION_SINCE_KEY]: now
-
-      });
+      await setPendingDailyRotation(true, now);
 
     }
 
@@ -2548,7 +1997,7 @@ async function ensureDailyWallpaper(forceNext = false) {
 
   } else if (forceNext && pendingAlreadySet) {
 
-    await browser.storage.local.remove([PENDING_DAILY_ROTATION_KEY, PENDING_DAILY_ROTATION_SINCE_KEY]);
+    await clearPendingDailyRotation();
 
   }
 
@@ -2579,7 +2028,7 @@ async function ensureDailyWallpaper(forceNext = false) {
       videoCacheKey: refreshedGalleryUrls.videoUrl,
       posterCacheKey: refreshedGalleryUrls.posterUrl
     };
-    await browser.storage.local.set({ [WALLPAPER_SELECTION_KEY]: current });
+    await setWallpaperSelection(current);
   }
 
   if (current) {
@@ -2904,10 +2353,7 @@ const wallpaperQualityToggle = document.getElementById('gallery-wallpaper-qualit
 
 const galleryDailyToggle = document.getElementById('gallery-daily-toggle');
 
-const FAVORITES_KEY = 'galleryFavorites';
-
-const WALLPAPER_TYPE_KEY = 'wallpaperTypePreference';
-const WALLPAPER_QUALITY_KEY = 'wallpaperQualityPreference';
+// WALLPAPER_TYPE_KEY & WALLPAPER_QUALITY_KEY imported from wallpaper-storage.js
 
 const APP_TIME_FORMAT_KEY = 'appTimeFormatPreference';
 
@@ -2932,10 +2378,6 @@ const APP_AUTOCLOSE_KEY = 'appAutoCloseMinutes';
 const APP_SINGLETON_MODE_KEY = 'appSingletonMode';
 
 const APP_SEARCH_OPEN_NEW_TAB_KEY = 'appSearchOpenNewTab';
-
-const APP_SEARCH_REMEMBER_ENGINE_KEY = 'appSearchRememberEngine';
-
-const APP_SEARCH_DEFAULT_ENGINE_KEY = 'appSearchDefaultEngine';
 
 const APP_SEARCH_MATH_KEY = 'appSearchMath';
 
@@ -3581,9 +3023,7 @@ function createBookmarkEditorContext() {
     createFolder: (details) => browser.bookmarks.create(details),
     updateFolder: (id, changes) => browser.bookmarks.update(id, changes),
     moveNode: (id, changes) => browser.bookmarks.move(id, changes),
-    storageLocalGet: (keys) => browser.storage.local.get(keys),
-    storageLocalSet: (items) => browser.storage.local.set(items),
-    addStorageChangedListener: (listener) => browser.storage.onChanged.addListener(listener),
+    ...createBookmarkEditorStorageBridge(),
     setLastUsedFolderId
   };
 }
@@ -7581,10 +7021,6 @@ function updateDefaultEngineVisibilityControl() {
 
 // ===============================================
 
-const SEARCH_ENGINES_PREF_KEY = 'searchEnginesConfig';
-
-
-
 let searchEngines = [
 
   { 
@@ -7832,33 +7268,6 @@ function buildSearchEngineIconContent(targetEl, engine) {
   targetEl.appendChild(fallback);
 }
 
-function getFastSearchPayload(engine) {
-  if (!engine) return null;
-
-  return {
-    placeholder: searchInput ? searchInput.placeholder : `Search with ${engine.name}`,
-    selectorData: {
-      name: engine.name,
-      color: engine.color || '#333',
-      symbolId: engine.symbolId || null,
-      fallback: engine.name.charAt(0)
-    },
-    engineId: engine.id
-  };
-}
-
-function writeFastSearchCache(engine) {
-  const fastSearch = getFastSearchPayload(engine);
-
-  if (!fastSearch) return;
-
-  try {
-    localStorage.setItem('fast-search', JSON.stringify(fastSearch));
-  } catch (e) {
-    // Ignore storage errors
-  }
-}
-
 function ensureEngineIconExists(engine) {
 
   const container = document.getElementById('search-engine-selector');
@@ -7908,11 +7317,7 @@ function ensureEngineIconExists(engine) {
     }
 
     if (appSearchRememberEnginePreference) {
-
-      browser.storage.local.set({ currentSearchEngineId: engine.id })
-        .then(() => writeFastSearchCache(engine))
-        .catch(() => {});
-
+      setCurrentSearchEngine(engine);
     }
 
     if (searchInput) searchInput.focus();
@@ -8115,11 +7520,7 @@ function renderSearchEngineSelector(options = {}) {
       }
 
       if (appSearchRememberEnginePreference) {
-
-        browser.storage.local.set({ currentSearchEngineId: engine.id })
-          .then(() => writeFastSearchCache(engine))
-          .catch(() => {});
-
+        setCurrentSearchEngine(engine);
       }
 
       if (searchInput) searchInput.focus();
@@ -8668,19 +8069,7 @@ async function handleSearchChange() {
   updateSearchUI(newId);
 
   if (appSearchRememberEnginePreference) {
-
-    const selectedEngine = currentSearchEngine;
-
-    browser.storage.local.set({ currentSearchEngineId: newId }).then(() => {
-
-      writeFastSearchCache(selectedEngine);
-
-    }).catch((err) => {
-
-      console.warn('Failed to persist search engine selection', err);
-
-    });
-
+    setCurrentSearchEngine(currentSearchEngine);
   }
 
   if (searchInput.value.trim().length > 0) {
@@ -10171,19 +9560,7 @@ function getSafeEnabledSearchEngineId(preferredId) {
 
 
 async function loadSearchEnginePreferences() {
-
-  const stored = await browser.storage.local.get([
-
-    SEARCH_ENGINES_PREF_KEY,
-
-    'currentSearchEngineId',
-
-    APP_SEARCH_REMEMBER_ENGINE_KEY,
-
-    APP_SEARCH_DEFAULT_ENGINE_KEY
-
-  ]);
-
+  const stored = await getSearchPreferences();
   const savedConfig = stored[SEARCH_ENGINES_PREF_KEY];
 
 
@@ -12205,79 +11582,40 @@ if (browser?.storage?.onChanged) {
       populateDefaultEngineSelectControl();
 
       if (safeDefaultEngineId !== requestedDefaultEngineId) {
-
-        browser.storage.local.set({ [APP_SEARCH_DEFAULT_ENGINE_KEY]: safeDefaultEngineId }).catch((err) => {
-
-          console.warn('Failed to persist default search engine', err);
-
-        });
-
+        setDefaultSearchEngineId(safeDefaultEngineId);
       }
 
       if (!appSearchRememberEnginePreference) {
-
         const defaultEngine = searchEngines.find((engine) => engine.id === safeDefaultEngineId);
-
         if (!currentSearchEngine || currentSearchEngine.id === previousDefaultEngineId) {
-
           updateSearchUI(safeDefaultEngineId, { updateFastCache: true, animate: false });
-
         } else {
-
           writeFastSearchCache(defaultEngine);
-
         }
-
       }
-
     }
 
     if (changes[APP_SEARCH_SUGGESTIONS_KEY]) {
-
       setSearchSuggestionsPreference(changes[APP_SEARCH_SUGGESTIONS_KEY].newValue !== false);
-
     }
 
-
-
     if (changes[SEARCH_ENGINES_PREF_KEY]) {
-
       const newConfig = changes[SEARCH_ENGINES_PREF_KEY].newValue;
-
       if (applySearchEngineConfig(newConfig)) {
-
         const previousEngineId = currentSearchEngine ? currentSearchEngine.id : null;
-
         const previousEngineStillEnabled = Boolean(previousEngineId && searchEngines.find((engine) => engine.id === previousEngineId && engine.enabled));
-
         const previousDefaultEngineId = appSearchDefaultEnginePreference;
-
         const defaultEngineId = populateDefaultEngineSelectControl();
-
         if (defaultEngineId && previousDefaultEngineId !== defaultEngineId) {
-
-          browser.storage.local.set({ [APP_SEARCH_DEFAULT_ENGINE_KEY]: defaultEngineId }).catch((err) => {
-
-            console.warn('Failed to persist default search engine', err);
-
-          });
-
+          setDefaultSearchEngineId(defaultEngineId);
         }
 
         const targetEngineId = getSafeEnabledSearchEngineId(previousEngineId);
-
         populateSearchOptions({ animate: false });
-
         updateSearchUI(targetEngineId, { updateFastCache: appSearchRememberEnginePreference, animate: false });
 
         if (appSearchRememberEnginePreference && !previousEngineStillEnabled) {
-
-          browser.storage.local.set({ currentSearchEngineId: targetEngineId }).catch((err) => {
-
-            console.warn('Failed to persist search engine selection', err);
-
-          });
-
+          setCurrentSearchEngine(targetEngineId);
         }
 
         if (!appSearchRememberEnginePreference) {
@@ -12443,9 +11781,7 @@ if (!isPerformanceModeEnabled()) {
 
 async function loadWallpaperTypePreference() {
 
-  const stored = await browser.storage.local.get(WALLPAPER_TYPE_KEY);
-
-  wallpaperTypePreference = stored[WALLPAPER_TYPE_KEY] || 'video';
+  wallpaperTypePreference = await getWallpaperTypePreferenceStorage();
 
   if (wallpaperTypeToggle) {
 
@@ -12467,9 +11803,7 @@ async function loadCurrentWallpaperSelection() {
 
   try {
 
-    const stored = await browser.storage.local.get(WALLPAPER_SELECTION_KEY);
-
-    const selection = stored[WALLPAPER_SELECTION_KEY] || null;
+    const selection = await getWallpaperSelection();
 
     currentWallpaperSelection = await hydrateWallpaperSelection(selection);
 
@@ -12505,7 +11839,7 @@ async function setWallpaperTypePreference(type) {
 
   wallpaperTypePreference = next;
 
-  await browser.storage.local.set({ [WALLPAPER_TYPE_KEY]: next });
+  await setWallpaperTypePreferenceStorage(next);
 
 
 
@@ -12513,23 +11847,17 @@ async function setWallpaperTypePreference(type) {
 
   try {
 
-    const stored = await browser.storage.local.get([WALLPAPER_SELECTION_KEY, WALLPAPER_FALLBACK_USED_KEY]);
+    const storedSelection = await getWallpaperSelection();
 
-    let selection = stored[WALLPAPER_SELECTION_KEY] || currentWallpaperSelection;
+    let selection = storedSelection || currentWallpaperSelection;
 
     if (!selection) {
 
-      const selectedAt = stored[WALLPAPER_FALLBACK_USED_KEY] || Date.now();
+      const selectedAt = await getWallpaperFallbackUsedAt() || Date.now();
 
       selection = buildFallbackSelection(selectedAt);
 
-      await browser.storage.local.set({
-
-        [WALLPAPER_SELECTION_KEY]: selection,
-
-        [WALLPAPER_FALLBACK_USED_KEY]: selectedAt
-
-      });
+      await setWallpaperSelectionWithFallback(selection, selectedAt);
 
     }
 

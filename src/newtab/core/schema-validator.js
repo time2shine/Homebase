@@ -133,8 +133,8 @@ const SCHEMA_DEFINITIONS = {
   },
   pendingDailyRotation: {
     default: null,
-    validate: (val) => val === null || isPlainObject(val),
-    sanitize: (val, fallback = true) => (val === null ? null : (isPlainObject(val) ? val : (fallback ? null : undefined)))
+    validate: (val) => val === null || typeof val === 'boolean' || isPlainObject(val),
+    sanitize: (val, fallback = true) => (val === null || typeof val === 'boolean' ? val : (isPlainObject(val) ? val : (fallback ? null : undefined)))
   },
   pendingDailyRotationSince: {
     default: 0,

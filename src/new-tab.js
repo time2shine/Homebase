@@ -2265,6 +2265,9 @@ const gridMenuPasteBtn = document.getElementById('grid-menu-paste');
 const gridMenuSortNameBtn = document.getElementById('grid-menu-sort-name');
 
 const ensureMenuMountedToBody = (menuEl) => {
+  if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.ensureMenuMountedToBody === 'function') {
+    return window.HomebaseContextMenuController.ensureMenuMountedToBody(menuEl);
+  }
   if (!menuEl || !(menuEl instanceof HTMLElement)) return;
   if (menuEl.parentElement !== document.body) {
     document.body.appendChild(menuEl);
@@ -11039,75 +11042,63 @@ function logInitSettled(name, result) {
 
 
 
-  // --- Add global listeners to hide ALL context menus ---
-
+  // --- Context Menu Management ---
   const hideAllContextMenus = () => {
-
-    folderContextMenu.classList.add('hidden');
-
-    gridFolderMenu.classList.add('hidden');
-
-    iconContextMenu.classList.add('hidden');
-
-    if (gridBlankMenu) {
-
-      gridBlankMenu.classList.add('hidden');
-
+    if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.hide === 'function') {
+      return window.HomebaseContextMenuController.hide();
     }
-
+    folderContextMenu.classList.add('hidden');
+    gridFolderMenu.classList.add('hidden');
+    iconContextMenu.classList.add('hidden');
+    if (gridBlankMenu) {
+      gridBlankMenu.classList.add('hidden');
+    }
   };
 
-
-
   const positionContextMenuInViewport = (menuEl, clientX, clientY, opts = {}) => {
+    if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.reposition === 'function') {
+      return window.HomebaseContextMenuController.reposition(menuEl, clientX, clientY, opts);
+    }
     if (!menuEl) return;
-
     ensureMenuMountedToBody(menuEl);
-
     const margin = Number.isFinite(opts.margin) ? opts.margin : 8;
     const docEl = document.documentElement;
     const viewportWidth = (docEl && docEl.clientWidth) || window.innerWidth || 0;
     const viewportHeight = (docEl && docEl.clientHeight) || window.innerHeight || 0;
-
     const wasHidden = menuEl.classList.contains('hidden');
     const prevVisibility = menuEl.style.visibility;
     const prevDisplay = menuEl.style.display;
     const prevPointerEvents = menuEl.style.pointerEvents;
-
-    if (wasHidden) {
-      menuEl.classList.remove('hidden');
-    }
-
+    if (wasHidden) menuEl.classList.remove('hidden');
     menuEl.style.visibility = 'hidden';
     menuEl.style.pointerEvents = 'none';
-
     const computedDisplay = window.getComputedStyle(menuEl).display;
-    if (computedDisplay === 'none') {
-      menuEl.style.display = 'flex';
-    }
-
+    if (computedDisplay === 'none') menuEl.style.display = 'flex';
     const rect = menuEl.getBoundingClientRect();
     const menuWidth = rect.width || 0;
     const menuHeight = rect.height || 0;
-
     const maxLeft = Math.max(margin, viewportWidth - menuWidth - margin);
     const maxTop = Math.max(margin, viewportHeight - menuHeight - margin);
     const left = Math.min(Math.max(clientX, margin), maxLeft);
     const top = Math.min(Math.max(clientY, margin), maxTop);
-
     menuEl.style.visibility = prevVisibility;
     menuEl.style.display = prevDisplay;
     menuEl.style.pointerEvents = prevPointerEvents;
-
     menuEl.style.left = `${left}px`;
     menuEl.style.top = `${top}px`;
-
     if (opts.show === true) {
       menuEl.classList.remove('hidden');
     } else if (wasHidden) {
       menuEl.classList.add('hidden');
     }
   };
+
+  if (typeof window !== 'undefined' && window.HomebaseDialogController && typeof window.HomebaseDialogController.initialize === 'function') {
+    window.HomebaseDialogController.initialize();
+  }
+  if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.initialize === 'function') {
+    window.HomebaseContextMenuController.initialize();
+  }
 
   window.addEventListener('click', hideAllContextMenus);
 

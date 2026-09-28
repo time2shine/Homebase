@@ -92,11 +92,20 @@ async function openNewsSettingsModal(triggerSource) {
   if (!newsSettingsModal) return;
   ensureNewsSourceOptions();
   let storedSource = appNewsSourcePreference || DEFAULT_NEWS_SOURCE_ID;
-  try {
-    const data = await browser.storage.local.get(APP_NEWS_SOURCE_KEY);
-    storedSource = resolveNewsSourceId(data[APP_NEWS_SOURCE_KEY] || storedSource);
-  } catch (err) {
-    storedSource = resolveNewsSourceId(storedSource);
+  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.get) {
+    try {
+      const val = await HomebaseStorage.get(APP_NEWS_SOURCE_KEY, storedSource);
+      storedSource = resolveNewsSourceId(val || storedSource);
+    } catch (_) {
+      storedSource = resolveNewsSourceId(storedSource);
+    }
+  } else {
+    try {
+      const data = await browser.storage.local.get(APP_NEWS_SOURCE_KEY);
+      storedSource = resolveNewsSourceId(data[APP_NEWS_SOURCE_KEY] || storedSource);
+    } catch (err) {
+      storedSource = resolveNewsSourceId(storedSource);
+    }
   }
   if (newsSourceSelect) {
     newsSourceSelect.value = storedSource;
@@ -734,10 +743,18 @@ function setupNewsWidget() {
     newsSettingsSaveBtn.addEventListener('click', async () => {
       const selected = resolveNewsSourceId(newsSourceSelect?.value);
       appNewsSourcePreference = selected;
-      try {
-        await browser.storage.local.set({ [APP_NEWS_SOURCE_KEY]: selected });
-      } catch (err) {
-        console.warn('Failed to save news source preference', err);
+      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+        try {
+          await HomebaseStorage.set(APP_NEWS_SOURCE_KEY, selected);
+        } catch (err) {
+          console.warn('Failed to save news source preference', err);
+        }
+      } else {
+        try {
+          await browser.storage.local.set({ [APP_NEWS_SOURCE_KEY]: selected });
+        } catch (err) {
+          console.warn('Failed to save news source preference', err);
+        }
       }
       try {
         if (window.localStorage) {
@@ -770,12 +787,18 @@ function setNewsPreference(show = true, options = {}) {
     // Ignore; instant mirror is best-effort only
   }
 
-  if (options.persist !== false && browser && browser.storage && browser.storage.local) {
-    browser.storage.local
-      .set({ [APP_SHOW_NEWS_KEY]: shouldShow })
-      .catch((err) => {
+  if (options.persist !== false) {
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set(APP_SHOW_NEWS_KEY, shouldShow).catch((err) => {
         console.warn('Failed to save news visibility preference', err);
       });
+    } else if (browser && browser.storage && browser.storage.local) {
+      browser.storage.local
+        .set({ [APP_SHOW_NEWS_KEY]: shouldShow })
+        .catch((err) => {
+          console.warn('Failed to save news visibility preference', err);
+        });
+    }
   }
 
   if (options.applyVisibility !== false) {

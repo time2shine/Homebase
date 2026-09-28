@@ -28,8 +28,7 @@ function updateTime() {
 
 }
 
-function applyTimeFormatPreference(format = '12-hour') {
-
+function applyTimeFormatPreference(format = '12-hour', options = {}) {
   timeFormatPreference = format === '12-hour' ? '12-hour' : '24-hour';
 
   // FIX: Sync to localStorage so instant_load.js knows the preference immediately
@@ -39,4 +38,20 @@ function applyTimeFormatPreference(format = '12-hour') {
     // Ignore if cookies/storage are disabled
   }
 
+  if (options.persist) {
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set('appTimeFormatPreference', timeFormatPreference).catch(() => {});
+    } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      browser.storage.local.set({ appTimeFormatPreference: timeFormatPreference }).catch(() => {});
+    }
+  }
+}
+
+function setTimeFormatPreference(format = '12-hour', options = {}) {
+  return applyTimeFormatPreference(format, { persist: true, ...options });
+}
+
+if (typeof window !== 'undefined') {
+  window.applyTimeFormatPreference = applyTimeFormatPreference;
+  window.setTimeFormatPreference = setTimeFormatPreference;
 }

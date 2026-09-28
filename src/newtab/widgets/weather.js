@@ -49,6 +49,40 @@ let geoAbortController = null;
 let geoRequestId = 0;
 let weatherRefreshInFlight = false;
 
+async function weatherStorageGet(keys) {
+  if (typeof HomebaseStorage !== 'undefined') {
+    if (typeof keys === 'string' && HomebaseStorage.get) {
+      const val = await HomebaseStorage.get(keys);
+      return { [keys]: val };
+    }
+    if (Array.isArray(keys) && HomebaseStorage.getMany) {
+      return await HomebaseStorage.getMany(keys);
+    }
+  }
+  if (typeof browser !== 'undefined' && browser.storage?.local?.get) {
+    return await browser.storage.local.get(keys);
+  }
+  return {};
+}
+
+async function weatherStorageSet(items) {
+  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
+    return await HomebaseStorage.setMany(items);
+  }
+  if (typeof browser !== 'undefined' && browser.storage?.local?.set) {
+    return await browser.storage.local.set(items);
+  }
+}
+
+async function weatherStorageRemove(keys) {
+  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.remove) {
+    return await HomebaseStorage.remove(keys);
+  }
+  if (typeof browser !== 'undefined' && browser.storage?.local?.remove) {
+    return await browser.storage.local.remove(keys);
+  }
+}
+
 function setWeatherLoadingState(isLoading) {
   const loading = Boolean(isLoading);
 
@@ -279,7 +313,7 @@ async function loadCachedWeather() {
 
   try {
 
-    const data = await browser.storage.local.get(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
+    const data = await weatherStorageGet(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
 
     const cachedTs = getCachedWeatherTimestamp(data);
 
@@ -545,7 +579,7 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options 
   hideWeatherSetupUI();
 
   if (!options.skipCacheSave) {
-    browser.storage.local.set({
+    weatherStorageSet({
 
       cachedWeatherData: data,
 
@@ -555,7 +589,7 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options 
 
       weatherFetchedAt: display.fetchedAt
 
-    });
+    }).catch(() => {});
   }
 
 
@@ -604,7 +638,7 @@ async function showWeatherError(error, options = {}) {
   if (error && !quiet) console.error('Weather Error:', error);
 
   try {
-    const data = await browser.storage.local.get(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
+    const data = await weatherStorageGet(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
 
     if (hasUsableCachedWeather(data.cachedWeatherData) && data.cachedCityName) {
       const cachedTs = getCachedWeatherTimestamp(data) ?? Date.now();
@@ -706,12 +740,18 @@ function setWeatherPreference(show = true, options = {}) {
     // Ignore; instant mirror is best-effort only
   }
 
-  if (options.persist !== false && browser && browser.storage && browser.storage.local) {
-    browser.storage.local
-      .set({ [APP_SHOW_WEATHER_KEY]: shouldShow })
-      .catch((err) => {
+  if (options.persist !== false) {
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set(APP_SHOW_WEATHER_KEY, shouldShow).catch((err) => {
         console.warn('Failed to save weather visibility preference', err);
       });
+    } else if (browser && browser.storage && browser.storage.local) {
+      browser.storage.local
+        .set({ [APP_SHOW_WEATHER_KEY]: shouldShow })
+        .catch((err) => {
+          console.warn('Failed to save weather visibility preference', err);
+        });
+    }
   }
 
   if (options.applyVisibility !== false) {
@@ -743,7 +783,7 @@ function startGeolocation() {
 
           const lat = position.coords.latitude, lon = position.coords.longitude;
 
-          await browser.storage.local.set({
+          await weatherStorageSet({
 
             weatherLat: lat,
 
@@ -753,7 +793,7 @@ function startGeolocation() {
 
           });
 
-          const data = await browser.storage.local.get('weatherUnits');
+          const data = await weatherStorageGet('weatherUnits');
 
           await fetchWeather(lat, lon, data.weatherUnits || 'celsius', 'Current Location');
 
@@ -890,7 +930,7 @@ function closeWeatherSettingsModal() {
 
 async function openWeatherSettingsModal(triggerSource) {
   if (!weatherSettingsModal) return;
-  const data = await browser.storage.local.get(['weatherCityName', 'weatherUnits']);
+  const data = await weatherStorageGet(['weatherCityName', 'weatherUnits']);
   if (weatherTempUnitToggle) {
     weatherTempUnitToggle.checked = data.weatherUnits === 'fahrenheit';
   }
@@ -914,7 +954,7 @@ async function setupWeather() {
 
   if (setLocationBtn) {
     setLocationBtn.addEventListener('click', async () => {
-      await browser.storage.local.remove(['weatherLat', 'weatherLon', 'weatherCityName']);
+      await weatherStorageRemove(['weatherLat', 'weatherLon', 'weatherCityName']);
       startGeolocation();
     });
   }
@@ -928,7 +968,7 @@ async function setupWeather() {
 
   if (weatherUseCurrentBtn) {
     weatherUseCurrentBtn.addEventListener('click', async () => {
-      await browser.storage.local.remove(['weatherLat', 'weatherLon', 'weatherCityName']);
+      await weatherStorageRemove(['weatherLat', 'weatherLon', 'weatherCityName']);
       startGeolocation();
       closeWeatherSettingsModal();
     });
@@ -941,7 +981,7 @@ async function setupWeather() {
       setWeatherLoadingState(true);
 
       try {
-        const data = await browser.storage.local.get(['weatherLat', 'weatherLon', 'weatherUnits', 'weatherCityName']);
+        const data = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherUnits', 'weatherCityName']);
         const units = data.weatherUnits || 'celsius';
 
         if (data.weatherLat && data.weatherLon) {
@@ -983,7 +1023,7 @@ async function setupWeather() {
   if (weatherSettingsSaveBtn) {
     weatherSettingsSaveBtn.addEventListener('click', async () => {
       const newUnit = weatherTempUnitToggle?.checked ? 'fahrenheit' : 'celsius';
-      const existingLocation = await browser.storage.local.get(['weatherLat', 'weatherLon', 'weatherCityName']);
+      const existingLocation = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherCityName']);
       const settingsToSave = { weatherUnits: newUnit };
 
       if (selectedLocation) {
@@ -996,9 +1036,9 @@ async function setupWeather() {
         settingsToSave.weatherCityName = existingLocation.weatherCityName;
       }
 
-      await browser.storage.local.set(settingsToSave);
+      await weatherStorageSet(settingsToSave);
 
-      const data = await browser.storage.local.get(['weatherLat', 'weatherLon', 'weatherCityName', 'weatherUnits']);
+      const data = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherCityName', 'weatherUnits']);
       if (data.weatherLat) {
         fetchWeather(data.weatherLat, data.weatherLon, data.weatherUnits, data.weatherCityName);
       } else {
@@ -1011,7 +1051,7 @@ async function setupWeather() {
 
 
 
-  const data = await browser.storage.local.get([
+  const data = await weatherStorageGet([
     'weatherLat',
     'weatherLon',
     'weatherCityName',

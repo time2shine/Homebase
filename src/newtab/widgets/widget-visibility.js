@@ -25,7 +25,11 @@ function applySidebarVisibility(showSidebar = true) {
     // Ignore; instant mirror is best-effort only
   }
 
-  if (browser && browser.storage && browser.storage.local) {
+  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+    HomebaseStorage.set(APP_SHOW_SIDEBAR_KEY, appShowSidebarPreference).catch((err) => {
+      console.warn('Failed to save sidebar visibility preference', err);
+    });
+  } else if (browser && browser.storage && browser.storage.local) {
     browser.storage.local
       .set({ [APP_SHOW_SIDEBAR_KEY]: appShowSidebarPreference })
       .catch((err) => {
@@ -107,12 +111,18 @@ function setWidgetOrderPreference(order, options = {}) {
     applyWidgetOrderToSettings(normalized);
   }
 
-  if (shouldPersist && browser && browser.storage && browser.storage.local) {
-    browser.storage.local
-      .set({ [WIDGET_ORDER_KEY]: normalized })
-      .catch((err) => {
+  if (shouldPersist) {
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set(WIDGET_ORDER_KEY, normalized).catch((err) => {
         console.warn('Failed to save widget order', err);
       });
+    } else if (browser && browser.storage && browser.storage.local) {
+      browser.storage.local
+        .set({ [WIDGET_ORDER_KEY]: normalized })
+        .catch((err) => {
+          console.warn('Failed to save widget order', err);
+        });
+    }
   }
 
   return normalized;
@@ -143,7 +153,11 @@ function setupWidgetOrderSortable() {
       return;
     }
 
-    if (browser && browser.storage && browser.storage.local) {
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set(WIDGET_ORDER_KEY, order).catch((err) => {
+        console.warn('Failed to save widget order', err);
+      });
+    } else if (browser && browser.storage && browser.storage.local) {
       browser.storage.local
         .set({ [WIDGET_ORDER_KEY]: order })
         .catch((err) => {

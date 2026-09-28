@@ -172,17 +172,38 @@ window.HomebaseGallery = (() => {
 
   function storageLocalGet(keys) {
     const fn = getContextCallback('storageLocalGet');
-    return fn ? fn(keys) : browser.storage.local.get(keys);
+    if (fn) return fn(keys);
+    if (typeof HomebaseStorage !== 'undefined' && typeof HomebaseStorage.getMany === 'function') {
+      return HomebaseStorage.getMany(keys);
+    }
+    if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      return browser.storage.local.get(keys);
+    }
+    return Promise.resolve({});
   }
 
   function storageLocalSet(items) {
     const fn = getContextCallback('storageLocalSet');
-    return fn ? fn(items) : browser.storage.local.set(items);
+    if (fn) return fn(items);
+    if (typeof HomebaseStorage !== 'undefined' && typeof HomebaseStorage.setMany === 'function') {
+      return HomebaseStorage.setMany(items);
+    }
+    if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      return browser.storage.local.set(items);
+    }
+    return Promise.resolve();
   }
 
   function storageLocalRemove(keys) {
     const fn = getContextCallback('storageLocalRemove');
-    return fn ? fn(keys) : browser.storage.local.remove(keys);
+    if (fn) return fn(keys);
+    if (typeof HomebaseStorage !== 'undefined' && typeof HomebaseStorage.remove === 'function') {
+      return HomebaseStorage.remove(keys);
+    }
+    if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      return browser.storage.local.remove(keys);
+    }
+    return Promise.resolve();
   }
 
   function normalizeWallpaperCacheKey(cacheKey) {
@@ -2956,6 +2977,9 @@ window.HomebaseGallery = (() => {
   return {
     open,
     close,
-    refresh
+    refresh,
+    storageLocalGet,
+    storageLocalSet,
+    storageLocalRemove
   };
 })();

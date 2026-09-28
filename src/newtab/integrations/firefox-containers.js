@@ -69,7 +69,11 @@ async function setupContainerMode() {
       if (subSettings) setSubSettingsExpanded(subSettings, isEnabled, { scrollIntoView: true });
       if (behaviorRow) behaviorRow.style.display = isEnabled ? 'flex' : 'none';
 
-      await browser.storage.local.set({ [APP_CONTAINER_MODE_KEY]: isEnabled });
+      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+        await HomebaseStorage.set(APP_CONTAINER_MODE_KEY, isEnabled);
+      } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+        await browser.storage.local.set({ [APP_CONTAINER_MODE_KEY]: isEnabled });
+      }
 
     });
 
@@ -97,7 +101,11 @@ async function setupContainerMode() {
 
         appContainerNewTabPreference = (e.target.value === 'keep');
 
-        await browser.storage.local.set({ [APP_CONTAINER_NEW_TAB_KEY]: appContainerNewTabPreference });
+        if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+          await HomebaseStorage.set(APP_CONTAINER_NEW_TAB_KEY, appContainerNewTabPreference);
+        } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+          await browser.storage.local.set({ [APP_CONTAINER_NEW_TAB_KEY]: appContainerNewTabPreference });
+        }
 
       }
 

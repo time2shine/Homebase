@@ -411,6 +411,20 @@
 
       if (resolvedBytes !== null) {
         bytesUsed = resolvedBytes;
+      } else if (!customBrowserApi && typeof HomebaseStorage !== 'undefined' && typeof HomebaseStorage.snapshot === 'function') {
+        try {
+          const allItems = (await HomebaseStorage.snapshot()) || {};
+          let totalBytes = 0;
+          for (const [k, v] of Object.entries(allItems)) {
+            try {
+              const json = JSON.stringify(v);
+              totalBytes += (k.length + (json ? json.length : 0)) * 2;
+            } catch (_) {}
+          }
+          bytesUsed = totalBytes;
+        } catch (_) {
+          bytesUsed = 0;
+        }
       } else if (typeof browserInstance.storage.local.get === 'function') {
         try {
           const allItems = (await browserInstance.storage.local.get(null)) || {};
@@ -494,7 +508,12 @@
     const browserInstance = customBrowserApi || (typeof window !== 'undefined' ? (window.browser || window.chrome) : null);
     const validator = customValidator || (typeof window !== 'undefined' ? window.HomebaseValidator : null);
 
-    if (!browserInstance?.storage?.local || !validator?.sanitizeStorageBatch) {
+    const hasStorage = Boolean(
+      (!customBrowserApi && typeof HomebaseStorage !== 'undefined' && typeof HomebaseStorage.snapshot === 'function') ||
+      browserInstance?.storage?.local
+    );
+
+    if (!hasStorage || !validator?.sanitizeStorageBatch) {
       if (button) {
         button.textContent = 'Repair Unavailable';
         setTimeout(() => {
@@ -507,7 +526,12 @@
 
     try {
       // 1. Read existing storage snapshot
-      const snapshot = (await browserInstance.storage.local.get(null)) || {};
+      let snapshot = {};
+      if (!customBrowserApi && typeof HomebaseStorage !== 'undefined' && typeof HomebaseStorage.snapshot === 'function') {
+        snapshot = (await HomebaseStorage.snapshot()) || {};
+      } else if (browserInstance?.storage?.local) {
+        snapshot = (await browserInstance.storage.local.get(null)) || {};
+      }
 
       // 2. Sanitize in memory (fallbackToDefault: false ensures unrecoverable/unknown keys are preserved)
       const sanitized = validator.sanitizeStorageBatch(snapshot, { fallbackToDefault: false });
@@ -529,9 +553,13 @@
 
       const changedCount = Object.keys(patch).length;
 
-      // 5. Write ONLY changed keys using browser.storage.local.set()
+      // 5. Write ONLY changed keys using HomebaseStorage.setMany or fallback browser.storage.local.set()
       if (changedCount > 0) {
-        await browserInstance.storage.local.set(patch);
+        if (!customBrowserApi && typeof HomebaseStorage !== 'undefined' && typeof HomebaseStorage.setMany === 'function') {
+          await HomebaseStorage.setMany(patch);
+        } else if (browserInstance?.storage?.local) {
+          await browserInstance.storage.local.set(patch);
+        }
       }
 
       clearAuditCache();

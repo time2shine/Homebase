@@ -138,7 +138,8 @@ const movedDeclarationNames = [
   "setupNewsWidget",
   "setNewsPreference",
   "updateDynamicAccent",
-  "SettingsUI"
+  "SettingsUI",
+  "wallpaperObjectUrlCache"
 ];
 
 const results = [];

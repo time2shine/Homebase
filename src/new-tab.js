@@ -7252,838 +7252,117 @@ let isBookmarkGridPointerOver = false;
 let bookmarkGridPointerListenersAttached = false;
 
 function buildSearchEngineIconContent(targetEl, engine) {
-  if (!targetEl || !engine) return;
-  targetEl.replaceChildren();
-
-  const tooltip = document.createElement('span');
-  tooltip.className = 'tooltip-popup tooltip-top';
-  tooltip.textContent = engine.name || '';
-  targetEl.appendChild(tooltip);
-
-  const svgEl = engine.symbolId ? createSvgIconElement(engine.symbolId) : null;
-  if (svgEl) {
-    targetEl.appendChild(svgEl);
-    return;
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.buildSearchEngineIconContent === 'function') {
+    return window.HomebaseSearchUiController.buildSearchEngineIconContent(targetEl, engine);
   }
-
-  const fallback = document.createElement('span');
-  fallback.style.fontWeight = 'bold';
-  fallback.style.fontSize = '12px';
-  fallback.style.color = '#555';
-  fallback.textContent = (engine.name || '').charAt(0);
-  targetEl.appendChild(fallback);
 }
 
 function ensureEngineIconExists(engine) {
-
-  const container = document.getElementById('search-engine-selector');
-
-  if (!container) return;
-
-  const list = container.querySelector('.search-engine-list');
-
-  if (!list) return;
-
-
-
-  let btn = list.querySelector(`.engine-icon-btn[data-engine-id="${engine.id}"]`);
-
-  if (btn) return;
-
-
-
-  btn = document.createElement('div');
-
-  btn.className = 'engine-icon-btn';
-
-  btn.dataset.engineId = engine.id;
-
-  btn.style.setProperty('--engine-color', engine.color || '#333');
-
-
-
-  buildSearchEngineIconContent(btn, engine);
-
-
-
-  btn.addEventListener('click', (e) => {
-
-    e.stopPropagation();
-
-    updateSearchUI(engine.id);
-
-    const selector = document.getElementById('search-engine-selector');
-
-    if (selector) {
-
-      selector.classList.remove('expanded');
-
-      selector.classList.add('suppress-hover');
-
-    }
-
-    if (appSearchRememberEnginePreference) {
-      setCurrentSearchEngine(engine);
-    }
-
-    if (searchInput) searchInput.focus();
-
-  });
-
-
-
-  list.appendChild(btn);
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.ensureEngineIconExists === 'function') {
+    return window.HomebaseSearchUiController.ensureEngineIconExists(engine);
+  }
 }
-
-
 
 function updateSearchSelectorPosition() {
-
-  const container = document.getElementById('search-engine-selector');
-
-  const list = container ? container.querySelector('.search-engine-list') : null;
-
-  if (!container || !list) return;
-
-
-
-  const allButtons = Array.from(list.querySelectorAll('.engine-icon-btn'));
-
-  if (allButtons.length === 0) return;
-
-
-
-  const currentIndex = allButtons.findIndex(btn => btn.dataset.engineId === currentSearchEngine.id);
-
-  if (currentIndex === -1) return;
-
-
-
-  // Constants matching CSS
-
-  const iconSize = 36;
-
-  const gap = 6;
-
-  const itemFullWidth = iconSize + gap;
-
-  const visibleCount = 1; // CHANGED: Show only 1 item
-
-
-
-  // --- Logic: Show the selected item in the 1-item window ---
-
-  // Offset = currentIndex * itemFullWidth
-
-  // We clamp this so we don't scroll past the start (0) or end.
-
-  
-
-  const maxOffset = Math.max(0, (allButtons.length - visibleCount) * itemFullWidth);
-
-  let offset = currentIndex * itemFullWidth;
-
-
-
-  // Clamp
-
-  offset = Math.max(0, Math.min(offset, maxOffset));
-
-
-
-  // Apply transform
-
-  list.style.transform = `translateX(-${offset}px)`;
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.updateSearchSelectorPosition === 'function') {
+    return window.HomebaseSearchUiController.updateSearchSelectorPosition();
+  }
 }
-
-
 
 function renderSearchEngineSelector(options = {}) {
-
-  const container = document.getElementById('search-engine-selector');
-
-  if (!container) return;
-
-  const suppressHydrationAnimation = options.animate === false || container.classList.contains('is-instant-fixed');
-
-  if (suppressHydrationAnimation) {
-
-    container.style.transition = 'none';
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.renderSearchEngineSelector === 'function') {
+    return window.HomebaseSearchUiController.renderSearchEngineSelector(options);
   }
-
-  
-
-  container.replaceChildren();
-
-  
-
-  // 1. Create Inner List
-
-  const list = document.createElement('div');
-
-  list.className = 'search-engine-list';
-
-  if (suppressHydrationAnimation) {
-
-    list.style.transition = 'none';
-
-  }
-
-  
-
-  const activeEngines = searchEngines.filter(e => e.enabled);
-
-  
-
-  // 2. Calculate Dimensions
-
-  const iconSize = 36;
-
-  const gap = 6;
-
-  const visibleCount = Math.min(activeEngines.length, 1); // CHANGED to 1
-
-  
-
-  // Width = (N * 36) + ((N-1) * 6)
-
-  const collapsedWidth = (visibleCount * iconSize) + (Math.max(0, visibleCount - 1) * gap);
-
-  const expandedWidth = (activeEngines.length * iconSize) + (Math.max(0, activeEngines.length - 1) * gap);
-
-  
-
-  // Apply widths to container
-
-  container.style.setProperty('--collapsed-width', `${collapsedWidth}px`);
-
-  container.style.setProperty('--expanded-width', `${expandedWidth}px`);
-
-  container.style.removeProperty('width'); // Ensure inline width doesn't block CSS
-
-
-
-  // 3. Render Buttons
-
-  activeEngines.forEach(engine => {
-
-    const btn = document.createElement('div');
-
-    // Removed 'cooltipz--bottom', added tooltip span inside
-
-    btn.className = 'engine-icon-btn';
-
-    btn.dataset.engineId = engine.id;
-
-    // Set color variable for CSS to use
-
-    btn.style.setProperty('--engine-color', engine.color || '#333');
-
-    
-
-    if (currentSearchEngine && currentSearchEngine.id === engine.id) {
-
-      btn.classList.add('active');
-
-    }
-
-    
-
-    // Insert Tooltip + Icon
-    buildSearchEngineIconContent(btn, engine);
-
-    if (suppressHydrationAnimation) {
-
-      btn.querySelectorAll('svg, img').forEach(icon => {
-
-        icon.style.animation = 'none';
-
-      });
-
-    }
-
-    
-
-    btn.addEventListener('click', (e) => {
-
-      e.stopPropagation();
-
-      updateSearchUI(engine.id);
-
-      // Immediately collapse/hide list on selection
-
-      const selector = document.getElementById('search-engine-selector');
-
-      if (selector) {
-
-        selector.classList.remove('expanded');
-
-        selector.classList.add('suppress-hover');
-
-      }
-
-      if (appSearchRememberEnginePreference) {
-        setCurrentSearchEngine(engine);
-      }
-
-      if (searchInput) searchInput.focus();
-
-    });
-
-    
-
-    list.appendChild(btn);
-
-  });
-
-  
-
-  container.appendChild(list);
-
-  container.classList.remove('is-instant-fixed');
-
-  // Allow hovering again once the mouse leaves
-
-  if (container.dataset.mouseleaveBound !== '1') {
-
-    container.addEventListener('mouseleave', () => {
-
-      container.classList.remove('suppress-hover');
-
-    });
-
-    container.dataset.mouseleaveBound = '1';
-
-  }
-
-  
-
-  // Set initial position
-
-  updateSearchSelectorPosition();
-
-  if (suppressHydrationAnimation) {
-
-    void container.offsetWidth;
-
-    container.style.transition = '';
-
-    list.style.transition = '';
-
-  }
-
 }
 
-
-
 function populateSearchOptions(options = {}) {
-
-  if (!searchSelect) return;
-
-  searchSelect.innerHTML = '';
-
-
-
-  const activeEngines = searchEngines.filter((engine) => engine.enabled);
-
-
-
-  if (activeEngines.length === 0) {
-
-    const option = document.createElement('option');
-
-    option.textContent = 'Google';
-
-    option.value = 'google';
-
-    searchSelect.appendChild(option);
-
-  } else {
-
-    activeEngines.forEach((engine) => {
-
-      const option = document.createElement('option');
-
-      option.value = engine.id;
-
-      option.textContent = engine.name;
-
-      searchSelect.appendChild(option);
-
-    });
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.populateSearchOptions === 'function') {
+    return window.HomebaseSearchUiController.populateSearchOptions(options);
   }
-
-  
-
-  renderSearchEngineSelector(options); 
-
 }
 
 function updateSearchUI(engineId, options = {}) {
-
-  let engine = searchEngines.find((e) => e.id === engineId);
-
-  if (!engine) {
-
-    engine = searchEngines.find((e) => e.enabled) || searchEngines[0];
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.updateSearchUI === 'function') {
+    return window.HomebaseSearchUiController.updateSearchUI(engineId, options);
   }
-
-
-
-  currentSearchEngine = engine;
-
-  if (options.updateActive !== false) {
-
-    activeSearchEngineId = currentSearchEngine.id;
-
-  }
-
-  ensureEngineIconExists(currentSearchEngine);
-
-  searchInput.placeholder = `Search with ${currentSearchEngine.name}`;
-
-  if (searchSelect) {
-
-    const previousValue = searchSelect.value;
-
-    searchSelect.value = currentSearchEngine.id;
-
-    if (previousValue !== currentSearchEngine.id && options.animate !== false) {
-
-      searchSelect.classList.remove('engine-switch-anim');
-
-      void searchSelect.offsetWidth;
-
-      searchSelect.classList.add('engine-switch-anim');
-
-    }
-
-  }
-
-
-
-  // Update Visual Selector Active State
-
-  const container = document.getElementById('search-engine-selector');
-
-  if (container) {
-
-    const buttons = container.querySelectorAll('.engine-icon-btn');
-
-    const list = container.querySelector('.search-engine-list');
-
-    const suppressSelectorAnimation = options.animate === false && list;
-
-    if (suppressSelectorAnimation) {
-
-      list.style.transition = 'none';
-
-    }
-
-    buttons.forEach(btn => {
-
-      if (btn.dataset.engineId === currentSearchEngine.id) {
-
-        btn.classList.add('active');
-
-      } else {
-
-        btn.classList.remove('active');
-
-      }
-
-    });
-
-
-
-    // Scroll the list to center the selection
-
-    updateSearchSelectorPosition();
-
-    if (suppressSelectorAnimation) {
-
-      void list.offsetWidth;
-
-      list.style.transition = '';
-
-    }
-
-  }
-
-
-
-  preconnectToSearchEngine(currentSearchEngine.url);
-
-
-
-  const isDefault = currentSearchEngine.id === (appSearchDefaultEnginePreference || 'google');
-
-  const searchContainer = document.querySelector('.search-container');
-
-  if (searchContainer) {
-
-    searchContainer.classList.toggle('non-default-engine', !isDefault);
-
-  }
-
-  if (options.updateFastCache === true) {
-
-    writeFastSearchCache(currentSearchEngine);
-
-  }
-
 }
-
-
 
 function preconnectToSearchEngine(url) {
-
-  let origin;
-
-  try {
-
-    origin = new URL(url).origin;
-
-  } catch (e) {
-
-    return;
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.preconnectToSearchEngine === 'function') {
+    return window.HomebaseSearchUiController.preconnectToSearchEngine(url);
   }
-
-
-
-  let link = document.head.querySelector(`link[rel="preconnect"][href="${origin}"]`);
-
-  if (link) return;
-
-
-
-  link = document.createElement('link');
-
-  link.rel = 'preconnect';
-
-  link.href = origin;
-
-  link.crossOrigin = 'anonymous';
-
-  document.head.appendChild(link);
-
 }
 
-
-
-function clearSearchUI({ clearInput = true, abortSuggestions = false, bumpToken = false } = {}) {
-
-  if (abortSuggestions && suggestionAbortController) {
-
-    abortSuggestionFetch();
-
+function clearSearchUI(options = {}) {
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.clearSearchUI === 'function') {
+    return window.HomebaseSearchUiController.clearSearchUI(options);
   }
-
-
-
-  if (bumpToken) {
-
-    latestSearchToken++;
-
-  }
-
-
-
-  if (clearInput) {
-
-    searchInput.value = '';
-
-  }
-
-  if (activeSearchEngineId && currentSearchEngine.id !== activeSearchEngineId) {
-
-    updateSearchUI(activeSearchEngineId);
-
-  }
-
-
-
-  clearAllSelections();
-
-  currentSectionIndex = 0;
-
-  lastSelectedText = '';
-
-  selectionExplicit = false;
-
-  searchAreaWrapper.classList.remove('search-focused');
-
-  document.body.classList.remove('search-focus-active');
-
-  bookmarkResultsContainer.innerHTML = '';
-
-  suggestionResultsContainer.innerHTML = '';
-
-  lastBookmarkHtml = '';
-
-  lastSuggestionHtml = '';
-
-  updatePanelVisibility();
-
 }
-
-
 
 function hideSearchResultsPanel() {
-
-  searchResultsPanel.classList.add('hidden');
-
-  searchWidget.classList.remove('results-open');
-
-  searchAreaWrapper.classList.remove('search-focused');
-
-  document.body.classList.remove('search-focus-active');
-
-  clearAllSelections();
-
-  currentSectionIndex = 0;
-
-  lastSelectedText = '';
-
-  selectionExplicit = false;
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.hideSearchResultsPanel === 'function') {
+    return window.HomebaseSearchUiController.hideSearchResultsPanel();
+  }
 }
-
-
 
 function cycleSearchEngine(direction) {
-
-  const activeEngines = searchEngines.filter((eng) => eng.enabled);
-
-  if (activeEngines.length < 2) return;
-
-
-
-  // 1. Find index of currently selected engine
-
-  let currentIndex = activeEngines.findIndex((eng) => eng.id === currentSearchEngine.id);
-
-  if (currentIndex === -1) currentIndex = 0;
-
-
-
-  // 2. Calculate next index (handles wrapping around)
-
-  const delta = direction === 'down' ? 1 : -1;
-
-  const nextIndex = (currentIndex + delta + activeEngines.length) % activeEngines.length;
-
-  const nextEngine = activeEngines[nextIndex];
-
-
-
-  // 3. Update UI
-
-  updateSearchUI(nextEngine.id);
-
-  handleSearchChange(); // Persist change if "Remember Engine" is on
-
-
-
-  // 4. Focus input if we aren't already there (optional quality of life)
-
-  if (document.activeElement !== searchInput) {
-
-    searchInput.focus();
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.cycleSearchEngine === 'function') {
+    return window.HomebaseSearchUiController.cycleSearchEngine(direction);
   }
-
-
-
-  // 5. Trigger the visual "Slide Out" animation
-
-  const selector = document.getElementById('search-engine-selector');
-
-  if (selector) {
-
-    selector.classList.remove('suppress-hover');
-
-    selector.classList.add('expanded');
-
-
-
-    if (selector.dataset.collapseTimeout) {
-
-      clearTimeout(parseInt(selector.dataset.collapseTimeout));
-
-    }
-
-
-
-    const timeoutId = setTimeout(() => {
-
-      selector.classList.remove('expanded');
-
-      selector.classList.add('suppress-hover');
-
-    }, 1500);
-
-
-
-    selector.dataset.collapseTimeout = timeoutId;
-
-  }
-
 }
 
-
-
 async function setupSearch() {
-
-  await loadSearchEnginePreferences();
-
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.initialize === 'function') {
+    await window.HomebaseSearchUiController.initialize();
+  }
 
   const debouncedSearch = debounce(handleSearchInput, 120);
   window.addEventListener('beforeunload', () => {
     debouncedSearch.cancel?.();
   });
 
-  searchForm.addEventListener('submit', handleSearch);
+  if (searchForm) searchForm.addEventListener('submit', handleSearch);
 
-  searchSelect.addEventListener('change', handleSearchChange);
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      userIsTyping = true;
+      selectionExplicit = false;
 
-  searchSelect.addEventListener('wheel', (e) => {
+      const selector = document.getElementById('search-engine-selector');
+      if (selector) {
+        selector.classList.remove('expanded');
+        selector.classList.add('suppress-hover');
+      }
 
-    e.preventDefault();
+      debouncedSearch(e);
+    });
 
-    // Determine direction and let the helper handle the rest
-
-    const direction = e.deltaY > 0 ? 'down' : 'up';
-
-    cycleSearchEngine(direction);
-
-  });
-
-
-
-  searchInput.addEventListener('input', e => {
-
-    userIsTyping = true;
-    selectionExplicit = false;
-
-    // Hide full list if user types
-
-    const selector = document.getElementById('search-engine-selector');
-
-    if (selector) {
-
-      selector.classList.remove('expanded');
-
-      selector.classList.add('suppress-hover');
-
-    }
-
-    debouncedSearch(e);
-
-  });
+    searchInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+  }
 
   document.addEventListener('keydown', handleSearchKeydown);
-
   setupBookmarkGridPointerTracking();
 
-
-
-  searchInput.addEventListener('click', e => {
-
-    e.stopPropagation();
-
-  });
-
-  
-
-  searchResultsPanel.addEventListener('mousedown', handleSearchResultMouseDown, true);
-  searchResultsPanel.addEventListener('click', handleSearchResultClick, true);
-
-  searchResultsPanel.addEventListener('click', e => e.stopPropagation());
-
-
+  if (searchResultsPanel) {
+    searchResultsPanel.addEventListener('mousedown', handleSearchResultMouseDown, true);
+    searchResultsPanel.addEventListener('click', handleSearchResultClick, true);
+    searchResultsPanel.addEventListener('click', (e) => e.stopPropagation());
+  }
 
   document.addEventListener('keydown', (e) => {
-
-    // Ignore if user is already typing in a field
-
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-
-
-
-    // --- 1. Global Alt + Arrow Up/Down for Search Engine Switching ---
-
-    if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-
-      e.preventDefault();
-
-      cycleSearchEngine(e.key === 'ArrowDown' ? 'down' : 'up');
-
-      return;
-
-    }
-
-
-
-    // --- 2. Existing "Start Typing" Logic ---
-
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-
     if (e.key.length > 1) return;
-
-    
-
-    searchInput.focus();
-
+    if (searchInput) searchInput.focus();
   });
-
-
-
-  window.addEventListener('mousedown', (e) => {
-
-    const target = e.target;
-
-    if (searchWidget.contains(target) || searchResultsPanel.contains(target) || searchInput.contains(target)) {
-
-      return;
-
-    }
-
-    hideSearchResultsPanel();
-
-  });
-
-
-
-  revealWidget('.widget-search');
-
 }
 
-
-
 async function handleSearchChange() {
-
-  const newId = searchSelect ? searchSelect.value : currentSearchEngine.id;
-
-  updateSearchUI(newId);
-
-  if (appSearchRememberEnginePreference) {
-    setCurrentSearchEngine(currentSearchEngine);
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.handleSearchChange === 'function') {
+    return window.HomebaseSearchUiController.handleSearchChange();
   }
-
-  if (searchInput.value.trim().length > 0) {
-
-    handleSearchInput();
-
-  }
-
 }
 
 
@@ -9466,173 +8745,23 @@ function setSearchSuggestionsPreference(enabled) {
 
 
 function applySearchEngineConfig(savedConfig) {
-
-  if (Array.isArray(savedConfig)) {
-
-    const reordered = [];
-
-    const processedIds = new Set();
-
-    savedConfig.forEach((cfg) => {
-
-      if (!cfg || typeof cfg !== 'object') return;
-
-      const id = cfg.id;
-
-      if (!id || processedIds.has(id)) return;
-
-      const match = searchEngines.find((engine) => engine.id === id);
-
-      if (!match) return;
-
-      match.enabled = cfg.enabled !== false;
-
-      reordered.push(match);
-
-      processedIds.add(id);
-
-    });
-
-    searchEngines.forEach((engine) => {
-
-      if (!processedIds.has(engine.id)) {
-
-        reordered.push(engine);
-
-        processedIds.add(engine.id);
-
-      }
-
-    });
-
-    searchEngines = reordered;
-
-    return true;
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.applySearchEngineConfig === 'function') {
+    return window.HomebaseSearchUiController.applySearchEngineConfig(savedConfig);
   }
-
-  if (savedConfig && typeof savedConfig === 'object') {
-
-    let applied = false;
-
-    searchEngines.forEach((engine) => {
-
-      if (Object.prototype.hasOwnProperty.call(savedConfig, engine.id)) {
-
-        engine.enabled = savedConfig[engine.id] !== false;
-
-        applied = true;
-
-      }
-
-    });
-
-    return applied;
-
-  }
-
   return false;
-
 }
-
-
 
 function getSafeEnabledSearchEngineId(preferredId) {
-
-  const preferred = preferredId
-
-    ? searchEngines.find((engine) => engine.id === preferredId && engine.enabled)
-
-    : null;
-
-  if (preferred) return preferred.id;
-
-  const defaultId = appSearchDefaultEnginePreference || 'google';
-
-  const defaultEngine = searchEngines.find((engine) => engine.id === defaultId && engine.enabled);
-
-  if (defaultEngine) return defaultEngine.id;
-
-  const firstEnabled = searchEngines.find((engine) => engine.enabled);
-
-  if (firstEnabled) return firstEnabled.id;
-
-  const googleEngine = searchEngines.find((engine) => engine.id === 'google');
-
-  return googleEngine ? googleEngine.id : (searchEngines[0]?.id || 'google');
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.getSafeEnabledSearchEngineId === 'function') {
+    return window.HomebaseSearchUiController.getSafeEnabledSearchEngineId(preferredId);
+  }
+  return preferredId || 'google';
 }
 
-
-
 async function loadSearchEnginePreferences() {
-  const stored = await getSearchPreferences();
-  const savedConfig = stored[SEARCH_ENGINES_PREF_KEY];
-
-
-
-  applySearchEngineConfig(savedConfig);
-
-
-
-  if (Object.prototype.hasOwnProperty.call(stored, APP_SEARCH_REMEMBER_ENGINE_KEY)) {
-
-    appSearchRememberEnginePreference = stored[APP_SEARCH_REMEMBER_ENGINE_KEY] !== false;
-
+  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.loadSearchEnginePreferences === 'function') {
+    return window.HomebaseSearchUiController.loadSearchEnginePreferences();
   }
-
-  if (stored[APP_SEARCH_DEFAULT_ENGINE_KEY]) {
-
-    appSearchDefaultEnginePreference = stored[APP_SEARCH_DEFAULT_ENGINE_KEY];
-
-  }
-
-
-
-  const remember = stored[APP_SEARCH_REMEMBER_ENGINE_KEY] !== false;
-
-  let targetEngineId = null;
-
-
-
-  if (remember) {
-
-    targetEngineId = stored.currentSearchEngineId;
-
-  } else {
-
-    targetEngineId = stored[APP_SEARCH_DEFAULT_ENGINE_KEY] || appSearchDefaultEnginePreference || 'google';
-
-  }
-
-
-
-  targetEngineId = getSafeEnabledSearchEngineId(targetEngineId);
-
-
-
-  const resolvedEngine = searchEngines.find((e) => e.id === targetEngineId) || currentSearchEngine;
-
-  if (resolvedEngine) {
-
-    currentSearchEngine = resolvedEngine;
-
-    activeSearchEngineId = resolvedEngine.id;
-
-  }
-
-  populateSearchOptions({ animate: false });
-
-  updateSearchUI(targetEngineId, {
-
-    updateActive: true,
-
-    updateFastCache: true,
-
-    animate: false
-
-  });
-
 }
 
 

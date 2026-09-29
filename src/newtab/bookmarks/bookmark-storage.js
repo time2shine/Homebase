@@ -259,7 +259,7 @@ async function getLastUsedFolderId() {
  * @param {string|null} id - Folder ID
  * @returns {Promise<void>}
  */
-async function setLastUsedFolderId(id) {
+async function setLastUsedFolderIdStorage(id) {
   const safeId = typeof id === 'string' && id ? id : null;
   try {
     if (typeof window !== 'undefined' && window.HomebaseStorage && typeof window.HomebaseStorage.set === 'function') {
@@ -295,8 +295,8 @@ if (typeof window !== 'undefined') {
   window.setFolderMetadata = setFolderMetadata;
 
   window.getLastUsedFolderId = getLastUsedFolderId;
-  window.setBookmarkLastUsedFolderId = setLastUsedFolderId;
-  window.setLastUsedFolderIdStorage = setLastUsedFolderId;
+  window.setBookmarkLastUsedFolderId = setLastUsedFolderIdStorage;
+  window.setLastUsedFolderIdStorage = setLastUsedFolderIdStorage;
 
   window.HomebaseBookmarkStorage = {
     HOMEBASE_BOOKMARK_ROOT_ID_KEY,
@@ -314,6 +314,6 @@ if (typeof window !== 'undefined') {
     getFolderMetadata,
     setFolderMetadata,
     getLastUsedFolderId,
-    setLastUsedFolderId
+    setLastUsedFolderId: setLastUsedFolderIdStorage
   };
 }

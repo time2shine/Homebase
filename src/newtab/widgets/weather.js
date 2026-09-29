@@ -621,18 +621,6 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options 
 
 
 
-function setText(el, value) {
-  if (!el) return;
-  const v = String(value ?? '');
-  if (el.textContent !== v) el.textContent = v;
-}
-
-function setAttr(el, name, value) {
-  if (!el) return;
-  const v = String(value ?? '');
-  if (el.getAttribute(name) !== v) el.setAttribute(name, v);
-}
-
 async function showWeatherError(error, options = {}) {
   const { quiet = false, cacheReason = '' } = options;
   if (error && !quiet) console.error('Weather Error:', error);

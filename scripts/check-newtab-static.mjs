@@ -50,110 +50,24 @@ const movedPathChecks = [
     newPath: "newtab/settings/settings-ui.js"
   }
 ];
-
-const movedDeclarationNames = [
-  "debounce",
-  "shuffleArray",
-  "mapLimit",
-  "blobToDataUrl",
-  "runAfterNextPaint",
-  "escapeHtml",
-  "throttle",
-  "recordRawPerfTiming",
-  "recordIdleTaskPerf",
-  "recordWidgetPerfTiming",
-  "recordSortablePerfTiming",
-  "recordBookmarkPerfTiming",
-  "recordStartupPerfEvent",
-  "recordStartupPerfEventOnce",
-  "hbPerfMark",
-  "hbPerfMeasure",
-  "hbPerfTime",
-  "hbPerfReport",
-  "openModalWithAnimation",
-  "closeModalWithAnimation",
-  "showCustomAlert",
-  "showCustomDialog",
-  "initUnifiedSortable",
-  "handleSingletonMode",
-  "manageHomebaseTabs",
-  "initAddonStoreDockLink",
-  "setupLazySettingsButton",
-  "setupDockNavigation",
-  "ensureSubSettingsInner",
-  "setSubSettingsExpanded",
-  "updateWidgetSettingsUI",
-  "applyBookmarkTextBg",
-  "applyBookmarkTextBgOpacity",
-  "applyBookmarkTextBgBlur",
-  "applyBookmarkTextBgColor",
-  "applyBookmarkFallbackColor",
-  "applyBookmarkFolderColor",
-  "captureGridItemPositions",
-  "animateGridReorder",
-  "setupQuickActions",
-  "updateBookmarkTabOverflow",
-  "scrollActiveFolderTabIntoView",
-  "initTabsScrollController",
-  "openFolderPicker",
-  "setupFolderPickerModal",
-  "applySidebarVisibility",
-  "normalizeWidgetOrder",
-  "applyWidgetOrderToSidebar",
-  "applyWidgetOrderToSettings",
-  "setWidgetOrderPreference",
-  "setupWidgetOrderSortable",
-  "applyWidgetVisibility",
-  "evaluateMath",
-  "evaluateUnits",
-  "isLikelyUrl",
-  "setSuggestionCacheEntry",
-  "getSuggestionCacheEntry",
-  "setupSearchEnginesModal",
-  "loadAppSettingsFromStorage",
-  "syncAppSettingsForm",
-  "applyBackgroundDim",
-  "applyGlassStyle",
-  "loadGlassStylePref",
-  "applyGridAnimation",
-  "loadGridAnimationPref",
-  "applyGridAnimationEnabled",
-  "applyGridAnimationSpeed",
-  "updateGridAnimationSettingsUI",
-  "setupAnimationSettings",
-  "setupGlassSettings",
-  "exportHomebaseState",
-  "importHomebaseState",
-  "HomebaseBackup",
-  "setupCinemaModeListeners",
-  "setupAppLauncher",
-  "setupContainerMode",
-  "updateTime",
-  "setupTodoWidget",
-  "setTodoPreference",
-  "setupQuoteWidget",
-  "setQuotePreference",
-  "setupWeather",
-  "setWeatherPreference",
-  "setupNewsWidget",
-  "setNewsPreference",
-  "updateDynamicAccent",
-  "SettingsUI",
-  "wallpaperObjectUrlCache"
-];
+// movedDeclarationNames replaced by dynamic cross-script top-level declaration collision scanner
 
 const results = [];
 
-try {
-  await runChecks();
-} catch (error) {
-  record(false, "unexpected static check error", error.stack || error.message);
-}
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-printReport();
+if (isMain) {
+  try {
+    await runChecks();
+  } catch (error) {
+    record(false, "unexpected static check error", error.stack || error.message);
+  }
 
-if (results.some((result) => !result.ok)) {
-  process.exitCode = 1;
+  printReport();
+
+  if (results.some((result) => !result.ok)) {
+    process.exitCode = 1;
+  }
 }
 
 async function runChecks() {
@@ -167,7 +81,7 @@ async function runChecks() {
   await verifyKeyExtractedModules();
   await verifyNoOldFlatNewtabReferences();
   await verifyMovedPathReferences();
-  await verifyMovedDeclarationsNotDuplicated();
+  await verifyCrossScriptDeclarationCollisions(deferredLocalScripts);
 }
 
 async function verifyDeferredScriptsExist(deferredLocalScripts) {
@@ -293,36 +207,159 @@ async function verifyMovedPathReferences() {
   );
 }
 
-async function verifyMovedDeclarationsNotDuplicated() {
-  const mainText = await fs.readFile(newTabRuntimePath, "utf8");
-  const moduleFiles = await collectFiles(newtabModulesDir, [".js"]);
-  const moduleEntries = [];
-  const duplicates = [];
-
-  for (const modulePath of moduleFiles) {
-    moduleEntries.push({
-      path: modulePath,
-      text: await fs.readFile(modulePath, "utf8")
-    });
+async function verifyCrossScriptDeclarationCollisions(deferredLocalScripts) {
+  const entries = [];
+  for (const tag of deferredLocalScripts) {
+    const scriptPath = path.join(srcDir, normalizeWebPath(tag.src));
+    if (!await fileExists(scriptPath)) continue;
+    const text = await fs.readFile(scriptPath, "utf8");
+    entries.push({ src: tag.src, text });
   }
 
-  for (const declarationName of movedDeclarationNames) {
-    if (!hasDeclaration(mainText, declarationName)) continue;
+  const { allDecls, duplicates } = findDeclarationCollisions(entries);
 
-    const moduleHits = moduleEntries
-      .filter((entry) => hasDeclaration(entry.text, declarationName))
-      .map((entry) => toRepoPath(entry.path));
-
-    if (moduleHits.length > 0) {
-      duplicates.push(`${declarationName}: src/new-tab.js and ${moduleHits.join(", ")}`);
-    }
-  }
+  const formatted = duplicates.map(({ name, occurrences }) => {
+    const details = occurrences.map((o) => `${o.file}:${o.line} (${o.type})`).join(" vs ");
+    return `${name} [${details}]`;
+  });
 
   record(
     duplicates.length === 0,
-    "common moved declarations are not duplicated",
-    duplicates.length === 0 ? `${movedDeclarationNames.length} declaration names checked` : duplicates.join("; ")
+    "no cross-script top-level declaration collisions",
+    duplicates.length === 0
+      ? `${allDecls.size} unique top-level declarations verified across ${deferredLocalScripts.length} deferred scripts`
+      : `collisions detected: ${formatted.join("; ")}`
   );
+}
+
+function findDeclarationCollisions(entries) {
+  const allDecls = new Map();
+
+  for (const { src, text } of entries) {
+    const decls = parseTopLevelDeclarations(text, src);
+    for (const d of decls) {
+      if (!allDecls.has(d.name)) allDecls.set(d.name, []);
+      allDecls.get(d.name).push(d);
+    }
+  }
+
+  const duplicates = [];
+  for (const [name, occurrences] of allDecls.entries()) {
+    const files = new Set(occurrences.map((o) => o.file));
+    if (files.size > 1) {
+      duplicates.push({ name, occurrences });
+    }
+  }
+
+  return { allDecls, duplicates };
+}
+
+function parseTopLevelDeclarations(sourceText, filename) {
+  const decls = [];
+  let depth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inTemplate = false;
+  const templateStack = [];
+  let inLineComment = false;
+  let inBlockComment = false;
+  let inRegex = false;
+  let line = 1;
+
+  for (let i = 0; i < sourceText.length; i++) {
+    const ch = sourceText[i];
+    const next = sourceText[i + 1];
+
+    if (ch === "\n") {
+      line++;
+      inLineComment = false;
+      inRegex = false;
+      continue;
+    }
+
+    if (inLineComment) continue;
+
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") { inBlockComment = false; i++; }
+      continue;
+    }
+
+    if (inSingleQuote) {
+      if (ch === "\\") { i++; continue; }
+      if (ch === "\x27") inSingleQuote = false;
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      if (ch === "\\") { i++; continue; }
+      if (ch === "\"") inDoubleQuote = false;
+      continue;
+    }
+
+    if (inRegex) {
+      if (ch === "\\") { i++; continue; }
+      if (ch === "/") inRegex = false;
+      continue;
+    }
+
+    if (inTemplate) {
+      if (ch === "\\") { i++; continue; }
+      if (ch === "$" && next === "{") {
+        templateStack.push(depth);
+        depth++;
+        inTemplate = false;
+        i++;
+        continue;
+      }
+      if (ch === "`") {
+        inTemplate = false;
+        continue;
+      }
+      continue;
+    }
+
+    if (templateStack.length > 0 && ch === "}" && depth === templateStack[templateStack.length - 1] + 1) {
+      depth = templateStack.pop();
+      inTemplate = true;
+      continue;
+    }
+
+    if (ch === "/" && next === "/") { inLineComment = true; i++; continue; }
+    if (ch === "/" && next === "*") { inBlockComment = true; i++; continue; }
+
+    if (ch === "\x27") { inSingleQuote = true; continue; }
+    if (ch === "\"") { inDoubleQuote = true; continue; }
+    if (ch === "`") { inTemplate = true; continue; }
+
+    if (ch === "/") {
+      let j = i - 1;
+      while (j >= 0 && /\s/.test(sourceText[j])) j--;
+      const prevChar = j >= 0 ? sourceText[j] : "\n";
+      if (/[\(=,;:!?\[&|~^%*+<>-]/.test(prevChar) || (j >= 5 && sourceText.substring(j - 5, j + 1) === "return")) {
+        inRegex = true;
+        continue;
+      }
+    }
+
+    if (ch === "{") { depth++; continue; }
+    if (ch === "}") { if (depth > 0) depth--; continue; }
+
+    if (depth === 0) {
+      const prev = i > 0 ? sourceText[i - 1] : "\n";
+      if (/[\s;({]/.test(prev) || i === 0) {
+        const sub = sourceText.substring(i);
+        const m = sub.match(/^(?:(async\s+)?function\s+([a-zA-Z0-9_$]+)\s*\(|class\s+([a-zA-Z0-9_$]+)\b|(const|let|var)\s+([a-zA-Z0-9_$]+)\b)/);
+        if (m) {
+          const name = m[2] || m[3] || m[5];
+          const type = m[2] ? "function" : (m[3] ? "class" : m[4]);
+          decls.push({ name, type, line, file: filename });
+          i += m[0].length - 1;
+        }
+      }
+    }
+  }
+
+  return decls;
 }
 
 function parseScriptTags(html) {
@@ -388,16 +425,7 @@ async function collectFiles(dir, extensions, options = {}) {
   return files.sort((a, b) => a.localeCompare(b));
 }
 
-function hasDeclaration(text, name) {
-  const escaped = escapeRegExp(name);
-  const patterns = [
-    new RegExp(`(^|\\n)\\s*(?:async\\s+)?function\\s+${escaped}\\s*\\(`),
-    new RegExp(`(^|\\n)\\s*(?:const|let|var)\\s+${escaped}\\b`),
-    new RegExp(`(^|\\n)\\s*window\\.${escaped}\\s*=`)
-  ];
-
-  return patterns.some((pattern) => pattern.test(text));
-}
+// hasDeclaration removed; replaced by parseTopLevelDeclarations
 
 async function fileExists(filePath) {
   try {
@@ -429,3 +457,9 @@ function toRepoPath(filePath) {
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+export {
+  parseTopLevelDeclarations,
+  findDeclarationCollisions,
+  verifyCrossScriptDeclarationCollisions
+};

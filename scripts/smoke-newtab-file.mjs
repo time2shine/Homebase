@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { statSync } from "node:fs";
+import { statSync, readdirSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -23,7 +23,9 @@ async function main() {
 
   try {
     if (!browserPath) {
-      skip("no Chrome or Edge executable found; set HOMEBASE_SMOKE_BROWSER to run the browser smoke test");
+      console.warn("Homebase new-tab browser smoke: No supported browser executable detected in standard system paths.");
+      console.warn("To run browser smoke testing, set HOMEBASE_SMOKE_BROWSER, CHROME_PATH, or EDGE_PATH to your browser executable.");
+      skip("no browser executable found; set HOMEBASE_SMOKE_BROWSER to run the browser smoke test");
     } else if (typeof WebSocket !== "function") {
       skip("this Node runtime does not expose global WebSocket, which is needed for dependency-free CDP control");
     } else {
@@ -93,6 +95,7 @@ async function runSmoke(smokeRoot, browserPath) {
   console.log(`PASS browser launched - ${path.basename(browserPath)}`);
   console.log(`PASS loaded page - ${pageUrl}`);
   printSmokeCheck("required DOM surfaces exist", failures.dom.length === 0, failures.dom.join(", "));
+  printSmokeCheck("core controllers are available", failures.controllers.length === 0, failures.controllers.join(", "));
   printSmokeCheck("startup perf helpers are available", failures.perf.length === 0, failures.perf.join(", "));
   printSmokeCheck("fast-widget-order preload applied", failures.fastWidgetOrder.length === 0, `order: ${smokeResult.fastWidgetOrder.join(" > ")}`);
   printSmokeCheck("no ReferenceError or severe runtime errors", failures.runtime.length === 0, failures.runtime.join("; "));
@@ -127,6 +130,20 @@ function analyzeSmokeResult(smokeResult, cdpIssues) {
     if (!ok) domFailures.push(label);
   }
 
+  const expectedControllers = {
+    HomebaseDialogController: smokeResult.controllers?.dialog,
+    HomebaseContextMenuController: smokeResult.controllers?.contextMenu,
+    HomebaseSearchUIController: smokeResult.controllers?.searchUI,
+    HomebaseSearchInteractionController: smokeResult.controllers?.searchInteraction,
+    HomebaseFaviconPipeline: smokeResult.controllers?.faviconPipeline,
+    HomebaseStorage: smokeResult.controllers?.storage
+  };
+
+  const controllerFailures = [];
+  for (const [label, ok] of Object.entries(expectedControllers)) {
+    if (!ok) controllerFailures.push(label);
+  }
+
   const expectedPerfHelpers = {
     "__HB_STARTUP_PERF": smokeResult.perf.startupStore,
     hbPerfMark: smokeResult.perf.hbPerfMark,
@@ -158,6 +175,7 @@ function analyzeSmokeResult(smokeResult, cdpIssues) {
 
   return {
     dom: domFailures,
+    controllers: controllerFailures,
     perf: perfFailures,
     fastWidgetOrder: orderFailures,
     runtime: [...new Set(runtimeFailures.filter(Boolean))]
@@ -186,6 +204,14 @@ function getSmokeCheckExpression() {
         bookmarkGrid: !!document.querySelector('#bookmarks-grid'),
         settingsButton: !!document.querySelector('#main-settings-btn'),
         bodyReady: !!document.body && document.body.classList.contains('ready')
+      },
+      controllers: {
+        dialog: typeof window.HomebaseDialogController === 'object' && window.HomebaseDialogController !== null,
+        contextMenu: typeof window.HomebaseContextMenuController === 'object' && window.HomebaseContextMenuController !== null,
+        searchUI: typeof (window.HomebaseSearchUiController || window.HomebaseSearchUIController) === 'object' && (window.HomebaseSearchUiController || window.HomebaseSearchUIController) !== null,
+        searchInteraction: typeof window.HomebaseSearchInteractionController === 'object' && window.HomebaseSearchInteractionController !== null,
+        faviconPipeline: typeof window.HomebaseFaviconPipeline === 'object' && window.HomebaseFaviconPipeline !== null,
+        storage: typeof window.HomebaseStorage === 'object' && window.HomebaseStorage !== null
       },
       perf: {
         startupStore: Array.isArray(window.__HB_STARTUP_PERF),
@@ -493,6 +519,7 @@ function getMockScript() {
   });
 
   function clone(value) {
+    if (value === undefined) return undefined;
     return JSON.parse(JSON.stringify(value));
   }
 
@@ -809,25 +836,69 @@ function resolveSmokeRoot() {
 }
 
 function findBrowserExecutable() {
-  const candidates = [
+  const envCandidates = [
     process.env.HOMEBASE_SMOKE_BROWSER,
     process.env.CHROME_PATH,
-    process.env.BROWSER,
-    process.platform === "win32" ? path.join(process.env.PROGRAMFILES || "", "Google", "Chrome", "Application", "chrome.exe") : "",
-    process.platform === "win32" ? path.join(process.env["PROGRAMFILES(X86)"] || "", "Google", "Chrome", "Application", "chrome.exe") : "",
-    process.platform === "win32" ? path.join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe") : "",
-    process.platform === "win32" ? path.join(process.env.PROGRAMFILES || "", "Microsoft", "Edge", "Application", "msedge.exe") : "",
-    process.platform === "win32" ? path.join(process.env["PROGRAMFILES(X86)"] || "", "Microsoft", "Edge", "Application", "msedge.exe") : "",
-    process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "",
-    process.platform === "darwin" ? "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" : "",
-    process.platform === "linux" ? "/usr/bin/google-chrome" : "",
-    process.platform === "linux" ? "/usr/bin/google-chrome-stable" : "",
-    process.platform === "linux" ? "/usr/bin/chromium" : "",
-    process.platform === "linux" ? "/usr/bin/chromium-browser" : "",
-    process.platform === "linux" ? "/usr/bin/microsoft-edge" : ""
+    process.env.EDGE_PATH,
+    process.env.BROWSER
   ].filter(Boolean);
 
-  return candidates.find((candidate) => fileExistsSync(candidate)) || "";
+  for (const candidate of envCandidates) {
+    if (fileExistsSync(candidate)) return candidate;
+  }
+
+  const standardCandidates = [];
+
+  if (process.platform === "win32") {
+    const pf = process.env.PROGRAMFILES || "C:\\Program Files";
+    const pf86 = process.env["PROGRAMFILES(X86)"] || "C:\\Program Files (x86)";
+    const local = process.env.LOCALAPPDATA || "";
+
+    standardCandidates.push(
+      path.join(pf, "Google", "Chrome", "Application", "chrome.exe"),
+      path.join(pf86, "Google", "Chrome", "Application", "chrome.exe"),
+      path.join(local, "Google", "Chrome", "Application", "chrome.exe"),
+      path.join(pf, "Microsoft", "Edge", "Application", "msedge.exe"),
+      path.join(pf86, "Microsoft", "Edge", "Application", "msedge.exe"),
+      path.join(local, "Microsoft", "Edge", "Application", "msedge.exe"),
+      path.join(pf, "Microsoft", "EdgeWebView", "Application", "msedge.exe"),
+      path.join(pf86, "Microsoft", "EdgeWebView", "Application", "msedge.exe"),
+      path.join(pf, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+      path.join(pf86, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+      path.join(local, "BraveSoftware", "Brave-Browser", "Application", "brave.exe")
+    );
+
+    for (const base of [pf, pf86]) {
+      const edgeCoreDir = path.join(base, "Microsoft", "EdgeCore");
+      try {
+        if (statSync(edgeCoreDir).isDirectory()) {
+          const versions = readdirSync(edgeCoreDir);
+          for (const ver of versions) {
+            standardCandidates.push(path.join(edgeCoreDir, ver, "msedge.exe"));
+          }
+        }
+      } catch (e) {}
+    }
+  } else if (process.platform === "darwin") {
+    standardCandidates.push(
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+      "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium"
+    );
+  } else {
+    standardCandidates.push(
+      "/usr/bin/google-chrome",
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/microsoft-edge",
+      "/usr/bin/brave-browser",
+      "/snap/bin/chromium"
+    );
+  }
+
+  return standardCandidates.find((candidate) => fileExistsSync(candidate)) || "";
 }
 
 function fileExistsSync(filePath) {

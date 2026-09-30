@@ -459,100 +459,11 @@ async function openBookmarkIconPicker(context = {}) {
   }
 }
 
-async function ensureGalleryUi() {
-  await loadStylesheetOnce('newtab/styles/gallery.css');
-  await loadScriptOnce('newtab/wallpaper/gallery-ui.js');
-
-  if (
-    !window.HomebaseGallery ||
-    typeof window.HomebaseGallery.open !== 'function'
-  ) {
-    throw new Error('HomebaseGallery failed to load');
-  }
-
-  return window.HomebaseGallery;
-}
-
-function createGalleryContext() {
-  return {
-    getCurrentWallpaperSelection: () => currentWallpaperSelection,
-    setCurrentWallpaperSelection: (selection) => { currentWallpaperSelection = selection || null; },
-    getWallpaperSettings: () => ({
-      type: wallpaperTypePreference || 'video',
-      quality: wallpaperQualityPreference || 'low',
-      daily: dailyRotationPreference !== false
-    }),
-    getWallpaperTypePreferenceState: () => wallpaperTypePreference,
-    setWallpaperTypePreferenceState: (type) => {
-      wallpaperTypePreference = type === 'static' ? 'static' : 'video';
-    },
-    getWallpaperQualityPreference: () => wallpaperQualityPreference,
-    setWallpaperQualityPreference: (quality) => {
-      wallpaperQualityPreference = quality === 'high' ? 'high' : 'low';
-    },
-    getDailyRotationPreference: () => dailyRotationPreference,
-    setDailyRotationPreference: (enabled) => {
-      dailyRotationPreference = enabled !== false;
-    },
-    loadWallpaperTypePreference,
-    loadCurrentWallpaperSelection,
-    getWallpaperTypePreference,
-    setWallpaperTypePreference,
-    applyWallpaperByType,
-    rebuildCurrentSelectionFromGallery,
-    ensureDailyWallpaper,
-    getVideosManifest,
-    cacheGalleryPosters,
-    cacheAppliedWallpaperVideo,
-    cacheAppliedWallpaperPoster,
-    resolvePosterBlob,
-    cacheAsset,
-    hydrateWallpaperSelection,
-    ensurePlayableSelection,
-    getWallpaperUrls,
-    isGallerySelection,
-    isRemoteVideoUrl,
-    normalizeWallpaperCacheKey,
-    getCacheKeyVariants,
-    buildFallbackSelection,
-    applyWallpaperBackground,
-    setWallpaperFallbackPoster,
-    clearBackgroundVideos,
-    isPerformanceModeEnabled,
-    blobToDataUrl,
-    openModalWithAnimation,
-    closeModalWithAnimation,
-    showCustomDialog,
-    showCustomAlert,
-    scheduleIdleTask,
-    debounce,
-    ...createGalleryStorageBridge()
-  };
-}
-window.createGalleryContext = createGalleryContext;
-
-function notifyGalleryUiLoadFailure(err) {
-  console.warn('Failed to open gallery UI', err);
-  const message = 'Could not open the wallpaper gallery. Please try again.';
-  if (typeof showCustomAlert === 'function') {
-    showCustomAlert(message);
-  } else {
-    alert(message);
-  }
-}
-
-async function openWallpaperGallery(triggerSource = 'dock-gallery-btn') {
-  try {
-    const gallery = await ensureGalleryUi();
-    return await gallery.open({
-      triggerSource,
-      context: createGalleryContext()
-    });
-  } catch (err) {
-    notifyGalleryUiLoadFailure(err);
-    return null;
-  }
-}
+// ===============================================
+// --- WALLPAPER GALLERY UI LIFECYCLE & CONTEXT ---
+// ===============================================
+// Extracted to wallpaper-controller.js:
+// (ensureGalleryUi, createGalleryContext, notifyGalleryUiLoadFailure, openWallpaperGallery)
 
 // Video playback state and cleanupBackgroundPlayback extracted to wallpaper-controller.js
 

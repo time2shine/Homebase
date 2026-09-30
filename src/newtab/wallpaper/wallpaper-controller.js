@@ -1643,6 +1643,115 @@ async function setWallpaperTypePreference(type) {
   }
 }
 
+// ===============================================
+// --- WALLPAPER GALLERY UI LIFECYCLE & CONTEXT ---
+// ===============================================
+
+async function ensureGalleryUi() {
+  if (typeof loadStylesheetOnce === 'function') {
+    await loadStylesheetOnce('newtab/styles/gallery.css');
+  } else if (typeof window !== 'undefined' && typeof window.loadStylesheetOnce === 'function') {
+    await window.loadStylesheetOnce('newtab/styles/gallery.css');
+  }
+
+  if (typeof loadScriptOnce === 'function') {
+    await loadScriptOnce('newtab/wallpaper/gallery-ui.js');
+  } else if (typeof window !== 'undefined' && typeof window.loadScriptOnce === 'function') {
+    await window.loadScriptOnce('newtab/wallpaper/gallery-ui.js');
+  }
+
+  if (
+    !window.HomebaseGallery ||
+    typeof window.HomebaseGallery.open !== 'function'
+  ) {
+    throw new Error('HomebaseGallery failed to load');
+  }
+
+  return window.HomebaseGallery;
+}
+
+function createGalleryContext() {
+  return {
+    getCurrentWallpaperSelection: () => currentWallpaperSelection,
+    setCurrentWallpaperSelection: (selection) => { currentWallpaperSelection = selection || null; },
+    getWallpaperSettings: () => ({
+      type: wallpaperTypePreference || 'video',
+      quality: wallpaperQualityPreference || 'low',
+      daily: dailyRotationPreference !== false
+    }),
+    getWallpaperTypePreferenceState: () => wallpaperTypePreference,
+    setWallpaperTypePreferenceState: (type) => {
+      wallpaperTypePreference = type === 'static' ? 'static' : 'video';
+    },
+    getWallpaperQualityPreference: () => wallpaperQualityPreference,
+    setWallpaperQualityPreference: (quality) => {
+      wallpaperQualityPreference = quality === 'high' ? 'high' : 'low';
+    },
+    getDailyRotationPreference: () => dailyRotationPreference,
+    setDailyRotationPreference: (enabled) => {
+      dailyRotationPreference = enabled !== false;
+    },
+    loadWallpaperTypePreference,
+    loadCurrentWallpaperSelection,
+    getWallpaperTypePreference,
+    setWallpaperTypePreference,
+    applyWallpaperByType,
+    rebuildCurrentSelectionFromGallery,
+    ensureDailyWallpaper,
+    getVideosManifest,
+    cacheGalleryPosters: typeof cacheGalleryPosters === 'function' ? cacheGalleryPosters : (typeof window !== 'undefined' ? window.cacheGalleryPosters : null),
+    cacheAppliedWallpaperVideo,
+    cacheAppliedWallpaperPoster,
+    resolvePosterBlob: typeof resolvePosterBlob === 'function' ? resolvePosterBlob : (typeof window !== 'undefined' ? window.resolvePosterBlob : null),
+    cacheAsset: typeof cacheAsset === 'function' ? cacheAsset : (typeof window !== 'undefined' ? window.cacheAsset : null),
+    hydrateWallpaperSelection,
+    ensurePlayableSelection,
+    getWallpaperUrls,
+    isGallerySelection,
+    isRemoteVideoUrl: typeof isRemoteVideoUrl === 'function' ? isRemoteVideoUrl : (typeof window !== 'undefined' ? window.isRemoteVideoUrl : null),
+    normalizeWallpaperCacheKey: typeof normalizeWallpaperCacheKey === 'function' ? normalizeWallpaperCacheKey : (typeof window !== 'undefined' ? window.normalizeWallpaperCacheKey : null),
+    getCacheKeyVariants: typeof getCacheKeyVariants === 'function' ? getCacheKeyVariants : (typeof window !== 'undefined' ? window.getCacheKeyVariants : null),
+    buildFallbackSelection,
+    applyWallpaperBackground,
+    setWallpaperFallbackPoster,
+    clearBackgroundVideos,
+    isPerformanceModeEnabled: typeof isPerformanceModeEnabled === 'function' ? isPerformanceModeEnabled : (typeof window !== 'undefined' ? window.isPerformanceModeEnabled : () => false),
+    blobToDataUrl: typeof blobToDataUrl === 'function' ? blobToDataUrl : (typeof window !== 'undefined' ? window.blobToDataUrl : null),
+    openModalWithAnimation: typeof openModalWithAnimation === 'function' ? openModalWithAnimation : (typeof window !== 'undefined' ? window.openModalWithAnimation : null),
+    closeModalWithAnimation: typeof closeModalWithAnimation === 'function' ? closeModalWithAnimation : (typeof window !== 'undefined' ? window.closeModalWithAnimation : null),
+    showCustomDialog: typeof showCustomDialog === 'function' ? showCustomDialog : (typeof window !== 'undefined' ? window.showCustomDialog : null),
+    showCustomAlert: typeof showCustomAlert === 'function' ? showCustomAlert : (typeof window !== 'undefined' ? window.showCustomAlert : null),
+    scheduleIdleTask: typeof scheduleIdleTask === 'function' ? scheduleIdleTask : (typeof window !== 'undefined' ? window.scheduleIdleTask : (fn) => setTimeout(fn, 1)),
+    debounce: typeof debounce === 'function' ? debounce : (typeof window !== 'undefined' ? window.debounce : (fn) => fn),
+    ...(typeof createGalleryStorageBridge === 'function' ? createGalleryStorageBridge() : (typeof window !== 'undefined' && typeof window.createGalleryStorageBridge === 'function' ? window.createGalleryStorageBridge() : {}))
+  };
+}
+
+function notifyGalleryUiLoadFailure(err) {
+  console.warn('Failed to open gallery UI', err);
+  const message = 'Could not open the wallpaper gallery. Please try again.';
+  if (typeof showCustomAlert === 'function') {
+    showCustomAlert(message);
+  } else if (typeof window !== 'undefined' && typeof window.showCustomAlert === 'function') {
+    window.showCustomAlert(message);
+  } else {
+    alert(message);
+  }
+}
+
+async function openWallpaperGallery(triggerSource = 'dock-gallery-btn') {
+  try {
+    const gallery = await ensureGalleryUi();
+    return await gallery.open({
+      triggerSource,
+      context: createGalleryContext()
+    });
+  } catch (err) {
+    notifyGalleryUiLoadFailure(err);
+    return null;
+  }
+}
+
 // --- Window Property Bridges for Seamless Multi-Script Access ---
 if (typeof window !== 'undefined') {
   if (!('currentWallpaperSelection' in window)) {
@@ -1729,6 +1838,12 @@ if (typeof window !== 'undefined') {
   window.loadCurrentWallpaperSelection = loadCurrentWallpaperSelection;
   window.getWallpaperTypePreference = getWallpaperTypePreference;
   window.setWallpaperTypePreference = setWallpaperTypePreference;
+
+  // Gallery UI Lifecycle & Context function bindings
+  window.ensureGalleryUi = ensureGalleryUi;
+  window.createGalleryContext = createGalleryContext;
+  window.notifyGalleryUiLoadFailure = notifyGalleryUiLoadFailure;
+  window.openWallpaperGallery = openWallpaperGallery;
 }
 
 // --- Homebase Wallpaper Controller Namespace ---
@@ -1796,6 +1911,12 @@ window.HomebaseWallpaperController = {
   loadCurrentWallpaperSelection,
   getWallpaperTypePreference,
   setWallpaperTypePreference,
+
+  // Gallery UI Lifecycle & Context
+  ensureGalleryUi,
+  createGalleryContext,
+  notifyGalleryUiLoadFailure,
+  openWallpaperGallery,
 
   // State Accessors
   getCurrentWallpaperSelection: () => currentWallpaperSelection,

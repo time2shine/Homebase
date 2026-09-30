@@ -655,6 +655,669 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
   }
 }
 
+// ===============================================
+// Video Lifecycle & Playback Pipeline
+// ===============================================
+
+function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
+  const poster = posterUrl || 'assets/fallback.webp';
+
+  // Avoid repainting when preload already drew a stable data URL and we'd swap to blob/http.
+  const current = document.documentElement.dataset.initialWallpaper || '';
+  const currentIsData = current.startsWith('data:');
+  const nextIsBlobOrHttp = poster.startsWith('blob:') || poster.startsWith('http');
+
+  if (!(currentIsData && nextIsBlobOrHttp) && current !== poster) {
+    document.documentElement.style.setProperty('--initial-wallpaper', `url("${poster}")`);
+    document.documentElement.dataset.initialWallpaper = poster;
+  }
+
+  const runIdle = typeof scheduleIdleTask === 'function'
+    ? scheduleIdleTask
+    : (typeof window !== 'undefined' && typeof window.scheduleIdleTask === 'function' ? window.scheduleIdleTask : null);
+
+  if (runIdle) {
+    runIdle(() => cacheAppliedWallpaperPoster(poster, posterCacheKey).catch(() => {}), 'cacheAppliedWallpaperPoster');
+  } else {
+    setTimeout(() => cacheAppliedWallpaperPoster(poster, posterCacheKey).catch(() => {}), 1);
+  }
+}
+
+function applyWallpaperBackground(posterUrl) {
+  const current = document.documentElement.dataset.initialWallpaper || '';
+  const currentIsData = current.startsWith('data:');
+  const nextIsBlobOrHttp = (posterUrl || '').startsWith('blob:') || (posterUrl || '').startsWith('http');
+
+  // Keep existing data URL if we would downgrade to blob/http, or if unchanged.
+  if ((currentIsData && nextIsBlobOrHttp) || current === posterUrl) return;
+
+  const next = posterUrl ? `url("${posterUrl}")` : '';
+
+  if (posterUrl) {
+    document.documentElement.style.setProperty('--initial-wallpaper', next);
+    document.documentElement.dataset.initialWallpaper = posterUrl;
+  } else {
+    document.documentElement.style.removeProperty('--initial-wallpaper');
+    delete document.documentElement.dataset.initialWallpaper;
+  }
+}
+
+async function hydrateWallpaperSelection(selection) {
+  if (!selection) return selection;
+
+  const hydrated = { ...selection };
+
+  if (!hydrated.videoCacheKey && isRemoteHttpUrl(hydrated.videoUrl || '')) {
+    hydrated.videoCacheKey = hydrated.videoUrl;
+  }
+
+  if (!hydrated.posterCacheKey && isRemoteHttpUrl(hydrated.posterUrl || '')) {
+    hydrated.posterCacheKey = hydrated.posterUrl;
+  }
+
+  if (!hydrated.posterCacheKey && hydrated.posterUrl && !hydrated.posterUrl.startsWith('data:') && !hydrated.posterUrl.startsWith('blob:')) {
+    hydrated.posterCacheKey = hydrated.posterUrl;
+  }
+
+  if (hydrated.videoCacheKey) {
+    let cachedVideo = await getCachedObjectUrl(hydrated.videoCacheKey);
+    if (!cachedVideo && typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.getObjectUrl === 'function') {
+      cachedVideo = await MyWallpapers.getObjectUrl(hydrated.videoCacheKey);
+    }
+    if (cachedVideo) {
+      hydrated.videoUrl = cachedVideo;
+    }
+  }
+
+  const posterLookupKey = hydrated.posterCacheKey || '';
+
+  if (posterLookupKey) {
+    let cachedPoster = await getCachedObjectUrl(posterLookupKey);
+    if (!cachedPoster && typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.getObjectUrl === 'function') {
+      cachedPoster = await MyWallpapers.getObjectUrl(posterLookupKey);
+    }
+    if (cachedPoster) {
+      hydrated.posterUrl = cachedPoster;
+    }
+  }
+
+  if (!hydrated.posterUrl) {
+    hydrated.posterUrl = 'assets/fallback.webp';
+  }
+
+  return hydrated;
+}
+
+async function ensurePlayableSelection(selection) {
+  if (!selection) return selection;
+
+  const cacheKey = selection.videoCacheKey || selection.videoUrl || '';
+  if (cacheKey) {
+    let cachedVideo = await getCachedObjectUrl(cacheKey);
+    if (!cachedVideo && typeof MyWallpapers !== 'undefined' && MyWallpapers && typeof MyWallpapers.getObjectUrl === 'function') {
+      cachedVideo = await MyWallpapers.getObjectUrl(cacheKey);
+    }
+    if (cachedVideo) {
+      selection.videoUrl = cachedVideo;
+    }
+  }
+
+  return selection;
+}
+
+async function setBackgroundVideoSources(videoUrl, posterUrl = '') {
+  const isPerf = typeof isPerformanceModeEnabled === 'function' ? isPerformanceModeEnabled() : false;
+  if (isPerf) return;
+
+  try {
+    const videos = Array.from(document.querySelectorAll('.background-video'));
+    if (typeof recordStartupPerfEvent === 'function') {
+      recordStartupPerfEvent('newtab:video-source-assign-start', { videoElements: videos.length });
+    }
+
+    const videoUpdates = videos.map((v) => {
+      try {
+        const source = v.querySelector('source');
+        const currentSrc = source ? (source.getAttribute('src') || '') : (v.getAttribute('src') || '');
+        const desiredPoster = posterUrl || '';
+        const needsUpdate = currentSrc !== videoUrl || v.poster !== desiredPoster;
+        return { v, source, desiredPoster, needsUpdate };
+      } catch (e) {
+        return { v, source: null, desiredPoster: posterUrl || '', needsUpdate: false };
+      }
+    });
+
+    if (!videoUpdates.some((update) => update.needsUpdate)) {
+      await backgroundVideoSourceLoadPromise;
+      if (typeof recordStartupPerfEvent === 'function') {
+        recordStartupPerfEvent('newtab:video-source-load-complete', { updated: false });
+      }
+      return;
+    }
+
+    const loadGeneration = ++backgroundVideoSourceLoadGeneration;
+    const loadTasks = videoUpdates.map(({ v, source, desiredPoster, needsUpdate }, index) => {
+      return new Promise((resolve) => {
+        if (!needsUpdate) {
+          resolve();
+          return;
+        }
+
+        try {
+          try { v.pause(); } catch (e) {}
+
+          v.poster = desiredPoster;
+
+          if (source) {
+            source.src = videoUrl;
+          } else {
+            v.src = videoUrl;
+          }
+
+          const loadVideo = () => {
+            try {
+              const currentPerf = typeof isPerformanceModeEnabled === 'function' ? isPerformanceModeEnabled() : false;
+              if (loadGeneration === backgroundVideoSourceLoadGeneration && !currentPerf) {
+                try {
+                  v.load();
+                  if (typeof recordStartupPerfEvent === 'function') {
+                    recordStartupPerfEvent('newtab:video-load-called', { index });
+                  }
+                } catch (e) {}
+                try { v.currentTime = 0; } catch (e) {}
+              }
+            } finally {
+              resolve();
+            }
+          };
+
+          if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(loadVideo);
+            });
+          } else {
+            setTimeout(loadVideo, 0);
+          }
+        } catch (e) {
+          resolve();
+        }
+      });
+    });
+
+    backgroundVideoSourceLoadPromise = Promise.all(loadTasks).then(() => undefined).catch(() => undefined);
+
+    await backgroundVideoSourceLoadPromise;
+    if (typeof recordStartupPerfEvent === 'function') {
+      recordStartupPerfEvent('newtab:video-source-load-complete', { updated: true });
+    }
+  } catch (e) {
+    // Keep wallpaper application resilient; callers handle playback fallback.
+  }
+}
+
+function startBackgroundVideosAfterSourceLoad(sourceLoadPromise, startSequence, selection, finalType, poster, video) {
+  Promise.resolve(sourceLoadPromise)
+    .catch(() => {})
+    .finally(() => {
+      const selectionId = selection && selection.id ? selection.id : null;
+      const current = currentWallpaperSelection || null;
+      const crossfadeKey = `${selectionId || ''}|${video}|${poster}`;
+
+      if (startSequence !== wallpaperVideoStartSequence) return;
+      if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+      if (!current || (current.id || null) !== selectionId) return;
+      if ((current.posterUrl || '') !== poster) return;
+      if (finalType === 'video' && (current.videoUrl || '') !== video) return;
+      if (
+        !lastAppliedWallpaper ||
+        lastAppliedWallpaper.id !== selectionId ||
+        lastAppliedWallpaper.poster !== poster ||
+        lastAppliedWallpaper.video !== video ||
+        lastAppliedWallpaper.type !== finalType
+      ) {
+        return;
+      }
+
+      if (crossfadeKey === backgroundVideoCrossfadeSetupKey) {
+        const activeVideo = document.querySelector('.background-video.is-active');
+        if (activeVideo && activeVideo.paused) {
+          activeVideo.play().catch(() => {});
+        }
+        return;
+      }
+
+      if (typeof recordStartupPerfEvent === 'function') {
+        recordStartupPerfEvent('newtab:video-start-requested');
+      }
+      startBackgroundVideos();
+      if (setupBackgroundVideoCrossfade()) {
+        if (typeof recordStartupPerfEvent === 'function') {
+          recordStartupPerfEvent('newtab:crossfade-setup');
+        }
+        backgroundVideoCrossfadeSetupKey = crossfadeKey;
+      }
+    });
+}
+
+function waitForWallpaperReady(selection, type = 'video') {
+  return new Promise((resolve) => {
+    if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return resolve();
+    if (!selection) return resolve();
+
+    const finalType = type === 'static' ? 'static' : 'video';
+    if (finalType === 'static' || !selection.videoUrl) {
+      return resolve();
+    }
+
+    const videos = Array.from(document.querySelectorAll('.background-video'));
+    if (!videos.length) return resolve();
+
+    const activeVideo = videos.find(v => v.classList.contains('is-active')) || videos[0];
+    if (!activeVideo) return resolve();
+
+    let done = false;
+    const cleanup = () => {
+      if (done) return;
+      done = true;
+      activeVideo.removeEventListener('playing', onPlaying);
+      activeVideo.removeEventListener('canplay', onCanPlay);
+      activeVideo.removeEventListener('error', onError);
+      clearTimeout(timeoutId);
+      resolve();
+    };
+
+    const onPlaying = () => cleanup();
+    const onCanPlay = () => cleanup();
+    const onError = () => cleanup();
+    const timeoutId = setTimeout(cleanup, 8000);
+
+    activeVideo.addEventListener('playing', onPlaying);
+    activeVideo.addEventListener('canplay', onCanPlay);
+    activeVideo.addEventListener('error', onError);
+  });
+}
+
+function setupBackgroundVideoCrossfade() {
+  if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) {
+    cleanupBackgroundPlayback();
+    return false;
+  }
+  const videos = Array.from(document.querySelectorAll('.background-video'));
+  if (videos.length < 2) return false;
+
+  if (!videoPlaybackController) videoPlaybackController = new AbortController();
+  const signal = videoPlaybackController.signal;
+
+  videos.forEach((v, idx) => {
+    v.loop = false;
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = idx === 0 ? 'auto' : 'metadata';
+    v.classList.remove('with-transition');
+    v.classList.remove('on-top');
+  });
+
+  const fadeMs = 1400;
+  const bufferMs = 400;
+  const safeDurationMs = 15000;
+  const fadeSec = fadeMs / 1000;
+  const bufferSec = bufferMs / 1000;
+  let firstActiveMarked = false;
+
+  const playAndFadeIn = async (videoEl, enableTransition, onReady) => {
+    if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+    try {
+      if (enableTransition) {
+        videoEl.classList.add('with-transition');
+        void videoEl.offsetWidth;
+      } else {
+        videoEl.classList.remove('with-transition');
+      }
+
+      await videoEl.play();
+
+      const showVideo = () => {
+        videoEl.classList.add('is-active');
+        if (!firstActiveMarked) {
+          firstActiveMarked = true;
+          if (typeof recordStartupPerfEvent === 'function') {
+            recordStartupPerfEvent('newtab:video-first-active', { transition: !!enableTransition });
+          }
+        }
+        if (onReady) onReady();
+      };
+
+      if ('requestVideoFrameCallback' in videoEl) {
+        videoEl.requestVideoFrameCallback(() => {
+          requestAnimationFrame(() => {
+            showVideo();
+          });
+        });
+      } else {
+        const checkFrame = () => {
+          if (videoEl.currentTime > 0) {
+            videoEl.removeEventListener('timeupdate', checkFrame);
+            requestAnimationFrame(() => showVideo());
+          }
+        };
+        if (videoEl.currentTime > 0) {
+          checkFrame();
+        } else {
+          videoEl.addEventListener('timeupdate', checkFrame, { signal });
+        }
+      }
+    } catch (err) {
+      console.warn('Background playback failed:', err);
+    }
+  };
+
+  const startCycle = (current, next) => {
+    if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+    let fading = false;
+
+    const primeNext = () => {
+      if (next.preload !== 'auto') {
+        next.preload = 'auto';
+        next.load();
+      }
+    };
+
+    const doFade = async () => {
+      if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+      if (fading) return;
+      fading = true;
+      primeNext();
+      next.currentTime = 0;
+
+      next.classList.add('on-top');
+      current.classList.remove('on-top');
+
+      let shouldAnimate = true;
+      if (typeof appPerformanceModePreference !== 'undefined' && appPerformanceModePreference) {
+        shouldAnimate = false;
+      } else if (typeof appBatteryOptimizationPreference !== 'undefined' && appBatteryOptimizationPreference) {
+        if ('getBattery' in navigator) {
+          try {
+            const battery = await navigator.getBattery();
+            if (!battery.charging) shouldAnimate = false;
+          } catch (e) {}
+        }
+      }
+
+      playAndFadeIn(next, shouldAnimate, () => {
+        const holdTime = shouldAnimate ? fadeMs + 50 : 50;
+        if (backgroundCrossfadeTimeout) clearTimeout(backgroundCrossfadeTimeout);
+        backgroundCrossfadeTimeout = setTimeout(() => {
+          backgroundCrossfadeTimeout = null;
+          current.classList.remove('is-active');
+          current.classList.remove('with-transition');
+          current.pause();
+          current.currentTime = 0;
+          startCycle(next, current);
+        }, holdTime);
+      });
+    };
+
+    const onTimeUpdate = () => {
+      const duration = current.duration || safeDurationMs / 1000;
+      const startFadeAt = Math.max(1, duration - fadeSec - bufferSec);
+      if (current.currentTime >= startFadeAt) {
+        current.removeEventListener('timeupdate', onTimeUpdate);
+        doFade();
+      }
+    };
+
+    current.addEventListener('timeupdate', onTimeUpdate, { signal });
+
+    current.addEventListener('ended', () => {
+      current.removeEventListener('timeupdate', onTimeUpdate);
+      doFade();
+    }, { once: true, signal });
+  };
+
+  const [first, second] = videos;
+  first.classList.add('on-top');
+
+  if (first.readyState >= 1) {
+    playAndFadeIn(first, false, () => startCycle(first, second));
+  } else {
+    first.addEventListener('loadedmetadata', () => {
+      playAndFadeIn(first, false, () => startCycle(first, second));
+    }, { once: true, signal });
+  }
+
+  return true;
+}
+
+function cleanupUnusedObjectUrls(currentSelection) {
+  const activeKeys = new Set();
+  const activeUrls = new Set();
+
+  if (currentSelection) {
+    if (currentSelection.videoUrl) activeUrls.add(currentSelection.videoUrl);
+    if (currentSelection.posterUrl) activeUrls.add(currentSelection.posterUrl);
+
+    if (currentSelection.videoCacheKey) {
+      getCacheKeyVariants(currentSelection.videoCacheKey).forEach(k => activeKeys.add(k));
+    }
+    if (currentSelection.posterCacheKey) {
+      getCacheKeyVariants(currentSelection.posterCacheKey).forEach(k => activeKeys.add(k));
+    }
+
+    // Back-compat: sometimes cacheKey is stored in videoUrl/posterUrl
+    if (currentSelection.videoUrl && !String(currentSelection.videoUrl).startsWith('blob:')) {
+      getCacheKeyVariants(currentSelection.videoUrl).forEach(k => activeKeys.add(k));
+    }
+    if (currentSelection.posterUrl &&
+        !String(currentSelection.posterUrl).startsWith('blob:') &&
+        !String(currentSelection.posterUrl).startsWith('data:')) {
+      getCacheKeyVariants(currentSelection.posterUrl).forEach(k => activeKeys.add(k));
+    }
+  }
+
+  const cleanupDetails = {
+    videoUrl: currentSelection && currentSelection.videoUrl,
+    videoCacheKey: currentSelection && currentSelection.videoCacheKey,
+    cacheEntries: Array.from(wallpaperObjectUrlCache.entries())
+  };
+  if (typeof recordObjectUrlCleanup === 'function') {
+    recordObjectUrlCleanup(cleanupDetails);
+  }
+
+  if (typeof DEBUG_HOMEBASE_LOGS !== 'undefined' && DEBUG_HOMEBASE_LOGS) {
+    try {
+      console.debug('cleanupUnusedObjectUrls', cleanupDetails);
+    } catch (_) {}
+  }
+
+  for (const [cacheKey, objectUrl] of wallpaperObjectUrlCache.entries()) {
+    const keepBecauseKeyActive = activeKeys.has(cacheKey);
+    const keepBecauseUrlActive = activeUrls.has(objectUrl) || activeUrls.has(cacheKey);
+
+    if (!keepBecauseKeyActive && !keepBecauseUrlActive) {
+      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+      wallpaperObjectUrlCache.delete(cacheKey);
+    }
+  }
+}
+
+function applyWallpaperByType(selection, type = 'video') {
+  if (!selection) return;
+
+  const finalType = type === 'static' ? 'static' : 'video';
+  const poster = selection.posterUrl || '';
+  const posterCacheKey = selection.posterCacheKey || selection.poster || selection.posterUrl || '';
+  const video = finalType === 'video' ? (selection.videoUrl || '') : '';
+  const videoStartSequence = ++wallpaperVideoStartSequence;
+
+  setWallpaperFallbackPoster(poster, posterCacheKey);
+
+  const unchanged =
+    lastAppliedWallpaper &&
+    lastAppliedWallpaper.id === (selection.id || null) &&
+    lastAppliedWallpaper.poster === poster &&
+    lastAppliedWallpaper.video === video &&
+    lastAppliedWallpaper.type === finalType;
+
+  currentWallpaperSelection = selection;
+  cleanupUnusedObjectUrls(selection);
+
+  const isPerf = typeof isPerformanceModeEnabled === 'function' ? isPerformanceModeEnabled() : false;
+  if (isPerf && finalType === 'video') {
+    cleanupBackgroundPlayback();
+    applyWallpaperBackground(poster);
+    if (typeof recordPerformanceModeVideoSkipped === 'function') {
+      recordPerformanceModeVideoSkipped();
+    }
+    if (typeof recordStartupPerfEvent === 'function') {
+      recordStartupPerfEvent('newtab:wallpaper-poster-applied', {
+        source: poster ? 'performance-mode-poster' : 'performance-mode-none'
+      });
+    }
+    lastAppliedWallpaper = {
+      id: selection.id || null,
+      poster,
+      video,
+      type: finalType
+    };
+    updateSettingsPreview(selection, finalType);
+    return;
+  }
+
+  const appliedImmediateVideoPoster = finalType === 'video' && !!poster;
+
+  if (appliedImmediateVideoPoster) {
+    applyWallpaperBackground(poster);
+    if (typeof recordStartupPerfEvent === 'function') {
+      recordStartupPerfEvent('newtab:wallpaper-poster-applied', { source: poster ? 'poster' : 'none' });
+    }
+  }
+
+  if (!unchanged) {
+    const applyWallpaperFlow = () => {
+      const current = currentWallpaperSelection || null;
+
+      if (
+        videoStartSequence !== wallpaperVideoStartSequence ||
+        !current ||
+        (current.id || null) !== (selection.id || null) ||
+        (current.posterUrl || '') !== poster ||
+        (finalType === 'video' && (current.videoUrl || '') !== video)
+      ) {
+        return;
+      }
+
+      // Stop any existing playback loop/listeners before starting new video logic.
+      cleanupBackgroundPlayback();
+
+      if (!appliedImmediateVideoPoster) {
+        applyWallpaperBackground(poster);
+      }
+
+      if (finalType === 'video' && video) {
+        const sourceLoadPromise = setBackgroundVideoSources(video, poster);
+        startBackgroundVideosAfterSourceLoad(sourceLoadPromise, videoStartSequence, selection, finalType, poster, video);
+      } else {
+        // Already cleaned up above, just ensure UI state is correct
+        clearBackgroundVideos();
+      }
+      lastAppliedWallpaper = {
+        id: selection.id || null,
+        poster,
+        video,
+        type: finalType
+      };
+    };
+
+    if (finalType === 'video') {
+      if (typeof runAfterNextPaint === 'function') {
+        runAfterNextPaint(applyWallpaperFlow);
+      } else {
+        requestAnimationFrame(() => requestAnimationFrame(applyWallpaperFlow));
+      }
+    } else if (poster) {
+      const img = new Image();
+      img.onload = () => {
+        img.onload = null;
+        img.onerror = null;
+        applyWallpaperFlow();
+      };
+      img.onerror = () => {
+        img.onload = null;
+        img.onerror = null;
+        applyWallpaperFlow();
+      };
+      img.src = poster;
+    } else {
+      applyWallpaperFlow();
+    }
+  } else {
+    // If unchanged, ensure videos keep playing for video type
+    if (finalType === 'video' && video) {
+      const sourceLoadPromise = setBackgroundVideoSources(video, poster);
+      startBackgroundVideosAfterSourceLoad(sourceLoadPromise, videoStartSequence, selection, finalType, poster, video);
+    }
+  }
+
+  updateSettingsPreview(selection, finalType);
+}
+
+function clearBackgroundVideos() {
+  backgroundVideoSourceLoadGeneration += 1;
+  backgroundVideoCrossfadeSetupKey = '';
+
+  const videos = Array.from(document.querySelectorAll('.background-video'));
+
+  videos.forEach((v) => {
+    try { v.pause(); } catch (e) {}
+
+    const source = v.querySelector('source');
+    if (source) source.src = '';
+    v.removeAttribute('src');
+    v.removeAttribute('poster');
+    v.load();
+
+    v.classList.remove('is-active');
+    v.classList.remove('with-transition');
+    v.classList.remove('on-top');
+  });
+}
+
+function startBackgroundVideos() {
+  if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) {
+    cleanupBackgroundPlayback();
+    return;
+  }
+
+  const videos = Array.from(document.querySelectorAll('.background-video'));
+  if (!videos.length) return;
+
+  videos.forEach((v) => {
+    v.muted = true;
+    v.playsInline = true;
+    v.loop = false; // crossfade manages looping
+    v.classList.remove('is-active'); // stay hidden until crossfade activates
+  });
+}
+
+function updateSettingsPreview(selection, type = 'video') {
+  if (
+    typeof window !== 'undefined' &&
+    window.HomebaseGallery &&
+    typeof window.HomebaseGallery.refresh === 'function'
+  ) {
+    const ctx = typeof createGalleryContext === 'function'
+      ? createGalleryContext()
+      : (typeof window.createGalleryContext === 'function' ? window.createGalleryContext() : null);
+
+    window.HomebaseGallery.refresh({
+      context: ctx,
+      selection,
+      type
+    });
+  }
+}
+
 // --- Window Property Bridges for Seamless Multi-Script Access ---
 if (typeof window !== 'undefined') {
   if (!('currentWallpaperSelection' in window)) {
@@ -699,6 +1362,21 @@ if (typeof window !== 'undefined') {
   window.warmGalleryPosterHydration = warmGalleryPosterHydration;
   window.cacheAppliedWallpaperVideo = cacheAppliedWallpaperVideo;
   window.cacheAppliedWallpaperPoster = cacheAppliedWallpaperPoster;
+
+  // Video Lifecycle function bindings
+  window.setWallpaperFallbackPoster = setWallpaperFallbackPoster;
+  window.applyWallpaperBackground = applyWallpaperBackground;
+  window.hydrateWallpaperSelection = hydrateWallpaperSelection;
+  window.ensurePlayableSelection = ensurePlayableSelection;
+  window.setBackgroundVideoSources = setBackgroundVideoSources;
+  window.startBackgroundVideosAfterSourceLoad = startBackgroundVideosAfterSourceLoad;
+  window.waitForWallpaperReady = waitForWallpaperReady;
+  window.setupBackgroundVideoCrossfade = setupBackgroundVideoCrossfade;
+  window.cleanupUnusedObjectUrls = cleanupUnusedObjectUrls;
+  window.applyWallpaperByType = applyWallpaperByType;
+  window.clearBackgroundVideos = clearBackgroundVideos;
+  window.startBackgroundVideos = startBackgroundVideos;
+  window.updateSettingsPreview = updateSettingsPreview;
 }
 
 // --- Homebase Wallpaper Controller Namespace ---
@@ -736,6 +1414,21 @@ window.HomebaseWallpaperController = {
   warmGalleryPosterHydration,
   cacheAppliedWallpaperVideo,
   cacheAppliedWallpaperPoster,
+
+  // Video Lifecycle & Playback
+  setWallpaperFallbackPoster,
+  applyWallpaperBackground,
+  hydrateWallpaperSelection,
+  ensurePlayableSelection,
+  setBackgroundVideoSources,
+  startBackgroundVideosAfterSourceLoad,
+  waitForWallpaperReady,
+  setupBackgroundVideoCrossfade,
+  cleanupUnusedObjectUrls,
+  applyWallpaperByType,
+  clearBackgroundVideos,
+  startBackgroundVideos,
+  updateSettingsPreview,
 
   // State Accessors
   getCurrentWallpaperSelection: () => currentWallpaperSelection,

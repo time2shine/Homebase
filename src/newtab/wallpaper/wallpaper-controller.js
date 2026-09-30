@@ -398,6 +398,263 @@ function setNextWallpaperButtonLoading(isLoading) {
   }
 }
 
+// ===============================================
+// Cache & Manifest Pipeline
+// ===============================================
+
+async function loadCachedGalleryManifest() {
+  const cached = await getVideosManifestCache();
+  const manifest = cached.manifest;
+  const fetchedAt = getGalleryManifestTimestamp(cached.fetchedAt);
+  const hasManifest = hasUsableGalleryManifest(manifest);
+  return {
+    manifest: hasManifest ? manifest : [],
+    fetchedAt,
+    hasManifest,
+    isFresh: hasManifest && Date.now() - fetchedAt < VIDEOS_JSON_TTL_MS
+  };
+}
+
+function refreshGalleryManifestInBackground() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
+
+  const refreshPromise = fetchVideosManifestIfNeeded()
+    .then((manifest) => {
+      if (hasUsableGalleryManifest(manifest)) {
+        if (typeof scheduleIdleTask === 'function') {
+          scheduleIdleTask(() => cacheGalleryPostersIfNeeded(manifest), 'cacheGalleryPostersIfNeeded');
+        } else if (typeof window !== 'undefined' && typeof window.scheduleIdleTask === 'function') {
+          window.scheduleIdleTask(() => cacheGalleryPostersIfNeeded(manifest), 'cacheGalleryPostersIfNeeded');
+        }
+      }
+      return manifest;
+    })
+    .catch((err) => {
+      console.warn('Gallery manifest background refresh failed', err);
+      return [];
+    });
+
+  return refreshPromise;
+}
+
+async function fetchVideosManifestIfNeeded() {
+  if (videosManifestPromise) return videosManifestPromise;
+
+  videosManifestPromise = (async () => {
+    try {
+      const now = Date.now();
+      const res = await fetchGalleryManifestWithTimeout(
+        VIDEOS_JSON_URL,
+        { cache: 'no-store' },
+        GALLERY_MANIFEST_FETCH_TIMEOUT_MS
+      );
+      if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`);
+      const manifest = await res.json();
+      if (!hasUsableGalleryManifest(manifest)) {
+        throw new Error('Manifest response was empty or invalid');
+      }
+
+      await setVideosManifestCache(manifest, now);
+      return manifest;
+    } catch (err) {
+      console.error('fetchVideosManifestIfNeeded error:', err);
+      const fallback = await loadCachedGalleryManifest();
+      return fallback.hasManifest ? fallback.manifest : [];
+    } finally {
+      videosManifestPromise = null;
+    }
+  })();
+
+  return videosManifestPromise;
+}
+
+async function getVideosManifest() {
+  const cached = await loadCachedGalleryManifest();
+
+  if (cached.hasManifest) {
+    if (typeof scheduleIdleTask === 'function') {
+      scheduleIdleTask(() => cacheGalleryPostersIfNeeded(cached.manifest), 'cacheGalleryPostersIfNeeded');
+    } else if (typeof window !== 'undefined' && typeof window.scheduleIdleTask === 'function') {
+      window.scheduleIdleTask(() => cacheGalleryPostersIfNeeded(cached.manifest), 'cacheGalleryPostersIfNeeded');
+    }
+
+    if (!cached.isFresh && typeof navigator !== 'undefined' && navigator.onLine !== false) {
+      refreshGalleryManifestInBackground();
+    }
+    return cached.manifest;
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return [];
+  }
+
+  const fetched = await fetchVideosManifestIfNeeded();
+  if (hasUsableGalleryManifest(fetched)) {
+    if (typeof scheduleIdleTask === 'function') {
+      scheduleIdleTask(() => cacheGalleryPostersIfNeeded(fetched), 'cacheGalleryPostersIfNeeded');
+    } else if (typeof window !== 'undefined' && typeof window.scheduleIdleTask === 'function') {
+      window.scheduleIdleTask(() => cacheGalleryPostersIfNeeded(fetched), 'cacheGalleryPostersIfNeeded');
+    }
+    return fetched;
+  }
+
+  return [];
+}
+
+async function cacheGalleryPostersIfNeeded(manifest = []) {
+  const signature = getGalleryPosterCacheSignature(manifest);
+  if (!signature) return;
+
+  const now = Date.now();
+  try {
+    const { lastCheckedAt, signature: previousSignature } = await getGalleryPostersCacheMetadata();
+    const isRecent = now - lastCheckedAt < GALLERY_POSTERS_CACHE_CHECK_TTL_MS;
+
+    if (isRecent && previousSignature === signature) {
+      return;
+    }
+
+    await cacheGalleryPosters(manifest);
+    await setGalleryPostersCacheMetadata(signature, now);
+  } catch (err) {
+    console.warn('Failed to check gallery poster cache freshness', err);
+    if (typeof recordPerfFallback === 'function') {
+      recordPerfFallback('galleryPosters', 'Poster cache check failed');
+    }
+  }
+}
+
+async function warmGalleryPosterHydration() {
+  if (galleryHydrationWarmPromise) return galleryHydrationWarmPromise;
+
+  galleryHydrationWarmPromise = (async () => {
+    try {
+      await getVideosManifest();
+    } catch (err) {
+      console.warn('Failed to warm gallery poster hydration', err);
+    }
+  })();
+
+  return galleryHydrationWarmPromise;
+}
+
+async function cacheAppliedWallpaperVideo(selection) {
+  if (!selection) return;
+
+  const videoCacheKey = selection.videoCacheKey || '';
+  const videoUrl = selection.videoUrl || '';
+  const targetUrl = isRemoteVideoUrl(videoCacheKey)
+    ? videoCacheKey
+    : (isRemoteVideoUrl(videoUrl) ? videoUrl : '');
+
+  const userPrefix = typeof USER_WALLPAPER_CACHE_PREFIX !== 'undefined'
+    ? USER_WALLPAPER_CACHE_PREFIX
+    : 'https://user-wallpapers.local/';
+
+  if (targetUrl && targetUrl.startsWith(userPrefix)) {
+    await clearCachedAppliedVideoUrl();
+    return;
+  }
+
+  try {
+    await pruneCachedVideos(targetUrl);
+
+    if (targetUrl) {
+      await cacheAsset(targetUrl);
+      await setCachedAppliedVideoUrl(targetUrl);
+    } else {
+      await clearCachedAppliedVideoUrl();
+    }
+  } catch (err) {
+    console.warn('Failed to cache applied video', err);
+  }
+}
+
+async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
+  try {
+    if (!posterUrl) {
+      await clearAppliedPosterMetadata();
+      const posterKey = typeof CACHED_APPLIED_POSTER_CACHE_KEY !== 'undefined'
+        ? CACHED_APPLIED_POSTER_CACHE_KEY
+        : 'cachedAppliedPoster';
+      await deleteCachedObject(posterKey);
+      return;
+    }
+
+    let urlToStore = posterUrl;
+
+    if (isRemoteHttpUrl(posterUrl)) {
+      await cacheAsset(posterUrl);
+    } else if (posterUrl.startsWith('blob:')) {
+      if (posterCacheKey && !posterCacheKey.startsWith('blob:')) {
+        urlToStore = posterCacheKey;
+      }
+    }
+
+    if (isRemoteHttpUrl(urlToStore)) {
+      await cacheAsset(urlToStore);
+    }
+
+    // Store the URL placeholder
+    await setCachedAppliedPosterUrl(urlToStore);
+
+    const cacheKeyToUse = posterCacheKey || posterUrl;
+
+    // Defer poster encoding so Apply stays responsive; work runs when the browser is idle.
+    const posterDataTaskState = { phase: 0, dataUrl: '' };
+
+    const runChunked = typeof scheduleIdleChunkedTask === 'function'
+      ? scheduleIdleChunkedTask
+      : (typeof window !== 'undefined' && typeof window.scheduleIdleChunkedTask === 'function'
+          ? window.scheduleIdleChunkedTask
+          : null);
+
+    if (runChunked) {
+      runChunked('posterDataUrlGeneration', async (state = posterDataTaskState) => {
+        try {
+          if (state.phase === 0) {
+            const storedUrl = await getCachedAppliedPosterUrl();
+            if (storedUrl !== urlToStore) {
+              return { done: true, state: { ...state, phase: 3 } }; // Race guard: applied poster changed before we started.
+            }
+            return { done: false, state: { ...state, phase: 1 } };
+          }
+
+          if (state.phase === 1) {
+            let dataUrl = '';
+            const blob = await resolvePosterBlob(urlToStore, cacheKeyToUse);
+            if (blob && blob.size > 0) {
+              dataUrl = await createStartupPosterDataUrl(blob);
+            }
+            return { done: false, state: { ...state, dataUrl, phase: 2 } };
+          }
+
+          if (state.phase === 2) {
+            const latestUrl = await getCachedAppliedPosterUrl();
+            if (latestUrl !== urlToStore) {
+              return { done: true, state: { ...state, phase: 3 } }; // Race guard: poster switched while encoding.
+            }
+
+            if (state.dataUrl && state.dataUrl.length <= TARGET_STARTUP_POSTER_DATA_URL_LENGTH) {
+              await setCachedAppliedPosterDataUrl(state.dataUrl);
+            } else {
+              await clearCachedAppliedPosterDataUrl();
+            }
+            return { done: true, state: { ...state, phase: 3 } };
+          }
+
+          return { done: true, state };
+        } catch (e) {
+          console.warn('Failed to generate data URL for poster', e);
+          return { done: true, state: { ...state, phase: 3 } };
+        }
+      }, posterDataTaskState);
+    }
+  } catch (err) {
+    console.warn('Failed to cache applied wallpaper poster', err);
+  }
+}
+
 // --- Window Property Bridges for Seamless Multi-Script Access ---
 if (typeof window !== 'undefined') {
   if (!('currentWallpaperSelection' in window)) {
@@ -432,6 +689,16 @@ if (typeof window !== 'undefined') {
       enumerable: true
     });
   }
+
+  // Window function bindings
+  window.loadCachedGalleryManifest = loadCachedGalleryManifest;
+  window.refreshGalleryManifestInBackground = refreshGalleryManifestInBackground;
+  window.fetchVideosManifestIfNeeded = fetchVideosManifestIfNeeded;
+  window.getVideosManifest = getVideosManifest;
+  window.cacheGalleryPostersIfNeeded = cacheGalleryPostersIfNeeded;
+  window.warmGalleryPosterHydration = warmGalleryPosterHydration;
+  window.cacheAppliedWallpaperVideo = cacheAppliedWallpaperVideo;
+  window.cacheAppliedWallpaperPoster = cacheAppliedWallpaperPoster;
 }
 
 // --- Homebase Wallpaper Controller Namespace ---
@@ -459,6 +726,16 @@ window.HomebaseWallpaperController = {
   // Pure Helpers: UI Controls & Playback Cleanup
   cleanupBackgroundPlayback,
   setNextWallpaperButtonLoading,
+
+  // Cache & Manifest Pipeline
+  loadCachedGalleryManifest,
+  refreshGalleryManifestInBackground,
+  fetchVideosManifestIfNeeded,
+  getVideosManifest,
+  cacheGalleryPostersIfNeeded,
+  warmGalleryPosterHydration,
+  cacheAppliedWallpaperVideo,
+  cacheAppliedWallpaperPoster,
 
   // State Accessors
   getCurrentWallpaperSelection: () => currentWallpaperSelection,

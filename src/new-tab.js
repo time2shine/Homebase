@@ -71,49 +71,8 @@ const SIDEBAR_COLLAPSE_RATIO = 0.49;
 
 const DOCK_COLLAPSE_RATIO = 0.32;
 
-const TARGET_STARTUP_POSTER_DATA_URL_LENGTH = 240000;
-const STARTUP_POSTER_MAX_DIM_SEQUENCE = [1280, 960, 720];
-const STARTUP_POSTER_QUALITY_SEQUENCE = [0.76, 0.68, 0.6];
-const DAILY_ROTATION_SEEN_DELAY_MS = 8000;
+// Wallpaper constants, state, and rotation helpers extracted to wallpaper-controller.js
 
-const VIDEOS_JSON_URL = 'https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/manifest.json';
-const GALLERY_ASSETS_BASE_URL = 'https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/v/';
-const VIDEOS_JSON_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const GALLERY_MANIFEST_FETCH_TIMEOUT_MS = 7000;
-const GALLERY_POSTERS_CACHE_CHECK_TTL_MS = 24 * 60 * 60 * 1000;
-
-let videosManifestPromise = null;
-let pendingDailyRotationTimer = null;
-
-function getLocalDayStamp(ts) {
-
-  const date = new Date(ts || 0);
-
-  const year = date.getFullYear();
-
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-
-}
-
-function isNewLocalDay(prevTs, nowTs) {
-
-  return getLocalDayStamp(prevTs || 0) !== getLocalDayStamp(nowTs || Date.now());
-
-}
-
-function isDailyWallpaperRotationDue(selection, allowDailyRotation, now = Date.now()) {
-
-  if (allowDailyRotation === false || !selection) return false;
-
-  const selectedAt = Number(selection.selectedAt || 0);
-
-  return Number.isFinite(selectedAt) && selectedAt > 0 && isNewLocalDay(selectedAt, now);
-
-}
 
 // syncWallpaperStartupState extracted to wallpaper-storage.js
 
@@ -594,48 +553,8 @@ async function openWallpaperGallery(triggerSource = 'dock-gallery-btn') {
   }
 }
 
-let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
-let backgroundVideoSourceLoadPromise = Promise.resolve();
-let backgroundVideoSourceLoadGeneration = 0;
-let wallpaperVideoStartSequence = 0;
-let backgroundVideoCrossfadeSetupKey = '';
+// Video playback state and cleanupBackgroundPlayback extracted to wallpaper-controller.js
 
-// --- Global Controller for Video Events ---
-let videoPlaybackController = null;
-let backgroundCrossfadeTimeout = null;
-
-function cleanupBackgroundPlayback() {
-  backgroundVideoSourceLoadGeneration += 1;
-  backgroundVideoCrossfadeSetupKey = '';
-
-  // 1. Send the "Abort" signal to kill all active video listeners immediately
-  if (videoPlaybackController) {
-
-    videoPlaybackController.abort();
-
-    videoPlaybackController = null;
-
-  }
-
-  if (backgroundCrossfadeTimeout) {
-    clearTimeout(backgroundCrossfadeTimeout);
-    backgroundCrossfadeTimeout = null;
-  }
-
-  // 2. Pause videos to stop CPU usage
-  const videos = document.querySelectorAll('.background-video');
-
-  videos.forEach(v => {
-
-    v.pause();
-
-    v.classList.remove('is-active');
-    v.classList.remove('with-transition');
-    v.classList.remove('on-top');
-
-  });
-
-}
 
 
 
@@ -831,25 +750,8 @@ function updateSidebarCollapseState() {
 
 // ===============================================
 
-function hasUsableGalleryManifest(value) {
+// hasUsableGalleryManifest & getGalleryManifestTimestamp extracted to wallpaper-controller.js
 
-  if (!Array.isArray(value) || value.length === 0) return false;
-
-  return value.some((item) => item && typeof item === 'object' && item.id);
-
-}
-
-function getGalleryManifestTimestamp(value) {
-
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-
-  if (!value) return 0;
-
-  const parsed = new Date(value).getTime();
-
-  return Number.isFinite(parsed) ? parsed : 0;
-
-}
 
 async function loadCachedGalleryManifest() {
 
@@ -875,47 +777,8 @@ async function loadCachedGalleryManifest() {
 
 }
 
-async function fetchGalleryManifestWithTimeout(url, options = {}, timeoutMs = GALLERY_MANIFEST_FETCH_TIMEOUT_MS) {
+// fetchGalleryManifestWithTimeout extracted to wallpaper-controller.js
 
-  const controller = new AbortController();
-
-  const timeout = Number.isFinite(timeoutMs) ? timeoutMs : GALLERY_MANIFEST_FETCH_TIMEOUT_MS;
-
-  let didTimeout = false;
-
-  const timeoutId = setTimeout(() => {
-
-    didTimeout = true;
-
-    controller.abort();
-
-  }, timeout);
-
-  try {
-
-    return await fetch(url, { ...options, signal: controller.signal });
-
-  } catch (error) {
-
-    if (didTimeout) {
-
-      const timeoutError = new Error('Gallery manifest request timed out');
-
-      timeoutError.name = 'AbortError';
-
-      throw timeoutError;
-
-    }
-
-    throw error;
-
-  } finally {
-
-    clearTimeout(timeoutId);
-
-  }
-
-}
 
 function refreshGalleryManifestInBackground() {
 
@@ -1055,7 +918,7 @@ async function cacheGalleryPostersIfNeeded(manifest = []) {
 }
 
 
-let galleryHydrationWarmPromise = null;
+// galleryHydrationWarmPromise extracted to wallpaper-controller.js
 
 
 
@@ -1236,235 +1099,8 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
   }
 }
 
-/**
- * Creates a resized/compressed Data URL specifically for instant startup cache.
- * Keeps the file within localStorage limits (~5MB) without affecting the actual high-res wallpaper.
- */
-async function createOptimizedPosterDataUrl(blob, options = {}) {
-  if (!blob) {
-    return '';
-  }
+// Poster encoding helpers and buildVideoPosterFromFile extracted to wallpaper-controller.js
 
-  const requestedMaxDim = Number(options.maxDim);
-  const maxDim = Number.isFinite(requestedMaxDim) && requestedMaxDim > 0 ? requestedMaxDim : 2000;
-  const requestedQuality = Number(options.quality);
-  const quality = Number.isFinite(requestedQuality) ? Math.min(1, Math.max(0.01, requestedQuality)) : 0.8;
-  const preferredType = typeof options.type === 'string' && options.type ? options.type : 'image/webp';
-  let objectUrl = '';
-
-  try {
-    const img = new Image();
-
-    objectUrl = URL.createObjectURL(blob);
-
-    await new Promise((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error('Image failed to load'));
-      img.src = objectUrl;
-    });
-
-    if (typeof img.decode === 'function') {
-      try {
-        await img.decode();
-      } catch (e) {}
-    }
-
-    let w = img.width;
-    let h = img.height;
-
-    if (!w || !h) {
-      return '';
-    }
-
-    if (w > maxDim || h > maxDim) {
-      const ratio = Math.min(maxDim / w, maxDim / h);
-      w = Math.round(w * ratio);
-      h = Math.round(h * ratio);
-    }
-
-    const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : document.createElement('canvas');
-
-    canvas.width = w;
-    canvas.height = h;
-
-    const ctx = canvas.getContext('2d');
-
-    if (!ctx) {
-      return '';
-    }
-
-    ctx.drawImage(img, 0, 0, w, h);
-
-    const canvasToBlob = async (outputType) => {
-      try {
-        if (typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas && typeof canvas.convertToBlob === 'function') {
-          return await canvas.convertToBlob({ type: outputType, quality });
-        }
-
-        return await new Promise((resolve) => {
-          if (typeof canvas.toBlob === 'function') {
-            canvas.toBlob((result) => resolve(result || null), outputType, quality);
-          } else {
-            resolve(null);
-          }
-        });
-      } catch (err) {
-        return null;
-      }
-    };
-
-    let optimizedBlob = await canvasToBlob(preferredType);
-
-    if (
-      preferredType === 'image/webp' &&
-      optimizedBlob &&
-      optimizedBlob.type &&
-      optimizedBlob.type !== 'image/webp'
-    ) {
-      optimizedBlob = null;
-    }
-
-    if ((!optimizedBlob || !optimizedBlob.size) && preferredType !== 'image/jpeg') {
-      optimizedBlob = await canvasToBlob('image/jpeg');
-    }
-
-    if (!optimizedBlob || !optimizedBlob.size) {
-      return '';
-    }
-
-    const dataUrl = await blobToDataUrl(optimizedBlob);
-
-    return typeof dataUrl === 'string' ? dataUrl : '';
-  } catch (err) {
-    return '';
-  } finally {
-    if (objectUrl) {
-      try {
-        URL.revokeObjectURL(objectUrl);
-      } catch (e) {}
-    }
-  }
-}
-
-async function createStartupPosterDataUrl(blob) {
-  if (!blob || blob.size <= 0) {
-    return '';
-  }
-
-  const rawDataUrl = await blobToDataUrl(blob);
-
-  if (rawDataUrl && rawDataUrl.length <= TARGET_STARTUP_POSTER_DATA_URL_LENGTH) {
-    return rawDataUrl;
-  }
-
-  for (const maxDim of STARTUP_POSTER_MAX_DIM_SEQUENCE) {
-    for (const quality of STARTUP_POSTER_QUALITY_SEQUENCE) {
-      const optimizedDataUrl = await createOptimizedPosterDataUrl(blob, {
-        maxDim,
-        type: 'image/webp',
-        quality
-      });
-
-      if (optimizedDataUrl && optimizedDataUrl.length <= TARGET_STARTUP_POSTER_DATA_URL_LENGTH) {
-        return optimizedDataUrl;
-      }
-    }
-  }
-
-  return '';
-}
-
-
-
-async function buildVideoPosterFromFile(file) {
-
-  return new Promise((resolve) => {
-
-    try {
-
-      const objectUrl = URL.createObjectURL(file);
-
-      const video = document.createElement('video');
-
-      video.preload = 'metadata';
-
-      video.muted = true;
-
-      video.playsInline = true;
-
-      video.src = objectUrl;
-
-
-
-      const cleanup = () => {
-
-        URL.revokeObjectURL(objectUrl);
-
-      };
-
-
-
-      const finalize = (posterUrl) => {
-
-        cleanup();
-
-        resolve(posterUrl);
-
-      };
-
-
-
-      video.addEventListener('loadeddata', () => {
-
-        try {
-
-          const maxDim = 1280;
-
-          const vw = Math.max(1, video.videoWidth || maxDim);
-
-          const vh = Math.max(1, video.videoHeight || maxDim);
-
-          const scale = Math.min(1, maxDim / Math.max(vw, vh));
-
-          const canvas = document.createElement('canvas');
-
-          canvas.width = Math.max(1, Math.round(vw * scale));
-
-          canvas.height = Math.max(1, Math.round(vh * scale));
-
-          const ctx = canvas.getContext('2d');
-
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-          const dataUrl = canvas.toDataURL('image/webp');
-
-          finalize(dataUrl);
-
-        } catch (err) {
-
-          console.warn('Failed to create poster from video upload', err);
-
-          finalize('');
-
-        }
-
-      });
-
-
-
-      video.addEventListener('error', () => finalize(''));
-
-    } catch (err) {
-
-      console.warn('Error while generating video poster', err);
-
-      resolve('');
-
-    }
-
-  });
-
-}
 
 
 
@@ -1672,61 +1308,8 @@ function applyWallpaperBackground(posterUrl) {
 
 
 
-function getWallpaperUrls(id) {
-  if (!id || id === 'fallback') {
-    return { videoUrl: '', posterUrl: '', thumbUrl: '' };
-  }
+// getWallpaperUrls, isUserUploadSelection, isGallerySelection, getGalleryUrlsOrNull extracted to wallpaper-controller.js
 
-  const normalizedId = String(id || '').trim();
-  if (!normalizedId) {
-    return { videoUrl: '', posterUrl: '', thumbUrl: '' };
-  }
-
-  const quality = wallpaperQualityPreference === 'high' ? 'high' : 'low';
-  const basePath = `${GALLERY_ASSETS_BASE_URL}${normalizedId}/`;
-  const videoFile = quality === 'high' ? '1080p.mp4' : '720p.mp4';
-  const posterFile = quality === 'high' ? 'poster_1080p.webp' : 'poster_720p.webp';
-
-  return {
-    videoUrl: `${basePath}${videoFile}`,
-    posterUrl: `${basePath}${posterFile}`,
-    thumbUrl: `${basePath}thumb.webp`
-  };
-}
-
-function isUserUploadSelection(sel) {
-  if (!sel) return false;
-  const startsWithUserPrefix = (val = '') => typeof val === 'string' && val.startsWith(USER_WALLPAPER_CACHE_PREFIX);
-  return (
-    startsWithUserPrefix(sel.videoCacheKey || '') ||
-    startsWithUserPrefix(sel.posterCacheKey || '') ||
-    startsWithUserPrefix(sel.videoUrl || '') ||
-    startsWithUserPrefix(sel.posterUrl || '') ||
-    sel.source === 'user'
-  );
-}
-
-function isGallerySelection(sel) {
-  if (!sel || isUserUploadSelection(sel)) return false;
-
-  const id = String(sel.id || '').trim();
-  const fromGalleryBase = (val = '') => typeof val === 'string' && val.startsWith(GALLERY_ASSETS_BASE_URL);
-  const looksLikeGalleryId = id && id !== 'fallback' && /^[a-z0-9_-]{3,}$/i.test(id);
-  const hasGalleryUrl =
-    fromGalleryBase(sel.videoUrl || '') ||
-    fromGalleryBase(sel.posterUrl || '') ||
-    fromGalleryBase(sel.videoCacheKey || '') ||
-    fromGalleryBase(sel.posterCacheKey || '');
-
-  return hasGalleryUrl || looksLikeGalleryId;
-}
-
-function getGalleryUrlsOrNull(selection) {
-  if (!selection || !isGallerySelection(selection)) return null;
-  const urls = getWallpaperUrls(selection.id);
-  if (!urls || !urls.videoUrl || !urls.posterUrl) return null;
-  return urls;
-}
 
 function rebuildCurrentSelectionFromGallery() {
   const urls = getGalleryUrlsOrNull(currentWallpaperSelection);
@@ -1808,33 +1391,8 @@ async function pickNextWallpaper(manifest) {
 
 
 
-async function checkBatteryStatus() {
+// checkBatteryStatus extracted to wallpaper-controller.js
 
-  if ('getBattery' in navigator) {
-
-    try {
-
-      const battery = await navigator.getBattery();
-
-      if (!battery.charging) {
-
-        hbDebugLog('Battery mode detected: Pausing live wallpaper.');
-
-        return true;
-
-      }
-
-    } catch (e) {
-
-      // Ignore errors
-
-    }
-
-  }
-
-  return false;
-
-}
 
 
 
@@ -2346,9 +1904,7 @@ const appWallpaperTypeSelect = document.getElementById('app-wallpaper-type-selec
 
 const appWallpaperQualitySelect = document.getElementById('app-wallpaper-quality-select');
 
-const NEXT_WALLPAPER_TOOLTIP_DEFAULT = nextWallpaperBtn?.getAttribute('aria-label') || 'Next Wallpaper';
-
-const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
+// NEXT_WALLPAPER_TOOLTIP_* extracted to wallpaper-controller.js
 
 const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
 const wallpaperQualityToggle = document.getElementById('gallery-wallpaper-quality-toggle');
@@ -2614,10 +2170,7 @@ let folderMetadata = {};
 
 let lastUsedBookmarkFolderId = null;
 
-let currentWallpaperSelection = null;
-
-let wallpaperTypePreference = null; // 'video' | 'static'
-let wallpaperQualityPreference = 'low';
+// currentWallpaperSelection, wallpaperTypePreference, wallpaperQualityPreference extracted to wallpaper-controller.js
 let dailyRotationPreference = true;
 let initialWallpaperState = {};
 
@@ -2683,25 +2236,8 @@ let appBatteryOptimizationPreference = false;
 
 let appCinemaModePreference = false;
 
-function setNextWallpaperButtonLoading(isLoading) {
+// setNextWallpaperButtonLoading extracted to wallpaper-controller.js
 
-  if (!nextWallpaperBtn) return;
-
-  nextWallpaperBtn.disabled = isLoading;
-
-  nextWallpaperBtn.classList.toggle('is-loading', isLoading);
-
-  nextWallpaperBtn.setAttribute('aria-busy', isLoading ? 'true' : 'false');
-
-  const tooltip = nextWallpaperBtn.querySelector('.tooltip-popup');
-
-  if (tooltip) {
-
-    tooltip.textContent = isLoading ? NEXT_WALLPAPER_TOOLTIP_LOADING : NEXT_WALLPAPER_TOOLTIP_DEFAULT;
-
-  }
-
-}
 
 
 

@@ -86,7 +86,20 @@ async function runSmoke(smokeRoot, browserPath) {
   await pageClient.send("Page.enable");
   await pageClient.send("Page.navigate", { url: pageUrl });
   await waitForPageLoad(pageClient);
-  await waitForSmokeReady(pageClient);
+  try {
+    await waitForSmokeReady(pageClient);
+  } catch (err) {
+    if (cdpIssues.length > 0) {
+      console.error("CDP Issues caught during startup:");
+      cdpIssues.forEach((issue) => console.error("  " + issue));
+    }
+    const pageErrors = await evaluate(pageClient, "window.__homebaseSmokeConsoleErrors || []").catch(() => []);
+    if (pageErrors.length > 0) {
+      console.error("Page console errors:");
+      pageErrors.forEach((e) => console.error("  " + JSON.stringify(e)));
+    }
+    throw err;
+  }
 
   const smokeResult = await evaluate(pageClient, getSmokeCheckExpression());
   const failures = analyzeSmokeResult(smokeResult, cdpIssues);
@@ -136,6 +149,7 @@ function analyzeSmokeResult(smokeResult, cdpIssues) {
     HomebaseSearchUIController: smokeResult.controllers?.searchUI,
     HomebaseSearchInteractionController: smokeResult.controllers?.searchInteraction,
     HomebaseFaviconPipeline: smokeResult.controllers?.faviconPipeline,
+    HomebaseWallpaperController: smokeResult.controllers?.wallpaper,
     HomebaseStorage: smokeResult.controllers?.storage
   };
 
@@ -211,6 +225,7 @@ function getSmokeCheckExpression() {
         searchUI: typeof (window.HomebaseSearchUiController || window.HomebaseSearchUIController) === 'object' && (window.HomebaseSearchUiController || window.HomebaseSearchUIController) !== null,
         searchInteraction: typeof window.HomebaseSearchInteractionController === 'object' && window.HomebaseSearchInteractionController !== null,
         faviconPipeline: typeof window.HomebaseFaviconPipeline === 'object' && window.HomebaseFaviconPipeline !== null,
+        wallpaper: typeof window.HomebaseWallpaperController === 'object' && window.HomebaseWallpaperController !== null,
         storage: typeof window.HomebaseStorage === 'object' && window.HomebaseStorage !== null
       },
       perf: {

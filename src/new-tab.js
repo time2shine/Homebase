@@ -977,104 +977,6 @@ const FAVICON_OBSERVER_THRESHOLD = 0.01;
 
 let faviconIntersectionObserver = null;
 
-function debugFavicon(event, details) {
-  // Handled in HomebaseFaviconPipeline
-}
-
-function setFaviconResolved(domainKey, url, options = {}) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.setResolvedEntry === 'function') {
-    return window.HomebaseFaviconPipeline.setResolvedEntry(domainKey, url, options);
-  }
-}
-
-function getFaviconResolvedEntry(domainKey) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.getResolvedEntry === 'function') {
-    return window.HomebaseFaviconPipeline.getResolvedEntry(domainKey);
-  }
-  return null;
-}
-
-function getFaviconResolvedUrl(domainKey) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.getResolvedUrl === 'function') {
-    return window.HomebaseFaviconPipeline.getResolvedUrl(domainKey);
-  }
-  return null;
-}
-
-function notifyFaviconWaiters(domainKey, resolved) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.notifyWaiters === 'function') {
-    return window.HomebaseFaviconPipeline.notifyWaiters(domainKey, resolved);
-  }
-}
-
-function runNextFaviconTask() {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.runNextTask === 'function') {
-    return window.HomebaseFaviconPipeline.runNextTask();
-  }
-}
-
-function enqueueFaviconTask(task) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.enqueueTask === 'function') {
-    return window.HomebaseFaviconPipeline.enqueueTask(task);
-  }
-  return Promise.resolve();
-}
-
-function getFaviconCache() {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.getFaviconCache === 'function') {
-    return window.HomebaseFaviconPipeline.getFaviconCache();
-  }
-  return typeof caches !== 'undefined' ? caches.open('favicons-v1') : null;
-}
-
-function cacheKeyFor(domainKey, size) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.cacheKeyFor === 'function') {
-    return window.HomebaseFaviconPipeline.cacheKeyFor(domainKey, size);
-  }
-  return `/favicons/${domainKey}@${size || 48}`;
-}
-
-async function readIconFromCache(cacheKey) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.readIconFromCache === 'function') {
-    return window.HomebaseFaviconPipeline.readIconFromCache(cacheKey);
-  }
-  return null;
-}
-
-async function writeIconToCache(cacheKey, response) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.writeIconToCache === 'function') {
-    return window.HomebaseFaviconPipeline.writeIconToCache(cacheKey, response);
-  }
-  return false;
-}
-
-async function responseToObjectURL(response) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.responseToObjectURL === 'function') {
-    return window.HomebaseFaviconPipeline.responseToObjectURL(response);
-  }
-  return '';
-}
-
-function xhrFetchBlob(url, timeoutMs = 8000) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.xhrFetchBlob === 'function') {
-    return window.HomebaseFaviconPipeline.xhrFetchBlob(url, timeoutMs);
-  }
-  return Promise.resolve(null);
-}
-
-function blobToResponse(blob) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.blobToResponse === 'function') {
-    return window.HomebaseFaviconPipeline.blobToResponse(blob);
-  }
-  return typeof Response !== 'undefined' ? new Response(blob) : null;
-}
-
-function setFaviconObjectUrlForImage(img, objectUrl) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.setObjectUrlForImage === 'function') {
-    return window.HomebaseFaviconPipeline.setObjectUrlForImage(img, objectUrl);
-  }
-}
-
 function revokeFaviconObjectUrl(img) {
   if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.revokeObjectUrl === 'function') {
     return window.HomebaseFaviconPipeline.revokeObjectUrl(img);
@@ -1087,44 +989,10 @@ function setFaviconImageSrc(img, url) {
   }
 }
 
-function loadFaviconObjectUrlIntoImage(img, objectUrl, shouldAbort, acceptCandidate) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.loadObjectUrlIntoImage === 'function') {
-    return window.HomebaseFaviconPipeline.loadObjectUrlIntoImage(img, objectUrl, shouldAbort, acceptCandidate);
-  }
-  return Promise.resolve({ accepted: false, aborted: false });
-}
-
-function testFaviconCandidateUrl(candidate, acceptCandidate) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.testCandidateUrl === 'function') {
-    return window.HomebaseFaviconPipeline.testCandidateUrl(candidate, acceptCandidate);
-  }
-  return Promise.resolve(false);
-}
-
-function testFaviconCandidateObjectUrl(objectUrl, acceptCandidate) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.testCandidateObjectUrl === 'function') {
-    return window.HomebaseFaviconPipeline.testCandidateObjectUrl(objectUrl, acceptCandidate);
-  }
-  return Promise.resolve(false);
-}
-
 function ensureFaviconObserver() {
   if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.ensureObserver === 'function') {
     return window.HomebaseFaviconPipeline.ensureObserver();
   }
-}
-
-function queueFaviconResolution(img, resolveTask) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.queueResolution === 'function') {
-    return window.HomebaseFaviconPipeline.queueResolution(img, resolveTask);
-  }
-}
-
-function isValidFaviconTargetUrl(rawUrl) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.isValidTargetUrl === 'function') {
-    return window.HomebaseFaviconPipeline.isValidTargetUrl(rawUrl);
-  }
-  return false;
 }
 
 function getDomainKeyFromUrl(rawUrl) {
@@ -1359,17 +1227,6 @@ function showDeleteConfirm(message, options = {}) {
 
 
 let bookmarkTreeFetchPromise = null;
-
-async function bookmarkNodeExists(id) {
-  if (!id || !browser.bookmarks || typeof browser.bookmarks.get !== 'function') return null;
-  try {
-    const node = await browser.bookmarks.get(id);
-    return Array.isArray(node) && node.length > 0;
-  } catch (err) {
-    console.warn('Bookmark node lookup failed', err);
-    return null;
-  }
-}
 
 function setChangeFolderButtonVisibility(visible) {
   if (!appBookmarksChangeRootBtn) return;
@@ -2276,34 +2133,9 @@ function flattenBookmarks(nodes) {
 
 }
 
-async function applyResolvedFaviconResult(options) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.applyResolvedFaviconResult === 'function') {
-    return window.HomebaseFaviconPipeline.applyResolvedFaviconResult(options);
-  }
-}
-
-async function resolveFaviconFromNetwork(options) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.resolveFaviconFromNetwork === 'function') {
-    return window.HomebaseFaviconPipeline.resolveFaviconFromNetwork(options);
-  }
-  return null;
-}
-
 async function resolveFaviconForImageTarget(options) {
   if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.resolveForImageTarget === 'function') {
     return window.HomebaseFaviconPipeline.resolveForImageTarget(options);
-  }
-}
-
-function ensureBookmarkFallback(wrapper, fallbackLetter) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.ensureBookmarkFallback === 'function') {
-    return window.HomebaseBookmarkGridController.ensureBookmarkFallback(wrapper, fallbackLetter);
-  }
-}
-
-function clearBookmarkImages(wrapper) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.clearBookmarkImages === 'function') {
-    return window.HomebaseBookmarkGridController.clearBookmarkImages(wrapper);
   }
 }
 
@@ -2316,12 +2148,6 @@ function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
 function renderFolderIconInto(wrapper, folderNode, iconKey) {
   if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.renderFolderIconInto === 'function') {
     return window.HomebaseBookmarkGridController.renderFolderIconInto(wrapper, folderNode, iconKey);
-  }
-}
-
-function renderBookmark(bookmarkNode) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.renderBookmark === 'function') {
-    return window.HomebaseBookmarkGridController.renderBookmark(bookmarkNode);
   }
 }
 
@@ -2463,25 +2289,7 @@ async function deleteBookmarkOrFolder(id, isFolder, sourceTileEl = null) {
 
 /**
 
- * NEW: Auto-resizes a textarea to fit its content.
-
- * (Around line 1178)
-
  */
-
-function autoResizeTextarea(textarea) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.autoResizeTextarea === 'function') {
-    return window.HomebaseBookmarkGridController.autoResizeTextarea(textarea);
-  }
-}
-
-
-
-function renderBookmarkFolder(folderNode) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.renderBookmarkFolder === 'function') {
-    return window.HomebaseBookmarkGridController.renderBookmarkFolder(folderNode);
-  }
-}
 
 
 
@@ -2592,18 +2400,6 @@ function getDefaultBookmarkParentId() {
   return activeHomebaseFolderId || null;
 }
 
-function createBackButton(parentId) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.createBackButton === 'function') {
-    return window.HomebaseBookmarkGridController.createBackButton(parentId);
-  }
-}
-
-function createNodeForVirtualizer(node) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.createNodeForVirtualizer === 'function') {
-    return window.HomebaseBookmarkGridController.createNodeForVirtualizer(node);
-  }
-}
-
 function updateElementData(el, node) {
   if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.updateElementData === 'function') {
     return window.HomebaseBookmarkGridController.updateElementData(el, node);
@@ -2615,13 +2411,6 @@ function getIconKeyForNode(node, options = {}) {
     return window.HomebaseBookmarkGridController.getIconKeyForNode(node, options);
   }
   return '';
-}
-
-function metadataEntriesEqual(previousEntry, nextEntry) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.metadataEntriesEqual === 'function') {
-    return window.HomebaseBookmarkGridController.metadataEntriesEqual(previousEntry, nextEntry);
-  }
-  return previousEntry === nextEntry;
 }
 
 function getChangedMetadataIds(previousMetadata, nextMetadata) {
@@ -2643,18 +2432,6 @@ function patchActiveGridMetadataItems(activeNode, changedIds) {
     return window.HomebaseBookmarkGridController.patchActiveGridMetadataItems(activeNode, changedIds);
   }
   return false;
-}
-
-function updateVirtualGrid() {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.updateVirtualGrid === 'function') {
-    return window.HomebaseBookmarkGridController.updateVirtualGrid();
-  }
-}
-
-function initVirtualizer(allItems) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.initVirtualizer === 'function') {
-    return window.HomebaseBookmarkGridController.initVirtualizer(allItems);
-  }
 }
 
 function disableVirtualizer() {
@@ -2912,11 +2689,7 @@ function showGridItemRenameInput(gridItem, bookmarkNode, options = {}) {
 
  */
 
-function setupBookmarkFolderAddTooltip(addButton, addTooltip) {
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.setupBookmarkFolderAddTooltip === 'function') {
-    return window.HomebaseBookmarkGridController.setupBookmarkFolderAddTooltip(addButton, addTooltip);
-  }
-}
+
 
 function createFolderTabs(homebaseFolder, activeFolderId = null) {
   if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.createFolderTabs === 'function') {
@@ -4464,49 +4237,11 @@ function logInitSettled(name, result) {
     if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.hide === 'function') {
       return window.HomebaseContextMenuController.hide();
     }
-    folderContextMenu.classList.add('hidden');
-    gridFolderMenu.classList.add('hidden');
-    iconContextMenu.classList.add('hidden');
-    if (gridBlankMenu) {
-      gridBlankMenu.classList.add('hidden');
-    }
   };
 
   const positionContextMenuInViewport = (menuEl, clientX, clientY, opts = {}) => {
     if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.reposition === 'function') {
       return window.HomebaseContextMenuController.reposition(menuEl, clientX, clientY, opts);
-    }
-    if (!menuEl) return;
-    ensureMenuMountedToBody(menuEl);
-    const margin = Number.isFinite(opts.margin) ? opts.margin : 8;
-    const docEl = document.documentElement;
-    const viewportWidth = (docEl && docEl.clientWidth) || window.innerWidth || 0;
-    const viewportHeight = (docEl && docEl.clientHeight) || window.innerHeight || 0;
-    const wasHidden = menuEl.classList.contains('hidden');
-    const prevVisibility = menuEl.style.visibility;
-    const prevDisplay = menuEl.style.display;
-    const prevPointerEvents = menuEl.style.pointerEvents;
-    if (wasHidden) menuEl.classList.remove('hidden');
-    menuEl.style.visibility = 'hidden';
-    menuEl.style.pointerEvents = 'none';
-    const computedDisplay = window.getComputedStyle(menuEl).display;
-    if (computedDisplay === 'none') menuEl.style.display = 'flex';
-    const rect = menuEl.getBoundingClientRect();
-    const menuWidth = rect.width || 0;
-    const menuHeight = rect.height || 0;
-    const maxLeft = Math.max(margin, viewportWidth - menuWidth - margin);
-    const maxTop = Math.max(margin, viewportHeight - menuHeight - margin);
-    const left = Math.min(Math.max(clientX, margin), maxLeft);
-    const top = Math.min(Math.max(clientY, margin), maxTop);
-    menuEl.style.visibility = prevVisibility;
-    menuEl.style.display = prevDisplay;
-    menuEl.style.pointerEvents = prevPointerEvents;
-    menuEl.style.left = `${left}px`;
-    menuEl.style.top = `${top}px`;
-    if (opts.show === true) {
-      menuEl.classList.remove('hidden');
-    } else if (wasHidden) {
-      menuEl.classList.add('hidden');
     }
   };
 
@@ -4514,28 +4249,30 @@ function logInitSettled(name, result) {
     window.HomebaseDialogController.initialize();
   }
   if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.initialize === 'function') {
-    window.HomebaseContextMenuController.initialize();
-  }
-
-  window.addEventListener('click', hideAllContextMenus);
-
-  window.addEventListener('blur', hideAllContextMenus);
-
-
-
-  // Prevent clicks inside menus from closing them immediately
-
-  [folderContextMenu, gridFolderMenu, iconContextMenu, gridBlankMenu].forEach(menu => {
-
-    if (!menu) return;
-
-    menu.addEventListener('click', (e) => {
-
-      e.stopPropagation();
-
+    window.HomebaseContextMenuController.initialize({
+      getBookmarkTree: () => bookmarkTree,
+      findBookmarkNodeById: (root, id) => findBookmarkNodeById(root, id),
+      openFolderFromContext: (folderId) => openFolderFromContext(folderId),
+      openFolderAll: (folderId) => openFolderAll(folderId),
+      showGridItemRenameInput: (item, node) => showGridItemRenameInput(item, node),
+      showEditFolderModal: (folderNode) => showEditFolderModal(folderNode),
+      showEditBookmarkModal: (bookmarkId) => showEditBookmarkModal(bookmarkId),
+      deleteBookmarkOrFolder: (id, isFolder, sourceTile) => deleteBookmarkOrFolder(id, isFolder, sourceTile),
+      openMoveBookmarkModal: (id, isFolder) => openMoveBookmarkModal(id, isFolder),
+      openBookmarkInNewTab: (bookmarkId) => openBookmarkInNewTab(bookmarkId),
+      showAddBookmarkModal: () => showAddBookmarkModal(),
+      showAddFolderModal: () => showAddFolderModal(),
+      handlePasteBookmark: () => handlePasteBookmark(),
+      sortCurrentFolderByName: () => sortCurrentFolderByName(),
+      populateContainerMenu: (id, isFolder) => typeof populateContainerMenu === 'function' && populateContainerMenu(id, isFolder),
+      isContainerModeEnabled: () => Boolean(appContainerModePreference),
+      onContextChanged: (data) => {
+        currentContextItemId = data.itemId;
+        currentContextIsFolder = data.isFolder;
+        currentContextSourceTile = data.sourceTile;
+      }
     });
-
-  });
+  }
 
 
 
@@ -4614,167 +4351,6 @@ function logInitSettled(name, result) {
 
 
 
-    bookmarksGrid.addEventListener('contextmenu', (e) => {
-
-      if (e.target.closest('.grid-item-rename-input')) return;
-
-      const item = e.target.closest('.bookmark-item');
-
-      if (!item || item.classList.contains('back-button')) return;
-
-
-
-      e.preventDefault();
-
-      e.stopPropagation();
-
-      hideAllContextMenus();
-
-      const isFolder = item.dataset.isFolder === 'true';
-
-      const nodeId = item.dataset.bookmarkId;
-
-      currentContextItemId = nodeId || null;
-
-      currentContextIsFolder = isFolder;
-
-      currentContextSourceTile = item;
-
-
-
-      folderContextMenu.classList.add('hidden');
-
-      gridFolderMenu.classList.add('hidden');
-
-        iconContextMenu.classList.add('hidden');
-
-
-
-        const targetMenu = isFolder ? gridFolderMenu : iconContextMenu;
-
-        if (!targetMenu) return;
-
-
-
-        // Populate container menus depending on selection
-
-        if (appContainerModePreference) {
-
-          populateContainerMenu(nodeId, isFolder);
-
-        } else {
-
-          const iconGroup = document.getElementById('context-menu-container-group');
-
-          const folderGroup = document.getElementById('folder-context-container-group');
-
-          if (iconGroup) iconGroup.classList.add('hidden');
-
-          if (folderGroup) folderGroup.classList.add('hidden');
-
-        }
-
-
-
-        positionContextMenuInViewport(targetMenu, e.clientX, e.clientY, { show: true });
-
-      });
-
-    }
-
-  if (gridBlankMenu) {
-
-    // Change: Attach the listener to the whole document but skip interactive elements.
-    document.addEventListener('contextmenu', (e) => {
-
-      if (
-        e.target.closest('.bookmark-item') ||
-        e.target.closest('.sidebar') ||
-        e.target.closest('.dock') ||
-        e.target.closest('.widget-search') ||
-        e.target.closest('.search-toolbar-buttons') ||
-        e.target.closest('.modal-overlay:not(.hidden)') ||
-        ['INPUT', 'TEXTAREA', 'BUTTON', 'A'].includes(e.target.tagName)
-      ) {
-        return;
-      }
-
-      e.preventDefault();
-
-      e.stopPropagation();
-
-      hideAllContextMenus();
-
-      positionContextMenuInViewport(gridBlankMenu, e.clientX, e.clientY, { show: true });
-
-    });
-
-
-
-    const handleGridMenuAction = (action) => {
-
-      hideAllContextMenus();
-
-      if (action === 'bookmark') {
-
-        showAddBookmarkModal();
-
-      } else if (action === 'folder') {
-
-        showAddFolderModal();
-
-      } else if (action === 'manage') {
-
-        // Placeholder for future functionality
-
-      }
-
-    };
-
-
-
-    if (gridMenuCreateBookmarkBtn) {
-
-      gridMenuCreateBookmarkBtn.addEventListener('click', () => handleGridMenuAction('bookmark'));
-
-    }
-
-    if (gridMenuCreateFolderBtn) {
-
-      gridMenuCreateFolderBtn.addEventListener('click', () => handleGridMenuAction('folder'));
-
-    }
-
-    if (gridMenuManageBtn) {
-
-      gridMenuManageBtn.addEventListener('click', () => handleGridMenuAction('manage'));
-
-    }
-
-    if (gridMenuPasteBtn) {
-
-      gridMenuPasteBtn.addEventListener('click', () => {
-
-        hideAllContextMenus();
-
-        handlePasteBookmark();
-
-      });
-
-    }
-
-    if (gridMenuSortNameBtn) {
-
-      gridMenuSortNameBtn.addEventListener('click', () => {
-
-        hideAllContextMenus();
-
-        sortCurrentFolderByName();
-
-      });
-
-    }
-
   }
 
   document.addEventListener('paste', (e) => {
@@ -4787,153 +4363,7 @@ function logInitSettled(name, result) {
     handlePasteBookmark();
   });
 
-  // === Handle clicks inside the GRID FOLDER context menu ===
 
-  if (gridFolderMenu) {
-
-    gridFolderMenu.addEventListener('click', (e) => {
-
-      const button = e.target.closest('button.menu-item');
-
-      if (!button) return;
-
-      e.stopPropagation();
-
-
-
-      const action = button.dataset.action;
-
-
-
-      if (action === 'open') {
-
-        openFolderFromContext(currentContextItemId);
-
-      } else if (action === 'open-all') {
-
-        openFolderAll(currentContextItemId);
-
-      } else if (action === 'rename') {
-
-        // --- UPDATED ---
-
-        const gridItem = document.querySelector(`.bookmark-item[data-bookmark-id="${currentContextItemId}"]`);
-
-        const node = findBookmarkNodeById(bookmarkTree[0], currentContextItemId);
-
-        if (gridItem && node) {
-
-          showGridItemRenameInput(gridItem, node);
-
-        }
-
-        // --- END UPDATE ---
-
-      } else if (action === 'edit') {
-
-        if (bookmarkTree && bookmarkTree[0] && currentContextItemId) {
-
-          const folderNode = findBookmarkNodeById(bookmarkTree[0], currentContextItemId);
-
-          if (folderNode) {
-
-            showEditFolderModal(folderNode);
-
-          }
-
-        }
-
-      } else if (action === 'delete') {
-
-        // Delete a folder (and its children) in the grid
-
-        deleteBookmarkOrFolder(currentContextItemId, true, currentContextSourceTile);
-
-      } else if (action === 'move') {
-
-        openMoveBookmarkModal(currentContextItemId, true);
-
-      }
-
-      // Later you can handle other actions:
-
-      // if (action === 'edit') { ... }
-
-
-
-      hideAllContextMenus();
-
-    });
-
-  }
-
-
-
-  // === Handle clicks inside the ICON context menu ===
-
-  if (iconContextMenu) {
-
-    iconContextMenu.addEventListener('click', (e) => {
-
-      const button = e.target.closest('button.menu-item');
-
-      if (!button) return;
-
-      e.stopPropagation();
-
-
-
-      const action = button.dataset.action;
-
-
-
-      if (action === 'rename') {
-
-        // --- UPDATED ---
-
-        const gridItem = document.querySelector(`.bookmark-item[data-bookmark-id="${currentContextItemId}"]`);
-
-        const node = findBookmarkNodeById(bookmarkTree[0], currentContextItemId);
-
-        if (gridItem && node) {
-
-          showGridItemRenameInput(gridItem, node);
-
-        }
-
-        // --- END UPDATE ---
-
-      } else if (action === 'edit') {
-
-        showEditBookmarkModal(currentContextItemId);
-
-      } else if (action === 'delete') {
-
-        // Delete a regular bookmark icon
-
-        deleteBookmarkOrFolder(currentContextItemId, false, currentContextSourceTile);
-
-      } else if (action === 'move') {
-
-        openMoveBookmarkModal(currentContextItemId, false);
-
-      } else if (action === 'open-new-tab') {
-
-        openBookmarkInNewTab(currentContextItemId);
-
-      }
-
-      // Later you can handle:
-
-      // if (action === 'edit') { ... }
-
-
-
-      hideAllContextMenus();
-
-    });
-
-  }
 
 
 

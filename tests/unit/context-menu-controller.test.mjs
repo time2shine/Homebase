@@ -208,3 +208,80 @@ test('Context Menu Controller - initialize binds window click and blur', () => {
   assert.ok(clickListener, 'Window click listener attached');
   assert.ok(blurListener, 'Window blur listener attached');
 });
+
+test('Context Menu Controller - Escape key dismisses active menu', () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-icon-menu');
+
+  ctrl.initialize();
+  const keydownListener = env.windowListeners.find(l => l.type === 'keydown');
+  assert.ok(keydownListener, 'Window keydown listener attached');
+
+  ctrl.show(menu, 100, 100, { itemId: 'bm-123' });
+  assert.equal(menu.classList.contains('hidden'), false);
+  assert.ok(ctrl.getActiveMenu());
+
+  keydownListener.handler({ key: 'Escape' });
+  assert.equal(menu.classList.contains('hidden'), true);
+  assert.equal(ctrl.getActiveMenu(), null);
+});
+
+test('Context Menu Controller - default action routing to injected dependencies', () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-grid-folder-menu');
+
+  const actionsCalled = {};
+  ctrl.initialize({
+    openFolderFromContext: (id) => { actionsCalled.open = id; },
+    openFolderAll: (id) => { actionsCalled.openAll = id; },
+    deleteBookmarkOrFolder: (id, isFolder, tile) => { actionsCalled.delete = { id, isFolder, tile }; },
+    openMoveBookmarkModal: (id, isFolder) => { actionsCalled.move = { id, isFolder }; },
+    openBookmarkInNewTab: (id) => { actionsCalled.openTab = id; },
+    showAddBookmarkModal: () => { actionsCalled.addBookmark = true; },
+    showAddFolderModal: () => { actionsCalled.addFolder = true; },
+    handlePasteBookmark: () => { actionsCalled.paste = true; },
+    sortCurrentFolderByName: () => { actionsCalled.sortName = true; }
+  });
+
+  ctrl.show(menu, 50, 50, { itemId: 'folder-1', isFolder: true });
+
+  ctrl.handleAction('open');
+  assert.equal(actionsCalled.open, 'folder-1');
+
+  ctrl.show(menu, 50, 50, { itemId: 'folder-2', isFolder: true });
+  ctrl.handleAction('delete');
+  assert.equal(actionsCalled.delete.id, 'folder-2');
+  assert.equal(actionsCalled.delete.isFolder, true);
+
+  ctrl.handleAction('bookmark');
+  assert.equal(actionsCalled.addBookmark, true);
+
+  ctrl.handleAction('folder');
+  assert.equal(actionsCalled.addFolder, true);
+
+  ctrl.handleAction('paste');
+  assert.equal(actionsCalled.paste, true);
+
+  ctrl.handleAction('sort-name');
+  assert.equal(actionsCalled.sortName, true);
+});
+
+test('Context Menu Controller - onContextChanged callback fires on show', () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-icon-menu');
+
+  let contextUpdate = null;
+  ctrl.initialize({
+    onContextChanged: (data) => {
+      contextUpdate = data;
+    }
+  });
+
+  ctrl.show(menu, 100, 100, { itemId: 'bm-555', isFolder: false });
+  assert.ok(contextUpdate);
+  assert.equal(contextUpdate.itemId, 'bm-555');
+  assert.equal(contextUpdate.isFolder, false);
+});

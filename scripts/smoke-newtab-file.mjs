@@ -150,6 +150,7 @@ function analyzeSmokeResult(smokeResult, cdpIssues) {
     HomebaseSearchInteractionController: smokeResult.controllers?.searchInteraction,
     HomebaseFaviconPipeline: smokeResult.controllers?.faviconPipeline,
     HomebaseWallpaperController: smokeResult.controllers?.wallpaper,
+    HomebaseBookmarkGridController: smokeResult.controllers?.bookmarkGrid,
     HomebaseStorage: smokeResult.controllers?.storage
   };
 
@@ -226,6 +227,7 @@ function getSmokeCheckExpression() {
         searchInteraction: typeof window.HomebaseSearchInteractionController === 'object' && window.HomebaseSearchInteractionController !== null,
         faviconPipeline: typeof window.HomebaseFaviconPipeline === 'object' && window.HomebaseFaviconPipeline !== null,
         wallpaper: typeof window.HomebaseWallpaperController === 'object' && window.HomebaseWallpaperController !== null,
+        bookmarkGrid: typeof window.HomebaseBookmarkGridController === 'object' && window.HomebaseBookmarkGridController !== null,
         storage: typeof window.HomebaseStorage === 'object' && window.HomebaseStorage !== null
       },
       perf: {

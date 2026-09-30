@@ -1251,7 +1251,12 @@ function createBookmarkEditorContext() {
   return {
     getActiveHomebaseFolderId: () => activeHomebaseFolderId,
     getRootDisplayFolderId: () => rootDisplayFolderId,
-    getCurrentGridFolderNode: () => currentGridFolderNode,
+    getCurrentGridFolderNode: () => {
+      if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.getCurrentGridFolderNode === 'function') {
+        return window.HomebaseBookmarkGridController.getCurrentGridFolderNode();
+      }
+      return currentGridFolderNode;
+    },
     getBookmarkTreeState: () => bookmarkTree,
     getBookmarkMetadata: () => bookmarkMetadata,
     setBookmarkMetadata: (metadata) => { bookmarkMetadata = metadata || {}; },
@@ -2881,9 +2886,17 @@ function showEditInput(tabButton, folderNode) {
   }
 }
 
-function showGridItemRenameInput(gridItem, bookmarkNode) {
+function showGridItemRenameInput(gridItem, bookmarkNode, options = {}) {
   if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.showGridItemRenameInput === 'function') {
-    return window.HomebaseBookmarkGridController.showGridItemRenameInput(gridItem, bookmarkNode);
+    return window.HomebaseBookmarkGridController.showGridItemRenameInput(gridItem, bookmarkNode, {
+      bookmarkTree,
+      currentGridFolderNode,
+      getBookmarkTree,
+      updateNodeInTree,
+      findBookmarkNodeById,
+      renderBookmarkGrid,
+      ...options
+    });
   }
 }
 
@@ -2900,503 +2913,32 @@ function showGridItemRenameInput(gridItem, bookmarkNode) {
  */
 
 function setupBookmarkFolderAddTooltip(addButton, addTooltip) {
-  if (!addButton || !addTooltip) return () => {};
-
-  const resetTooltip = () => {
-    addTooltip.style.position = '';
-    addTooltip.style.left = '';
-    addTooltip.style.top = '';
-    addTooltip.style.transform = '';
-    addTooltip.style.opacity = '';
-    addTooltip.style.visibility = '';
-    addTooltip.style.pointerEvents = '';
-    addTooltip.style.zIndex = '';
-    addTooltip.style.marginTop = '';
-    addTooltip.style.marginBottom = '';
-  };
-
-  const showTooltip = () => {
-    if (!document.body) return;
-
-    const buttonRect = addButton.getBoundingClientRect();
-    document.body.appendChild(addTooltip);
-    addTooltip.hidden = false;
-    addTooltip.style.position = 'fixed';
-    addTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
-    addTooltip.style.top = `${buttonRect.bottom + 10}px`;
-    addTooltip.style.transform = 'translateX(-50%) translateY(6px)';
-    addTooltip.style.opacity = '1';
-    addTooltip.style.visibility = 'visible';
-    addTooltip.style.pointerEvents = 'none';
-    addTooltip.style.zIndex = '1000';
-    addTooltip.style.marginTop = '0';
-    addTooltip.style.marginBottom = '0';
-  };
-
-  const hideTooltip = () => {
-    addTooltip.hidden = true;
-    resetTooltip();
-    if (addTooltip.parentElement !== addButton) {
-      addButton.appendChild(addTooltip);
-    }
-  };
-
-  addTooltip.hidden = true;
-  addButton.addEventListener('mouseenter', showTooltip);
-  addButton.addEventListener('focus', showTooltip);
-  addButton.addEventListener('mouseleave', hideTooltip);
-  addButton.addEventListener('blur', hideTooltip);
-
-  return hideTooltip;
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.setupBookmarkFolderAddTooltip === 'function') {
+    return window.HomebaseBookmarkGridController.setupBookmarkFolderAddTooltip(addButton, addTooltip);
+  }
 }
 
 function createFolderTabs(homebaseFolder, activeFolderId = null) {
-
-  const folderTabsWrapper = bookmarkFolderTabsContainer.closest('.bookmark-tabs-wrapper');
-
-  const folderEditorHost = folderTabsWrapper?.closest('.bookmark-bar-wrapper') || folderTabsWrapper || bookmarkTabsTrack || bookmarkFolderTabsContainer.parentElement;
-
-  if (folderEditorHost) {
-
-    folderEditorHost.querySelectorAll('.bookmark-folder-inline-editor').forEach(editorElement => editorElement.remove());
-
-    folderEditorHost.classList.remove('has-folder-inline-editor');
-
-  }
-
-  bookmarkFolderTabsContainer.replaceChildren();
-
-  if (bookmarkTabsTrack && !activeFolderId) {
-
-    bookmarkTabsTrack.scrollLeft = 0;
-
-  }
-
-  
-
-  const folderChildren = homebaseFolder.children.filter(node => !node.url && node.children);
-
-  
-
-  let folderToSelect = null;
-
-  if (activeFolderId) {
-
-    folderToSelect = folderChildren.find(f => f.id === activeFolderId);
-
-  }
-
-  if (!folderToSelect && folderChildren.length > 0) {
-
-    folderToSelect = folderChildren[0];
-
-  }
-
-  
-
-  folderChildren.forEach((folderNode, index) => {
-
-    const tabButton = document.createElement('button');
-
-    tabButton.className = 'bookmark-folder-tab';
-
-    tabButton.textContent = folderNode.title;
-
-    
-
-    tabButton.dataset.folderId = folderNode.id;
-
-    tabButton.dataset.index = index;
-
-    
-
-    if (folderToSelect && folderNode.id === folderToSelect.id) {
-
-      tabButton.classList.add('active');
-
-    }
-
-
-
-    tabButton.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (isTabDragging) return;
-
-      showEditInput(tabButton, folderNode);
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.createFolderTabs === 'function') {
+    const result = window.HomebaseBookmarkGridController.createFolderTabs(homebaseFolder, activeFolderId, {
+      bookmarkTree,
+      findBookmarkNodeById,
+      renderBookmarkGrid,
+      showEditInput,
+      deleteBookmarkFolder,
+      showDeleteConfirm,
+      createNewBookmarkFolder,
+      setupTabsSortable,
+      updateBookmarkTabOverflow,
+      scrollActiveFolderTabIntoView,
+      createSvgIconElement,
+      onActiveFolderChanged: (id) => { activeHomebaseFolderId = id; }
     });
-
-    
-
-    // All manual 'draggable' and 'dragstart'/'dragend' listeners removed.
-
-    
-
-    bookmarkFolderTabsContainer.appendChild(tabButton);
-
-  });
-
-  if (bookmarkFolderTabsContainer._tabContextMenuHandler) {
-    bookmarkFolderTabsContainer.removeEventListener('contextmenu', bookmarkFolderTabsContainer._tabContextMenuHandler);
-  }
-
-  const tabContextMenuHandler = (e) => {
-    const tabButton = e.target.closest('.bookmark-folder-tab');
-    if (!tabButton) return;
-    if (!bookmarkFolderTabsContainer.contains(tabButton)) return;
-
-    const folderId = tabButton.dataset.folderId;
-    const folderNode = folderChildren.find(node => node.id === folderId) || findBookmarkNodeById(bookmarkTree[0], folderId);
-    if (!folderNode) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    folderContextMenu.style.top = `${e.clientY}px`;
-    folderContextMenu.style.left = `${e.clientX}px`;
-    folderContextMenu.classList.remove('hidden');
-
-    menuEditBtn.onclick = () => {
-      folderContextMenu.classList.add('hidden');
-      showEditInput(tabButton, folderNode);
-    };
-
-    menuDeleteBtn.onclick = async () => {
-      folderContextMenu.classList.add('hidden');
-
-      const confirmed = await showDeleteConfirm(
-        `Delete "${folderNode.title}" and all its contents?`,
-        { isFolder: true, node: folderNode }
-      );
-      if (confirmed) {
-        deleteBookmarkFolder(folderNode.id);
-      }
-    };
-  };
-
-  bookmarkFolderTabsContainer.addEventListener('contextmenu', tabContextMenuHandler);
-  bookmarkFolderTabsContainer._tabContextMenuHandler = tabContextMenuHandler;
-
-  if (bookmarkFolderTabsContainer._tabClickHandler) {
-    bookmarkFolderTabsContainer.removeEventListener('click', bookmarkFolderTabsContainer._tabClickHandler);
-  }
-
-  const tabClickHandler = (e) => {
-    const tabButton = e.target.closest('.bookmark-folder-tab');
-    if (!tabButton) return;
-    if (isTabDragging) return;
-
-    bookmarkFolderTabsContainer.querySelectorAll('.bookmark-folder-tab').forEach(btn => btn.classList.remove('active'));
-    tabButton.classList.add('active');
-
-    const folderId = tabButton.dataset.folderId;
-    const freshNode = findBookmarkNodeById(bookmarkTree[0], folderId);
-    
-    if (freshNode) {
-      renderBookmarkGrid(freshNode);
-      activeHomebaseFolderId = freshNode.id;
+    if (window.HomebaseBookmarkGridController.getActiveHomebaseFolderId) {
+      activeHomebaseFolderId = window.HomebaseBookmarkGridController.getActiveHomebaseFolderId();
     }
-
-    requestAnimationFrame(() => scrollActiveFolderTabIntoView({ behavior: 'smooth' }));
-  };
-
-  bookmarkFolderTabsContainer.addEventListener('click', tabClickHandler);
-  bookmarkFolderTabsContainer._tabClickHandler = tabClickHandler;
-
-
-
-  const addButton = document.createElement('button');
-
-  addButton.className = 'bookmark-folder-add-btn';
-
-  addButton.setAttribute('aria-label', 'Create New Folder');
-
-  const addIcon = createSvgIconElement('bookmarkTabsPlus');
-  if (addIcon) {
-    addButton.appendChild(addIcon);
+    return result;
   }
-
-  const addTooltip = document.createElement('span');
-  addTooltip.className = 'tooltip-popup tooltip-bottom bookmark-folder-add-tooltip';
-  addTooltip.textContent = 'Create New Folder';
-  addButton.appendChild(addTooltip);
-  const hideAddTooltip = setupBookmarkFolderAddTooltip(addButton, addTooltip);
-
-  
-
-  addButton.addEventListener('click', (e) => {
-
-    e.stopPropagation();
-
-    
-
-    hideAddTooltip();
-
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    const addButtonFadeDuration = prefersReducedMotion ? 0 : 160;
-
-    let cleanupStarted = false;
-
-    let cleanupFinished = false;
-
-    let pendingCleanupCallback = null;
-
-    addButton.classList.add('is-editor-hidden');
-
-    setTimeout(() => {
-
-      if (!cleanupFinished && addButton.classList.contains('is-editor-hidden')) {
-
-        addButton.style.display = 'none';
-
-      }
-
-    }, addButtonFadeDuration);
-
-
-
-    const input = document.createElement('input');
-
-    input.type = 'text';
-
-    input.id = 'new-folder-input';
-
-    input.className = 'bookmark-folder-input';
-
-    input.value = 'New Folder';
-
-    input.placeholder = 'Folder Name';
-
-
-
-    const saveButton = document.createElement('button');
-
-    saveButton.className = 'bookmark-folder-save-btn';
-
-    saveButton.textContent = '✓ Save';
-    saveButton.setAttribute('aria-label', 'Save folder');
-
-
-
-    const cancelButton = document.createElement('button');
-
-    cancelButton.className = 'bookmark-folder-cancel-btn';
-
-    cancelButton.textContent = '× Cancel';
-    cancelButton.setAttribute('aria-label', 'Cancel');
-
-    const editor = document.createElement('div');
-
-    editor.className = 'bookmark-folder-inline-editor';
-
-    editor.append(input, saveButton, cancelButton);
-
-    const editorExitDuration = prefersReducedMotion ? 0 : 160;
-
-    function finishCleanup() {
-
-      if (cleanupFinished) return;
-
-      cleanupFinished = true;
-
-      editor.classList.remove('is-visible', 'is-exiting');
-
-      editor.remove();
-
-      if (folderEditorHost) {
-
-        folderEditorHost.classList.remove('has-folder-inline-editor');
-
-      }
-
-      addButton.style.display = 'flex';
-
-      requestAnimationFrame(() => {
-
-        addButton.classList.remove('is-editor-hidden');
-
-      });
-
-      const callback = pendingCleanupCallback;
-
-      pendingCleanupCallback = null;
-
-      if (typeof callback === 'function') {
-
-        callback();
-
-      }
-
-    }
-
-    function cleanup(afterCleanup) {
-
-      if (typeof afterCleanup === 'function') {
-
-        pendingCleanupCallback = afterCleanup;
-
-      }
-
-      if (cleanupStarted) return;
-
-      cleanupStarted = true;
-
-      editor.classList.remove('is-visible');
-
-      editor.classList.add('is-exiting');
-
-      if (editorExitDuration === 0) {
-
-        finishCleanup();
-
-        return;
-
-      }
-
-      editor.addEventListener('transitionend', (event) => {
-
-        if (event.target === editor) {
-
-          finishCleanup();
-
-        }
-
-      }, { once: true });
-
-      setTimeout(finishCleanup, editorExitDuration);
-
-    }
-
-    let actionCompleted = false;
-    const markActionComplete = () => {
-      if (actionCompleted) return false;
-      actionCompleted = true;
-      return true;
-    };
-
-    const saveAction = () => {
-      if (!markActionComplete()) return;
-
-      const folderName = input.value.trim();
-
-      if (folderName) {
-
-        cleanup(() => {
-
-          createNewBookmarkFolder(folderName);
-
-        });
-
-      } else {
-
-        cleanup();
-
-      }
-
-    };
-
-    const cancelAction = () => {
-      if (!markActionComplete()) return;
-      cleanup();
-    };
-
-
-
-    saveButton.addEventListener('mousedown', (e) => e.preventDefault());
-
-    cancelButton.addEventListener('mousedown', (e) => e.preventDefault());
-
-    saveButton.addEventListener('click', saveAction);
-
-    cancelButton.addEventListener('click', cancelAction);
-
-
-
-    input.addEventListener('keydown', (e) => {
-
-      if (e.key === 'Enter') {
-
-        e.preventDefault();
-
-        saveButton.click();
-
-      } else if (e.key === 'Escape') {
-
-        e.preventDefault();
-
-        cancelAction();
-
-      }
-
-    });
-
-    
-
-    if (folderEditorHost) {
-
-      folderEditorHost.appendChild(editor);
-
-      folderEditorHost.classList.add('has-folder-inline-editor');
-
-    } else {
-
-      bookmarkFolderTabsContainer.insertAdjacentElement('afterend', editor);
-
-    }
-
-    requestAnimationFrame(() => {
-
-      if (!cleanupStarted) {
-
-        editor.classList.add('is-visible');
-
-      }
-
-    });
-
-    input.focus();
-
-    input.select();
-
-  });
-
-  
-
-  // 'dragover' listener on add-button removed.
-
-  
-
-  bookmarkFolderTabsContainer.appendChild(addButton);
-
-  requestAnimationFrame(updateBookmarkTabOverflow);
-  requestAnimationFrame(() => scrollActiveFolderTabIntoView({ behavior: 'smooth' }));
-
-
-
-  // --- NEW: Initialize Sortable.js on the tabs ---
-
-  setupTabsSortable(bookmarkFolderTabsContainer);
-
-
-
-  if (folderToSelect) {
-
-    renderBookmarkGrid(folderToSelect);
-
-    activeHomebaseFolderId = folderToSelect.id;
-
-  } else if (folderChildren.length === 0) {
-
-    console.warn(`No folders found inside "${homebaseFolder.title}". Displaying its contents.`);
-
-    renderBookmarkGrid(homebaseFolder);
-
-    activeHomebaseFolderId = homebaseFolder.id;
-
-  }
-
 }
 
 

@@ -770,24 +770,7 @@ let lastGridDragOverItem = null;
 const FOLDER_HOVER_DELAY_MS = 250; // tweak this (200-400ms) to taste
 
 // --- VIRTUALIZATION GLOBALS ---
-let virtualizerState = {
-  isEnabled: false,
-  items: [],
-  rowHeight: 115, // Approximate height (110px item + 5px gap)
-  itemWidth: 105, // Approximate width (100px item + 5px gap)
-  cols: 1,
-  totalRows: 0,
-  mainContentEl: document.querySelector('.main-content'),
-  gridEl: document.getElementById('bookmarks-grid'),
-  scrollListener: null,
-  resizeObserver: null,
-  updateRafId: 0,
-  // Cache the last rendered range to avoid DOM thrashing
-  lastStart: -1,
-  lastEnd: -1
-};
-
-const METADATA_GRID_PATCH_LIMIT = 12;
+// (virtualizerState, METADATA_GRID_PATCH_LIMIT extracted to bookmark-grid-controller.js)
 
 let sortableTimeout = null;
 
@@ -2308,400 +2291,33 @@ async function resolveFaviconForImageTarget(options) {
 }
 
 function ensureBookmarkFallback(wrapper, fallbackLetter) {
-  let fallbackIcon = wrapper.querySelector('.bookmark-fallback-icon');
-  if (!fallbackIcon) {
-    fallbackIcon = document.createElement('div');
-    fallbackIcon.className = 'bookmark-fallback-icon';
-    wrapper.appendChild(fallbackIcon);
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.ensureBookmarkFallback === 'function') {
+    return window.HomebaseBookmarkGridController.ensureBookmarkFallback(wrapper, fallbackLetter);
   }
-  fallbackIcon.textContent = fallbackLetter;
-  return fallbackIcon;
 }
 
 function clearBookmarkImages(wrapper) {
-  const images = wrapper.querySelectorAll('img.bookmark-img');
-  images.forEach((img) => {
-    if (faviconIntersectionObserver) {
-      faviconIntersectionObserver.unobserve(img);
-    }
-    if (img._faviconResolve) {
-      delete img._faviconResolve;
-    }
-    revokeFaviconObjectUrl(img);
-    img.remove();
-  });
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.clearBookmarkImages === 'function') {
+    return window.HomebaseBookmarkGridController.clearBookmarkImages(wrapper);
+  }
 }
 
 function renderBookmarkIconInto(wrapper, bookmarkNode, iconKey) {
-  if (!wrapper || !bookmarkNode) return;
-
-  const nextKey = iconKey !== undefined ? iconKey : getIconKeyForNode(bookmarkNode);
-  const title = bookmarkNode.title || ' ';
-  const fallbackLetter = (title.trim().charAt(0) || '?').toUpperCase();
-  const meta = (bookmarkMetadata && bookmarkMetadata[bookmarkNode.id]) || {};
-  const fallbackColor = appBookmarkFallbackColorPreference || '#00b8d4';
-  const existingLoaded = wrapper.querySelector('img.bookmark-img.loaded');
-  const fallbackIcon = ensureBookmarkFallback(wrapper, fallbackLetter);
-  const cancelFallback = () => {};
-
-  const showFallbackNow = (reason) => {
-    cancelFallback();
-    fallbackIcon.classList.add('show-fallback');
-    wrapper.style.backgroundColor = fallbackColor;
-    debugFavicon('fallback shown', {
-      reason,
-      nodeId: bookmarkNode.id,
-      url: bookmarkNode.url || '',
-      iconKey: nextKey
-    });
-  };
-
-  const hideFallback = () => {
-    fallbackIcon.classList.remove('show-fallback');
-  };
-
-  wrapper.style.backgroundColor = '';
-  hideFallback();
-
-  // --- NEW: Check for Custom Icon ---
-  if (meta && meta.icon) {
-    clearBookmarkImages(wrapper);
-    wrapper.style.backgroundColor = '';
-    wrapper.dataset.iconKey = nextKey;
-    delete wrapper.dataset.faviconDomain;
-
-    const customImg = document.createElement('img');
-    customImg.className = 'bookmark-img';
-    customImg.alt = '';
-    customImg.onload = () => {
-      if (wrapper.dataset.iconKey !== nextKey) {
-        debugFavicon('abort/race detected', {
-          reason: 'custom-icon-load',
-          nodeId: bookmarkNode.id,
-          iconKey: nextKey
-        });
-        showFallbackNow('custom-icon-abort');
-        return;
-      }
-      cancelFallback();
-      customImg.classList.add('loaded');
-      wrapper.style.backgroundColor = 'transparent';
-      hideFallback();
-      debugFavicon('custom icon shown', {
-        nodeId: bookmarkNode.id,
-        iconKey: nextKey
-      });
-    };
-    customImg.onerror = () => {
-      if (wrapper.dataset.iconKey !== nextKey) {
-        debugFavicon('abort/race detected', {
-          reason: 'custom-icon-error',
-          nodeId: bookmarkNode.id,
-          iconKey: nextKey
-        });
-        showFallbackNow('custom-icon-abort');
-        return;
-      }
-      customImg.remove();
-      showFallbackNow('custom-icon-error');
-    };
-    customImg.src = meta.icon;
-    wrapper.appendChild(customImg);
-    return;
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.renderBookmarkIconInto === 'function') {
+    return window.HomebaseBookmarkGridController.renderBookmarkIconInto(wrapper, bookmarkNode, iconKey);
   }
-
-  if (meta && meta.iconCleared === true) {
-    clearBookmarkImages(wrapper);
-    wrapper.style.backgroundColor = '';
-    showFallbackNow('icon-cleared');
-    wrapper.dataset.iconKey = nextKey;
-    delete wrapper.dataset.faviconDomain;
-    return;
-  }
-
-  const domainKey = getDomainKeyFromUrl(bookmarkNode.url);
-
-  if (!domainKey) {
-    clearBookmarkImages(wrapper);
-    wrapper.style.backgroundColor = '';
-    fallbackIcon.textContent = '?';
-    showFallbackNow('missing-domain');
-    wrapper.dataset.iconKey = nextKey;
-    delete wrapper.dataset.faviconDomain;
-    return;
-  }
-
-  if (wrapper.dataset.iconKey === nextKey &&
-      wrapper.dataset.faviconDomain === domainKey &&
-      existingLoaded) {
-    wrapper.dataset.iconKey = nextKey;
-    hideFallback();
-    return;
-  }
-
-  clearBookmarkImages(wrapper);
-
-  // 2. Prepare image icon (stacked above fallback).
-  const imgIcon = document.createElement('img');
-  imgIcon.className = 'bookmark-img';
-  imgIcon.decoding = 'async';
-  imgIcon.loading = 'lazy';
-  imgIcon.setAttribute('fetchpriority', 'low');
-  if (!imgIcon.referrerPolicy) {
-    imgIcon.referrerPolicy = 'no-referrer';
-  }
-  imgIcon.alt = '';
-
-  const candidates = buildFaviconCandidates(bookmarkNode.url);
-
-  wrapper.dataset.iconKey = nextKey;
-  wrapper.dataset.faviconDomain = domainKey;
-  wrapper.appendChild(imgIcon);
-
-  const shouldAbort = () =>
-    wrapper.dataset.iconKey !== nextKey ||
-    wrapper.dataset.faviconDomain !== domainKey;
-
-  const markLoaded = (img) => {
-    if (img.naturalWidth >= 6) {
-      img.classList.add('loaded');
-      wrapper.style.backgroundColor = 'transparent';
-      cancelFallback();
-      return true;
-    }
-    return false;
-  };
-
-  const resolveTask = () => resolveFaviconForImageTarget({
-    img: imgIcon,
-    domainKey,
-    candidates,
-    shouldAbort,
-    onResolved: (resolvedUrl, meta) => {
-      if (!meta.sourceAlreadySet) {
-        imgIcon.onload = () => {
-          cancelFallback();
-          if (shouldAbort()) {
-            debugFavicon('abort/race detected', {
-              reason: 'favicon-load',
-              nodeId: bookmarkNode.id,
-              domainKey,
-              iconKey: nextKey
-            });
-            cancelFallback();
-            return;
-          }
-          if (markLoaded(imgIcon)) {
-            hideFallback();
-            debugFavicon('favicon shown', {
-              nodeId: bookmarkNode.id,
-              domainKey,
-              iconKey: nextKey
-            });
-          } else {
-            showFallbackNow('favicon-too-small');
-          }
-        };
-        imgIcon.onerror = () => {
-          cancelFallback();
-          if (shouldAbort()) {
-            debugFavicon('abort/race detected', {
-              reason: 'favicon-error',
-              nodeId: bookmarkNode.id,
-              domainKey,
-              iconKey: nextKey
-            });
-            cancelFallback();
-            return;
-          }
-          showFallbackNow('favicon-error');
-        };
-        setFaviconImageSrc(imgIcon, resolvedUrl);
-        if (imgIcon.complete) {
-          if (markLoaded(imgIcon)) {
-            cancelFallback();
-            hideFallback();
-            debugFavicon('favicon shown', {
-              nodeId: bookmarkNode.id,
-              domainKey,
-              iconKey: nextKey
-            });
-          }
-        }
-        return;
-      }
-
-      cancelFallback();
-      if (markLoaded(imgIcon)) {
-        hideFallback();
-        debugFavicon('favicon shown', {
-          nodeId: bookmarkNode.id,
-          domainKey,
-          iconKey: nextKey
-        });
-      } else {
-        showFallbackNow('favicon-too-small');
-      }
-    },
-    onFailed: () => {
-      showFallbackNow('favicon-failed');
-    },
-    onNegativeCacheHit: () => {
-      debugFavicon('favicon skipped (negative cache)', {
-        nodeId: bookmarkNode.id,
-        domainKey,
-        iconKey: nextKey
-      });
-      showFallbackNow('negative-cache');
-    },
-    onAbort: () => {
-      debugFavicon('abort/race detected', {
-        reason: 'favicon-race',
-        nodeId: bookmarkNode.id,
-        domainKey,
-        iconKey: nextKey
-      });
-      cancelFallback();
-    },
-    acceptCandidate: (img) => img.naturalWidth >= 6
-  });
-  queueFaviconResolution(imgIcon, resolveTask);
 }
 
 function renderFolderIconInto(wrapper, folderNode, iconKey) {
-  if (!wrapper || !folderNode) return;
-
-  wrapper.textContent = '';
-
-  const meta = (folderMetadata && folderMetadata[folderNode.id]) || {};
-  const customColor = meta.color || null;
-  const customIcon = meta.icon || null;
-  
-  // Defaults
-
-  const scale = meta.scale ?? 1;
-
-  const offsetY = meta.offsetY ?? 0;
-  const rotation = meta.rotation ?? 0;
-
-
-
-  // 1. ALWAYS render the Base Folder SVG
-
-  wrapper.replaceChildren();
-  const baseIcon = createSvgIconElement('bookmarkFolderLarge');
-  if (baseIcon) {
-    wrapper.appendChild(baseIcon);
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.renderFolderIconInto === 'function') {
+    return window.HomebaseBookmarkGridController.renderFolderIconInto(wrapper, folderNode, iconKey);
   }
-
-  
-
-  // Apply Color to SVG
-
-  const appliedColor = customColor || appBookmarkFolderColorPreference;
-
-  const baseSvg = wrapper.querySelector('svg');
-
-  tintSvgElement(baseSvg, appliedColor);
-
-
-
-  // Complementary color for inner icon based on folder color
-
-  const iconFillColor = getComplementaryColor(appliedColor);
-
-
-
-  // 2. Render Custom Icon (Updated with transforms)
-
-  if (customIcon) {
-
-    // Base style for the icon (centered + custom offset/scale)
-
-    // NOTE: Base CSS has transform: translate(-50%, -50%) scale(0.9). 
-
-    // We override it here.
-
-    const transformStyle = `transform: translate(-50%, calc(-50% + ${offsetY}px)) scale(${scale * 0.9}) rotate(${rotation}deg);`;
-
-
-
-    if (customIcon.startsWith('builtin:')) {
-
-      const key = customIcon.replace('builtin:', '');
-
-      const svgEl = createSvgIconElement(key);
-
-      if (svgEl) {
-
-        const iconDiv = document.createElement('div');
-
-        iconDiv.className = 'bookmark-folder-custom-icon';
-
-        iconDiv.appendChild(svgEl);
-
-        iconDiv.setAttribute('style', transformStyle);
-
-
-
-        // Apply contrast fill to built-in SVG paths
-
-        const svg = iconDiv.querySelector('svg');
-
-        if (svg) {
-
-          tintSvgElement(svg, iconFillColor);
-
-        }
-
-        wrapper.appendChild(iconDiv);
-
-      }
-
-    } else {
-
-      const img = document.createElement('img');
-
-      img.src = customIcon;
-
-      img.className = 'bookmark-folder-custom-icon';
-
-      img.setAttribute('style', transformStyle);
-
-      wrapper.appendChild(img);
-
-    }
-
-  }
-
-
-
-  wrapper.dataset.iconKey = iconKey !== undefined ? iconKey : getIconKeyForNode(folderNode);
 }
 
-
-
 function renderBookmark(bookmarkNode) {
-  const item = document.createElement('div');
-  item.className = 'bookmark-item';
-  if (bookmarkNode.isBackButton) item.classList.add('back-button');
-
-  item.dataset.bookmarkId = bookmarkNode.id;
-  item.dataset.isFolder = 'false';
-
-  const title = bookmarkNode.title || ' ';
-
-  const iconWrapper = document.createElement('div');
-  iconWrapper.className = 'bookmark-icon-wrapper';
-  renderBookmarkIconInto(iconWrapper, bookmarkNode);
-
-  const titleSpan = document.createElement('span');
-  titleSpan.textContent = title;
-
-  item.appendChild(iconWrapper);
-  item.appendChild(titleSpan);
-
-  return item;
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.renderBookmark === 'function') {
+    return window.HomebaseBookmarkGridController.renderBookmark(bookmarkNode);
+  }
 }
 
 
@@ -2849,79 +2465,17 @@ async function deleteBookmarkOrFolder(id, isFolder, sourceTileEl = null) {
  */
 
 function autoResizeTextarea(textarea) {
-
-  // Reset height to 'auto' to shrink if text is deleted
-
-  textarea.style.height = 'auto'; 
-
-
-
-  // === NEW: Force a layout reflow ===
-
-  // Reading a property like offsetHeight immediately after setting
-
-  // a style forces the browser to recalculate the layout.
-
-  // This ensures the scrollHeight we read next is 100% accurate.
-
-  const _ = textarea.offsetHeight; 
-
-
-
-  // === MODIFIED ===
-
-  // 2px for border (1px top + 1px bottom)
-
-  const verticalBorders = 2; 
-
-  
-
-  // Now scrollHeight is accurate, so we set the final height
-
-  textarea.style.height = (textarea.scrollHeight + verticalBorders) + 'px';
-
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.autoResizeTextarea === 'function') {
+    return window.HomebaseBookmarkGridController.autoResizeTextarea(textarea);
+  }
 }
 
 
 
-/**
-
- * === MODIFIED ===
-
- * Renders a single folder item (MODIFIED for Sortable.js)
-
- * All manual D&D listeners have been removed.
-
- */
-
 function renderBookmarkFolder(folderNode) {
-
-  const item = document.createElement('div');
-
-  item.className = 'bookmark-item';
-
-  item.dataset.bookmarkId = folderNode.id;
-
-  item.dataset.isFolder = 'true';
-
-
-
-  const wrapper = document.createElement('div');
-
-  wrapper.className = 'bookmark-icon-wrapper';
-
-
-
-  renderFolderIconInto(wrapper, folderNode);
-
-  item.appendChild(wrapper);
-
-  const span = document.createElement('span');
-  span.textContent = folderNode.title;
-  item.appendChild(span);
-
-  return item;
-
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.renderBookmarkFolder === 'function') {
+    return window.HomebaseBookmarkGridController.renderBookmarkFolder(folderNode);
+  }
 }
 
 
@@ -3033,428 +2587,75 @@ function getDefaultBookmarkParentId() {
   return activeHomebaseFolderId || null;
 }
 
-/**
-
- * Creates the "Back" button item for the grid.
-
- */
-
 function createBackButton(parentId) {
-
-  const item = document.createElement('a');
-
-  item.href = '#';
-
-  item.className = 'bookmark-item';
-
-  item.dataset.backTargetId = parentId;
-
-  item.innerHTML = `
-
-    <div class="bookmark-icon-wrapper back-icon-wrapper">
-
-      <img src="icons/back.svg" alt="Go back" class="back-icon" />
-
-    </div>
-
-    <span class="back-button-label">Back</span>
-
-  `;
-
-  return item;
-
-}
-
-
-
-
-
-/** 
-
- * Calculates layout metrics and renders the visible slice.
-
- */
-
-function updateVirtualGrid() {
-  // === FIX: Stop updates while dragging to prevent DOM recycling errors ===
-  if (isGridDragging) return;
-
-  if (!virtualizerState.isEnabled || !virtualizerState.items.length) return;
-
-  const { mainContentEl, gridEl, items, rowHeight, itemWidth } = virtualizerState;
-
-  if (!mainContentEl || !gridEl) return;
-
-  perfState.gridMode = 'virtual';
-
-  const renderStart = performance.now();
-  
-  // 1. Calculate Columns
-  const gridWidth = gridEl.clientWidth;
-  const cols = Math.floor(gridWidth / itemWidth) || 1;
-  virtualizerState.cols = cols;
-
-  // 2. Calculate Total Height
-  const totalRows = Math.ceil(items.length / cols);
-  const totalHeight = totalRows * rowHeight;
-  
-  // 3. Determine Scroll Position
-  const scrollTop = mainContentEl.scrollTop;
-  const viewportHeight = mainContentEl.clientHeight;
-  const bufferRows = 2; 
-
-  // 4. Calculate Visible Range
-  let startRow = Math.floor(scrollTop / rowHeight) - bufferRows;
-  let endRow = Math.ceil((scrollTop + viewportHeight) / rowHeight) + bufferRows;
-
-  startRow = Math.max(0, startRow);
-  endRow = Math.min(totalRows, endRow);
-
-  const startIndex = startRow * cols;
-  const endIndex = Math.min(items.length, endRow * cols);
-  perfState.lastRenderedStartIndex = startIndex;
-  perfState.lastRenderedEndIndex = Math.max(startIndex, endIndex - 1);
-  perfState.lastVirtualRange = { start: startIndex, end: Math.max(startIndex, endIndex - 1) };
-  perfState.totalCount = items.length;
-
-  // 5. Optimization: Only render if range changed (unless it's the first render)
-  if (!virtualizerState.initialRender && startIndex === virtualizerState.lastStart && endIndex === virtualizerState.lastEnd) {
-
-    return;
-
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.createBackButton === 'function') {
+    return window.HomebaseBookmarkGridController.createBackButton(parentId);
   }
-  virtualizerState.lastStart = startIndex;
-  virtualizerState.lastEnd = endIndex;
-
-  // 6. Apply Styles
-  gridEl.style.height = `${totalHeight}px`;
-  gridEl.style.paddingTop = `${startRow * rowHeight}px`;
-  gridEl.style.paddingBottom = '0px'; 
-
-  // 7. Render Slice (DOM recycling)
-  const existingNodes = Array.from(gridEl.children);
-  const visibleItems = items.slice(startIndex, endIndex);
-
-  visibleItems.forEach((node, index) => {
-    let el = existingNodes[index];
-    const neededType = node.isBackButton ? 'back' : (node.children ? 'folder' : 'bookmark');
-    const existingType = el ? el.dataset.recyclingType : null;
-
-    if (el && existingType === neededType) {
-      updateElementData(el, node);
-    } else {
-      const newEl = createNodeForVirtualizer(node);
-      newEl.dataset.recyclingType = neededType;
-
-      if (virtualizerState.initialRender && !appPerformanceModePreference && appGridAnimationEnabledPreference) {
-        const delay = index * 15;
-        newEl.style.animationDelay = `${delay}ms`;
-        newEl.classList.add('newly-rendered');
-
-        newEl.addEventListener('animationend', () => {
-          newEl.classList.remove('newly-rendered');
-          newEl.style.animationDelay = '';
-        }, { once: true });
-      }
-
-      if (el) {
-        gridEl.replaceChild(newEl, el);
-      } else {
-        gridEl.appendChild(newEl);
-      }
-
-      el = newEl;
-    }
-
-    if (el) {
-      el.dataset.recyclingType = neededType;
-    }
-  });
-
-  // 8. Trim excess DOM nodes
-  while (gridEl.children.length > visibleItems.length) {
-    gridEl.lastChild.remove();
-  }
-
-  const nodeCount = visibleItems.length;
-  perfState.gridRenderedNodes = nodeCount;
-  perfState.lastGridRenderMs = performance.now() - renderStart;
-
-  // --- NEW: Disable animation for future scrolls ---
-  if (virtualizerState.initialRender) {
-      // Force a reflow if needed, or just flip the flag so scrolling is instant
-      virtualizerState.initialRender = false;
-  }
-
-  // *Important*: Re-initialize drag-and-drop ONLY for visible items (debounced)
-  if (sortableTimeout) clearTimeout(sortableTimeout);
-  sortableTimeout = setTimeout(() => {
-      setupGridSortable(gridEl);
-      sortableTimeout = null;
-  }, 150);
 }
 
 function createNodeForVirtualizer(node) {
-  if (node.isBackButton) return createBackButton(node.parentId);
-  if (node.children) return renderBookmarkFolder(node);
-  return renderBookmark(node);
-}
-
-function getIconKeyForNode(node) {
-  if (!node || node.isBackButton) return '';
-
-  const iconParts = [];
-  const fallbackTextPref = (typeof appBookmarkFallbackTextColorPreference !== 'undefined')
-    ? appBookmarkFallbackTextColorPreference
-    : '';
-
-  if (node.children) {
-    const meta = (folderMetadata && folderMetadata[node.id]) || {};
-    iconParts.push('folder');
-    iconParts.push(meta.color || '');
-    iconParts.push(meta.icon || '');
-    iconParts.push(meta.scale ?? 1);
-    iconParts.push(meta.offsetY ?? 0);
-    iconParts.push(meta.rotation ?? 0);
-    iconParts.push(appBookmarkFolderColorPreference || '');
-  } else {
-    const meta = (bookmarkMetadata && bookmarkMetadata[node.id]) || {};
-    const title = node.title || ' ';
-    const fallbackLetter = (title.trim().charAt(0) || '?').toUpperCase();
-    iconParts.push('bookmark');
-    iconParts.push(node.url || '');
-    iconParts.push(fallbackLetter);
-    iconParts.push(meta.icon || '');
-    iconParts.push(`cleared:${meta.iconCleared === true}`);
-    iconParts.push(appBookmarkFallbackColorPreference || '');
-    iconParts.push(fallbackTextPref);
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.createNodeForVirtualizer === 'function') {
+    return window.HomebaseBookmarkGridController.createNodeForVirtualizer(node);
   }
-
-  return iconParts.join('|');
 }
 
 function updateElementData(el, node) {
-  const recyclingType = node.isBackButton ? 'back' : (node.children ? 'folder' : 'bookmark');
-  el.dataset.recyclingType = recyclingType;
-  el.dataset.bookmarkId = node.id || '';
-
-  if (node.isBackButton) {
-    el.dataset.backTargetId = node.parentId || '';
-    delete el.dataset.isFolder;
-  } else {
-    el.dataset.isFolder = node.children ? 'true' : 'false';
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.updateElementData === 'function') {
+    return window.HomebaseBookmarkGridController.updateElementData(el, node);
   }
+}
 
-  const span = el.querySelector('span');
-  if (span) {
-    span.textContent = node.title || 'Back';
+function getIconKeyForNode(node, options = {}) {
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.getIconKeyForNode === 'function') {
+    return window.HomebaseBookmarkGridController.getIconKeyForNode(node, options);
   }
-
-  const iconWrapper = el.querySelector('.bookmark-icon-wrapper');
-  if (iconWrapper) {
-    if (node.isBackButton) return;
-
-    const nextKey = getIconKeyForNode(node);
-    const prevKey = iconWrapper.dataset.iconKey;
-
-    if (nextKey !== prevKey) {
-      if (node.children) {
-        renderFolderIconInto(iconWrapper, node, nextKey);
-      } else {
-        renderBookmarkIconInto(iconWrapper, node, nextKey);
-      }
-
-      // DEV-ONLY: uncomment for parity checks against legacy rendering.
-      // const legacyIcon = (node.children ? renderBookmarkFolder(node) : renderBookmark(node)).querySelector('.bookmark-icon-wrapper');
-      // console.assert(!legacyIcon || iconWrapper.innerHTML === legacyIcon.innerHTML, 'Icon mismatch', node);
-    }
-  }
+  return '';
 }
 
 function metadataEntriesEqual(previousEntry, nextEntry) {
-  if (previousEntry === nextEntry) return true;
-  if (!previousEntry || !nextEntry) return false;
-
-  const previousKeys = Object.keys(previousEntry);
-  const nextKeys = Object.keys(nextEntry);
-  if (previousKeys.length !== nextKeys.length) return false;
-
-  for (const key of previousKeys) {
-    if (!Object.prototype.hasOwnProperty.call(nextEntry, key) || previousEntry[key] !== nextEntry[key]) {
-      return false;
-    }
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.metadataEntriesEqual === 'function') {
+    return window.HomebaseBookmarkGridController.metadataEntriesEqual(previousEntry, nextEntry);
   }
-
-  return true;
+  return previousEntry === nextEntry;
 }
 
 function getChangedMetadataIds(previousMetadata, nextMetadata) {
-  const previous = previousMetadata || {};
-  const next = nextMetadata || {};
-  const changedIds = new Set([
-    ...Object.keys(previous),
-    ...Object.keys(next)
-  ]);
-
-  return Array.from(changedIds).filter((id) => !metadataEntriesEqual(previous[id], next[id]));
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.getChangedMetadataIds === 'function') {
+    return window.HomebaseBookmarkGridController.getChangedMetadataIds(previousMetadata, nextMetadata);
+  }
+  return [];
 }
 
 function findRenderedGridItemById(itemId) {
-  if (!bookmarksGridEl || !itemId) return null;
-
-  const renderedItems = bookmarksGridEl.children;
-  for (let i = 0; i < renderedItems.length; i++) {
-    const item = renderedItems[i];
-    if (item?.dataset?.bookmarkId === itemId) {
-      return item;
-    }
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.findRenderedGridItemById === 'function') {
+    return window.HomebaseBookmarkGridController.findRenderedGridItemById(itemId);
   }
-
   return null;
 }
 
 function patchActiveGridMetadataItems(activeNode, changedIds) {
-  if (!activeNode || !Array.isArray(activeNode.children) || !changedIds.length) {
-    return false;
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.patchActiveGridMetadataItems === 'function') {
+    return window.HomebaseBookmarkGridController.patchActiveGridMetadataItems(activeNode, changedIds);
   }
-
-  const changedIdSet = new Set(changedIds);
-  const relevantNodes = activeNode.children.filter((child) => child && changedIdSet.has(child.id));
-
-  if (!relevantNodes.length) {
-    return false;
-  }
-
-  if (relevantNodes.length > METADATA_GRID_PATCH_LIMIT) {
-    return true;
-  }
-
-  for (const node of relevantNodes) {
-    const itemEl = findRenderedGridItemById(node.id);
-
-    if (!itemEl) {
-      if (!virtualizerState.isEnabled) {
-        return true;
-      }
-      continue;
-    }
-
-    try {
-      updateElementData(itemEl, node);
-    } catch (_) {
-      return true;
-    }
-  }
-
   return false;
 }
 
-/**
-
- * Setup listeners for scrolling and resizing
-
- */
-
-function initVirtualizer(allItems) {
-
-  // Cleanup old listeners
-  if (virtualizerState.scrollListener) {
-
-    virtualizerState.mainContentEl.removeEventListener('scroll', virtualizerState.scrollListener);
-
+function updateVirtualGrid() {
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.updateVirtualGrid === 'function') {
+    return window.HomebaseBookmarkGridController.updateVirtualGrid();
   }
-  if (virtualizerState.resizeObserver) {
-
-    virtualizerState.resizeObserver.disconnect();
-
-  }
-
-  if (!virtualizerState.mainContentEl || !virtualizerState.gridEl) {
-
-    return;
-
-  }
-
-  // Set State
-  virtualizerState.items = allItems;
-  virtualizerState.isEnabled = true;
-  virtualizerState.lastStart = -1;
-  virtualizerState.lastEnd = -1;
-  virtualizerState.updateRafId = 0;
-  
-  // --- NEW: Flag to trigger animation only on first paint ---
-  virtualizerState.initialRender = true; 
-
-  // Shared RAF scheduler for scroll + resize
-  let virtualGridRafId = 0;
-  function scheduleVirtualGridUpdate() {
-
-    if (!virtualizerState.isEnabled) return;
-    if (virtualizerState.updateRafId) return;
-
-    virtualGridRafId = requestAnimationFrame(() => {
-      virtualizerState.updateRafId = 0;
-      virtualGridRafId = 0;
-      if (!virtualizerState.isEnabled) return;
-      updateVirtualGrid();
-    });
-    virtualizerState.updateRafId = virtualGridRafId;
-  }
-
-  // Attach Scroll Listener (Throttled via shared scheduler)
-  virtualizerState.scrollListener = () => {
-    scheduleVirtualGridUpdate();
-  };
-  virtualizerState.mainContentEl.addEventListener('scroll', virtualizerState.scrollListener, { passive: true });
-
-  // Attach Resize Listener
-  virtualizerState.resizeObserver = new ResizeObserver(() => {
-    scheduleVirtualGridUpdate();
-  });
-  virtualizerState.resizeObserver.observe(virtualizerState.gridEl);
-
-  // Initial Paint
-  updateVirtualGrid();
 }
 
-/**
-
- * Disable virtualization and clean up styles
-
- */
+function initVirtualizer(allItems) {
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.initVirtualizer === 'function') {
+    return window.HomebaseBookmarkGridController.initVirtualizer(allItems);
+  }
+}
 
 function disableVirtualizer() {
-
-  virtualizerState.isEnabled = false;
-  if (virtualizerState.updateRafId) {
-    cancelAnimationFrame(virtualizerState.updateRafId);
-    virtualizerState.updateRafId = 0;
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.disableVirtualizer === 'function') {
+    return window.HomebaseBookmarkGridController.disableVirtualizer();
   }
-
-  if (sortableTimeout) {
-    clearTimeout(sortableTimeout);
-    sortableTimeout = null;
-  }
-
-  if (!virtualizerState.mainContentEl || !virtualizerState.gridEl) {
-
-    return;
-
-  }
-  if (virtualizerState.scrollListener) {
-
-    virtualizerState.mainContentEl.removeEventListener('scroll', virtualizerState.scrollListener);
-
-  }
-  if (virtualizerState.resizeObserver) {
-
-    virtualizerState.resizeObserver.disconnect();
-
-  }
-  // Reset grid styles
-  virtualizerState.gridEl.style.height = '';
-  virtualizerState.gridEl.style.paddingTop = '';
-  virtualizerState.gridEl.style.paddingBottom = '';
 }
 
 
@@ -3472,152 +2673,14 @@ function disableVirtualizer() {
  */
 
 function renderBookmarkGrid(folderNode, droppedItemId = null) {
-
-  const grid = document.getElementById('bookmarks-grid');
-
-  // Keep virtualization references fresh
-  virtualizerState.gridEl = grid;
-  virtualizerState.mainContentEl = virtualizerState.mainContentEl || document.querySelector('.main-content');
-
-  grid.innerHTML = '';
-
-  // --- Store the current folder node ---
   currentGridFolderNode = folderNode;
-
-  // Reset virtualization state/styles for this render
-  disableVirtualizer();
-
-  // 2. Prepare Data List
-  let itemsToRender = [];
-
-  // Add Back Button object to the list if needed
-  if (folderNode.id !== rootDisplayFolderId && folderNode.parentId !== rootDisplayFolderId && folderNode.parentId !== '0' && folderNode.parentId !== 'root________') {
-
-    const parentNode = findBookmarkNodeById(bookmarkTree[0], folderNode.parentId);
-
-    if (parentNode && parentNode.id !== rootDisplayFolderId) {
-
-       itemsToRender.push({ isBackButton: true, parentId: parentNode.id });
-
-    }
-
-  }
-
-  if (folderNode.children) {
-
-    itemsToRender = itemsToRender.concat(folderNode.children);
-
-  }
-
-  // 3. DECISION: Virtualize or Standard?
-  const VIRTUALIZATION_THRESHOLD = 150; // Enable if > 150 items
-
-  if (itemsToRender.length > VIRTUALIZATION_THRESHOLD) {
-
-    // --- VIRTUAL MODE ---
-    initVirtualizer(itemsToRender);
-    
-    // NOTE: In virtual mode, we skip the "drop-in" animation for performance
-
-  } else {
-
-    // --- STANDARD MODE (Original Logic) ---
-    const standardRenderStart =
-      typeof performance !== 'undefined' && typeof performance.now === 'function'
-        ? performance.now()
-        : 0;
-
-    const previousPositions = droppedItemId ? captureGridItemPositions(grid) : null;
-
-    itemsToRender.forEach(node => {
-
-      if (node.isBackButton) {
-
-        const btn = createBackButton(node.parentId);
-
-        btn.classList.add('back-button');
-
-        grid.appendChild(btn);
-
-      } else if (node.url) {
-
-        grid.appendChild(renderBookmark(node));
-
-      } else if (node.children) {
-
-        grid.appendChild(renderBookmarkFolder(node));
-
-      }
-
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.renderBookmarkGrid === 'function') {
+    return window.HomebaseBookmarkGridController.renderBookmarkGrid(folderNode, droppedItemId, {
+      rootDisplayFolderId,
+      bookmarkTree,
+      findBookmarkNodeById
     });
-
-    // FIX: Use the global 'sortableTimeout' so it can be cancelled if the user switches folders quickly.
-    // Increased delay to 200ms to ensure layout/animations are stable first.
-    if (sortableTimeout) clearTimeout(sortableTimeout);
-
-    sortableTimeout = setTimeout(() => {
-      setupGridSortable(grid);
-      sortableTimeout = null;
-    }, 200);
-
-    // Apply Animations (Standard Mode Only)
-    const domItems = grid.querySelectorAll('.bookmark-item');
-
-    perfState.gridMode = 'standard';
-    perfState.totalCount = itemsToRender.length;
-    perfState.gridRenderedNodes = domItems.length;
-    perfState.lastRenderedStartIndex = itemsToRender.length ? 0 : -1;
-    perfState.lastRenderedEndIndex = itemsToRender.length ? itemsToRender.length - 1 : -1;
-    perfState.lastVirtualRange = { start: -1, end: -1 };
-
-    if (standardRenderStart) {
-      perfState.lastGridRenderMs = performance.now() - standardRenderStart;
-    } else {
-      perfState.lastGridRenderMs = 0;
-    }
-
-    if (perfState.overlayEnabled) {
-      updatePerfOverlay(false);
-    }
-
-    if (droppedItemId) {
-
-      animateGridReorder(domItems, previousPositions);
-
-    } else {
-
-      domItems.forEach((item, index) => {
-
-        if (item.classList.contains('back-button') || appPerformanceModePreference) {
-
-          item.style.opacity = 1;
-
-          return;
-
-        }
-
-        const delay = Math.min(index * 25, 500);
-
-        item.style.animationDelay = `${delay}ms`;
-
-        item.classList.add('newly-rendered');
-
-        
-
-        item.addEventListener('animationend', () => {
-
-          item.classList.remove('newly-rendered');
-
-          item.style.animationDelay = '';
-
-        }, { once: true });
-
-      });
-
-    }
-
   }
-
 }
 
 
@@ -3647,8 +2710,6 @@ async function createNewBookmarkFolder(name) {
       title: name
 
     });
-
-    
 
     const tree = await getBookmarkTree(true);
 
@@ -3815,280 +2876,15 @@ async function deleteBookmarkFolder(folderId) {
  */
 
 function showEditInput(tabButton, folderNode) {
-
-  tabButton.style.display = 'none';
-
-
-
-  const input = document.createElement('input');
-
-  input.type = 'text';
-
-  input.className = 'bookmark-folder-input bookmark-folder-rename-input';
-
-  input.value = folderNode.title;
-
-  const resizeFolderRenameInput = () => {
-    const valueLength = Math.max(input.value.length, 6);
-    const nextWidth = Math.min(Math.max(valueLength * 8 + 24, 110), 260);
-    input.style.width = `${nextWidth}px`;
-  };
-
-  resizeFolderRenameInput();
-
-
-
-  tabButton.parentNode.insertBefore(input, tabButton.nextSibling);
-
-
-
-  input.focus();
-
-  input.select();
-
-
-
-  const cleanup = () => {
-
-    input.remove();
-
-    tabButton.style.display = '';
-
-  };
-
-
-
-  const saveAction = async () => {
-
-    const newName = input.value.trim();
-
-    if (newName && newName !== folderNode.title) {
-
-      try {
-
-        await browser.bookmarks.update(folderNode.id, { title: newName });
-
-        loadBookmarks(folderNode.id);
-
-      } catch (err) {
-
-        console.error("Error updating folder:", err);
-
-        cleanup();
-
-      }
-
-    } else {
-
-      cleanup();
-
-    }
-
-  };
-
-
-
-  input.addEventListener('input', resizeFolderRenameInput);
-
-  input.addEventListener('keydown', async (e) => {
-
-    if (e.key === 'Enter') {
-
-      e.preventDefault();
-
-      saveAction();
-
-    } else if (e.key === 'Escape') {
-
-      e.preventDefault();
-
-      cleanup();
-
-    }
-
-  });
-
-
-
-  input.addEventListener('blur', saveAction);
-
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.showEditInput === 'function') {
+    return window.HomebaseBookmarkGridController.showEditInput(tabButton, folderNode);
+  }
 }
 
-
-
-/**
-
- * === MODIFIED ===
-
- * Replaces a grid item's span with an input field to edit its name.
-
- */
-
 function showGridItemRenameInput(gridItem, bookmarkNode) {
-
-  const titleSpan = gridItem.querySelector('span');
-
-  if (!titleSpan) return;
-
-  
-
-  titleSpan.style.display = 'none';
-
-
-
-  // === FIX: Add class to allow parent to grow ===
-
-  gridItem.classList.add('is-renaming');
-
-
-
-  // --- MODIFIED: Use a <textarea> for multi-line support ---
-
-  const input = document.createElement('textarea');
-
-  input.className = 'grid-item-rename-input';
-
-  input.value = bookmarkNode.title;
-
-
-
-  input.rows = 1; // Set the default rows to 1
-
-  
-
-  // Stop the click from bubbling to the parent div's click listener
-
-  input.addEventListener('click', (e) => {
-
-    e.stopPropagation();
-
-  });
-
-
-
-  // Stop mousedown from bubbling to Sortable.js
-
-  input.addEventListener('mousedown', (e) => {
-
-    e.stopPropagation();
-
-  });
-
-
-
-  // --- NEW: Add auto-resize listener ---
-
-  input.addEventListener('input', () => {
-
-    autoResizeTextarea(input);
-
-  });
-
-
-
-  gridItem.appendChild(input);
-
-
-
-  // --- NEW: Call resize function immediately after append ---
-
-  autoResizeTextarea(input); 
-
-  input.focus();
-
-  input.select();
-
-
-
-  const cleanup = () => {
-
-    // === FIX: Remove class to restore parent's fixed height ===
-
-    gridItem.classList.remove('is-renaming');
-
-
-
-    input.remove();
-
-    titleSpan.style.display = '-webkit-box'; // Restore original display
-
-  };
-
-
-
-  const saveAction = async () => {
-
-    const newName = input.value.trim();
-
-    if (newName && newName !== bookmarkNode.title) {
-
-      try {
-
-        await browser.bookmarks.update(bookmarkNode.id, { title: newName });
-
-        let treePatched = false;
-        if (bookmarkTree && bookmarkTree[0]) {
-          treePatched = Boolean(updateNodeInTree(bookmarkTree[0], bookmarkNode.id, {
-            title: newName
-          }));
-        }
-        if (!treePatched) {
-          await getBookmarkTree(true);
-        }
-
-        const updatedNode = bookmarkTree && bookmarkTree[0]
-          ? findBookmarkNodeById(bookmarkTree[0], bookmarkNode.id)
-          : null;
-
-        if (updatedNode) {
-          updateElementData(gridItem, updatedNode);
-        }
-        cleanup();
-
-        
-
-      } catch (err) {
-
-        console.error("Error updating bookmark:", err);
-
-        cleanup(); // On error, just revert
-
-      }
-
-    } else {
-
-      cleanup(); // No change, revert
-
-    }
-
-  };
-
-
-
-  input.addEventListener('keydown', async (e) => {
-
-    // --- MODIFIED: Allow Shift+Enter for newline, just Enter to save ---
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-
-      e.preventDefault(); // Stop newline
-
-      saveAction();
-
-    } else if (e.key === 'Escape') {
-
-      e.preventDefault();
-
-      cleanup();
-
-    }
-
-  });
-
-
-
-  input.addEventListener('blur', saveAction);
-
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.showGridItemRenameInput === 'function') {
+    return window.HomebaseBookmarkGridController.showGridItemRenameInput(gridItem, bookmarkNode);
+  }
 }
 
 

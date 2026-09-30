@@ -20,6 +20,15 @@
   let bookmarkGridPointerListenersAttached = false;
   let suggestionAbortController = null;
   let boundEventListeners = false;
+  let boundFormSubmitHandler = null;
+  let boundInputHandler = null;
+  let boundInputClickHandler = null;
+  let boundPanelMousedownHandler = null;
+  let boundPanelClickHandler = null;
+  let boundPanelStopHandler = null;
+  let boundKeydownHandler = null;
+  let boundQuickFocusHandler = null;
+  let boundBeforeUnloadHandler = null;
   let customOptions = {};
 
   function isElementOrObject(obj) {
@@ -1746,20 +1755,80 @@
     if (options.bindEvents && !boundEventListeners) {
       const form = getSearchForm();
       if (form && typeof form.addEventListener === 'function') {
-        form.addEventListener('submit', handleSubmit);
+        boundFormSubmitHandler = handleSubmit;
+        form.addEventListener('submit', boundFormSubmitHandler);
       }
+
       const input = getSearchInput();
       if (input && typeof input.addEventListener === 'function') {
-        input.addEventListener('input', handleInput);
+        const wait = typeof options.debounceWait === 'number' ? options.debounceWait : 120;
+        const debounceFn = typeof debounce === 'function' ? debounce : (typeof window !== 'undefined' && typeof window.debounce === 'function' ? window.debounce : null);
+        const debounced = debounceFn ? debounceFn(handleInput, wait) : handleInput;
+
+        boundInputHandler = (e) => {
+          userIsTyping = true;
+          selectionExplicit = false;
+          if (typeof document !== 'undefined') {
+            const selector = document.getElementById('search-engine-selector');
+            if (selector && selector.classList) {
+              selector.classList.remove('expanded');
+              selector.classList.add('suppress-hover');
+            }
+          }
+          debounced(e);
+        };
+        boundInputHandler._cancel = () => {
+          if (debounced && typeof debounced.cancel === 'function') {
+            debounced.cancel();
+          }
+        };
+
+        input.addEventListener('input', boundInputHandler);
+
+        boundInputClickHandler = (e) => {
+          if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        };
+        input.addEventListener('click', boundInputClickHandler);
       }
+
       const panel = getSearchResultsPanel();
       if (panel && typeof panel.addEventListener === 'function') {
-        panel.addEventListener('mousedown', handleResultMouseDown, true);
-        panel.addEventListener('click', handleResultClick, true);
+        boundPanelMousedownHandler = handleResultMouseDown;
+        panel.addEventListener('mousedown', boundPanelMousedownHandler, true);
+
+        boundPanelClickHandler = handleResultClick;
+        panel.addEventListener('click', boundPanelClickHandler, true);
+
+        boundPanelStopHandler = (e) => {
+          if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        };
+        panel.addEventListener('click', boundPanelStopHandler);
       }
+
       if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-        document.addEventListener('keydown', handleKeydown);
+        boundKeydownHandler = handleKeydown;
+        document.addEventListener('keydown', boundKeydownHandler);
+
+        boundQuickFocusHandler = (e) => {
+          if (!e || !e.target) return;
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+          if (e.ctrlKey || e.metaKey || e.altKey) return;
+          if (e.key && e.key.length > 1) return;
+          const searchIn = getSearchInput();
+          if (searchIn && typeof searchIn.focus === 'function') searchIn.focus();
+        };
+        document.addEventListener('keydown', boundQuickFocusHandler);
       }
+
+      if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        boundBeforeUnloadHandler = () => {
+          if (boundInputHandler && typeof boundInputHandler._cancel === 'function') {
+            boundInputHandler._cancel();
+          }
+        };
+        window.addEventListener('beforeunload', boundBeforeUnloadHandler);
+      }
+
       boundEventListeners = true;
     }
   }
@@ -1769,21 +1838,56 @@
     clearAllSelections();
     if (boundEventListeners) {
       const form = getSearchForm();
-      if (form && typeof form.removeEventListener === 'function') {
-        form.removeEventListener('submit', handleSubmit);
+      if (form && typeof form.removeEventListener === 'function' && boundFormSubmitHandler) {
+        form.removeEventListener('submit', boundFormSubmitHandler);
       }
+
       const input = getSearchInput();
       if (input && typeof input.removeEventListener === 'function') {
-        input.removeEventListener('input', handleInput);
+        if (boundInputHandler) {
+          if (typeof boundInputHandler._cancel === 'function') boundInputHandler._cancel();
+          input.removeEventListener('input', boundInputHandler);
+        }
+        if (boundInputClickHandler) {
+          input.removeEventListener('click', boundInputClickHandler);
+        }
       }
+
       const panel = getSearchResultsPanel();
       if (panel && typeof panel.removeEventListener === 'function') {
-        panel.removeEventListener('mousedown', handleResultMouseDown, true);
-        panel.removeEventListener('click', handleResultClick, true);
+        if (boundPanelMousedownHandler) {
+          panel.removeEventListener('mousedown', boundPanelMousedownHandler, true);
+        }
+        if (boundPanelClickHandler) {
+          panel.removeEventListener('click', boundPanelClickHandler, true);
+        }
+        if (boundPanelStopHandler) {
+          panel.removeEventListener('click', boundPanelStopHandler);
+        }
       }
+
       if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
-        document.removeEventListener('keydown', handleKeydown);
+        if (boundKeydownHandler) {
+          document.removeEventListener('keydown', boundKeydownHandler);
+        }
+        if (boundQuickFocusHandler) {
+          document.removeEventListener('keydown', boundQuickFocusHandler);
+        }
       }
+
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function' && boundBeforeUnloadHandler) {
+        window.removeEventListener('beforeunload', boundBeforeUnloadHandler);
+      }
+
+      boundFormSubmitHandler = null;
+      boundInputHandler = null;
+      boundInputClickHandler = null;
+      boundPanelMousedownHandler = null;
+      boundPanelClickHandler = null;
+      boundPanelStopHandler = null;
+      boundKeydownHandler = null;
+      boundQuickFocusHandler = null;
+      boundBeforeUnloadHandler = null;
       boundEventListeners = false;
     }
     latestSearchToken = 0;

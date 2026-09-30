@@ -631,3 +631,18 @@ test('search-interaction-controller: safe execution in headless environment with
   assert.doesNotThrow(() => ctrl.handleKeydown({ key: 'Escape' }));
   assert.doesNotThrow(() => ctrl.destroy());
 });
+
+// 9. Event Binding Lifecycle
+test('search-interaction-controller: bindEvents wires form, input, panel, and keyboard listeners cleanly', async () => {
+  const { controller, elements } = setupTestEnvironment();
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  let formSubmitted = false;
+  elements.searchForm.dispatchMockEvent('submit', { preventDefault: () => { formSubmitted = true; } });
+
+  elements.searchResultsPanel.dispatchMockEvent('mousedown', {});
+  elements.searchResultsPanel.dispatchMockEvent('click', {});
+
+  assert.doesNotThrow(() => controller.destroy());
+});

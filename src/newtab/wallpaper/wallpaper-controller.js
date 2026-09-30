@@ -36,6 +36,8 @@ let galleryHydrationWarmPromise = null;
 let currentWallpaperSelection = null;
 let wallpaperTypePreference = null; // 'video' | 'static'
 let wallpaperQualityPreference = 'low';
+let dailyRotationPreference = true;
+let initialWallpaperState = {};
 
 // --- Pure Helpers: Date & Day Stamps ---
 function getLocalDayStamp(ts) {
@@ -1318,6 +1320,329 @@ function updateSettingsPreview(selection, type = 'video') {
   }
 }
 
+// ===============================================
+// --- SELECTION RESOLUTION & DAILY ROTATION ---
+// ===============================================
+
+function buildFallbackSelection(selectedAt = Date.now()) {
+  return {
+    id: 'fallback',
+    videoUrl: 'assets/fallback.mp4',
+    posterUrl: 'assets/fallback.webp',
+    posterCacheKey: 'assets/fallback.webp',
+    title: 'Daily Wallpaper',
+    category: 'Default',
+    selectedAt
+  };
+}
+
+function rebuildCurrentSelectionFromGallery() {
+  const urls = getGalleryUrlsOrNull(currentWallpaperSelection);
+  if (!urls) return null;
+
+  const updated = {
+    ...currentWallpaperSelection,
+    videoUrl: urls.videoUrl,
+    posterUrl: urls.posterUrl,
+    videoCacheKey: urls.videoUrl,
+    posterCacheKey: urls.posterUrl
+  };
+  currentWallpaperSelection = updated;
+  return updated;
+}
+
+async function pickNextWallpaper(manifest) {
+  if (!manifest || !manifest.length) return null;
+
+  let pool = await getWallpaperPool();
+  if (!pool.length) {
+    pool = typeof shuffleArray === 'function'
+      ? shuffleArray(manifest.map(item => item.id))
+      : manifest.map(item => item.id).sort(() => Math.random() - 0.5);
+  }
+
+  const nextId = pool.pop();
+  const entry = manifest.find(item => item.id === nextId);
+  await setWallpaperPool(pool);
+
+  if (!entry) return null;
+
+  let generatedVideoUrl = '';
+  let generatedPosterUrl = '';
+  if (isGallerySelection(entry)) {
+    const urls = getWallpaperUrls(entry.id);
+    generatedVideoUrl = urls.videoUrl;
+    generatedPosterUrl = urls.posterUrl;
+  }
+  const videoUrl = generatedVideoUrl || entry.url || '';
+  const posterUrl = generatedPosterUrl || entry.poster || entry.posterUrl || '';
+  const posterCacheKey = entry.posterCacheKey || posterUrl || '';
+
+  if (posterUrl) {
+    await cacheAsset(posterUrl);
+  }
+
+  const selection = {
+    id: entry.id,
+    videoUrl,
+    videoCacheKey: videoUrl || '',
+    posterUrl,
+    posterCacheKey,
+    title: entry.title,
+    selectedAt: Date.now()
+  };
+
+  await setWallpaperSelection(selection);
+  return selection;
+}
+
+function schedulePendingDailyRotationAttempt() {
+  if (pendingDailyRotationTimer) return;
+
+  pendingDailyRotationTimer = setTimeout(async () => {
+    pendingDailyRotationTimer = null;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+
+    try {
+      const stored = await getWallpaperRotationState();
+      const now = Date.now();
+      const pending = stored.pending;
+      const allowDailyRotation = stored.allowDailyRotation;
+      const current = stored.selection;
+      const selectedAt = current && current.selectedAt ? current.selectedAt : 0;
+
+      if (!current || !Number.isFinite(selectedAt) || selectedAt <= 0) {
+        await clearPendingDailyRotation();
+        return;
+      }
+
+      const dueByDayChange = isDailyWallpaperRotationDue(current, allowDailyRotation, now);
+      if (!pending) return;
+
+      if (!allowDailyRotation || !dueByDayChange) {
+        await clearPendingDailyRotation();
+        return;
+      }
+
+      await clearPendingDailyRotation();
+    } catch (err) {
+      console.warn('Failed to clear pending daily rotation', err);
+      return;
+    }
+
+    try {
+      await ensureDailyWallpaper(true);
+    } catch (err) {
+      console.warn('Pending daily rotation failed', err);
+    }
+  }, DAILY_ROTATION_SEEN_DELAY_MS);
+}
+
+async function ensureDailyWallpaper(forceNext = false) {
+  const recordStartupIdle = forceNext !== true;
+  const startupIdleStart =
+    recordStartupIdle && typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : 0;
+
+  if (recordStartupIdle) {
+    if (typeof recordIdleTaskPerf === 'function') {
+      recordIdleTaskPerf('startup:ensureDailyWallpaper', 'start');
+    }
+    if (typeof DEBUG_IDLE_STARTUP !== 'undefined' && DEBUG_IDLE_STARTUP) {
+      console.log('[startup idle] startup:ensureDailyWallpaper start');
+    }
+  }
+
+  try {
+    if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) {
+      if (
+        wallpaperTypePreference === 'video' ||
+        (currentWallpaperSelection && currentWallpaperSelection.videoUrl)
+      ) {
+        if (typeof recordPerformanceModeVideoSkipped === 'function') {
+          recordPerformanceModeVideoSkipped();
+        }
+      }
+      return;
+    }
+
+    const stored = await getWallpaperRotationState();
+    const now = Date.now();
+    const storedFallbackUsedAt = stored.fallbackUsedAt || 0;
+    const storedQuality = stored.quality;
+    if (storedQuality) {
+      wallpaperQualityPreference = storedQuality === 'high' ? 'high' : 'low';
+    }
+
+    let current = stored.selection;
+    let fallbackUsedAt = storedFallbackUsedAt || now;
+
+    if (!current) {
+      const fallbackSelection = buildFallbackSelection(fallbackUsedAt);
+      current = fallbackSelection;
+      currentWallpaperSelection = fallbackSelection;
+      await setWallpaperSelectionWithFallback(fallbackSelection, fallbackUsedAt);
+    } else {
+      currentWallpaperSelection = current;
+    }
+
+    const allowDailyRotation = stored.allowDailyRotation;
+    const pendingAlreadySet = stored.pending;
+    const pendingSince = stored.pendingSince || 0;
+    const dueByDayChange = isDailyWallpaperRotationDue(current, allowDailyRotation, now);
+
+    if (pendingAlreadySet && !dueByDayChange) {
+      await clearPendingDailyRotation();
+    }
+
+    const shouldDeferRotation = !forceNext && allowDailyRotation && dueByDayChange;
+
+    if (shouldDeferRotation) {
+      if (!pendingAlreadySet) {
+        await setPendingDailyRotation(true, now);
+      } else if (!pendingSince) {
+        await setPendingDailyRotation(true, now);
+      }
+      schedulePendingDailyRotationAttempt();
+    } else if (forceNext && pendingAlreadySet) {
+      await clearPendingDailyRotation();
+    }
+
+    const shouldPickNext = forceNext;
+
+    if (shouldPickNext) {
+      const manifest = await getVideosManifest();
+      const nextSelection = await pickNextWallpaper(manifest);
+      if (nextSelection) {
+        current = nextSelection;
+        currentWallpaperSelection = nextSelection;
+      }
+    }
+
+    const refreshedGalleryUrls = getGalleryUrlsOrNull(current);
+    if (refreshedGalleryUrls) {
+      current = {
+        ...current,
+        videoUrl: refreshedGalleryUrls.videoUrl,
+        posterUrl: refreshedGalleryUrls.posterUrl,
+        videoCacheKey: refreshedGalleryUrls.videoUrl,
+        posterCacheKey: refreshedGalleryUrls.posterUrl
+      };
+      await setWallpaperSelection(current);
+    }
+
+    if (current) {
+      syncWallpaperStartupState(current, allowDailyRotation);
+      const hydratedSelection = await hydrateWallpaperSelection(current);
+      await ensurePlayableSelection(hydratedSelection);
+      currentWallpaperSelection = hydratedSelection;
+
+      let saveBattery = false;
+      const batteryPref = typeof appBatteryOptimizationPreference !== 'undefined'
+        ? appBatteryOptimizationPreference
+        : (typeof window !== 'undefined' && window.appBatteryOptimizationPreference);
+      if (batteryPref) {
+        saveBattery = await checkBatteryStatus();
+      }
+
+      if (saveBattery && hydratedSelection.videoUrl) {
+        applyWallpaperByType(hydratedSelection, 'static');
+        return;
+      }
+
+      const type = hydratedSelection.videoUrl ? await getWallpaperTypePreference() : 'static';
+      applyWallpaperByType(hydratedSelection, type);
+      if (typeof scheduleIdleTask === 'function') {
+        scheduleIdleTask(() => cacheAppliedWallpaperVideo(hydratedSelection), 'cacheAppliedWallpaperVideo');
+      } else {
+        cacheAppliedWallpaperVideo(hydratedSelection);
+      }
+    } else {
+      applyWallpaperBackground('assets/fallback.webp');
+    }
+  } finally {
+    if (recordStartupIdle) {
+      const elapsedMs =
+        startupIdleStart && typeof performance !== 'undefined' && typeof performance.now === 'function'
+          ? performance.now() - startupIdleStart
+          : 0;
+
+      if (typeof recordIdleTaskPerf === 'function') {
+        recordIdleTaskPerf('startup:ensureDailyWallpaper', 'end', elapsedMs);
+      }
+      if (typeof DEBUG_IDLE_STARTUP !== 'undefined' && DEBUG_IDLE_STARTUP) {
+        console.log('[startup idle] startup:ensureDailyWallpaper end in', Math.round(elapsedMs), 'ms');
+      }
+    }
+  }
+}
+
+async function loadWallpaperTypePreference() {
+  wallpaperTypePreference = await getWallpaperTypePreferenceStorage();
+
+  const toggle = typeof wallpaperTypeToggle !== 'undefined' && wallpaperTypeToggle
+    ? wallpaperTypeToggle
+    : (typeof document !== 'undefined' ? document.getElementById('gallery-wallpaper-type-toggle') : null);
+  if (toggle) {
+    toggle.checked = wallpaperTypePreference === 'video';
+  }
+
+  const select = typeof appWallpaperTypeSelect !== 'undefined' && appWallpaperTypeSelect
+    ? appWallpaperTypeSelect
+    : (typeof document !== 'undefined' ? document.getElementById('app-wallpaper-type-select') : null);
+  if (select) {
+    select.value = wallpaperTypePreference;
+  }
+
+  return wallpaperTypePreference;
+}
+
+async function loadCurrentWallpaperSelection() {
+  try {
+    const selection = await getWallpaperSelection();
+    currentWallpaperSelection = await hydrateWallpaperSelection(selection);
+  } catch (err) {
+    currentWallpaperSelection = null;
+  }
+  return currentWallpaperSelection;
+}
+
+async function getWallpaperTypePreference() {
+  if (!wallpaperTypePreference) {
+    await loadWallpaperTypePreference();
+  }
+  return wallpaperTypePreference || 'video';
+}
+
+async function setWallpaperTypePreference(type) {
+  const next = type === 'static' ? 'static' : 'video';
+  wallpaperTypePreference = next;
+  await setWallpaperTypePreferenceStorage(next);
+
+  // Re-apply current wallpaper with the new mode if available
+  try {
+    const storedSelection = await getWallpaperSelection();
+    let selection = storedSelection || currentWallpaperSelection;
+
+    if (!selection) {
+      const selectedAt = (await getWallpaperFallbackUsedAt()) || Date.now();
+      selection = buildFallbackSelection(selectedAt);
+      await setWallpaperSelectionWithFallback(selection, selectedAt);
+    }
+
+    if (selection) {
+      const hydrated = await hydrateWallpaperSelection(selection);
+      await ensurePlayableSelection(hydrated);
+      currentWallpaperSelection = hydrated;
+      applyWallpaperByType(hydrated, next);
+    }
+  } catch (err) {
+    console.warn('Failed to reapply wallpaper for type change', err);
+  }
+}
+
 // --- Window Property Bridges for Seamless Multi-Script Access ---
 if (typeof window !== 'undefined') {
   if (!('currentWallpaperSelection' in window)) {
@@ -1352,6 +1677,22 @@ if (typeof window !== 'undefined') {
       enumerable: true
     });
   }
+  if (!('dailyRotationPreference' in window)) {
+    Object.defineProperty(window, 'dailyRotationPreference', {
+      get: () => dailyRotationPreference,
+      set: (val) => { dailyRotationPreference = val !== false; },
+      configurable: true,
+      enumerable: true
+    });
+  }
+  if (!('initialWallpaperState' in window)) {
+    Object.defineProperty(window, 'initialWallpaperState', {
+      get: () => initialWallpaperState,
+      set: (val) => { initialWallpaperState = val || {}; },
+      configurable: true,
+      enumerable: true
+    });
+  }
 
   // Window function bindings
   window.loadCachedGalleryManifest = loadCachedGalleryManifest;
@@ -1377,6 +1718,17 @@ if (typeof window !== 'undefined') {
   window.clearBackgroundVideos = clearBackgroundVideos;
   window.startBackgroundVideos = startBackgroundVideos;
   window.updateSettingsPreview = updateSettingsPreview;
+
+  // Selection & Daily Rotation function bindings
+  window.buildFallbackSelection = buildFallbackSelection;
+  window.rebuildCurrentSelectionFromGallery = rebuildCurrentSelectionFromGallery;
+  window.pickNextWallpaper = pickNextWallpaper;
+  window.schedulePendingDailyRotationAttempt = schedulePendingDailyRotationAttempt;
+  window.ensureDailyWallpaper = ensureDailyWallpaper;
+  window.loadWallpaperTypePreference = loadWallpaperTypePreference;
+  window.loadCurrentWallpaperSelection = loadCurrentWallpaperSelection;
+  window.getWallpaperTypePreference = getWallpaperTypePreference;
+  window.setWallpaperTypePreference = setWallpaperTypePreference;
 }
 
 // --- Homebase Wallpaper Controller Namespace ---
@@ -1430,14 +1782,33 @@ window.HomebaseWallpaperController = {
   startBackgroundVideos,
   updateSettingsPreview,
 
+  // Pure Selection Helpers
+  buildFallbackSelection,
+  rebuildCurrentSelectionFromGallery,
+  pickNextWallpaper,
+
+  // Daily Rotation Runtime
+  schedulePendingDailyRotationAttempt,
+  ensureDailyWallpaper,
+
+  // Wallpaper Preference Management
+  loadWallpaperTypePreference,
+  loadCurrentWallpaperSelection,
+  getWallpaperTypePreference,
+  setWallpaperTypePreference,
+
   // State Accessors
   getCurrentWallpaperSelection: () => currentWallpaperSelection,
   setCurrentWallpaperSelection: (sel) => { currentWallpaperSelection = sel || null; },
-  getWallpaperTypePreference: () => wallpaperTypePreference || 'video',
-  setWallpaperTypePreference: (type) => { wallpaperTypePreference = type === 'static' ? 'static' : 'video'; },
+  getWallpaperTypePreference: getWallpaperTypePreference,
+  setWallpaperTypePreference: setWallpaperTypePreference,
   getWallpaperTypePreferenceState: () => wallpaperTypePreference,
   setWallpaperTypePreferenceState: (type) => { wallpaperTypePreference = type === 'static' ? 'static' : 'video'; },
   getWallpaperQualityPreference: () => wallpaperQualityPreference || 'low',
   setWallpaperQualityPreference: (q) => { wallpaperQualityPreference = q === 'high' ? 'high' : 'low'; },
+  getDailyRotationPreference: () => dailyRotationPreference,
+  setDailyRotationPreference: (val) => { dailyRotationPreference = val !== false; },
+  getInitialWallpaperState: () => initialWallpaperState,
+  setInitialWallpaperState: (val) => { initialWallpaperState = val || {}; },
   getLastAppliedWallpaper: () => lastAppliedWallpaper
 };

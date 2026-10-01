@@ -153,6 +153,21 @@ const DOCK_COLLAPSE_RATIO = 0.32;
 let responsiveLayoutListenerAttached = false;
 let debouncedResizeHandler = null;
 
+function getSidebarElement() {
+  if (typeof document === 'undefined') return null;
+  return document.querySelector('.sidebar');
+}
+
+function getCollapsedClockSlotElement() {
+  if (typeof document === 'undefined') return null;
+  return document.getElementById('collapsed-clock-slot');
+}
+
+function getTimeWidgetElement() {
+  if (typeof document === 'undefined') return null;
+  return document.querySelector('.widget-time');
+}
+
 function updateSidebarCollapseState() {
   if (typeof document === 'undefined') return;
 
@@ -167,9 +182,9 @@ function updateSidebarCollapseState() {
   document.body.classList.toggle('sidebar-collapsed', shouldCollapseSidebar);
   document.body.classList.toggle('dock-collapsed', shouldCollapseDock);
 
-  const sidebar = document.querySelector('.sidebar');
-  const collapsedClockSlot = document.getElementById('collapsed-clock-slot');
-  const timeWidget = document.querySelector('.widget-time');
+  const sidebar = getSidebarElement();
+  const collapsedClockSlot = getCollapsedClockSlotElement();
+  const timeWidget = getTimeWidgetElement();
 
   if (shouldCollapseSidebar && !sidebarHiddenPref) {
     if (collapsedClockSlot && timeWidget && timeWidget.parentElement !== collapsedClockSlot) {
@@ -218,6 +233,9 @@ function setupResponsiveLayoutListener() {
 if (typeof window !== 'undefined') {
   window.updateSidebarCollapseState = updateSidebarCollapseState;
   window.setupResponsiveLayoutListener = setupResponsiveLayoutListener;
+  window.getSidebarElement = getSidebarElement;
+  window.getCollapsedClockSlotElement = getCollapsedClockSlotElement;
+  window.getTimeWidgetElement = getTimeWidgetElement;
 
   window.HomebaseDockNavigation = {
     SIDEBAR_COLLAPSE_RATIO,
@@ -226,7 +244,10 @@ if (typeof window !== 'undefined') {
     setupResponsiveLayoutListener,
     setupDockNavigation,
     setupLazySettingsButton,
-    initAddonStoreDockLink
+    initAddonStoreDockLink,
+    getSidebarElement,
+    getCollapsedClockSlotElement,
+    getTimeWidgetElement
   };
 }
 

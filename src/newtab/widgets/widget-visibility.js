@@ -55,7 +55,11 @@ function writeFastWidgetOrderMirror(order) {
 }
 
 function applyWidgetOrderToSidebar(order = widgetOrderPreference) {
-  const sidebarEl = sidebar || document.querySelector('.sidebar');
+  const sidebarEl = (typeof window !== 'undefined' && window.HomebaseDockNavigation && typeof window.HomebaseDockNavigation.getSidebarElement === 'function')
+    ? window.HomebaseDockNavigation.getSidebarElement()
+    : (typeof getSidebarElement === 'function'
+      ? getSidebarElement()
+      : (typeof document !== 'undefined' ? document.querySelector('.sidebar') : null));
   if (!sidebarEl) return;
 
   const widgets = {

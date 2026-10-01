@@ -71,11 +71,6 @@ const SIDEBAR_COLLAPSE_RATIO = 0.49;
 
 const DOCK_COLLAPSE_RATIO = 0.32;
 
-// Wallpaper constants, state, and rotation helpers extracted to wallpaper-controller.js
-
-
-// syncWallpaperStartupState extracted to wallpaper-storage.js
-
 const runWhenIdle = (cb, timeout = 500) => {
 
   if ('requestIdleCallback' in window) {
@@ -3683,113 +3678,6 @@ if (!isPerformanceModeEnabled()) {
   recordStartupPerfEventOnce('newtab:dynamic-accent-skipped-performance-mode');
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Placeholder: alternate button shuffles through manifest in current view
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Wallpaper Preference Management extracted to wallpaper-controller.js
-// (loadWallpaperTypePreference, loadCurrentWallpaperSelection,
-//  getWallpaperTypePreference, setWallpaperTypePreference)
-
-
-
-document.addEventListener('visibilitychange', () => {
-
-  const videos = document.querySelectorAll('.background-video');
-
-
-
-  if (document.hidden) {
-
-    videos.forEach((v) => {
-
-      if (!v.paused) {
-
-        v.dataset.wasPlaying = 'true';
-
-        v.pause();
-
-      }
-
-    });
-
-  } else {
-
-    if (isPerformanceModeEnabled()) return;
-
-    const activeVideo = document.querySelector('.background-video.is-active') || videos[0];
-
-    if (activeVideo) {
-
-      activeVideo.play().catch(() => {});
-
-    }
-
-    if (!document.body.classList.contains('modal-open')) {
-
-      setTimeout(() => searchInput.focus(), 50);
-
-    }
-
-  }
-
-});
-
 function openBookmarkInNewTab(bookmarkId) {
 
   if (!bookmarkTree || !bookmarkTree[0] || !bookmarkId) return;
@@ -3825,8 +3713,3 @@ function openFolderFromContext(folderId) {
   renderBookmarkGrid(folderNode);
 
 }
-
-
-
-// Video Lifecycle functions (cleanupUnusedObjectUrls, applyWallpaperByType, clearBackgroundVideos,
-// startBackgroundVideos, updateSettingsPreview, ensurePlayableSelection) extracted to wallpaper-controller.js

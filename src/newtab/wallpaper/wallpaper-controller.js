@@ -1320,6 +1320,53 @@ function updateSettingsPreview(selection, type = 'video') {
   }
 }
 
+function handleWallpaperVisibilityChange() {
+  if (typeof document === 'undefined') return;
+
+  const videos = document.querySelectorAll('.background-video');
+
+  if (document.hidden) {
+    videos.forEach((v) => {
+      if (!v.paused) {
+        v.dataset.wasPlaying = 'true';
+        v.pause();
+      }
+    });
+  } else {
+    const isPerfMode = typeof isPerformanceModeEnabled === 'function'
+      ? isPerformanceModeEnabled()
+      : (typeof window !== 'undefined' && typeof window.isPerformanceModeEnabled === 'function'
+          ? window.isPerformanceModeEnabled()
+          : false);
+
+    if (isPerfMode) return;
+
+    const activeVideo = document.querySelector('.background-video.is-active') || videos[0];
+    if (activeVideo) {
+      activeVideo.play().catch(() => {});
+    }
+
+    if (!document.body.classList.contains('modal-open')) {
+      const searchInput = document.getElementById('search-input');
+      if (searchInput && typeof setTimeout === 'function') {
+        setTimeout(() => searchInput.focus(), 50);
+      }
+    }
+  }
+}
+
+let wallpaperVisibilityListenerAttached = false;
+
+function setupWallpaperVisibilityListener() {
+  if (typeof document === 'undefined') return;
+  if (wallpaperVisibilityListenerAttached) return;
+  wallpaperVisibilityListenerAttached = true;
+  if (document.documentElement && document.documentElement.dataset) {
+    document.documentElement.dataset.wallpaperVisibilityAttached = 'true';
+  }
+  document.addEventListener('visibilitychange', handleWallpaperVisibilityChange);
+}
+
 // ===============================================
 // --- SELECTION RESOLUTION & DAILY ROTATION ---
 // ===============================================
@@ -1827,6 +1874,8 @@ if (typeof window !== 'undefined') {
   window.clearBackgroundVideos = clearBackgroundVideos;
   window.startBackgroundVideos = startBackgroundVideos;
   window.updateSettingsPreview = updateSettingsPreview;
+  window.handleWallpaperVisibilityChange = handleWallpaperVisibilityChange;
+  window.setupWallpaperVisibilityListener = setupWallpaperVisibilityListener;
 
   // Selection & Daily Rotation function bindings
   window.buildFallbackSelection = buildFallbackSelection;
@@ -1896,6 +1945,8 @@ window.HomebaseWallpaperController = {
   clearBackgroundVideos,
   startBackgroundVideos,
   updateSettingsPreview,
+  handleVisibilityChange: handleWallpaperVisibilityChange,
+  setupVisibilityListener: setupWallpaperVisibilityListener,
 
   // Pure Selection Helpers
   buildFallbackSelection,
@@ -1933,3 +1984,5 @@ window.HomebaseWallpaperController = {
   setInitialWallpaperState: (val) => { initialWallpaperState = val || {}; },
   getLastAppliedWallpaper: () => lastAppliedWallpaper
 };
+
+setupWallpaperVisibilityListener();

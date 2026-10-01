@@ -32,6 +32,7 @@ const keyExtractedModulePaths = [
   "newtab/bookmarks/folder-picker.js",
   "newtab/bookmarks/bookmark-grid-controller.js",
   "newtab/bookmarks/bookmark-editor-adapter.js",
+  "newtab/bookmarks/bookmark-root-controller.js",
   "newtab/widgets/widget-visibility.js",
   "newtab/widgets/time.js",
   "newtab/widgets/todo.js",

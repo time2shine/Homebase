@@ -33,11 +33,6 @@ const bookmarksGridEl = document.getElementById('bookmarks-grid');
 const bookmarksEmptyState = document.getElementById('bookmarks-empty-state');
 
 const bookmarksEmptyMessage = document.getElementById('bookmarks-empty-message');
-const appBookmarksChangeRootBtn = document.getElementById('app-bookmarks-change-root-btn');
-
-const homebaseCreateFolderBtn = document.getElementById('homebase-create-folder-btn');
-
-const homebaseChooseFolderBtn = document.getElementById('homebase-choose-folder-btn');
 
 const folderPickerModal = document.getElementById('folder-picker-modal');
 
@@ -927,11 +922,12 @@ let appCinemaModePreference = false;
 let bookmarkTreeFetchPromise = null;
 
 function setChangeFolderButtonVisibility(visible) {
-  if (!appBookmarksChangeRootBtn) return;
+  const changeBtn = document.getElementById('app-bookmarks-change-root-btn');
+  if (!changeBtn) return;
   const shouldShow = Boolean(visible);
-  const changeFolderRow = appBookmarksChangeRootBtn.closest('.app-setting-row');
-  appBookmarksChangeRootBtn.hidden = !shouldShow;
-  appBookmarksChangeRootBtn.classList.toggle('hidden', !shouldShow);
+  const changeFolderRow = changeBtn.closest('.app-setting-row');
+  changeBtn.hidden = !shouldShow;
+  changeBtn.classList.toggle('hidden', !shouldShow);
   if (changeFolderRow) {
     changeFolderRow.hidden = !shouldShow;
     changeFolderRow.classList.toggle('hidden', !shouldShow);
@@ -1010,62 +1006,7 @@ function endBookmarksBoot() {
   }
 }
 
-function findChildFolderByTitle(parentNode, titleLower) {
-  if (!parentNode || !parentNode.children) return null;
-  return parentNode.children.find(
-    (child) => child && child.children && (child.title || '').toLowerCase() === titleLower
-  ) || null;
-}
 
-async function ensureFolder(parentId, title) {
-  const titleLower = (title || '').toLowerCase();
-  try {
-    const children = await browser.bookmarks.getChildren(parentId);
-    const existing = findChildFolderByTitle({ children }, titleLower);
-    if (existing) return existing;
-    return await browser.bookmarks.create({ parentId, title });
-  } catch (err) {
-    console.warn('Failed to ensure folder', err);
-    return null;
-  }
-}
-
-async function ensureBookmark(parentId, title, url) {
-  const desiredUrl = (url || '').trim();
-  const normalizedDesiredUrl = desiredUrl.replace(/\/$/, '');
-  const titleLower = (title || '').toLowerCase();
-  try {
-    const children = await browser.bookmarks.getChildren(parentId);
-    const existing = (children || []).find((child) => {
-      const childUrl = (child.url || '').trim().replace(/\/$/, '');
-      const titleMatch = (child.title || '').toLowerCase() === titleLower;
-      return (!!child.url && (childUrl === normalizedDesiredUrl || titleMatch));
-    });
-    if (existing) return existing;
-    return await browser.bookmarks.create({ parentId, title, url: desiredUrl });
-  } catch (err) {
-    console.warn('Failed to ensure bookmark', err);
-    return null;
-  }
-}
-
-function getOtherBookmarksNode(rootChildren = []) {
-  if (!Array.isArray(rootChildren)) return null;
-  let node = rootChildren.find((folder) => folder && folder.id === 'unfiled_____');
-  if (node) return node;
-  node = rootChildren.find((folder) => folder && folder.id === '2');
-  if (node) return node;
-  return rootChildren.find(
-    (folder) => folder && folder.children && (folder.title || '').toLowerCase() === 'other bookmarks'
-  ) || null;
-}
-
-function findHomebaseUnderOtherBookmarks(treeRoot) {
-  if (!treeRoot || !treeRoot.children) return null;
-  const other = getOtherBookmarksNode(treeRoot.children);
-  if (!other || !other.children) return null;
-  return findChildFolderByTitle(other, 'homebase');
-}
 
 async function getBookmarkTree(forceRefresh = false) {
 
@@ -1109,29 +1050,7 @@ async function getBookmarkTree(forceRefresh = false) {
 
 }
 
-async function getStoredHomebaseRootSubTree(storedRootId) {
-  if (!storedRootId || !browser.bookmarks || typeof browser.bookmarks.getSubTree !== 'function') {
-    return null;
-  }
 
-  try {
-    const subTree = await browser.bookmarks.getSubTree(storedRootId);
-    const rootNode = Array.isArray(subTree) ? subTree[0] : null;
-
-    if (!rootNode || rootNode.url) {
-      await clearHomebaseRootId();
-      return null;
-    }
-
-    bookmarkTree = subTree;
-    return rootNode;
-  } catch (err) {
-    console.warn('Stored Homebase root ID is invalid; falling back to full bookmark tree lookup.', err);
-    recordPerfFallback('bookmarks', 'Invalid bookmark root ID');
-    await clearHomebaseRootId();
-    return null;
-  }
-}
 
 
 
@@ -2474,45 +2393,7 @@ async function loadFolderMetadata() {
 
 
 
-async function createHomebaseFolder() {
-  if (!browser.bookmarks) {
-    showBookmarksEmptyState('Bookmarks permission unavailable.');
-    return;
-  }
 
-  beginBookmarksBoot();
-  try {
-    const tree = await getBookmarkTree(true);
-    const root = tree && tree[0];
-    const rootChildren = (root && root.children) || [];
-
-    const parentNode = getOtherBookmarksNode(rootChildren) || rootChildren[0] || root;
-    if (!parentNode || !parentNode.id) {
-      console.warn('Could not resolve Other Bookmarks node to create Homebase.');
-      showBookmarksEmptyState('Bookmarks permission unavailable.');
-      return;
-    }
-
-    const homebaseFolder = await ensureFolder(parentNode.id, 'Homebase');
-    if (!homebaseFolder || !homebaseFolder.id) {
-      showBookmarksEmptyState('Bookmarks permission unavailable.');
-      return;
-    }
-
-    const folderOne = await ensureFolder(homebaseFolder.id, 'Folder 1');
-    if (folderOne && folderOne.id) {
-      await ensureBookmark(folderOne.id, 'Google', 'https://www.google.com');
-    }
-
-    await setHomebaseRootId(homebaseFolder.id);
-    await loadBookmarks();
-  } catch (err) {
-    console.warn('Failed to create Homebase folder', err);
-    showBookmarksEmptyState('Bookmarks permission unavailable.');
-  } finally {
-    endBookmarksBoot();
-  }
-}
 
 /**
 
@@ -2551,6 +2432,9 @@ async function loadBookmarks(activeFolderId = null) {
           : 0;
 
       rootNode = await getStoredHomebaseRootSubTree(storedRootId);
+      if (window.HomebaseBookmarkRootController?.getLastResolvedSubTree()) {
+        bookmarkTree = window.HomebaseBookmarkRootController.getLastResolvedSubTree();
+      }
       hbPerfTime('bookmarks getSubTree', subTreeStart);
     }
 
@@ -2608,90 +2492,7 @@ async function loadBookmarks(activeFolderId = null) {
 
 
 
-function setupHomebaseRootControls() {
 
-  if (homebaseCreateFolderBtn) {
-
-    homebaseCreateFolderBtn.addEventListener('click', () => {
-
-      createHomebaseFolder();
-
-    });
-
-  }
-
-  if (homebaseChooseFolderBtn) {
-
-    homebaseChooseFolderBtn.addEventListener('click', () => {
-
-      openFolderPicker(homebaseChooseFolderBtn);
-
-    });
-
-  }
-
-  if (appBookmarksChangeRootBtn) {
-
-    appBookmarksChangeRootBtn.addEventListener('click', () => {
-
-      openFolderPicker(appBookmarksChangeRootBtn);
-
-    });
-
-  }
-
-}
-
-function setupHomebaseRootListeners() {
-
-  if (!browser.bookmarks) {
-
-    return;
-
-  }
-
-  const bindBookmarkListener = (eventTarget, handler, label) => {
-    if (!eventTarget || typeof eventTarget.addListener !== 'function') return;
-    try {
-      eventTarget.addListener(handler);
-    } catch (err) {
-      console.warn(`Failed to bind bookmark ${label || 'event'} listener`, err);
-    }
-  };
-
-  const cacheInvalidator = () => {
-    invalidateFolderIndexCache();
-  };
-
-  bindBookmarkListener(browser.bookmarks.onCreated, cacheInvalidator, 'creation');
-  bindBookmarkListener(browser.bookmarks.onChanged, cacheInvalidator, 'change');
-  bindBookmarkListener(browser.bookmarks.onMoved, cacheInvalidator, 'move');
-
-  bindBookmarkListener(
-    browser.bookmarks.onRemoved,
-    async (id) => {
-      invalidateFolderIndexCache();
-
-      try {
-        const storedRootId = await getHomebaseRootId();
-
-        if (storedRootId && id === storedRootId) {
-
-          await clearHomebaseRootId();
-
-          showBookmarksEmptyState();
-
-        }
-      } catch (err) {
-
-        console.warn('Failed to handle bookmark removal', err);
-
-      }
-    },
-    'removal'
-  );
-
-}
 
 
 // ===============================================

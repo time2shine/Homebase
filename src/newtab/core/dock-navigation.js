@@ -142,3 +142,92 @@ function setupDockNavigation() {
   }
 
 }
+
+// ===============================================
+// Responsive Layout & Sidebar/Dock Collapse
+// ===============================================
+
+const SIDEBAR_COLLAPSE_RATIO = 0.49;
+const DOCK_COLLAPSE_RATIO = 0.32;
+
+let responsiveLayoutListenerAttached = false;
+let debouncedResizeHandler = null;
+
+function updateSidebarCollapseState() {
+  if (typeof document === 'undefined') return;
+
+  const sidebarHiddenPref = document.body.classList.contains('sidebar-hidden');
+  const referenceWidth = (window.screen && window.screen.availWidth) ? window.screen.availWidth : window.innerWidth;
+  if (!referenceWidth) return;
+
+  const widthRatio = window.innerWidth / referenceWidth;
+  const shouldCollapseSidebar = !sidebarHiddenPref && widthRatio <= SIDEBAR_COLLAPSE_RATIO;
+  const shouldCollapseDock = widthRatio <= DOCK_COLLAPSE_RATIO;
+
+  document.body.classList.toggle('sidebar-collapsed', shouldCollapseSidebar);
+  document.body.classList.toggle('dock-collapsed', shouldCollapseDock);
+
+  const sidebar = document.querySelector('.sidebar');
+  const collapsedClockSlot = document.getElementById('collapsed-clock-slot');
+  const timeWidget = document.querySelector('.widget-time');
+
+  if (shouldCollapseSidebar && !sidebarHiddenPref) {
+    if (collapsedClockSlot && timeWidget && timeWidget.parentElement !== collapsedClockSlot) {
+      collapsedClockSlot.appendChild(timeWidget);
+    }
+  } else {
+    if (sidebar && timeWidget && timeWidget.parentElement !== sidebar) {
+      const firstSidebarChild = sidebar.firstElementChild;
+      if (firstSidebarChild) {
+        sidebar.insertBefore(timeWidget, firstSidebarChild);
+      } else {
+        sidebar.appendChild(timeWidget);
+      }
+    }
+  }
+}
+
+function setupResponsiveLayoutListener() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (responsiveLayoutListenerAttached) return;
+  responsiveLayoutListenerAttached = true;
+
+  const runResize = () => {
+    updateSidebarCollapseState();
+    if (typeof updateBookmarkTabOverflow === 'function') {
+      updateBookmarkTabOverflow();
+    } else if (typeof window !== 'undefined' && typeof window.updateBookmarkTabOverflow === 'function') {
+      window.updateBookmarkTabOverflow();
+    }
+  };
+
+  if (typeof debounce === 'function') {
+    debouncedResizeHandler = debounce(runResize, 100);
+  } else {
+    debouncedResizeHandler = runResize;
+  }
+
+  window.addEventListener('resize', debouncedResizeHandler);
+  window.addEventListener('beforeunload', () => {
+    debouncedResizeHandler?.cancel?.();
+  });
+
+  updateSidebarCollapseState();
+}
+
+if (typeof window !== 'undefined') {
+  window.updateSidebarCollapseState = updateSidebarCollapseState;
+  window.setupResponsiveLayoutListener = setupResponsiveLayoutListener;
+
+  window.HomebaseDockNavigation = {
+    SIDEBAR_COLLAPSE_RATIO,
+    DOCK_COLLAPSE_RATIO,
+    updateSidebarCollapseState,
+    setupResponsiveLayoutListener,
+    setupDockNavigation,
+    setupLazySettingsButton,
+    initAddonStoreDockLink
+  };
+}
+
+setupResponsiveLayoutListener();

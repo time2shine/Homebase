@@ -24,14 +24,6 @@ const suggestionResultsContainer = document.getElementById('suggestion-results-c
 
 const searchAreaWrapper = document.querySelector('.search-area-wrapper');
 
-const sidebar = document.querySelector('.sidebar');
-
-const collapsedClockSlot = document.getElementById('collapsed-clock-slot');
-
-const timeWidget = document.querySelector('.widget-time');
-
-const dock = document.querySelector('.dock');
-
 const bookmarkTabsTrack = document.getElementById('bookmark-tabs-track');
 
 const bookmarkBarWrapper = document.querySelector('.bookmark-bar-wrapper');
@@ -66,10 +58,6 @@ const folderPickerError = document.getElementById('folder-picker-error');
 const tabScrollLeftBtn = document.getElementById('tab-scroll-left');
 
 const tabScrollRightBtn = document.getElementById('tab-scroll-right');
-
-const SIDEBAR_COLLAPSE_RATIO = 0.49;
-
-const DOCK_COLLAPSE_RATIO = 0.32;
 
 const runWhenIdle = (cb, timeout = 500) => {
 
@@ -536,84 +524,11 @@ function revealWidget(selector) {
 
 
 
-/**
-
- * Toggles a CSS class when the window width shrinks below the configured ratio
-
- * so the sidebar widgets can be hidden and the main pane regains the space.
-
- */
-
-function updateSidebarCollapseState() {
-
-  const sidebarHiddenPref = document.body.classList.contains('sidebar-hidden');
-
-  const referenceWidth = (window.screen && window.screen.availWidth) ? window.screen.availWidth : window.innerWidth;
-
-  if (!referenceWidth) return;
-
-  const widthRatio = window.innerWidth / referenceWidth;
-
-  const shouldCollapseSidebar = !sidebarHiddenPref && widthRatio <= SIDEBAR_COLLAPSE_RATIO;
-
-  const shouldCollapseDock = widthRatio <= DOCK_COLLAPSE_RATIO;
-
-  document.body.classList.toggle('sidebar-collapsed', shouldCollapseSidebar);
-
-  document.body.classList.toggle('dock-collapsed', shouldCollapseDock);
-
-
-
-  if (shouldCollapseSidebar && !sidebarHiddenPref) {
-
-    if (collapsedClockSlot && timeWidget && timeWidget.parentElement !== collapsedClockSlot) {
-
-      collapsedClockSlot.appendChild(timeWidget);
-
-    }
-
-  } else {
-
-    if (sidebar && timeWidget && timeWidget.parentElement !== sidebar) {
-
-      const firstSidebarChild = sidebar.firstElementChild;
-
-      if (firstSidebarChild) {
-
-        sidebar.insertBefore(timeWidget, firstSidebarChild);
-
-      } else {
-
-        sidebar.appendChild(timeWidget);
-
-      }
-
-    }
-
-  }
-
+if (window.HomebaseDockNavigation) {
+  window.HomebaseDockNavigation.setupResponsiveLayoutListener();
 }
 
-
-
-const debouncedResize = debounce(() => {
-
-  updateSidebarCollapseState();
-
-  updateBookmarkTabOverflow();
-
-}, 100);
-
-
-
-window.addEventListener('resize', debouncedResize);
-window.addEventListener('beforeunload', () => {
-  debouncedResize.cancel?.();
-});
-
 tabsScrollController = initTabsScrollController();
-
-updateSidebarCollapseState();
 
 updateBookmarkTabOverflow();
 
@@ -958,6 +873,18 @@ let appMaxTabsPreference = 0; // 0 means unlimited
   let appAutoClosePreference = 0; // 0 means never
 
   let appSingletonModePreference = false;
+
+  let appSearchOpenNewTabPreference = false;
+
+  let appSearchRememberEnginePreference = true;
+
+  let appSearchDefaultEnginePreference = 'google';
+
+  let appSearchMathPreference = true;
+
+  let appSearchShowHistoryPreference = false;
+
+  let appSearchSuggestionsPreference = true;
 
   let appContainerModePreference = true;
 

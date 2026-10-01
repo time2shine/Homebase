@@ -515,3 +515,64 @@ async function openBookmarkInContainer(bookmarkId, cookieStoreId) {
   }
 
 }
+
+async function openFolderAll(folderId) {
+  if (!folderId) return;
+
+  const getTree = () => {
+    if (typeof bookmarkTree !== 'undefined' && Array.isArray(bookmarkTree)) {
+      return bookmarkTree;
+    }
+    if (typeof window !== 'undefined') {
+      if (Array.isArray(window.bookmarkTree)) return window.bookmarkTree;
+      if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.getBookmarkTreeState === 'function') {
+        return window.HomebaseBookmarkGridController.getBookmarkTreeState();
+      }
+    }
+    return [];
+  };
+
+  const findNode = (root, id) => {
+    if (typeof findBookmarkNodeById === 'function') {
+      return findBookmarkNodeById(root, id);
+    }
+    if (typeof window !== 'undefined' && typeof window.findBookmarkNodeById === 'function') {
+      return window.findBookmarkNodeById(root, id);
+    }
+    return null;
+  };
+
+  const tree = getTree();
+  const rootNode = tree[0] || tree;
+  const folderNode = findNode(rootNode, folderId);
+
+  if (!folderNode || !folderNode.children || folderNode.children.length === 0) {
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert('This folder is empty.');
+    } else {
+      alert('This folder is empty.');
+    }
+    return;
+  }
+
+  if (folderNode.children.length > 10) {
+    const confirmed = confirm(`Are you sure you want to open ${folderNode.children.length} tabs?`);
+    if (!confirmed) return;
+  }
+
+  const tabsApi = (typeof browser !== 'undefined' && browser.tabs)
+    ? browser.tabs
+    : ((typeof chrome !== 'undefined' && chrome.tabs) ? chrome.tabs : null);
+
+  if (!tabsApi || typeof tabsApi.create !== 'function') return;
+
+  for (const child of folderNode.children) {
+    if (child.url) {
+      await tabsApi.create({ url: child.url, active: false });
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.openFolderAll = openFolderAll;
+}

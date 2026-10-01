@@ -459,17 +459,6 @@ async function openBookmarkIconPicker(context = {}) {
   }
 }
 
-// ===============================================
-// --- WALLPAPER GALLERY UI LIFECYCLE & CONTEXT ---
-// ===============================================
-// Extracted to wallpaper-controller.js:
-// (ensureGalleryUi, createGalleryContext, notifyGalleryUiLoadFailure, openWallpaperGallery)
-
-// Video playback state and cleanupBackgroundPlayback extracted to wallpaper-controller.js
-
-
-
-
 function revealWidget(selector) {
 
   const el = document.querySelector(selector);
@@ -481,14 +470,6 @@ function revealWidget(selector) {
   el.classList.add('widget-visible');
 
 }
-
-
-
-// buildFallbackSelection extracted to wallpaper-controller.js
-
-
-
-// setWallpaperFallbackPoster extracted to wallpaper-controller.js
 
 
 
@@ -617,36 +598,6 @@ function updateSidebarCollapseState() {
   }
 
 }
-
-
-
-// ===============================================
-
-// --- VIDEOS MANIFEST CACHING (DAILY) ---
-
-// ===============================================
-// Manifest & Cache Storage Pipeline extracted to wallpaper-controller.js
-// (loadCachedGalleryManifest, refreshGalleryManifestInBackground,
-//  fetchVideosManifestIfNeeded, getVideosManifest, cacheGalleryPostersIfNeeded,
-//  warmGalleryPosterHydration, cacheAppliedWallpaperVideo, cacheAppliedWallpaperPoster)
-// ===============================================
-
-// Poster encoding helpers and buildVideoPosterFromFile extracted to wallpaper-controller.js
-
-
-
-
-// hydrateWallpaperSelection, setBackgroundVideoSources, startBackgroundVideosAfterSourceLoad,
-// and applyWallpaperBackground extracted to wallpaper-controller.js
-
-
-
-// getWallpaperUrls, isUserUploadSelection, isGallerySelection, getGalleryUrlsOrNull extracted to wallpaper-controller.js
-
-
-// Selection Resolution & Daily Rotation Runtime extracted to wallpaper-controller.js
-// (rebuildCurrentSelectionFromGallery, pickNextWallpaper,
-//  schedulePendingDailyRotationAttempt, ensureDailyWallpaper)
 
 
 
@@ -965,30 +916,8 @@ const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
 // Map to store per-bookmark customization (id -> { icon })
 
 // ==========================
-// FAVICON PERF CACHE (NEW)
+// FAVICON RUNTIME DELEGATION
 // ==========================
-const FAVICON_SIZE_PX = 48;
-const FAVICON_NEGATIVE_TTL_MS = 10 * 60 * 1000;
-const FAVICON_RESOLVED_CACHE_LIMIT = 300;
-const MAX_CONCURRENT_FAVICON_TASKS = 6;
-const FAVICON_CACHE_NAME = 'favicons-v1';
-const FAVICON_OBSERVER_ROOT_MARGIN = '250px';
-const FAVICON_OBSERVER_THRESHOLD = 0.01;
-
-let faviconIntersectionObserver = null;
-
-function revokeFaviconObjectUrl(img) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.revokeObjectUrl === 'function') {
-    return window.HomebaseFaviconPipeline.revokeObjectUrl(img);
-  }
-}
-
-function setFaviconImageSrc(img, url) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.setImageSrc === 'function') {
-    return window.HomebaseFaviconPipeline.setImageSrc(img, url);
-  }
-}
-
 function ensureFaviconObserver() {
   if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.ensureObserver === 'function') {
     return window.HomebaseFaviconPipeline.ensureObserver();
@@ -1000,13 +929,6 @@ function getDomainKeyFromUrl(rawUrl) {
     return window.HomebaseFaviconPipeline.getDomainKey(rawUrl);
   }
   return '';
-}
-
-function buildFaviconCandidates(rawUrl) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.buildCandidates === 'function') {
-    return window.HomebaseFaviconPipeline.buildCandidates(rawUrl);
-  }
-  return [];
 }
 
 async function getFaviconUrlForRawUrl(rawUrl) {
@@ -1021,9 +943,6 @@ let bookmarkMetadata = {};
 let folderMetadata = {};
 
 let lastUsedBookmarkFolderId = null;
-
-// currentWallpaperSelection, wallpaperTypePreference, wallpaperQualityPreference,
-// dailyRotationPreference, and initialWallpaperState extracted to wallpaper-controller.js
 
 let appBackgroundDimPreference = 0;
 
@@ -1044,18 +963,6 @@ let appMaxTabsPreference = 0; // 0 means unlimited
   let appAutoClosePreference = 0; // 0 means never
 
   let appSingletonModePreference = false;
-
-  let appSearchOpenNewTabPreference = false;
-
-let appSearchRememberEnginePreference = true;
-
-  let appSearchDefaultEnginePreference = 'google';
-
-  let appSearchMathPreference = true;
-
-  let appSearchShowHistoryPreference = false;
-
-  let appSearchSuggestionsPreference = true;
 
   let appContainerModePreference = true;
 
@@ -1086,15 +993,6 @@ let debugPerfOverlayPreference = false;
 let appBatteryOptimizationPreference = false;
 
 let appCinemaModePreference = false;
-
-// setNextWallpaperButtonLoading extracted to wallpaper-controller.js
-
-
-
-
-// waitForWallpaperReady extracted to wallpaper-controller.js
-
-
 
 // ===============================================
 
@@ -2997,9 +2895,7 @@ function setupHomebaseRootListeners() {
 
 
 // ===============================================
-
-// --- MODIFIED: QUICK ACTIONS BAR SETUP ---
-
+// --- PERFORMANCE MODE COMPATIBILITY BRIDGES ---
 // ===============================================
 
 function readFastPerformanceModePreference() {
@@ -3035,40 +2931,18 @@ function disableGridAnimationRuntime() {
   if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.disableGridAnimationRuntime === 'function') {
     return window.HomebasePerformanceController.disableGridAnimationRuntime();
   }
-  document.body.classList.remove('grid-animation-enabled');
-  let styleEl = document.getElementById('dynamic-grid-animation');
-  if (!styleEl) {
-    styleEl = document.createElement('style');
-    styleEl.id = 'dynamic-grid-animation';
-    document.head.appendChild(styleEl);
-  }
-  styleEl.innerHTML = '';
 }
 
 function disableGlassRuntime() {
   if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.disableGlassRuntime === 'function') {
     return window.HomebasePerformanceController.disableGlassRuntime();
   }
-  let styleEl = document.getElementById('dynamic-glass-style');
-  if (!styleEl) {
-    styleEl = document.createElement('style');
-    styleEl.id = 'dynamic-glass-style';
-    document.head.appendChild(styleEl);
-  }
-  styleEl.innerHTML = '';
-  document.documentElement.style.setProperty('--glass-blur', '0px');
-  document.documentElement.style.setProperty('--glass-bg', 'transparent');
-  document.documentElement.style.setProperty('--overlay-blur', '0px');
 }
 
 function enableGlassRuntimeFromPreference() {
   if (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.enableGlassRuntimeFromPreference === 'function') {
     return window.HomebasePerformanceController.enableGlassRuntimeFromPreference(appGlassStylePreference);
   }
-  document.documentElement.style.removeProperty('--glass-blur');
-  document.documentElement.style.removeProperty('--glass-bg');
-  document.documentElement.style.removeProperty('--overlay-blur');
-  applyGlassStyle(appGlassStylePreference);
 }
 
 function applyPerformanceModeState(enabled) {
@@ -3109,18 +2983,6 @@ function applyPerformanceModeState(enabled) {
         resetCinemaMode();
       }
     });
-  }
-
-  document.body.classList.toggle('performance-mode', isOn);
-  const perfToggle = document.getElementById('app-performance-mode-toggle');
-  if (perfToggle) perfToggle.checked = isOn;
-  if (isOn) {
-    disableGridAnimationRuntime();
-    disableGlassRuntime();
-    cleanupBackgroundPlayback();
-    clearBackgroundVideos();
-  } else {
-    enableGlassRuntimeFromPreference();
   }
 }
 
@@ -3175,9 +3037,9 @@ function setSearchSuggestionsPreference(enabled) {
   if (window.HomebaseSearchInteractionController && typeof window.HomebaseSearchInteractionController.setSuggestionsPreference === 'function') {
     return window.HomebaseSearchInteractionController.setSuggestionsPreference(enabled);
   }
-  appSearchSuggestionsPreference = enabled !== false;
+  const isEnabled = enabled !== false;
   if (appSearchSuggestionsToggle) {
-    appSearchSuggestionsToggle.checked = appSearchSuggestionsPreference;
+    appSearchSuggestionsToggle.checked = isEnabled;
   }
 }
 
@@ -3196,68 +3058,9 @@ function getSafeEnabledSearchEngineId(preferredId) {
 }
 
 // ===============================================
-
-// --- BACKGROUND VIDEO CROSSFADE ---
-
-// ===============================================
-
-// setupBackgroundVideoCrossfade extracted to wallpaper-controller.js
-
-
-
-// ===============================================
-
-// --- DOCK NAVIGATION ---
-
-// ===============================================
-
-// ===============================================
-
 // --- FIREFOX CONTAINER LOGIC ---
-
 // ===============================================
-
-
-
-async function openFolderAll(folderId) {
-
-  if (!folderId) return;
-
-
-
-  const folderNode = findBookmarkNodeById(bookmarkTree[0], folderId);
-
-  if (!folderNode || !folderNode.children || folderNode.children.length === 0) {
-
-    alert('This folder is empty.');
-
-    return;
-
-  }
-
-
-
-  if (folderNode.children.length > 10) {
-
-    const confirmed = confirm(`Are you sure you want to open ${folderNode.children.length} tabs?`);
-
-    if (!confirmed) return;
-
-  }
-
-
-
-  for (const child of folderNode.children) {
-
-    if (child.url) {
-
-      await browser.tabs.create({ url: child.url, active: false });
-
-    }
-
-  }
-
-}
+// Extracted to firefox-containers.js (openFolderAll)
 
 
 
@@ -3657,7 +3460,7 @@ function logInitSettled(name, result) {
       getBookmarkTree: () => bookmarkTree,
       findBookmarkNodeById: (root, id) => findBookmarkNodeById(root, id),
       openFolderFromContext: (folderId) => openFolderFromContext(folderId),
-      openFolderAll: (folderId) => openFolderAll(folderId),
+      openFolderAll: (folderId) => (window.openFolderAll ? window.openFolderAll(folderId) : undefined),
       showGridItemRenameInput: (item, node) => showGridItemRenameInput(item, node),
       showEditFolderModal: (folderNode) => showEditFolderModal(folderNode),
       showEditBookmarkModal: (bookmarkId) => showEditBookmarkModal(bookmarkId),

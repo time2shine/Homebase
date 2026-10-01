@@ -843,5 +843,11 @@
 
   if (typeof window !== 'undefined') {
     window.HomebaseFaviconPipeline = pipeline;
+    window.revokeFaviconObjectUrl = revokeObjectUrl;
+    window.setFaviconImageSrc = setImageSrc;
+    window.ensureFaviconObserver = ensureObserver;
+    window.getDomainKeyFromUrl = getDomainKey;
+    window.buildFaviconCandidates = buildCandidates;
+    window.getFaviconUrlForRawUrl = getUrlForRawUrl;
   }
 })();

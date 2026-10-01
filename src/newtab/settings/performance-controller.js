@@ -135,6 +135,13 @@
       });
     }
 
+    if (typeof appPerformanceModePreference !== 'undefined') {
+      appPerformanceModePreference = isOn;
+    }
+    if (typeof window !== 'undefined') {
+      window.appPerformanceModePreference = isOn;
+    }
+
     if (isOn) {
       disableGridAnimationRuntime();
       disableGlassRuntime();
@@ -143,22 +150,35 @@
       }
       if (typeof options.onVideoCleanup === 'function') {
         options.onVideoCleanup();
+      } else {
+        if (typeof cleanupBackgroundPlayback === 'function') {
+          cleanupBackgroundPlayback();
+        } else if (typeof window !== 'undefined' && typeof window.cleanupBackgroundPlayback === 'function') {
+          window.cleanupBackgroundPlayback();
+        }
+        if (typeof clearBackgroundVideos === 'function') {
+          clearBackgroundVideos();
+        } else if (typeof window !== 'undefined' && typeof window.clearBackgroundVideos === 'function') {
+          window.clearBackgroundVideos();
+        }
       }
       return { performanceMode: true };
     }
 
     // Turning off performance mode: restore visual effects
-    const glassStyle = options.appGlassStylePreference || _glassStyle;
+    const glassStyle = options.appGlassStylePreference ||
+      (typeof appGlassStylePreference !== 'undefined' ? appGlassStylePreference : (typeof window !== 'undefined' ? window.appGlassStylePreference : _glassStyle));
     enableGlassRuntimeFromPreference(glassStyle);
 
-    const gridAnim = options.appGridAnimationPreference || _gridAnimation;
+    const gridAnim = options.appGridAnimationPreference ||
+      (typeof appGridAnimationPreference !== 'undefined' ? appGridAnimationPreference : (typeof window !== 'undefined' ? window.appGridAnimationPreference : _gridAnimation));
     if (typeof applyGridAnimation === 'function') {
       applyGridAnimation(gridAnim);
     }
 
     const gridSpeed = options.appGridAnimationSpeedPreference !== undefined
       ? options.appGridAnimationSpeedPreference
-      : _gridAnimationSpeed;
+      : (typeof appGridAnimationSpeedPreference !== 'undefined' ? appGridAnimationSpeedPreference : (typeof window !== 'undefined' ? window.appGridAnimationSpeedPreference : _gridAnimationSpeed));
     if (typeof applyGridAnimationSpeed === 'function') {
       applyGridAnimationSpeed(gridSpeed);
     } else {
@@ -167,7 +187,7 @@
 
     const gridEnabled = options.appGridAnimationEnabledPreference !== undefined
       ? options.appGridAnimationEnabledPreference
-      : _gridAnimationEnabled;
+      : (typeof appGridAnimationEnabledPreference !== 'undefined' ? appGridAnimationEnabledPreference : (typeof window !== 'undefined' ? window.appGridAnimationEnabledPreference : _gridAnimationEnabled));
     if (typeof applyGridAnimationEnabled === 'function') {
       applyGridAnimationEnabled(gridEnabled);
     } else {
@@ -176,6 +196,12 @@
 
     if (typeof options.onCinemaModeReset === 'function') {
       options.onCinemaModeReset();
+    } else if (typeof resetCinemaMode === 'function') {
+      if (typeof setupCinemaModeListeners === 'function') setupCinemaModeListeners();
+      resetCinemaMode();
+    } else if (typeof window !== 'undefined' && typeof window.resetCinemaMode === 'function') {
+      if (typeof window.setupCinemaModeListeners === 'function') window.setupCinemaModeListeners();
+      window.resetCinemaMode();
     }
 
     return { performanceMode: false };
@@ -308,6 +334,7 @@
   const HomebasePerformanceController = {
     initialize,
     applyPerformanceMode,
+    applyPerformanceModeState: applyPerformanceMode,
     applyVisualEffects,
     setGlassStyle,
     setGridAnimationSpeed,
@@ -336,5 +363,12 @@
     if (typeof window.isPerformanceModeEnabled !== 'function') {
       window.isPerformanceModeEnabled = isPerformanceModeEnabled;
     }
+    window.applyPerformanceModeState = applyPerformanceMode;
+    window.applyPerformanceMode = applyPerformanceMode;
+    window.readFastPerformanceModePreference = readFastPerformanceModePreference;
+    window.syncFastPerformanceModeMirror = syncFastPerformanceModeMirror;
+    window.disableGridAnimationRuntime = disableGridAnimationRuntime;
+    window.disableGlassRuntime = disableGlassRuntime;
+    window.enableGlassRuntimeFromPreference = enableGlassRuntimeFromPreference;
   }
 })();

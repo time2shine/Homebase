@@ -330,3 +330,84 @@ function setupSearchEnginesModal() {
   });
 
 }
+
+function populateDefaultEngineSelectControl() {
+  const engines = (typeof searchEngines !== 'undefined' && Array.isArray(searchEngines))
+    ? searchEngines
+    : ((typeof window !== 'undefined' && Array.isArray(window.searchEngines)) ? window.searchEngines : []);
+  const activeEngines = engines.filter((engine) => engine.enabled);
+
+  const currentPref = typeof appSearchDefaultEnginePreference !== 'undefined'
+    ? appSearchDefaultEnginePreference
+    : (typeof window !== 'undefined' && window.appSearchDefaultEnginePreference ? window.appSearchDefaultEnginePreference : 'google');
+
+  const safeDefaultId = typeof getSafeEnabledSearchEngineId === 'function'
+    ? getSafeEnabledSearchEngineId(currentPref)
+    : ((typeof window !== 'undefined' && window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.getSafeEnabledSearchEngineId === 'function')
+        ? window.HomebaseSearchUiController.getSafeEnabledSearchEngineId(currentPref)
+        : currentPref);
+
+  const selectedId = activeEngines.some((engine) => engine.id === safeDefaultId)
+    ? safeDefaultId
+    : (activeEngines[0]?.id || '');
+
+  if (selectedId) {
+    if (typeof appSearchDefaultEnginePreference !== 'undefined') {
+      appSearchDefaultEnginePreference = selectedId;
+    }
+    if (typeof window !== 'undefined') {
+      window.appSearchDefaultEnginePreference = selectedId;
+    }
+  }
+
+  const select = (typeof appSearchDefaultEngineSelect !== 'undefined' && appSearchDefaultEngineSelect)
+    ? appSearchDefaultEngineSelect
+    : document.getElementById('app-search-default-engine-select');
+
+  if (!select) return selectedId;
+
+  select.innerHTML = '';
+
+  activeEngines.forEach((engine) => {
+    const option = document.createElement('option');
+    option.value = engine.id;
+    option.textContent = engine.name;
+    select.appendChild(option);
+  });
+
+  if (selectedId) {
+    select.value = selectedId;
+  }
+
+  return selectedId;
+}
+
+function updateDefaultEngineVisibilityControl() {
+  populateDefaultEngineSelectControl();
+
+  const container = (typeof appSearchDefaultEngineContainer !== 'undefined' && appSearchDefaultEngineContainer)
+    ? appSearchDefaultEngineContainer
+    : document.getElementById('app-search-default-engine-container');
+
+  if (!container) return;
+
+  const toggle = (typeof appSearchRememberEngineToggle !== 'undefined' && appSearchRememberEngineToggle)
+    ? appSearchRememberEngineToggle
+    : document.getElementById('app-search-remember-engine-toggle');
+
+  if (toggle && toggle.checked) {
+    container.style.display = 'none';
+  } else {
+    container.style.display = 'flex';
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.populateDefaultEngineSelectControl = populateDefaultEngineSelectControl;
+  window.updateDefaultEngineVisibilityControl = updateDefaultEngineVisibilityControl;
+  window.HomebaseSearchEngineSettings = {
+    setupSearchEnginesModal,
+    populateDefaultEngineSelectControl,
+    updateDefaultEngineVisibilityControl
+  };
+}

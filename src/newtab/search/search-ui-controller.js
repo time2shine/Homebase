@@ -746,12 +746,146 @@
     hideSearchResultsPanel();
   }
 
+  function handleSearchStorageChange(changes, area) {
+    if (!changes || typeof changes !== 'object') return;
+
+    // 1. Remember engine preference
+    const rememberChange = changes.appSearchRememberEngine ||
+      changes.appSearchRememberEnginePreference ||
+      (typeof APP_SEARCH_REMEMBER_ENGINE_KEY !== 'undefined' ? changes[APP_SEARCH_REMEMBER_ENGINE_KEY] : null);
+    if (rememberChange) {
+      const remember = rememberChange.newValue !== false;
+      setRememberPreference(remember);
+      if (!remember) {
+        const defaultId = getDefaultEnginePreference();
+        updateSearchUI(defaultId, { updateFastCache: true });
+      }
+      if (typeof updateDefaultEngineVisibilityControl === 'function') {
+        updateDefaultEngineVisibilityControl();
+      } else if (typeof window !== 'undefined' && typeof window.updateDefaultEngineVisibilityControl === 'function') {
+        window.updateDefaultEngineVisibilityControl();
+      }
+    }
+
+    // 2. Default engine preference
+    const defaultChange = changes.appSearchDefaultEngine ||
+      changes.appSearchDefaultEnginePreference ||
+      (typeof APP_SEARCH_DEFAULT_ENGINE_KEY !== 'undefined' ? changes[APP_SEARCH_DEFAULT_ENGINE_KEY] : null);
+    if (defaultChange) {
+      const requestedDefault = defaultChange.newValue || 'google';
+      const previousDefault = getDefaultEnginePreference();
+      const safeDefaultId = getSafeEnabledSearchEngineId(requestedDefault);
+      setDefaultEnginePreference(safeDefaultId);
+
+      if (typeof populateDefaultEngineSelectControl === 'function') {
+        populateDefaultEngineSelectControl();
+      } else if (typeof window !== 'undefined' && typeof window.populateDefaultEngineSelectControl === 'function') {
+        window.populateDefaultEngineSelectControl();
+      }
+
+      if (safeDefaultId !== requestedDefault) {
+        if (typeof setDefaultSearchEngineId === 'function') {
+          setDefaultSearchEngineId(safeDefaultId);
+        } else if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.setDefaultSearchEngineId) {
+          HomebaseSearchStorage.setDefaultSearchEngineId(safeDefaultId);
+        }
+      }
+
+      if (!getRememberPreference()) {
+        const current = getCurrentEngine();
+        if (!current || current.id === previousDefault) {
+          updateSearchUI(safeDefaultId, { updateFastCache: true, animate: false });
+        } else {
+          const engines = getSearchEngines();
+          const defaultEngine = engines.find(e => e.id === safeDefaultId);
+          if (defaultEngine) {
+            if (typeof writeFastSearchCache === 'function') {
+              writeFastSearchCache(defaultEngine);
+            } else if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.writeFastSearchCache) {
+              HomebaseSearchStorage.writeFastSearchCache(defaultEngine);
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Search suggestions preference
+    const suggestionsChange = changes.appSearchSuggestionsEnabled ||
+      changes.appSearchSuggestionsPreference ||
+      (typeof APP_SEARCH_SUGGESTIONS_KEY !== 'undefined' ? changes[APP_SEARCH_SUGGESTIONS_KEY] : null);
+    if (suggestionsChange) {
+      const enabled = suggestionsChange.newValue !== false;
+      if (typeof window !== 'undefined' && window.HomebaseSearchInteractionController?.setSuggestionsPreference) {
+        window.HomebaseSearchInteractionController.setSuggestionsPreference(enabled);
+      } else if (typeof setSearchSuggestionsPreference === 'function') {
+        setSearchSuggestionsPreference(enabled);
+      } else if (typeof window !== 'undefined' && typeof window.setSearchSuggestionsPreference === 'function') {
+        window.setSearchSuggestionsPreference(enabled);
+      }
+    }
+
+    // 4. Search engines configuration
+    const enginesChange = changes.searchEnginesConfig ||
+      changes.searchEngines ||
+      (typeof SEARCH_ENGINES_PREF_KEY !== 'undefined' ? changes[SEARCH_ENGINES_PREF_KEY] : null);
+    if (enginesChange) {
+      const newConfig = enginesChange.newValue;
+      if (applySearchEngineConfig(newConfig)) {
+        const current = getCurrentEngine();
+        const previousEngineId = current ? current.id : null;
+        const engines = getSearchEngines();
+        const previousEngineStillEnabled = Boolean(previousEngineId && engines.find(e => e.id === previousEngineId && e.enabled));
+
+        let defaultEngineId = null;
+        if (typeof populateDefaultEngineSelectControl === 'function') {
+          defaultEngineId = populateDefaultEngineSelectControl();
+        } else if (typeof window !== 'undefined' && typeof window.populateDefaultEngineSelectControl === 'function') {
+          defaultEngineId = window.populateDefaultEngineSelectControl();
+        }
+
+        const targetEngineId = getSafeEnabledSearchEngineId(previousEngineId);
+        populateSearchOptions({ animate: false });
+        updateSearchUI(targetEngineId, { updateFastCache: getRememberPreference(), animate: false });
+
+        if (getRememberPreference() && !previousEngineStillEnabled) {
+          if (typeof setCurrentSearchEngine === 'function') {
+            setCurrentSearchEngine(targetEngineId);
+          } else if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.setCurrentSearchEngine) {
+            HomebaseSearchStorage.setCurrentSearchEngine(targetEngineId);
+          }
+        }
+
+        if (!getRememberPreference()) {
+          const startupEngineId = defaultEngineId || getSafeEnabledSearchEngineId(getDefaultEnginePreference());
+          const startupEngine = engines.find(e => e.id === startupEngineId) || current;
+          if (startupEngine) {
+            if (typeof writeFastSearchCache === 'function') {
+              writeFastSearchCache(startupEngine);
+            } else if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.writeFastSearchCache) {
+              HomebaseSearchStorage.writeFastSearchCache(startupEngine);
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Current search engine selection
+    if (changes.currentSearchEngineId) {
+      const newId = changes.currentSearchEngineId.newValue;
+      const current = getCurrentEngine();
+      if (getRememberPreference() && newId && (!current || newId !== current.id)) {
+        updateSearchUI(newId, { updateFastCache: true, animate: false });
+      }
+    }
+  }
+
   // Export to window
   const controller = {
     initialize,
     render,
     refresh,
     destroy,
+    handleStorageChange: handleSearchStorageChange,
 
     // Operations
     buildSearchEngineIconContent,
@@ -784,5 +918,6 @@
   if (typeof window !== 'undefined') {
     window.HomebaseSearchUiController = controller;
     window.HomebaseSearchEngineController = controller;
+    window.handleSearchStorageChange = handleSearchStorageChange;
   }
 })();

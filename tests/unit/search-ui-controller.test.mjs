@@ -338,3 +338,42 @@ test('Search UI Controller - headless missing DOM safety', () => {
     controller.destroy();
   });
 });
+
+test('Search UI Controller - handleStorageChange responds to preference changes', () => {
+  const { sandbox, elementsById } = createEnvironment();
+  const controller = sandbox.window.HomebaseSearchUiController;
+
+  const selectorEl = createMockElement('div', 'search-engine-selector');
+  const selectEl = createMockElement('select', 'search-select');
+  const inputEl = createMockElement('input', 'search-input');
+  elementsById['search-engine-selector'] = selectorEl;
+  elementsById['search-select'] = selectEl;
+  elementsById['search-input'] = inputEl;
+
+  controller.populateSearchOptions();
+
+  assert.equal(typeof controller.handleStorageChange, 'function');
+
+  // Test appSearchDefaultEngine change
+  controller.handleStorageChange({
+    appSearchDefaultEngine: { newValue: 'duckduckgo' }
+  }, 'local');
+  assert.equal(controller.getDefaultEnginePreference(), 'duckduckgo');
+
+  // Test appSearchRememberEngine change (disable, then enable)
+  controller.handleStorageChange({
+    appSearchRememberEngine: { newValue: false }
+  }, 'local');
+  assert.equal(controller.getRememberEnginePreference(), false);
+
+  controller.handleStorageChange({
+    appSearchRememberEngine: { newValue: true }
+  }, 'local');
+  assert.equal(controller.getRememberEnginePreference(), true);
+
+  // Test currentSearchEngineId change with remember preference active
+  controller.handleStorageChange({
+    currentSearchEngineId: { newValue: 'youtube' }
+  }, 'local');
+  assert.equal(controller.getCurrentSearchEngine().id, 'youtube');
+});

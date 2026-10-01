@@ -375,4 +375,27 @@ test('search-storage: exports expected functions and keys to window and Homebase
   assert.equal(typeof namespace.getSearchPreferences, 'function');
   assert.equal(typeof namespace.setSearchPreferences, 'function');
   assert.equal(typeof namespace.writeFastSearchCache, 'function');
+  assert.ok(Array.isArray(namespace.DEFAULT_SEARCH_ENGINES), 'HomebaseSearchStorage.DEFAULT_SEARCH_ENGINES should be exported');
+});
+
+test('search-storage: exports DEFAULT_SEARCH_ENGINES and populates searchEngines compatibility bridge', () => {
+  const env = createSearchStorageTestEnvironment();
+
+  assert.ok(Array.isArray(env.sandbox.DEFAULT_SEARCH_ENGINES), 'DEFAULT_SEARCH_ENGINES should be an array');
+  assert.equal(env.sandbox.DEFAULT_SEARCH_ENGINES.length, 12, 'Should define exactly 12 canonical engines');
+
+  assert.ok(Array.isArray(env.sandbox.searchEngines), 'searchEngines bridge should be defined on window');
+  assert.equal(env.sandbox.searchEngines.length, 12, 'searchEngines should match DEFAULT_SEARCH_ENGINES length');
+
+  const engineIds = Array.from(env.sandbox.DEFAULT_SEARCH_ENGINES.map(e => e.id));
+  assert.equal(
+    engineIds.join(','),
+    'google,youtube,duckduckgo,bing,wikipedia,reddit,github,stackoverflow,amazon,maps,yahoo,yandex'
+  );
+
+  const google = env.sandbox.DEFAULT_SEARCH_ENGINES[0];
+  assert.equal(google.id, 'google');
+  assert.equal(google.name, 'Google');
+  assert.equal(google.enabled, true);
+  assert.equal(google.symbolId, 'google');
 });

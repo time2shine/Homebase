@@ -9,6 +9,85 @@ const APP_SEARCH_REMEMBER_ENGINE_KEY = 'appSearchRememberEngine';
 const SEARCH_ENGINES_PREF_KEY = 'searchEnginesConfig';
 const FAST_SEARCH_STORAGE_KEY = 'fast-search';
 
+const DEFAULT_SEARCH_ENGINES = [
+  {
+    id: 'google',
+    name: 'Google',
+    color: '#4285F4',
+    enabled: true,
+    url: 'https://www.google.com/search?q=',
+    suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=',
+    symbolId: 'google'
+  },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    color: '#FF0000',
+    enabled: true,
+    url: 'https://www.youtube.com/results?search_query=',
+    suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=',
+    symbolId: 'youtube'
+  },
+  {
+    id: 'duckduckgo',
+    name: 'DuckDuckGo',
+    color: '#DE5833',
+    enabled: true,
+    url: 'https://duckduckgo.com/?q=',
+    suggestionUrl: 'https://duckduckgo.com/ac/?type=json&q=',
+    symbolId: 'duckduckgo'
+  },
+  {
+    id: 'bing',
+    name: 'Bing',
+    color: '#008373',
+    enabled: true,
+    url: 'https://www.bing.com/search?q=',
+    suggestionUrl: 'https://api.bing.com/osjson.aspx?query=',
+    symbolId: 'bing'
+  },
+  {
+    id: 'wikipedia',
+    name: 'Wikipedia',
+    color: '#000000',
+    enabled: true,
+    url: 'https://en.wikipedia.org/wiki/Special:Search?search=',
+    suggestionUrl: 'https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=',
+    symbolId: 'wikipedia'
+  },
+  {
+    id: 'reddit',
+    name: 'Reddit',
+    color: '#FF4500',
+    enabled: false,
+    url: 'https://www.reddit.com/search/?q=',
+    suggestionUrl: '',
+    symbolId: 'reddit'
+  },
+  {
+    id: 'github',
+    name: 'GitHub',
+    color: '#0d6efd',
+    enabled: false,
+    url: 'https://github.com/search?q=',
+    suggestionUrl: '',
+    symbolId: 'github'
+  },
+  {
+    id: 'stackoverflow',
+    name: 'StackOverflow',
+    color: '#F48024',
+    enabled: false,
+    url: 'https://stackoverflow.com/search?q=',
+    suggestionUrl: '',
+    symbolId: 'stackoverflow'
+  },
+  { id: 'amazon', name: 'Amazon', color: '#FF9900', enabled: false, url: 'https://www.amazon.com/s?k=', suggestionUrl: 'https://completion.amazon.com/search/complete?search-alias=aps&client=amazon-search-ui&mkt=1&q=', symbolId: 'amazon' },
+  { id: 'maps', name: 'Maps', color: '#34A853', enabled: false, url: 'https://www.google.com/maps/search/', suggestionUrl: 'https://suggestqueries.google.com/complete/search?client=firefox&q=', symbolId: 'maps' },
+  { id: 'yahoo', name: 'Yahoo', color: '#6001D2', enabled: false, url: 'https://search.yahoo.com/search?p=', suggestionUrl: 'https://ff.search.yahoo.com/gossip?output=json&command=', symbolId: 'yahoo' },
+  { id: 'yandex', name: 'Yandex', color: '#FC3F1D', enabled: false, url: 'https://yandex.com/search/?text=', suggestionUrl: 'https://suggest.yandex.com/suggest-ff.cgi?part=', symbolId: 'yandex' }
+];
+
 /**
  * Retrieves the currently selected search engine ID.
  *
@@ -362,12 +441,17 @@ if (typeof window !== 'undefined') {
   window.getFastSearchCache = getFastSearchCache;
   window.clearFastSearchCache = clearFastSearchCache;
 
+  window.DEFAULT_SEARCH_ENGINES = DEFAULT_SEARCH_ENGINES;
+  window.searchEngines = window.searchEngines || DEFAULT_SEARCH_ENGINES.map((e) => ({ ...e }));
+
   window.HomebaseSearchStorage = {
     CURRENT_SEARCH_ENGINE_ID_KEY,
     APP_SEARCH_DEFAULT_ENGINE_KEY,
     APP_SEARCH_REMEMBER_ENGINE_KEY,
     SEARCH_ENGINES_PREF_KEY,
     FAST_SEARCH_STORAGE_KEY,
+    DEFAULT_SEARCH_ENGINES,
+    getDefaultSearchEngines: () => DEFAULT_SEARCH_ENGINES.map((e) => ({ ...e })),
     getCurrentSearchEngineId,
     getCurrentSearchEngine: getCurrentSearchEngineId,
     setCurrentSearchEngine,

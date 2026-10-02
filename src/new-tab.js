@@ -698,121 +698,8 @@ const appSettingsModal = document.getElementById('app-settings-modal');
 
 const appSettingsNav = document.getElementById('app-settings-nav');
 
-const appSettingsCloseBtn = document.getElementById('app-settings-close');
+// Settings DOM element handles and APP_*_KEY constants extracted to settings-preferences.js
 
-const appSettingsCancelBtn = document.getElementById('app-settings-cancel');
-
-const appSettingsSaveBtn = document.getElementById('app-settings-save');
-
-const appTimeFormatSelect = document.getElementById('app-time-format');
-
-const appSidebarToggle = document.getElementById('app-show-sidebar-toggle');
-
-const appWeatherToggle = document.getElementById('app-show-weather-toggle');
-
-const appQuoteToggle = document.getElementById('app-show-quote-toggle');
-
-const appNewsToggle = document.getElementById('app-show-news-toggle');
-
-const appTodoToggle = document.getElementById('app-show-todo-toggle');
-
-const appMaxTabsSelect = document.getElementById('app-max-tabs-select');
-
-const appAutoCloseSelect = document.getElementById('app-autoclose-select');
-
-const appSearchOpenNewTabToggle = document.getElementById('app-search-open-new-tab-toggle');
-
-const appSearchRememberEngineToggle = document.getElementById('app-search-remember-engine-toggle');
-
-const appSearchMathToggle = document.getElementById('app-search-math-toggle');
-
-const appSearchHistoryToggle = document.getElementById('app-search-history-toggle');
-
-const appSearchSuggestionsToggle = document.getElementById('app-search-suggestions-toggle');
-
-const appSearchDefaultEngineContainer = document.getElementById('app-search-default-engine-container');
-
-const appSearchDefaultEngineSelect = document.getElementById('app-search-default-engine-select');
-
-const appDimSlider = document.getElementById('app-dim-slider');
-
-const appDimLabel = document.getElementById('app-dim-value-label');
-
-const appDailyToggle = document.getElementById('app-daily-toggle');
-
-const appWallpaperTypeSelect = document.getElementById('app-wallpaper-type-select');
-
-const appWallpaperQualitySelect = document.getElementById('app-wallpaper-quality-select');
-
-// NEXT_WALLPAPER_TOOLTIP_* extracted to wallpaper-controller.js
-
-const wallpaperTypeToggle = document.getElementById('gallery-wallpaper-type-toggle');
-const wallpaperQualityToggle = document.getElementById('gallery-wallpaper-quality-toggle');
-
-const galleryDailyToggle = document.getElementById('gallery-daily-toggle');
-
-// WALLPAPER_TYPE_KEY & WALLPAPER_QUALITY_KEY imported from wallpaper-storage.js
-
-const APP_TIME_FORMAT_KEY = 'appTimeFormatPreference';
-
-const APP_BACKGROUND_DIM_KEY = 'appBackgroundDim';
-
-const APP_SHOW_SIDEBAR_KEY = 'appShowSidebar';
-
-const APP_SHOW_WEATHER_KEY = 'appShowWeather';
-
-const APP_SHOW_QUOTE_KEY = 'appShowQuote';
-
-const APP_SHOW_NEWS_KEY = 'appShowNews';
-
-const APP_SHOW_TODO_KEY = 'appShowTodo';
-
-const APP_NEWS_SOURCE_KEY = 'appNewsSource';
-
-const APP_MAX_TABS_KEY = 'appMaxTabsCount';
-
-const APP_AUTOCLOSE_KEY = 'appAutoCloseMinutes';
-
-const APP_SINGLETON_MODE_KEY = 'appSingletonMode';
-
-const APP_SEARCH_OPEN_NEW_TAB_KEY = 'appSearchOpenNewTab';
-
-const APP_SEARCH_MATH_KEY = 'appSearchMath';
-
-const APP_SEARCH_SHOW_HISTORY_KEY = 'appSearchShowHistory';
-
-const APP_SEARCH_SUGGESTIONS_KEY = 'appSearchSuggestionsEnabled';
-
-const APP_BOOKMARK_OPEN_NEW_TAB_KEY = 'appBookmarkOpenNewTab';
-
-const APP_BOOKMARK_TEXT_BG_KEY = 'appBookmarkTextBg';
-
-const APP_BOOKMARK_TEXT_BG_COLOR_KEY = 'appBookmarkTextBgColor';
-
-const APP_BOOKMARK_TEXT_OPACITY_KEY = 'appBookmarkTextBgOpacity';
-
-  const APP_BOOKMARK_TEXT_BLUR_KEY = 'appBookmarkTextBgBlur';
-
-  const APP_BOOKMARK_FALLBACK_COLOR_KEY = 'appBookmarkFallbackColor';
-
-  const APP_BOOKMARK_FOLDER_COLOR_KEY = 'appBookmarkFolderColor';
-
-  const APP_PERFORMANCE_MODE_KEY = 'appPerformanceMode';
-  const FAST_PERFORMANCE_MODE_KEY = 'fast-performance-mode';
-  const APP_DEBUG_PERF_OVERLAY_KEY = 'debugPerfOverlay';
-
-  const APP_BATTERY_OPTIMIZATION_KEY = 'appBatteryOptimization';
-
-  const APP_CINEMA_MODE_KEY = 'appCinemaMode';
-
-  const APP_CONTAINER_MODE_KEY = 'appContainerMode';
-
-  const APP_CONTAINER_NEW_TAB_KEY = 'appContainerNewTab';
-
-  const APP_GRID_ANIMATION_KEY = 'appGridAnimationPref';
-  const APP_GRID_ANIMATION_SPEED_KEY = 'appGridAnimationSpeed';
-  const APP_GRID_ANIMATION_ENABLED_KEY = 'appGridAnimationEnabled';
-  const APP_GLASS_STYLE_KEY = 'appGlassStylePref';
 
 
 
@@ -849,67 +736,8 @@ let folderMetadata = {};
 
 let lastUsedBookmarkFolderId = null;
 
-let appBackgroundDimPreference = 0;
+// app*Preference state variables extracted to settings-preferences.js
 
-let appShowSidebarPreference = true;
-
-let appShowWeatherPreference = true;
-
-let appShowQuotePreference = true;
-
-let appShowNewsPreference = false;
-
-let appShowTodoPreference = true;
-
-let appNewsSourcePreference = 'aljazeera';
-
-let appMaxTabsPreference = 0; // 0 means unlimited
-
-  let appAutoClosePreference = 0; // 0 means never
-
-  let appSingletonModePreference = false;
-
-  let appSearchOpenNewTabPreference = false;
-
-  let appSearchRememberEnginePreference = true;
-
-  let appSearchDefaultEnginePreference = 'google';
-
-  let appSearchMathPreference = true;
-
-  let appSearchShowHistoryPreference = false;
-
-  let appSearchSuggestionsPreference = true;
-
-  let appContainerModePreference = true;
-
-  let appContainerNewTabPreference = true;
-
-  let appBookmarkOpenNewTabPreference = false;
-
-  let appBookmarkTextBgPreference = false;
-
-let appBookmarkTextBgColorPreference = '#2CA5FF';
-
-let appBookmarkTextBgOpacityPreference = 0.65;
-
-let appBookmarkTextBgBlurPreference = 4;
-
-let appBookmarkFallbackColorPreference = '#00b8d4';
-
-let appBookmarkFolderColorPreference = '#FFFFFF';
-
-let appGridAnimationPreference = 'default';
-let appGridAnimationSpeedPreference = 0.3;
-let appGridAnimationEnabledPreference = false;
-let appGlassStylePreference = 'original';
-
-let appPerformanceModePreference = readFastPerformanceModePreference();
-let debugPerfOverlayPreference = false;
-
-let appBatteryOptimizationPreference = false;
-
-let appCinemaModePreference = false;
 
 // ===============================================
 
@@ -2691,7 +2519,12 @@ function logInitSettled(name, result) {
 
     const wallpaperTypeP = getWallpaperTypePreference();
 
-    const settingsP = loadAppSettingsFromStorage();
+    if (window.HomebaseSettingsPreferences && typeof window.HomebaseSettingsPreferences.initialize === 'function') {
+      window.HomebaseSettingsPreferences.initialize();
+    }
+    const settingsP = (window.HomebaseSettingsPreferences && typeof window.HomebaseSettingsPreferences.load === 'function')
+      ? window.HomebaseSettingsPreferences.load()
+      : loadAppSettingsFromStorage();
     const bookmarkMetaP = loadBookmarkMetadata();
     const lastFolderP = loadLastUsedFolderId();
 
@@ -2728,7 +2561,11 @@ function logInitSettled(name, result) {
       ensureSubSettingsInner(container);
     });
 
-    syncAppSettingsForm();
+    if (window.HomebaseSettingsPreferences && typeof window.HomebaseSettingsPreferences.sync === 'function') {
+      window.HomebaseSettingsPreferences.sync();
+    } else if (typeof syncAppSettingsForm === 'function') {
+      syncAppSettingsForm();
+    }
 
     setupCinemaModeListeners();
 
@@ -3208,6 +3045,10 @@ if (browser?.storage?.onChanged) {
 
     if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.handleStorageChange === 'function') {
       window.HomebaseSearchUiController.handleStorageChange(changes, area);
+    }
+
+    if (window.HomebaseSettingsPreferences && typeof window.HomebaseSettingsPreferences.handleStorageChange === 'function') {
+      window.HomebaseSettingsPreferences.handleStorageChange(changes, area);
     }
 
     handleTodoStorageChange(changes, area);

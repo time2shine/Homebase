@@ -621,9 +621,45 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options 
 
 
 
+function isWeatherNetworkError(error) {
+  if (!error) return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+
+  const msg = String(error.message || '');
+  const name = String(error.name || '');
+
+  if (name === 'TypeError' && /failed to fetch|fetch|load failed/i.test(msg)) {
+    return true;
+  }
+  if (/networkerror|network request failed|failed to fetch|load failed/i.test(msg)) {
+    return true;
+  }
+  if (msg === 'Weather data not available' || msg === 'Weather unavailable offline') {
+    return true;
+  }
+  return false;
+}
+
+function isWeatherAbortError(error) {
+  return error?.name === 'AbortError';
+}
+
 async function showWeatherError(error, options = {}) {
   const { quiet = false, cacheReason = '' } = options;
-  if (error && !quiet) console.error('Weather Error:', error);
+  const isAbort = isWeatherAbortError(error);
+  const isNetwork = isWeatherNetworkError(error);
+  const isGeo = error && typeof error === 'object' && 'code' in error && (error.code === 1 || error.code === 2 || error.code === 3);
+
+  if (isAbort || quiet) {
+    // Silent for aborted requests or explicit quiet calls
+  } else if (isNetwork) {
+    console.warn('Weather network unavailable; attempting cached restore:', error?.message || error);
+  } else if (isGeo) {
+    console.warn('Weather geolocation unavailable:', error?.message || error);
+  } else if (error) {
+    // True programmatic / unexpected errors remain visible
+    console.error('Weather Error:', error);
+  }
 
   try {
     const data = await weatherStorageGet(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
@@ -672,7 +708,7 @@ async function showWeatherError(error, options = {}) {
 async function fetchWeather(lat, lon, units, cityName) {
 
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    await showWeatherError(new Error('Weather unavailable offline'), { quiet: true, cacheReason: 'Offline cache' });
+    await showWeatherError(new Error('Weather unavailable offline'), { cacheReason: 'Offline cache' });
     return;
   }
 
@@ -700,10 +736,9 @@ async function fetchWeather(lat, lon, units, cityName) {
 
   } catch (error) {
 
-    const cacheReason = (typeof navigator !== 'undefined' && navigator.onLine === false)
-      ? 'Offline cache'
-      : 'Cached data';
-    await showWeatherError(error, { cacheReason, quiet: error?.name === 'AbortError' });
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    const cacheReason = isOffline ? 'Offline cache' : 'Cached data';
+    await showWeatherError(error, { cacheReason });
 
   }
 

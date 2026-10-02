@@ -643,24 +643,15 @@ const appSettingsNav = document.getElementById('app-settings-nav');
 // ==========================
 // FAVICON RUNTIME DELEGATION
 // ==========================
-function ensureFaviconObserver() {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.ensureObserver === 'function') {
-    return window.HomebaseFaviconPipeline.ensureObserver();
-  }
-}
-
-function getDomainKeyFromUrl(rawUrl) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.getDomainKey === 'function') {
-    return window.HomebaseFaviconPipeline.getDomainKey(rawUrl);
-  }
-  return '';
-}
-
-async function getFaviconUrlForRawUrl(rawUrl) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.getUrlForRawUrl === 'function') {
-    return window.HomebaseFaviconPipeline.getUrlForRawUrl(rawUrl);
-  }
-  return null;
+if (typeof window !== 'undefined' && window.HomebaseFaviconPipeline) {
+  window.ensureFaviconObserver =
+    window.HomebaseFaviconPipeline.ensureFaviconObserver;
+  window.getDomainKeyFromUrl =
+    window.HomebaseFaviconPipeline.getDomainKeyFromUrl;
+  window.getFaviconUrlForRawUrl =
+    window.HomebaseFaviconPipeline.getFaviconUrlForRawUrl;
+  window.resolveFaviconForImageTarget =
+    window.HomebaseFaviconPipeline.resolveFaviconForImageTarget;
 }
 
 let bookmarkMetadata = {};
@@ -1349,20 +1340,6 @@ async function handleTabDrop(evt) {
   }
 
 }
-
-
-
-
-
-
-
-async function resolveFaviconForImageTarget(options) {
-  if (window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.resolveForImageTarget === 'function') {
-    return window.HomebaseFaviconPipeline.resolveForImageTarget(options);
-  }
-}
-
-
 
 function processBookmarks(nodes, activeFolderId = null, rootNodeOverride = null) {
   const rootNode = rootNodeOverride || (nodes && nodes[0]) || null;

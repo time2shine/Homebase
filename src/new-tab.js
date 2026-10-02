@@ -1519,50 +1519,33 @@ async function loadBookmarks(activeFolderId = null) {
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 // ===============================================
-
 // --- SEARCH BAR ---
-
 // ===============================================
 
 const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
 const searchSelect = document.getElementById('search-select');
 
-function updateSearchUI(engineId, options = {}) {
-  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.updateSearchUI === 'function') {
-    return window.HomebaseSearchUiController.updateSearchUI(engineId, options);
+// Search compatibility bridges
+if (typeof window !== 'undefined') {
+  if (window.HomebaseSearchUiController) {
+    window.updateSearchUI =
+      window.HomebaseSearchUiController.updateSearchUI;
+    window.clearSearchUI =
+      window.HomebaseSearchUiController.clearSearchUI;
+    window.hideSearchResultsPanel =
+      window.HomebaseSearchUiController.hideSearchResultsPanel;
+    window.cycleSearchEngine =
+      window.HomebaseSearchUiController.cycleSearchEngine;
+    window.applySearchEngineConfig =
+      window.HomebaseSearchUiController.applySearchEngineConfig;
+    window.getSafeEnabledSearchEngineId =
+      window.HomebaseSearchUiController.getSafeEnabledSearchEngineId;
   }
-}
-
-function clearSearchUI(options = {}) {
-  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.clearSearchUI === 'function') {
-    return window.HomebaseSearchUiController.clearSearchUI(options);
-  }
-}
-
-function hideSearchResultsPanel() {
-  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.hideSearchResultsPanel === 'function') {
-    return window.HomebaseSearchUiController.hideSearchResultsPanel();
-  }
-}
-
-function cycleSearchEngine(direction) {
-  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.cycleSearchEngine === 'function') {
-    return window.HomebaseSearchUiController.cycleSearchEngine(direction);
+  if (window.HomebaseSearchInteractionController) {
+    window.setSearchSuggestionsPreference =
+      window.HomebaseSearchInteractionController.setSearchSuggestionsPreference;
   }
 }
 
@@ -1573,30 +1556,6 @@ async function setupSearch() {
   if (window.HomebaseSearchInteractionController && typeof window.HomebaseSearchInteractionController.initialize === 'function') {
     await window.HomebaseSearchInteractionController.initialize({ bindEvents: true });
   }
-}
-
-function setSearchSuggestionsPreference(enabled) {
-  if (window.HomebaseSearchInteractionController && typeof window.HomebaseSearchInteractionController.setSuggestionsPreference === 'function') {
-    return window.HomebaseSearchInteractionController.setSuggestionsPreference(enabled);
-  }
-  const isEnabled = enabled !== false;
-  if (appSearchSuggestionsToggle) {
-    appSearchSuggestionsToggle.checked = isEnabled;
-  }
-}
-
-function applySearchEngineConfig(savedConfig) {
-  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.applySearchEngineConfig === 'function') {
-    return window.HomebaseSearchUiController.applySearchEngineConfig(savedConfig);
-  }
-  return false;
-}
-
-function getSafeEnabledSearchEngineId(preferredId) {
-  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.getSafeEnabledSearchEngineId === 'function') {
-    return window.HomebaseSearchUiController.getSafeEnabledSearchEngineId(preferredId);
-  }
-  return preferredId || 'google';
 }
 
 // ===============================================

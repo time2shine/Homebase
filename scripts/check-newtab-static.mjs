@@ -13,6 +13,7 @@ const keyExtractedModulePaths = [
   "newtab/core/startup-perf-runtime.js",
   "newtab/core/dialogs.js",
   "newtab/core/utils.js",
+  "newtab/core/asset-loader.js",
   "newtab/core/sortable-bridge.js",
   "newtab/core/tab-lifecycle.js",
   "newtab/core/dock-navigation.js",

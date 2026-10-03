@@ -16,39 +16,7 @@ const searchWidget = document.querySelector('.widget-search');
 
 const searchResultsPanel = document.getElementById('search-results-panel');
 
-const bookmarkResultsContainer = document.getElementById('bookmark-results-container');
-
-const suggestionResultsContainer = document.getElementById('suggestion-results-container');
-
-
-
-const searchAreaWrapper = document.querySelector('.search-area-wrapper');
-
 const bookmarkTabsTrack = document.getElementById('bookmark-tabs-track');
-
-const bookmarkBarWrapper = document.querySelector('.bookmark-bar-wrapper');
-
-const bookmarksGridEl = document.getElementById('bookmarks-grid');
-
-const bookmarksEmptyState = document.getElementById('bookmarks-empty-state');
-
-const bookmarksEmptyMessage = document.getElementById('bookmarks-empty-message');
-
-const folderPickerModal = document.getElementById('folder-picker-modal');
-
-const folderPickerPanel = document.getElementById('folder-picker-panel');
-
-const folderPickerSearchInput = document.getElementById('folder-picker-search');
-
-const folderPickerList = document.getElementById('folder-picker-list');
-
-const folderPickerBreadcrumb = document.getElementById('folder-picker-breadcrumb');
-
-const folderPickerConfirmBtn = document.getElementById('folder-picker-confirm');
-
-const folderPickerCancelBtn = document.getElementById('folder-picker-cancel');
-
-const folderPickerError = document.getElementById('folder-picker-error');
 
 const tabScrollLeftBtn = document.getElementById('tab-scroll-left');
 
@@ -577,14 +545,6 @@ const quickAddBookmarkBtn = document.getElementById('quick-add-bookmark');
 const quickAddFolderBtn = document.getElementById('quick-add-folder');
 
 const quickOpenBookmarksBtn = document.getElementById('quick-open-bookmarks');
-
-const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
-
-const mainSettingsBtn = document.getElementById('main-settings-btn');
-
-const appSettingsModal = document.getElementById('app-settings-modal');
-
-const appSettingsNav = document.getElementById('app-settings-nav');
 
 // Settings DOM element handles and APP_*_KEY constants extracted to settings-preferences.js
 

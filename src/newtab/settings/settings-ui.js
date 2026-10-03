@@ -15,6 +15,9 @@ window.SettingsUI = (() => {
   const FEEDBACK_FIREFOX_LISTING_URL = 'https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/';
   const FEEDBACK_CHROME_LISTING_URL = 'https://chromewebstore.google.com/detail/homebase/ejfdeilhncacmmbdfmgpolpoldpllbmc?authuser=0&hl=en';
   const appHomebaseTipsToggle = document.getElementById('app-show-homebase-tips-toggle');
+  const appSettingsModal = document.getElementById('app-settings-modal');
+  const appSettingsNav = document.getElementById('app-settings-nav');
+  const mainSettingsBtn = document.getElementById('main-settings-btn');
   let whatsNewChangelogCache = null;
   let whatsNewChangelogPromise = null;
   let privacyPolicyCache = null;

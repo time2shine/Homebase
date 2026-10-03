@@ -45,6 +45,7 @@ async function initAddonStoreDockLink() {
 }
 
 function setupLazySettingsButton() {
+  const mainSettingsBtn = document.getElementById('main-settings-btn');
   if (!mainSettingsBtn) return;
   if (mainSettingsBtn.dataset.settingsHandlerAttached === 'true') return;
 
@@ -101,6 +102,7 @@ function setupDockNavigation() {
 
 
 
+  const nextWallpaperBtn = document.getElementById('dock-next-wallpaper-btn');
   if (nextWallpaperBtn) {
 
     nextWallpaperBtn.addEventListener('click', async () => {

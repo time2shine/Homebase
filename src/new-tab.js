@@ -566,52 +566,7 @@ let sortableTimeout = null;
 recordSortableLibraryAvailability();
 
 
-// === CONTEXT MENU ELEMENTS ===
 
-const folderContextMenu = document.getElementById('bookmark-folder-menu');
-
-const menuEditBtn = document.getElementById('menu-edit-btn');
-
-const menuDeleteBtn = document.getElementById('menu-delete-btn');
-
-
-
-// NEW: context menus for grid items
-
-const gridFolderMenu = document.getElementById('bookmark-grid-folder-menu');
-
-const iconContextMenu = document.getElementById('bookmark-icon-menu');
-
-const gridBlankMenu = document.getElementById('bookmark-grid-blank-menu');
-
-const gridMenuCreateBookmarkBtn = document.getElementById('grid-menu-create-bookmark');
-
-const gridMenuCreateFolderBtn = document.getElementById('grid-menu-create-folder');
-
-const gridMenuManageBtn = document.getElementById('grid-menu-manage');
-
-const gridMenuPasteBtn = document.getElementById('grid-menu-paste');
-
-const gridMenuSortNameBtn = document.getElementById('grid-menu-sort-name');
-
-const ensureMenuMountedToBody = (menuEl) => {
-  if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.ensureMenuMountedToBody === 'function') {
-    return window.HomebaseContextMenuController.ensureMenuMountedToBody(menuEl);
-  }
-  if (!menuEl || !(menuEl instanceof HTMLElement)) return;
-  if (menuEl.parentElement !== document.body) {
-    document.body.appendChild(menuEl);
-  }
-};
-
-
-// NEW: simple state so you know what was right-clicked
-
-let currentContextItemId = null;
-
-let currentContextIsFolder = false;
-
-let currentContextSourceTile = null;
 
 
 
@@ -1927,17 +1882,6 @@ function logInitSettled(name, result) {
 
 
   // --- Context Menu Management ---
-  const hideAllContextMenus = () => {
-    if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.hide === 'function') {
-      return window.HomebaseContextMenuController.hide();
-    }
-  };
-
-  const positionContextMenuInViewport = (menuEl, clientX, clientY, opts = {}) => {
-    if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.reposition === 'function') {
-      return window.HomebaseContextMenuController.reposition(menuEl, clientX, clientY, opts);
-    }
-  };
 
   if (typeof window !== 'undefined' && window.HomebaseDialogController && typeof window.HomebaseDialogController.initialize === 'function') {
     window.HomebaseDialogController.initialize();
@@ -1959,12 +1903,7 @@ function logInitSettled(name, result) {
       handlePasteBookmark: () => handlePasteBookmark(),
       sortCurrentFolderByName: () => sortCurrentFolderByName(),
       populateContainerMenu: (id, isFolder) => typeof populateContainerMenu === 'function' && populateContainerMenu(id, isFolder),
-      isContainerModeEnabled: () => Boolean(appContainerModePreference),
-      onContextChanged: (data) => {
-        currentContextItemId = data.itemId;
-        currentContextIsFolder = data.isFolder;
-        currentContextSourceTile = data.sourceTile;
-      }
+      isContainerModeEnabled: () => Boolean(appContainerModePreference)
     });
   }
 

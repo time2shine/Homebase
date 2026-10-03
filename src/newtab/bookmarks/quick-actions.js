@@ -10,9 +10,11 @@ function setupQuickActions() {
 
 
 
-  if (quickOpenBookmarksBtn && gridBlankMenu) {
+  const blankMenu = (typeof gridBlankMenu !== 'undefined' && gridBlankMenu)
+    || (typeof document !== 'undefined' ? document.getElementById('bookmark-grid-blank-menu') : null);
+
+  if (quickOpenBookmarksBtn && blankMenu) {
     const moreBtn = quickOpenBookmarksBtn;
-    const blankMenu = gridBlankMenu;
 
     const closeMenuOutside = (e) => {
       if (!moreBtn.contains(e.target) && !blankMenu.contains(e.target)) {

@@ -228,3 +228,14 @@ function applyWidgetVisibility() {
   }
 
 }
+
+function revealWidget(selector) {
+  const el = (typeof document !== 'undefined' && document.querySelector) ? document.querySelector(selector) : null;
+  if (!el) return;
+  el.classList.remove('widget-hidden');
+  el.classList.add('widget-visible');
+}
+
+if (typeof window !== 'undefined') {
+  window.revealWidget = revealWidget;
+}

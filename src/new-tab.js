@@ -321,36 +321,6 @@ function scheduleIdleChunkedTask(label, stepFn, initialState) {
 
 }
 
-async function openBookmarkIconPicker(context = {}) {
-  try {
-    await loadScriptOnce('assets/js/icon-picker.js');
-
-    if (
-      !window.HomebaseIconPicker ||
-      typeof window.HomebaseIconPicker.open !== 'function'
-    ) {
-      throw new Error('HomebaseIconPicker failed to load');
-    }
-
-    return window.HomebaseIconPicker.open(context);
-  } catch (err) {
-    console.warn('Failed to open icon picker', err);
-    alert('Could not open the icon picker. Please try again.');
-    return null;
-  }
-}
-
-function revealWidget(selector) {
-
-  const el = document.querySelector(selector);
-
-  if (!el) return;
-
-  el.classList.remove('widget-hidden');
-
-  el.classList.add('widget-visible');
-
-}
 
 
 

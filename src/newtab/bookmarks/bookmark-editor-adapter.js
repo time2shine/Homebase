@@ -234,6 +234,41 @@ function showDeleteConfirm(message, options = {}) {
   return callBookmarkEditorMethod('openDeleteDialog', { ...options, message }, false);
 }
 
+async function openBookmarkIconPicker(context = {}) {
+  try {
+    if (typeof loadScriptOnce === 'function') {
+      await loadScriptOnce('assets/js/icon-picker.js');
+    } else if (typeof window !== 'undefined' && typeof window.loadScriptOnce === 'function') {
+      await window.loadScriptOnce('assets/js/icon-picker.js');
+    } else if (typeof document !== 'undefined') {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'assets/js/icon-picker.js';
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = (err) => reject(err || new Error('Failed to load icon picker script'));
+        document.head.appendChild(script);
+      });
+    }
+
+    if (
+      typeof window === 'undefined' ||
+      !window.HomebaseIconPicker ||
+      typeof window.HomebaseIconPicker.open !== 'function'
+    ) {
+      throw new Error('HomebaseIconPicker failed to load');
+    }
+
+    return window.HomebaseIconPicker.open(context);
+  } catch (err) {
+    console.warn('Failed to open icon picker', err);
+    if (typeof alert === 'function') {
+      alert('Could not open the icon picker. Please try again.');
+    }
+    return null;
+  }
+}
+
 // Controller API and Global Compatibility Bridges
 if (typeof window !== 'undefined') {
   window.HomebaseBookmarkEditorAdapter = {
@@ -246,7 +281,8 @@ if (typeof window !== 'undefined') {
     showAddFolderModal,
     showEditFolderModal,
     openMoveBookmarkModal,
-    showDeleteConfirm
+    showDeleteConfirm,
+    openBookmarkIconPicker
   };
 
   window.ensureBookmarkEditor = ensureBookmarkEditor;
@@ -259,6 +295,7 @@ if (typeof window !== 'undefined') {
   window.showEditFolderModal = showEditFolderModal;
   window.openMoveBookmarkModal = openMoveBookmarkModal;
   window.showDeleteConfirm = showDeleteConfirm;
+  window.openBookmarkIconPicker = openBookmarkIconPicker;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -272,6 +309,7 @@ if (typeof module !== 'undefined' && module.exports) {
     showAddFolderModal,
     showEditFolderModal,
     openMoveBookmarkModal,
-    showDeleteConfirm
+    showDeleteConfirm,
+    openBookmarkIconPicker
   };
 }

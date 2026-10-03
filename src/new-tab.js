@@ -1296,159 +1296,70 @@ async function handleTabDrop(evt) {
 
 }
 
+// =============================================================================
+// Backward compatibility bridges for Bookmark Loader Service
+// Canonical implementation lives in src/newtab/bookmarks/bookmark-loader-service.js
+// =============================================================================
+
 function processBookmarks(nodes, activeFolderId = null, rootNodeOverride = null) {
-  const rootNode = rootNodeOverride || (nodes && nodes[0]) || null;
-
-  if (!rootNode) {
-    console.warn('Bookmark tree is empty or malformed.');
-    showBookmarksEmptyState();
-    return;
+  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.processBookmarks === 'function') {
+    const res = window.HomebaseBookmarkLoader.processBookmarks(nodes, activeFolderId, rootNodeOverride);
+    allBookmarks = window.HomebaseBookmarkLoader.getAllBookmarks();
+    rootDisplayFolderId = window.HomebaseBookmarkLoader.getRootDisplayFolderId();
+    return res;
   }
-
-  allBookmarks = flattenBookmarks([rootNode]);
-  rootDisplayFolderId = rootNode.id;
-  hideBookmarksEmptyState();
-  showBookmarksUI();
-  createFolderTabs(rootNode, activeFolderId);
 }
 
-
-
 async function loadBookmarkMetadata() {
-  try {
-    bookmarkMetadata = (await getBookmarkMetadata()) || {};
-  } catch (e) {
-    console.warn('Failed to load bookmark metadata', e);
-    bookmarkMetadata = {};
+  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadBookmarkMetadata === 'function') {
+    bookmarkMetadata = await window.HomebaseBookmarkLoader.loadBookmarkMetadata();
+    return bookmarkMetadata;
   }
+  return {};
 }
 
 async function loadLastUsedFolderId() {
-  try {
-    lastUsedBookmarkFolderId = (await getLastUsedFolderId()) || null;
-  } catch (e) {
-    console.warn('Failed to load last used bookmark folder id', e);
-    lastUsedBookmarkFolderId = null;
+  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadLastUsedFolderId === 'function') {
+    lastUsedBookmarkFolderId = await window.HomebaseBookmarkLoader.loadLastUsedFolderId();
+    return lastUsedBookmarkFolderId;
   }
+  return null;
 }
 
 async function setLastUsedFolderId(id) {
   lastUsedBookmarkFolderId = id || null;
-  try {
-    if (typeof window !== 'undefined' && window.HomebaseBookmarkStorage && typeof window.HomebaseBookmarkStorage.setLastUsedFolderId === 'function') {
-      await window.HomebaseBookmarkStorage.setLastUsedFolderId(lastUsedBookmarkFolderId);
-    } else if (typeof setBookmarkLastUsedFolderId === 'function') {
-      await setBookmarkLastUsedFolderId(lastUsedBookmarkFolderId);
-    }
-  } catch (e) {
-    console.warn('Failed to persist last used folder id', e);
+  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.setLastUsedFolderId === 'function') {
+    return await window.HomebaseBookmarkLoader.setLastUsedFolderId(id);
   }
 }
 
 async function loadFolderMetadata() {
-  try {
-    folderMetadata = (await getFolderMetadata()) || {};
-  } catch (e) {
-    console.warn('Failed to load folder metadata', e);
-    folderMetadata = {};
+  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadFolderMetadata === 'function') {
+    folderMetadata = await window.HomebaseBookmarkLoader.loadFolderMetadata();
+    return folderMetadata;
+  }
+  return {};
+}
+
+async function loadBookmarks(activeFolderId = null) {
+  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadBookmarks === 'function') {
+    const res = await window.HomebaseBookmarkLoader.loadBookmarks(activeFolderId);
+    allBookmarks = window.HomebaseBookmarkLoader.getAllBookmarks();
+    rootDisplayFolderId = window.HomebaseBookmarkLoader.getRootDisplayFolderId();
+    if (typeof window.bookmarkTree !== 'undefined') {
+      bookmarkTree = window.bookmarkTree;
+    }
+    return res;
   }
 }
 
-
-
-
-
-/**
-
- * Now accepts an optional ID to keep a folder active after reload.
-
- */
-
-async function loadBookmarks(activeFolderId = null) {
-
-  const loadBookmarksStart =
-    typeof performance !== 'undefined' && typeof performance.now === 'function'
-      ? performance.now()
-      : 0;
-
-  beginBookmarksBoot();
-  if (!browser.bookmarks) {
-
-    console.warn('Bookmarks API not available.');
-
-    showBookmarksEmptyState('Bookmarks permission unavailable.');
-    return;
-
-  }
-
-
-
-  try {
-
-    let rootNode = null;
-    const storedRootId = await getHomebaseRootId();
-
-    if (storedRootId) {
-      const subTreeStart =
-        typeof performance !== 'undefined' && typeof performance.now === 'function'
-          ? performance.now()
-          : 0;
-
-      rootNode = await getStoredHomebaseRootSubTree(storedRootId);
-      if (window.HomebaseBookmarkRootController?.getLastResolvedSubTree()) {
-        bookmarkTree = window.HomebaseBookmarkRootController.getLastResolvedSubTree();
-      }
-      hbPerfTime('bookmarks getSubTree', subTreeStart);
-    }
-
-    if (!rootNode) {
-      const treeStart =
-        typeof performance !== 'undefined' && typeof performance.now === 'function'
-          ? performance.now()
-          : 0;
-
-      const tree = await getBookmarkTree(true);
-      hbPerfTime('bookmarks getBookmarkTree', treeStart);
-
-      const treeRoot = tree && tree[0];
-      if (!treeRoot) {
-        console.warn('Bookmark tree is empty.');
-        showBookmarksEmptyState();
-        return;
-      }
-
-      rootNode = findHomebaseUnderOtherBookmarks(treeRoot);
-      if (rootNode && rootNode.id) {
-        await setHomebaseRootId(rootNode.id);
-      } else {
-        console.warn('Homebase folder not found under Other Bookmarks.');
-      }
-    }
-
-    if (!rootNode) {
-      showBookmarksEmptyState();
-      return;
-    }
-
-    hideBookmarksEmptyState();
-    showBookmarksUI();
-    const processStart =
-      typeof performance !== 'undefined' && typeof performance.now === 'function'
-        ? performance.now()
-        : 0;
-    processBookmarks([rootNode], activeFolderId, rootNode);
-    hbPerfTime('bookmarks process/render request', processStart);
-
-  } catch (err) {
-
-    console.warn('Failed to load bookmarks', err);
-    showBookmarksEmptyState('Bookmarks permission unavailable.');
-
-  } finally {
-    endBookmarksBoot();
-    hbPerfTime('loadBookmarks function total', loadBookmarksStart);
-  }
-
+if (typeof window !== 'undefined') {
+  window.loadBookmarks = loadBookmarks;
+  window.processBookmarks = processBookmarks;
+  window.loadBookmarkMetadata = loadBookmarkMetadata;
+  window.loadFolderMetadata = loadFolderMetadata;
+  window.loadLastUsedFolderId = loadLastUsedFolderId;
+  window.setLastUsedFolderId = setLastUsedFolderId;
 }
 
 // ===============================================

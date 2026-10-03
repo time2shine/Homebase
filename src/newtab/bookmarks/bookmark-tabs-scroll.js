@@ -14,9 +14,13 @@ function updateBookmarkTabOverflow() {
   }
 
   // Fallback: hide arrows when controller is unavailable.
-  if (!tabScrollLeftBtn || !tabScrollRightBtn) return;
-  tabScrollLeftBtn.classList.remove('visible');
-  tabScrollRightBtn.classList.remove('visible');
+  const leftBtn = (typeof tabScrollLeftBtn !== 'undefined' && tabScrollLeftBtn)
+    || (typeof document !== 'undefined' && document.getElementById('tab-scroll-left'));
+  const rightBtn = (typeof tabScrollRightBtn !== 'undefined' && tabScrollRightBtn)
+    || (typeof document !== 'undefined' && document.getElementById('tab-scroll-right'));
+  if (!leftBtn || !rightBtn) return;
+  leftBtn.classList.remove('visible');
+  rightBtn.classList.remove('visible');
 
 }
 
@@ -25,7 +29,8 @@ function updateBookmarkTabOverflow() {
  * Clamps target scroll so we never overshoot the bounds.
  */
 function scrollActiveFolderTabIntoView({ behavior = 'smooth', centerIfLarge = false } = {}) {
-  const track = bookmarkTabsTrack;
+  const track = (typeof bookmarkTabsTrack !== 'undefined' && bookmarkTabsTrack)
+    || (typeof document !== 'undefined' && document.getElementById('bookmark-tabs-track'));
   if (!track) return;
 
   const activeTab = track.querySelector('.bookmark-folder-tab.active');
@@ -67,35 +72,56 @@ function scrollActiveFolderTabIntoView({ behavior = 'smooth', centerIfLarge = fa
 
 function scrollBookmarkTabs(direction) {
 
-  if (!bookmarkTabsTrack) return;
+  const track = (typeof bookmarkTabsTrack !== 'undefined' && bookmarkTabsTrack)
+    || (typeof document !== 'undefined' && document.getElementById('bookmark-tabs-track'));
 
-  const scrollAmount = Math.max(160, Math.round(bookmarkTabsTrack.clientWidth * 0.75));
+  if (!track) return;
+
+  const scrollAmount = Math.max(160, Math.round(track.clientWidth * 0.75));
 
   if (tabsScrollController) {
     tabsScrollController.scrollByStep(direction, scrollAmount);
     return;
   }
 
-  bookmarkTabsTrack.scrollBy({
+  track.scrollBy({
     left: direction * scrollAmount,
     behavior: 'smooth'
   });
 
 }
 
+function setupTabScrollListeners() {
+  const leftBtn = (typeof tabScrollLeftBtn !== 'undefined' && tabScrollLeftBtn)
+    || (typeof document !== 'undefined' && document.getElementById('tab-scroll-left'));
+  const rightBtn = (typeof tabScrollRightBtn !== 'undefined' && tabScrollRightBtn)
+    || (typeof document !== 'undefined' && document.getElementById('tab-scroll-right'));
+
+  if (leftBtn && !leftBtn.dataset.scrollBound) {
+    leftBtn.dataset.scrollBound = '1';
+    leftBtn.addEventListener('click', () => scrollBookmarkTabs(-1));
+  }
+
+  if (rightBtn && !rightBtn.dataset.scrollBound) {
+    rightBtn.dataset.scrollBound = '1';
+    rightBtn.addEventListener('click', () => scrollBookmarkTabs(1));
+  }
+}
+
 function initTabsScrollController() {
 
-  if (!bookmarkTabsTrack || !tabScrollLeftBtn || !tabScrollRightBtn) return null;
+  const track = (typeof bookmarkTabsTrack !== 'undefined' && bookmarkTabsTrack)
+    || (typeof document !== 'undefined' && document.getElementById('bookmark-tabs-track'));
 
+  const leftBtn = (typeof tabScrollLeftBtn !== 'undefined' && tabScrollLeftBtn)
+    || (typeof document !== 'undefined' && document.getElementById('tab-scroll-left'));
 
+  const rightBtn = (typeof tabScrollRightBtn !== 'undefined' && tabScrollRightBtn)
+    || (typeof document !== 'undefined' && document.getElementById('tab-scroll-right'));
 
-  const track = bookmarkTabsTrack;
+  if (!track || !leftBtn || !rightBtn) return null;
 
-  const leftBtn = tabScrollLeftBtn;
-
-  const rightBtn = tabScrollRightBtn;
-
-
+  setupTabScrollListeners();
 
   const startSentinel = document.createElement('span');
 
@@ -457,7 +483,7 @@ function initTabsScrollController() {
 
 
 
-  return {
+  const controller = {
 
     refresh,
 
@@ -469,4 +495,35 @@ function initTabsScrollController() {
 
   };
 
+  tabsScrollController = controller;
+
+  return controller;
+
+}
+
+const HomebaseBookmarkTabsScroll = {
+  initTabsScrollController,
+  updateBookmarkTabOverflow,
+  scrollActiveFolderTabIntoView,
+  scrollBookmarkTabs,
+  setupTabScrollListeners,
+  get tabsScrollController() {
+    return tabsScrollController;
+  },
+  set tabsScrollController(val) {
+    tabsScrollController = val;
+  }
+};
+
+if (typeof window !== 'undefined') {
+  window.HomebaseBookmarkTabsScroll = HomebaseBookmarkTabsScroll;
+  window.initTabsScrollController = initTabsScrollController;
+  window.updateBookmarkTabOverflow = updateBookmarkTabOverflow;
+  window.scrollActiveFolderTabIntoView = scrollActiveFolderTabIntoView;
+  window.scrollBookmarkTabs = scrollBookmarkTabs;
+  window.setupTabScrollListeners = setupTabScrollListeners;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = HomebaseBookmarkTabsScroll;
 }

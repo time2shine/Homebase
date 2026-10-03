@@ -402,17 +402,6 @@ updateBookmarkTabOverflow();
 
 
 
-if (tabScrollLeftBtn) {
-
-  tabScrollLeftBtn.addEventListener('click', () => scrollBookmarkTabs(-1));
-
-}
-
-if (tabScrollRightBtn) {
-
-  tabScrollRightBtn.addEventListener('click', () => scrollBookmarkTabs(1));
-
-}
 
 // Optimized: Throttle pointermove to Animation Frame to reduce CPU usage
 

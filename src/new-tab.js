@@ -497,14 +497,6 @@ recordSortableLibraryAvailability();
 
 
 
-// === QUICK ACTION ELEMENTS ===
-
-const quickAddBookmarkBtn = document.getElementById('quick-add-bookmark');
-
-const quickAddFolderBtn = document.getElementById('quick-add-folder');
-
-const quickOpenBookmarksBtn = document.getElementById('quick-open-bookmarks');
-
 // Settings DOM element handles and APP_*_KEY constants extracted to settings-preferences.js
 
 

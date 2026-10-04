@@ -1289,36 +1289,7 @@ const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
 const searchSelect = document.getElementById('search-select');
 
-// Search compatibility bridges
-if (typeof window !== 'undefined') {
-  if (window.HomebaseSearchUiController) {
-    window.updateSearchUI =
-      window.HomebaseSearchUiController.updateSearchUI;
-    window.clearSearchUI =
-      window.HomebaseSearchUiController.clearSearchUI;
-    window.hideSearchResultsPanel =
-      window.HomebaseSearchUiController.hideSearchResultsPanel;
-    window.cycleSearchEngine =
-      window.HomebaseSearchUiController.cycleSearchEngine;
-    window.applySearchEngineConfig =
-      window.HomebaseSearchUiController.applySearchEngineConfig;
-    window.getSafeEnabledSearchEngineId =
-      window.HomebaseSearchUiController.getSafeEnabledSearchEngineId;
-  }
-  if (window.HomebaseSearchInteractionController) {
-    window.setSearchSuggestionsPreference =
-      window.HomebaseSearchInteractionController.setSearchSuggestionsPreference;
-  }
-}
 
-async function setupSearch() {
-  if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.initialize === 'function') {
-    await window.HomebaseSearchUiController.initialize();
-  }
-  if (window.HomebaseSearchInteractionController && typeof window.HomebaseSearchInteractionController.initialize === 'function') {
-    await window.HomebaseSearchInteractionController.initialize({ bindEvents: true });
-  }
-}
 
 // ===============================================
 // --- FIREFOX CONTAINER LOGIC ---

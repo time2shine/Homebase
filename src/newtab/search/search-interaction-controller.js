@@ -1970,5 +1970,6 @@
 
   if (typeof window !== 'undefined') {
     window.HomebaseSearchInteractionController = controller;
+    window.setSearchSuggestionsPreference = setSuggestionsPreference;
   }
 })();

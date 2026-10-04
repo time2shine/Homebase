@@ -879,6 +879,13 @@
     }
   }
 
+  async function setupSearch() {
+    await initialize();
+    if (typeof window !== 'undefined' && window.HomebaseSearchInteractionController && typeof window.HomebaseSearchInteractionController.initialize === 'function') {
+      await window.HomebaseSearchInteractionController.initialize({ bindEvents: true });
+    }
+  }
+
   // Export to window
   const controller = {
     initialize,
@@ -886,6 +893,7 @@
     refresh,
     destroy,
     handleStorageChange: handleSearchStorageChange,
+    setupSearch,
 
     // Operations
     buildSearchEngineIconContent,
@@ -919,5 +927,12 @@
     window.HomebaseSearchUiController = controller;
     window.HomebaseSearchEngineController = controller;
     window.handleSearchStorageChange = handleSearchStorageChange;
+    window.updateSearchUI = updateSearchUI;
+    window.clearSearchUI = clearSearchUI;
+    window.hideSearchResultsPanel = hideSearchResultsPanel;
+    window.cycleSearchEngine = cycleSearchEngine;
+    window.applySearchEngineConfig = applySearchEngineConfig;
+    window.getSafeEnabledSearchEngineId = getSafeEnabledSearchEngineId;
+    window.setupSearch = setupSearch;
   }
 })();

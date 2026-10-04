@@ -1795,71 +1795,55 @@ function logInitSettled(name, result) {
 
 
 
-if (browser?.storage?.onChanged) {
+function handleNewTabStorageChange(changes, area) {
+  if (changes[WALLPAPER_SELECTION_KEY] || changes[DAILY_ROTATION_KEY]) {
+    const nextSelection = changes[WALLPAPER_SELECTION_KEY]
+      ? (changes[WALLPAPER_SELECTION_KEY].newValue || null)
+      : currentWallpaperSelection;
+    const allowDailyRotation = changes[DAILY_ROTATION_KEY]
+      ? changes[DAILY_ROTATION_KEY].newValue !== false
+      : dailyRotationPreference !== false;
 
-  browser.storage.onChanged.addListener((changes, area) => {
+    syncWallpaperStartupState(nextSelection, allowDailyRotation);
+  }
 
-    if (area !== 'local') return;
+  let changedMetadataIds = null;
 
-    if (changes[WALLPAPER_SELECTION_KEY] || changes[DAILY_ROTATION_KEY]) {
+  if (changes[FOLDER_META_KEY]) {
+    const nextFolderMetadata = changes[FOLDER_META_KEY].newValue || {};
+    changedMetadataIds = getChangedMetadataIds(changes[FOLDER_META_KEY].oldValue, nextFolderMetadata);
+    folderMetadata = nextFolderMetadata;
+  }
 
-      const nextSelection = changes[WALLPAPER_SELECTION_KEY]
-        ? (changes[WALLPAPER_SELECTION_KEY].newValue || null)
-        : currentWallpaperSelection;
-      const allowDailyRotation = changes[DAILY_ROTATION_KEY]
-        ? changes[DAILY_ROTATION_KEY].newValue !== false
-        : dailyRotationPreference !== false;
+  if (changes[BOOKMARK_META_KEY]) {
+    const nextBookmarkMetadata = changes[BOOKMARK_META_KEY].newValue || {};
+    const changedBookmarkIds = getChangedMetadataIds(changes[BOOKMARK_META_KEY].oldValue, nextBookmarkMetadata);
+    changedMetadataIds = changedMetadataIds
+      ? Array.from(new Set([...changedMetadataIds, ...changedBookmarkIds]))
+      : changedBookmarkIds;
+    bookmarkMetadata = nextBookmarkMetadata;
+  }
 
-      syncWallpaperStartupState(nextSelection, allowDailyRotation);
-
+  if (changedMetadataIds?.length && currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
+    const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
+    if (activeNode && patchActiveGridMetadataItems(activeNode, changedMetadataIds)) {
+      renderBookmarkGrid(activeNode);
     }
+  }
 
+  if (changes[LAST_USED_BOOKMARK_FOLDER_KEY]) {
+    lastUsedBookmarkFolderId = changes[LAST_USED_BOOKMARK_FOLDER_KEY].newValue || null;
+  }
 
+  if (changes[HOMEBASE_BOOKMARK_ROOT_ID_KEY]) {
+    loadBookmarks();
+  }
+}
 
-    if (window.HomebaseSearchUiController && typeof window.HomebaseSearchUiController.handleStorageChange === 'function') {
-      window.HomebaseSearchUiController.handleStorageChange(changes, area);
-    }
-
-    if (window.HomebaseSettingsPreferences && typeof window.HomebaseSettingsPreferences.handleStorageChange === 'function') {
-      window.HomebaseSettingsPreferences.handleStorageChange(changes, area);
-    }
-
-    handleTodoStorageChange(changes, area);
-
-    let changedMetadataIds = null;
-
-    if (changes[FOLDER_META_KEY]) {
-      const nextFolderMetadata = changes[FOLDER_META_KEY].newValue || {};
-      changedMetadataIds = getChangedMetadataIds(changes[FOLDER_META_KEY].oldValue, nextFolderMetadata);
-      folderMetadata = nextFolderMetadata;
-    }
-
-    if (changes[BOOKMARK_META_KEY]) {
-      const nextBookmarkMetadata = changes[BOOKMARK_META_KEY].newValue || {};
-      const changedBookmarkIds = getChangedMetadataIds(changes[BOOKMARK_META_KEY].oldValue, nextBookmarkMetadata);
-      changedMetadataIds = changedMetadataIds
-        ? Array.from(new Set([...changedMetadataIds, ...changedBookmarkIds]))
-        : changedBookmarkIds;
-      bookmarkMetadata = nextBookmarkMetadata;
-    }
-
-    if (changedMetadataIds?.length && currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
-      const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
-      if (activeNode && patchActiveGridMetadataItems(activeNode, changedMetadataIds)) {
-        renderBookmarkGrid(activeNode);
-      }
-    }
-
-    if (changes[LAST_USED_BOOKMARK_FOLDER_KEY]) {
-      lastUsedBookmarkFolderId = changes[LAST_USED_BOOKMARK_FOLDER_KEY].newValue || null;
-    }
-
-    if (changes[HOMEBASE_BOOKMARK_ROOT_ID_KEY]) {
-      loadBookmarks();
-    }
-
+if (window.HomebaseStorageDispatcher && typeof window.HomebaseStorageDispatcher.initialize === 'function') {
+  window.HomebaseStorageDispatcher.initialize({
+    onStorageChange: handleNewTabStorageChange
   });
-
 }
 
 

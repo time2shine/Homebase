@@ -17,6 +17,7 @@ const keyExtractedModulePaths = [
   "newtab/core/sortable-bridge.js",
   "newtab/core/tab-lifecycle.js",
   "newtab/core/dock-navigation.js",
+  "newtab/core/storage-dispatcher.js",
   "newtab/settings/sub-settings-ui.js",
   "newtab/settings/search-engine-settings.js",
   "newtab/settings/settings-preferences.js",

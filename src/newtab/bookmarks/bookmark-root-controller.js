@@ -354,8 +354,12 @@ function handleStorageChange(changes, area) {
   if (area && area !== 'local') return;
   const rootKey = (typeof window !== 'undefined' && window.HOMEBASE_BOOKMARK_ROOT_ID_KEY) || 'homebaseBookmarkRootId';
   if (changes && changes[rootKey]) {
-    if (typeof loadBookmarks === 'function') {
+    if (typeof window !== 'undefined' && typeof window.loadBookmarks === 'function') {
+      window.loadBookmarks();
+    } else if (typeof loadBookmarks === 'function') {
       loadBookmarks();
+    } else if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadBookmarks === 'function') {
+      window.HomebaseBookmarkLoader.loadBookmarks();
     }
   }
 }

@@ -13,13 +13,17 @@ function createTestEnvironment(options = {}) {
   const {
     withSearchController = true,
     withSettingsPreferences = true,
-    withTodoHandler = true
+    withTodoHandler = true,
+    withBookmarkRootController = true,
+    withBookmarkGridController = true
   } = options;
 
   const storageListeners = [];
   const searchCalls = [];
   const settingsCalls = [];
   const todoCalls = [];
+  const bookmarkRootCalls = [];
+  const bookmarkGridCalls = [];
 
   const context = {
     console: {
@@ -61,6 +65,22 @@ function createTestEnvironment(options = {}) {
     };
   }
 
+  if (withBookmarkRootController) {
+    context.window.HomebaseBookmarkRootController = {
+      handleStorageChange: (changes, area) => {
+        bookmarkRootCalls.push({ changes, area });
+      }
+    };
+  }
+
+  if (withBookmarkGridController) {
+    context.window.HomebaseBookmarkGridController = {
+      handleStorageChange: (changes, area) => {
+        bookmarkGridCalls.push({ changes, area });
+      }
+    };
+  }
+
   vm.createContext(context);
   vm.runInContext(storageDispatcherScriptCode, context);
 
@@ -70,7 +90,9 @@ function createTestEnvironment(options = {}) {
     storageListeners,
     searchCalls,
     settingsCalls,
-    todoCalls
+    todoCalls,
+    bookmarkRootCalls,
+    bookmarkGridCalls
   };
 }
 
@@ -98,7 +120,7 @@ test('initialize binds storage listener once', () => {
   assert.strictEqual(env.storageListeners.length, 1);
 });
 
-test('dispatches changes to search, settings, and todo controllers', () => {
+test('dispatches changes to search, settings, todo, bookmark-root, and bookmark-grid controllers', () => {
   const env = createTestEnvironment();
   env.dispatcher.initialize();
 
@@ -117,6 +139,12 @@ test('dispatches changes to search, settings, and todo controllers', () => {
 
   assert.strictEqual(env.todoCalls.length, 1);
   assert.deepStrictEqual(env.todoCalls[0], { changes, area: 'local' });
+
+  assert.strictEqual(env.bookmarkRootCalls.length, 1);
+  assert.deepStrictEqual(env.bookmarkRootCalls[0], { changes, area: 'local' });
+
+  assert.strictEqual(env.bookmarkGridCalls.length, 1);
+  assert.deepStrictEqual(env.bookmarkGridCalls[0], { changes, area: 'local' });
 });
 
 test('ignores non-local storage changes', () => {
@@ -134,6 +162,8 @@ test('ignores non-local storage changes', () => {
   assert.strictEqual(env.searchCalls.length, 0);
   assert.strictEqual(env.settingsCalls.length, 0);
   assert.strictEqual(env.todoCalls.length, 0);
+  assert.strictEqual(env.bookmarkRootCalls.length, 0);
+  assert.strictEqual(env.bookmarkGridCalls.length, 0);
 });
 
 test('dispatches changes to custom subscriber registered via initialize options', () => {
@@ -182,9 +212,15 @@ test('survives exceptions in individual handlers gracefully', () => {
   const env = createTestEnvironment();
   const subsequentCalls = [];
 
-  // Make Search controller throw
+  // Make Search and Bookmark controllers throw
   env.context.window.HomebaseSearchUiController.handleStorageChange = () => {
     throw new Error('Search handler crash');
+  };
+  env.context.window.HomebaseBookmarkRootController.handleStorageChange = () => {
+    throw new Error('BookmarkRoot handler crash');
+  };
+  env.context.window.HomebaseBookmarkGridController.handleStorageChange = () => {
+    throw new Error('BookmarkGrid handler crash');
   };
 
   env.dispatcher.initialize({
@@ -203,4 +239,105 @@ test('survives exceptions in individual handlers gracefully', () => {
   assert.strictEqual(env.settingsCalls.length, 1);
   assert.strictEqual(env.todoCalls.length, 1);
   assert.strictEqual(subsequentCalls.length, 1);
+});
+
+test('HomebaseBookmarkGridController.handleStorageChange processes metadata updates and triggers patching/fallback', () => {
+  const gridScriptPath = path.join(rootDir, 'src/newtab/bookmarks/bookmark-grid-controller.js');
+  const gridScriptCode = fs.readFileSync(gridScriptPath, 'utf8');
+
+  let renderedNodes = [];
+  const fakeRoot = {
+    id: 'root',
+    children: [
+      { id: 'item1', title: 'Item 1' },
+      { id: 'item2', title: 'Item 2' }
+    ]
+  };
+
+  const context = {
+    console: { log: () => {}, warn: () => {}, error: () => {} },
+    document: {
+      getElementById: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => []
+    },
+    bookmarkTree: [fakeRoot],
+    findBookmarkNodeById: (root, id) => (root && root.id === id ? root : null),
+    renderBookmarkGrid: (node) => { renderedNodes.push(node); }
+  };
+  context.window = context;
+
+  vm.createContext(context);
+  vm.runInContext(gridScriptCode, context);
+
+  context.window.renderBookmarkGrid = (node) => { renderedNodes.push(node); };
+
+  const controller = context.window.HomebaseBookmarkGridController;
+  assert.ok(controller, 'BookmarkGridController must be defined');
+  assert.strictEqual(typeof controller.handleStorageChange, 'function');
+
+  // Set active folder to fakeRoot
+  controller.setCurrentGridFolderNode(fakeRoot);
+
+  // 1. Process folder metadata update
+  controller.handleStorageChange({
+    folderCustomMetadata: {
+      oldValue: {},
+      newValue: { item1: { icon: 'folder-icon' } }
+    }
+  }, 'local');
+
+  assert.deepStrictEqual(context.window.folderMetadata, { item1: { icon: 'folder-icon' } });
+
+  // 2. Process bookmark metadata update
+  controller.handleStorageChange({
+    bookmarkCustomMetadata: {
+      oldValue: {},
+      newValue: { item2: { iconCleared: true } }
+    }
+  }, 'local');
+
+  assert.deepStrictEqual(context.window.bookmarkMetadata, { item2: { iconCleared: true } });
+
+  // Since patchActiveGridMetadataItems returns true when DOM item is not rendered in non-virtual mode,
+  // it falls back to renderBookmarkGrid(activeNode)
+  assert.ok(renderedNodes.length >= 2, 'Fallback renderBookmarkGrid must be called');
+  assert.strictEqual(renderedNodes[0].id, 'root');
+});
+
+test('HomebaseBookmarkRootController.handleStorageChange reloads bookmarks on root id change', () => {
+  const rootScriptPath = path.join(rootDir, 'src/newtab/bookmarks/bookmark-root-controller.js');
+  const rootScriptCode = fs.readFileSync(rootScriptPath, 'utf8');
+
+  let loadBookmarksCalled = 0;
+  const context = {
+    console: { log: () => {}, warn: () => {}, error: () => {} },
+    document: {
+      getElementById: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => []
+    },
+    loadBookmarks: () => { loadBookmarksCalled++; },
+    HOMEBASE_BOOKMARK_ROOT_ID_KEY: 'homebaseBookmarkRootId'
+  };
+  context.window = context;
+
+  vm.createContext(context);
+  vm.runInContext(rootScriptCode, context);
+
+  const controller = context.window.HomebaseBookmarkRootController;
+  assert.ok(controller, 'BookmarkRootController must be defined');
+  assert.strictEqual(typeof controller.handleStorageChange, 'function');
+
+  // Storage change with unrelated key
+  controller.handleStorageChange({ otherKey: { newValue: 'x' } }, 'local');
+  assert.strictEqual(loadBookmarksCalled, 0);
+
+  // Storage change with non-local area
+  controller.handleStorageChange({ homebaseBookmarkRootId: { newValue: 'new-root' } }, 'sync');
+  assert.strictEqual(loadBookmarksCalled, 0);
+
+  // Storage change with root id key
+  controller.handleStorageChange({ homebaseBookmarkRootId: { newValue: 'new-root' } }, 'local');
+  assert.strictEqual(loadBookmarksCalled, 1);
 });

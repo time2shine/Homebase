@@ -1807,36 +1807,11 @@ function handleNewTabStorageChange(changes, area) {
     syncWallpaperStartupState(nextSelection, allowDailyRotation);
   }
 
-  let changedMetadataIds = null;
-
-  if (changes[FOLDER_META_KEY]) {
-    const nextFolderMetadata = changes[FOLDER_META_KEY].newValue || {};
-    changedMetadataIds = getChangedMetadataIds(changes[FOLDER_META_KEY].oldValue, nextFolderMetadata);
-    folderMetadata = nextFolderMetadata;
-  }
-
-  if (changes[BOOKMARK_META_KEY]) {
-    const nextBookmarkMetadata = changes[BOOKMARK_META_KEY].newValue || {};
-    const changedBookmarkIds = getChangedMetadataIds(changes[BOOKMARK_META_KEY].oldValue, nextBookmarkMetadata);
-    changedMetadataIds = changedMetadataIds
-      ? Array.from(new Set([...changedMetadataIds, ...changedBookmarkIds]))
-      : changedBookmarkIds;
-    bookmarkMetadata = nextBookmarkMetadata;
-  }
-
-  if (changedMetadataIds?.length && currentGridFolderNode && bookmarkTree && bookmarkTree[0]) {
-    const activeNode = findBookmarkNodeById(bookmarkTree[0], currentGridFolderNode.id);
-    if (activeNode && patchActiveGridMetadataItems(activeNode, changedMetadataIds)) {
-      renderBookmarkGrid(activeNode);
-    }
-  }
-
   if (changes[LAST_USED_BOOKMARK_FOLDER_KEY]) {
     lastUsedBookmarkFolderId = changes[LAST_USED_BOOKMARK_FOLDER_KEY].newValue || null;
-  }
-
-  if (changes[HOMEBASE_BOOKMARK_ROOT_ID_KEY]) {
-    loadBookmarks();
+    if (typeof window !== 'undefined') {
+      window.lastUsedBookmarkFolderId = lastUsedBookmarkFolderId;
+    }
   }
 }
 

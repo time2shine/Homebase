@@ -109,7 +109,33 @@
       }
     }
 
-    // 4. Custom Subscriber Delegates (e.g. Bookmarks & Wallpaper in new-tab.js)
+    // 4. Bookmark Root Controller
+    const rootController =
+      (typeof window !== 'undefined' && window.HomebaseBookmarkRootController) ||
+      (typeof HomebaseBookmarkRootController !== 'undefined' ? HomebaseBookmarkRootController : null);
+
+    if (rootController && typeof rootController.handleStorageChange === 'function') {
+      try {
+        rootController.handleStorageChange(changes, areaName);
+      } catch (err) {
+        console.warn('[storage-dispatcher] Bookmark root storage handler error:', err);
+      }
+    }
+
+    // 5. Bookmark Grid Controller
+    const gridController =
+      (typeof window !== 'undefined' && window.HomebaseBookmarkGridController) ||
+      (typeof HomebaseBookmarkGridController !== 'undefined' ? HomebaseBookmarkGridController : null);
+
+    if (gridController && typeof gridController.handleStorageChange === 'function') {
+      try {
+        gridController.handleStorageChange(changes, areaName);
+      } catch (err) {
+        console.warn('[storage-dispatcher] Bookmark grid storage handler error:', err);
+      }
+    }
+
+    // 6. Custom Subscriber Delegates (e.g. Wallpaper & Last Used Folder in new-tab.js)
     _subscribers.forEach((listener) => {
       try {
         listener(changes, areaName);

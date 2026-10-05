@@ -701,6 +701,89 @@
     return false;
   }
 
+  /**
+   * Handles storage changes for bookmark and folder metadata.
+   * Updates in-memory metadata maps and patches active grid items (or re-renders if necessary).
+   *
+   * @param {Object} changes - Storage changes dictionary
+   * @param {string} [area] - Storage area (only 'local' processed)
+   */
+  function handleStorageChange(changes, area) {
+    if (area && area !== 'local') return;
+    if (!changes || typeof changes !== 'object') return;
+
+    const folderMetaKey =
+      (typeof FOLDER_META_KEY !== 'undefined' && FOLDER_META_KEY) ||
+      (typeof window !== 'undefined' && window.FOLDER_META_KEY) ||
+      'folderCustomMetadata';
+    const bookmarkMetaKey =
+      (typeof BOOKMARK_META_KEY !== 'undefined' && BOOKMARK_META_KEY) ||
+      (typeof window !== 'undefined' && window.BOOKMARK_META_KEY) ||
+      'bookmarkCustomMetadata';
+
+    let changedMetadataIds = null;
+
+    if (changes[folderMetaKey]) {
+      const nextFolderMetadata = changes[folderMetaKey].newValue || {};
+      changedMetadataIds = getChangedMetadataIds(changes[folderMetaKey].oldValue, nextFolderMetadata);
+      if (typeof window !== 'undefined') {
+        window.folderMetadata = nextFolderMetadata;
+      }
+      try {
+        if (typeof folderMetadata !== 'undefined') {
+          folderMetadata = nextFolderMetadata;
+        }
+      } catch (_) {}
+    }
+
+    if (changes[bookmarkMetaKey]) {
+      const nextBookmarkMetadata = changes[bookmarkMetaKey].newValue || {};
+      const changedBookmarkIds = getChangedMetadataIds(changes[bookmarkMetaKey].oldValue, nextBookmarkMetadata);
+      changedMetadataIds = changedMetadataIds
+        ? Array.from(new Set([...changedMetadataIds, ...changedBookmarkIds]))
+        : changedBookmarkIds;
+      if (typeof window !== 'undefined') {
+        window.bookmarkMetadata = nextBookmarkMetadata;
+      }
+      try {
+        if (typeof bookmarkMetadata !== 'undefined') {
+          bookmarkMetadata = nextBookmarkMetadata;
+        }
+      } catch (_) {}
+    }
+
+    if (changedMetadataIds && changedMetadataIds.length) {
+      const currentFolder = getCurrentGridFolderNode() ||
+        (typeof currentGridFolderNode !== 'undefined' ? currentGridFolderNode : null) ||
+        (typeof window !== 'undefined' ? window.currentGridFolderNode : null);
+
+      const tree =
+        (typeof bookmarkTree !== 'undefined' ? bookmarkTree : null) ||
+        (typeof window !== 'undefined' ? window.bookmarkTree : null);
+
+      if (currentFolder && tree && tree[0]) {
+        const findNode =
+          (typeof findBookmarkNodeById === 'function' ? findBookmarkNodeById : null) ||
+          (typeof window !== 'undefined' && typeof window.findBookmarkNodeById === 'function' ? window.findBookmarkNodeById : null);
+
+        const activeNode = findNode ? findNode(tree[0], currentFolder.id) : null;
+        if (activeNode) {
+          const patchFn =
+            (typeof window !== 'undefined' && typeof window.patchActiveGridMetadataItems === 'function')
+              ? window.patchActiveGridMetadataItems
+              : patchActiveGridMetadataItems;
+          if (patchFn(activeNode, changedMetadataIds)) {
+            const renderFn =
+              (typeof window !== 'undefined' && typeof window.renderBookmarkGrid === 'function')
+                ? window.renderBookmarkGrid
+                : renderBookmarkGrid;
+            renderFn(activeNode);
+          }
+        }
+      }
+    }
+  }
+
   let virtualSortableTimeout = null;
 
   function scheduleSortableReinit(gridEl) {
@@ -1870,6 +1953,7 @@
     updateElementData,
     findRenderedGridItemById,
     patchActiveGridMetadataItems,
+    handleStorageChange,
     updateVirtualGrid,
     initVirtualizer,
     disableVirtualizer,
@@ -1912,6 +1996,7 @@
     window.updateElementData = updateElementData;
     window.findRenderedGridItemById = findRenderedGridItemById;
     window.patchActiveGridMetadataItems = patchActiveGridMetadataItems;
+    window.handleBookmarkGridStorageChange = handleStorageChange;
     window.updateVirtualGrid = updateVirtualGrid;
     window.initVirtualizer = initVirtualizer;
     window.disableVirtualizer = disableVirtualizer;

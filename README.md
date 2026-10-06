@@ -46,7 +46,7 @@ Homebase is built with privacy in mind:
 - Some enabled features make network requests, such as weather, RSS feeds, wallpapers, and optional search suggestions
 - No remote JavaScript execution
 
-See the full [Privacy Policy](./PRIVACY.md) for details.
+See the full [Privacy Policy](./src/PRIVACY.md) for details.
 
 ---
 

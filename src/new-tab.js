@@ -468,6 +468,18 @@ let gridSortable = null;          // Instance for the bookmarks grid
 let tabsSortable = null;          // Instance for the folder tabs
 
 let isGridDragging = false;       // Track active drag to block click navigation
+if (typeof window !== 'undefined') {
+  try {
+    Object.defineProperty(window, 'isGridDragging', {
+      get: () => isGridDragging,
+      set: (val) => { isGridDragging = Boolean(val); },
+      configurable: true,
+      enumerable: true
+    });
+  } catch (_) {
+    window.isGridDragging = isGridDragging;
+  }
+}
 
 let isTabDragging = false;        // Track tab drag state to avoid click misfires
 
@@ -1702,81 +1714,10 @@ function logInitSettled(name, result) {
 
 
 
-  const bookmarksGrid = document.getElementById('bookmarks-grid');
-
-  if (bookmarksGrid) {
-
-    bookmarksGrid.addEventListener('click', (e) => {
-
-      if (e.target.classList.contains('grid-item-rename-input')) return;
-
-      const item = e.target.closest('.bookmark-item');
-
-      if (!item) return;
-
-      if (isGridDragging || item.classList.contains('sortable-chosen')) return;
-
-      if (item.classList.contains('back-button')) {
-        e.preventDefault();
-        const parentId = item.dataset.backTargetId;
-        if (!bookmarkTree || !bookmarkTree[0]) return;
-        const parentNode = findBookmarkNodeById(bookmarkTree[0], parentId);
-        if (parentNode) renderBookmarkGrid(parentNode);
-        return;
-      }
-
-      e.preventDefault();
-
-
-
-      const nodeId = item.dataset.bookmarkId;
-
-      if (!nodeId || !bookmarkTree || !bookmarkTree[0]) return;
-
-      const node = findBookmarkNodeById(bookmarkTree[0], nodeId);
-
-      if (!node) return;
-
-
-
-      if (item.dataset.isFolder === 'true') {
-
-        renderBookmarkGrid(node);
-
-        return;
-
-      }
-
-
-
-      if (item.classList.contains('is-loading')) return;
-
-      item.classList.add('is-loading');
-
-      requestAnimationFrame(() => {
-
-        if (node.url) {
-
-          if (appBookmarkOpenNewTabPreference) {
-
-            browser.tabs.create({ url: node.url, active: true });
-
-            setTimeout(() => item.classList.remove('is-loading'), 500);
-
-          } else {
-
-            window.location.href = node.url;
-
-          }
-
-        }
-
-      });
-
-    });
-
-
-
+  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.setupGridClickDelegation === 'function') {
+    window.HomebaseBookmarkGridController.setupGridClickDelegation();
+  } else if (typeof setupGridClickDelegation === 'function') {
+    setupGridClickDelegation();
   }
 
   setupPasteListener();

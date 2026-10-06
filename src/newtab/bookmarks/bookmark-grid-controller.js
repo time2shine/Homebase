@@ -1086,6 +1086,8 @@
     virtualizerState.gridEl = grid;
     virtualizerState.mainContentEl = virtualizerState.mainContentEl || getMainContentElement();
 
+    setupGridClickDelegation(grid);
+
     grid.innerHTML = '';
 
     // Store the current folder node
@@ -1922,6 +1924,126 @@
     }
   }
 
+  // --- Grid Click Event Delegation ---
+  let isGridClickDelegationBound = false;
+
+  /**
+   * Handles click events delegated on the bookmarks grid.
+   * Manages back-button navigation, folder exploration, and bookmark URL launching.
+   *
+   * @param {MouseEvent} e - The click event
+   */
+  function handleGridClick(e) {
+    if (!e || !e.target) return;
+
+    if (e.target.classList.contains('grid-item-rename-input') || (e.target.closest && e.target.closest('.grid-item-rename-input'))) {
+      return;
+    }
+
+    const item = e.target.closest('.bookmark-item');
+    if (!item) return;
+
+    const isDragging = (typeof window !== 'undefined' && window.isGridDragging) ||
+      (typeof isGridDragging !== 'undefined' && isGridDragging);
+    if (isDragging || item.classList.contains('sortable-chosen')) return;
+
+    const tree =
+      (typeof bookmarkTree !== 'undefined' ? bookmarkTree : null) ||
+      (typeof window !== 'undefined' ? window.bookmarkTree : null);
+
+    const findNode =
+      (typeof findBookmarkNodeById === 'function' ? findBookmarkNodeById : null) ||
+      (typeof window !== 'undefined' && typeof window.findBookmarkNodeById === 'function' ? window.findBookmarkNodeById : null);
+
+    if (item.classList.contains('back-button')) {
+      e.preventDefault();
+      const parentId = item.dataset.backTargetId;
+      if (!tree || !tree[0] || !findNode) return;
+      const parentNode = findNode(tree[0], parentId);
+      if (parentNode) {
+        const renderFn =
+          (typeof window !== 'undefined' && typeof window.renderBookmarkGrid === 'function')
+            ? window.renderBookmarkGrid
+            : renderBookmarkGrid;
+        renderFn(parentNode);
+      }
+      return;
+    }
+
+    e.preventDefault();
+
+    const nodeId = item.dataset.bookmarkId;
+    if (!nodeId || !tree || !tree[0] || !findNode) return;
+
+    const node = findNode(tree[0], nodeId);
+    if (!node) return;
+
+    if (item.dataset.isFolder === 'true') {
+      const renderFn =
+        (typeof window !== 'undefined' && typeof window.renderBookmarkGrid === 'function')
+          ? window.renderBookmarkGrid
+          : renderBookmarkGrid;
+      renderFn(node);
+      return;
+    }
+
+    if (item.classList.contains('is-loading')) return;
+
+    item.classList.add('is-loading');
+
+    const raf = (typeof requestAnimationFrame === 'function')
+      ? requestAnimationFrame
+      : (fn) => setTimeout(fn, 16);
+
+    raf(() => {
+      if (node.url) {
+        const openInNewTab =
+          (typeof appBookmarkOpenNewTabPreference !== 'undefined' ? appBookmarkOpenNewTabPreference : null) ??
+          (typeof window !== 'undefined' && typeof window.appBookmarkOpenNewTabPreference !== 'undefined'
+            ? window.appBookmarkOpenNewTabPreference
+            : false);
+
+        if (openInNewTab) {
+          const browserApi =
+            (typeof browser !== 'undefined' && browser.tabs) ? browser :
+            (typeof window !== 'undefined' && window.browser && window.browser.tabs) ? window.browser :
+            (typeof chrome !== 'undefined' && chrome.tabs) ? chrome :
+            (typeof window !== 'undefined' && window.chrome && window.chrome.tabs) ? window.chrome : null;
+
+          if (browserApi && browserApi.tabs && typeof browserApi.tabs.create === 'function') {
+            browserApi.tabs.create({ url: node.url, active: true });
+          } else if (typeof window !== 'undefined' && typeof window.open === 'function') {
+            window.open(node.url, '_blank');
+          }
+
+          setTimeout(() => item.classList.remove('is-loading'), 500);
+        } else {
+          if (typeof window !== 'undefined' && window.location) {
+            window.location.href = node.url;
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * Idempotently binds click event delegation on the bookmarks grid.
+   *
+   * @param {HTMLElement} [gridEl] - Optional specific grid element
+   */
+  function setupGridClickDelegation(gridEl = null) {
+    const targetGrid = gridEl || getGridElement();
+    if (!targetGrid) return;
+
+    if (targetGrid._hasGridClickDelegation) {
+      return;
+    }
+
+    targetGrid.addEventListener('click', handleGridClick);
+    targetGrid._hasGridClickDelegation = true;
+    isGridClickDelegationBound = true;
+  }
+
   // --- Controller API Surface ---
   const HomebaseBookmarkGridController = {
     METADATA_GRID_PATCH_LIMIT,
@@ -1964,7 +2086,9 @@
     showEditInput,
     showGridItemRenameInput,
     setupBookmarkFolderAddTooltip,
-    createFolderTabs
+    createFolderTabs,
+    handleGridClick,
+    setupGridClickDelegation
   };
 
   // --- Global Window Export ---
@@ -1997,6 +2121,8 @@
     window.findRenderedGridItemById = findRenderedGridItemById;
     window.patchActiveGridMetadataItems = patchActiveGridMetadataItems;
     window.handleBookmarkGridStorageChange = handleStorageChange;
+    window.handleGridClick = handleGridClick;
+    window.setupGridClickDelegation = setupGridClickDelegation;
     window.updateVirtualGrid = updateVirtualGrid;
     window.initVirtualizer = initVirtualizer;
     window.disableVirtualizer = disableVirtualizer;

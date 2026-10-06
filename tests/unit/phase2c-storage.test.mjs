@@ -198,7 +198,7 @@ function createPhase2cEnvironment(options = {}) {
       },
       contextualIdentities: {},
       runtime: {
-        getManifest: () => ({ version: '0.15.0' })
+        getManifest: () => ({ version: '0.16.0' })
       }
     },
     document: {

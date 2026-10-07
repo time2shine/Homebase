@@ -256,9 +256,13 @@ async function ensureQuoteIndexBuilt() {
 
   quoteIndexPromise = (async () => {
 
-    const stored = await browser.storage.local.get([QUOTE_INDEX_KEY]);
-
-    const storedIndex = stored[QUOTE_INDEX_KEY];
+    let storedIndex = null;
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.get) {
+      storedIndex = await HomebaseStorage.get(QUOTE_INDEX_KEY);
+    } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      const stored = await browser.storage.local.get([QUOTE_INDEX_KEY]);
+      storedIndex = stored[QUOTE_INDEX_KEY];
+    }
 
     if (hasUsableStoredQuoteIndex(storedIndex)) {
 
@@ -304,7 +308,11 @@ async function ensureQuoteIndexBuilt() {
 
     quoteIndexCache = newIndex;
 
-    await browser.storage.local.set({ [QUOTE_INDEX_KEY]: newIndex });
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      await HomebaseStorage.set(QUOTE_INDEX_KEY, newIndex);
+    } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      await browser.storage.local.set({ [QUOTE_INDEX_KEY]: newIndex });
+    }
 
     return newIndex;
 
@@ -433,7 +441,12 @@ async function fetchQuote(options = {}) {
 
     }
 
-    const stored = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY]);
+    let stored = {};
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.getMany) {
+      stored = await HomebaseStorage.getMany(['quoteTags', QUOTE_FREQUENCY_KEY]);
+    } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      stored = await browser.storage.local.get(['quoteTags', QUOTE_FREQUENCY_KEY]);
+    }
 
     const freq = stored[QUOTE_FREQUENCY_KEY] || QUOTE_DEFAULT_FREQUENCY;
 
@@ -557,9 +570,14 @@ async function populateQuoteCategories() {
 
   quoteCategoriesList.innerHTML = '<span style="color:#666; padding:10px;">Loading categories...</span>';
 
-  const stored = await browser.storage.local.get(['quoteTags']);
-
-  const savedRaw = Array.isArray(stored.quoteTags) ? stored.quoteTags.filter((t) => typeof t === 'string' && t.trim()) : [];
+  let savedRaw = [];
+  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.get) {
+    const raw = await HomebaseStorage.get('quoteTags');
+    savedRaw = Array.isArray(raw) ? raw.filter((t) => typeof t === 'string' && t.trim()) : [];
+  } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+    const stored = await browser.storage.local.get(['quoteTags']);
+    savedRaw = Array.isArray(stored.quoteTags) ? stored.quoteTags.filter((t) => typeof t === 'string' && t.trim()) : [];
+  }
 
   const savedTags = new Set(savedRaw);
 
@@ -702,9 +720,15 @@ function closeQuoteSettingsModal() {
 
 async function openQuoteSettingsModal(triggerSource) {
   populateQuoteCategories();
-  const data = await browser.storage.local.get(QUOTE_FREQUENCY_KEY);
+  let freq = QUOTE_DEFAULT_FREQUENCY;
+  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.get) {
+    freq = await HomebaseStorage.get(QUOTE_FREQUENCY_KEY, QUOTE_DEFAULT_FREQUENCY);
+  } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+    const data = await browser.storage.local.get(QUOTE_FREQUENCY_KEY);
+    freq = data[QUOTE_FREQUENCY_KEY] || QUOTE_DEFAULT_FREQUENCY;
+  }
   if (quoteFrequencySelect) {
-    quoteFrequencySelect.value = data[QUOTE_FREQUENCY_KEY] || QUOTE_DEFAULT_FREQUENCY;
+    quoteFrequencySelect.value = freq;
   }
   openModalWithAnimation('quote-settings-modal', triggerSource || null, '.dialog-content');
 }
@@ -830,7 +854,11 @@ function setupQuoteWidget() {
 
       const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : QUOTE_DEFAULT_FREQUENCY;
 
-      await browser.storage.local.set({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });
+      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
+        await HomebaseStorage.setMany({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });
+      } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+        await browser.storage.local.set({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });
+      }
 
       closeQuoteSettingsModal();
 
@@ -858,12 +886,18 @@ function setQuotePreference(show = true, options = {}) {
     // Ignore; instant mirror is best-effort only
   }
 
-  if (options.persist !== false && browser && browser.storage && browser.storage.local) {
-    browser.storage.local
-      .set({ [APP_SHOW_QUOTE_KEY]: shouldShow })
-      .catch((err) => {
+  if (options.persist !== false) {
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set(APP_SHOW_QUOTE_KEY, shouldShow).catch((err) => {
         console.warn('Failed to save quote visibility preference', err);
       });
+    } else if (browser && browser.storage && browser.storage.local) {
+      browser.storage.local
+        .set({ [APP_SHOW_QUOTE_KEY]: shouldShow })
+        .catch((err) => {
+          console.warn('Failed to save quote visibility preference', err);
+        });
+    }
   }
 
   if (options.applyVisibility !== false) {

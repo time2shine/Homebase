@@ -150,6 +150,15 @@ function updateTodoCache() {
 }
 
 function persistTodoState() {
+  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
+    HomebaseStorage.setMany({
+      [TODO_ITEMS_KEY]: todoItems,
+      [TODO_HIDE_DONE_KEY]: todoHideDone
+    }).catch((err) => {
+      console.warn('Failed to save todo items', err);
+    });
+    return;
+  }
   if (!browser || !browser.storage || !browser.storage.local) return;
   browser.storage.local
     .set({ [TODO_ITEMS_KEY]: todoItems, [TODO_HIDE_DONE_KEY]: todoHideDone })
@@ -167,6 +176,17 @@ function commitTodoState(options = {}) {
 }
 
 async function loadTodoState() {
+  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.getMany) {
+    try {
+      const stored = await HomebaseStorage.getMany([TODO_ITEMS_KEY, TODO_HIDE_DONE_KEY]);
+      todoItems = normalizeTodoItems(stored[TODO_ITEMS_KEY]);
+      todoHideDone = stored[TODO_HIDE_DONE_KEY] === true;
+    } catch (err) {
+      console.warn('Failed to load todo items', err);
+    }
+    commitTodoState({ persist: false });
+    return;
+  }
   if (!browser || !browser.storage || !browser.storage.local) {
     commitTodoState({ persist: false });
     return;
@@ -293,12 +313,18 @@ function setTodoPreference(show = true, options = {}) {
     // Ignore; instant mirror is best-effort only
   }
 
-  if (options.persist !== false && browser && browser.storage && browser.storage.local) {
-    browser.storage.local
-      .set({ [APP_SHOW_TODO_KEY]: shouldShow })
-      .catch((err) => {
+  if (options.persist !== false) {
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set(APP_SHOW_TODO_KEY, shouldShow).catch((err) => {
         console.warn('Failed to save todo visibility preference', err);
       });
+    } else if (browser && browser.storage && browser.storage.local) {
+      browser.storage.local
+        .set({ [APP_SHOW_TODO_KEY]: shouldShow })
+        .catch((err) => {
+          console.warn('Failed to save todo visibility preference', err);
+        });
+    }
   }
 
   if (options.applyVisibility !== false) {

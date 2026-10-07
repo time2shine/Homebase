@@ -1,8 +1,9 @@
 {
   "name": "homebase-extension",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "private": true,
   "scripts": {
+    "test": "node scripts/test.mjs",
     "build": "node scripts/build.mjs",
     "build:chrome": "node scripts/build.mjs chrome",
     "build:firefox": "node scripts/build.mjs firefox",

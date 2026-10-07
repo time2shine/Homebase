@@ -147,28 +147,48 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.15.0',
-  date: '2026-09-26',
+  version: '0.16.0',
+  date: '2026-10-07',
   items: [
     {
       type: 'NEW',
-      title: 'Wallpaper backup',
-      desc: 'Settings backup and export now preserves your custom uploaded wallpaper collection across profiles.'
+      title: 'Storage architecture & dispatcher',
+      desc: 'Modular storage facade and decoupled event dispatcher power responsive dashboard updates.'
+    },
+    {
+      type: 'NEW',
+      title: 'Storage diagnostics & health HUD',
+      desc: 'Interactive storage health panel in Settings with real-time integrity monitoring and diagnostic exports.'
+    },
+    {
+      type: 'NEW',
+      title: 'Transactional backup system',
+      desc: 'Settings import now includes atomic rollback safety, schema migrations, and custom wallpaper protection.'
     },
     {
       type: 'IMPROVED',
-      title: 'Settings styling',
-      desc: 'Settings modals now feature smoother search engine reordering and refined responsive layout.'
+      title: 'Bookmark subsystem modularization',
+      desc: 'Bookmark grid, root controllers, tree traversal, and folder picker operate through focused modular services.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Search & settings separation',
+      desc: 'Search, settings preferences, wallpaper lifecycle, and widgets separated into dedicated first-party controllers.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Startup & test infrastructure',
+      desc: 'Startup architecture streamlined and validated by an automated test suite with 367 passing tests.'
     },
     {
       type: 'FIX',
-      title: 'Import protection',
-      desc: 'Importing settings backups now protects your active custom wallpapers and tasks from accidental deletion.'
+      title: 'Declaration safety & resilience',
+      desc: 'Static invariant checks prevent duplicate global declarations, and weather widget network handling is hardened.'
     },
     {
-      type: 'IMPROVED',
-      title: 'Module architecture',
-      desc: 'Core settings and gallery systems load from streamlined, verified first-party modules.'
+      type: 'FIX',
+      title: 'Bookmark synchronization & UI',
+      desc: 'Resolved bookmark rename desynchronization between grid items and edit dialog state.'
     }
   ]
 };

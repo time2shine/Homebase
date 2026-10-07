@@ -85,7 +85,11 @@ function setupAnimationSettings() {
   if (saveBtn) {
     saveBtn.addEventListener('click', async () => {
       appGridAnimationPreference = selectedKey;
-      await browser.storage.local.set({ [APP_GRID_ANIMATION_KEY]: selectedKey });
+      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+        await HomebaseStorage.set(APP_GRID_ANIMATION_KEY, selectedKey);
+      } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+        await browser.storage.local.set({ [APP_GRID_ANIMATION_KEY]: selectedKey });
+      }
       
       // Update actual grid immediately if visible
       if (currentGridFolderNode) {
@@ -176,7 +180,11 @@ function setupGlassSettings() {
   if (saveBtn) {
     saveBtn.addEventListener('click', async () => {
       appGlassStylePreference = selectedId;
-      await browser.storage.local.set({ [APP_GLASS_STYLE_KEY]: selectedId });
+      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+        await HomebaseStorage.set(APP_GLASS_STYLE_KEY, selectedId);
+      } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+        await browser.storage.local.set({ [APP_GLASS_STYLE_KEY]: selectedId });
+      }
       closeModalWithAnimation('glass-settings-modal', '.dialog-content');
     });
   }

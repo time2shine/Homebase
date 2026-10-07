@@ -1,5 +1,35 @@
 const PERF_OVERLAY_CACHE_THROTTLE_MS = 5000;
 const PERF_HEALTH_SESSION_KEY = 'homebasePerfHealthSession';
+const PERF_OVERLAY_MINIMIZED_SESSION_KEY = 'homebasePerfOverlayMinimized';
+
+/**
+ * Returns whether the performance overlay HUD is minimized into a status pill.
+ * Strictly checks sessionStorage only; never accesses browser.storage.local/sync.
+ *
+ * @returns {boolean}
+ */
+function isPerfOverlayMinimized() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      return sessionStorage.getItem(PERF_OVERLAY_MINIMIZED_SESSION_KEY) === 'true';
+    }
+  } catch (_) {}
+  return false;
+}
+
+/**
+ * Persists the minimized/expanded state of the performance overlay HUD in sessionStorage.
+ * Strictly forbidden to use browser.storage.local or browser.storage.sync.
+ *
+ * @param {boolean} minimized
+ */
+function setPerfOverlayMinimized(minimized) {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(PERF_OVERLAY_MINIMIZED_SESSION_KEY, minimized ? 'true' : 'false');
+    }
+  } catch (_) {}
+}
 
 const SCRIPT_TIMING_TARGETS = [
   { label: 'script:instant-load', file: 'instant_load.js' },
@@ -134,6 +164,73 @@ function getPerfTimestamp() {
   }
 }
 
+/**
+ * In-memory circular buffer for performance diagnostic metrics.
+ * Capped at 20 records.
+ */
+const PERF_METRIC_BUFFER_MAX_SIZE = 20;
+const perfMetricBuffer = [];
+
+/**
+ * Records a performance metric into the diagnostic buffer.
+ * Capped at 20 entries.
+ * Stores strictly { name, durationMs }.
+ * Never stores page data, user data, or network information.
+ *
+ * @param {string|Object} nameOrObj
+ * @param {number} [durationMs]
+ * @returns {Object|null}
+ */
+function recordPerformanceMetric(nameOrObj, durationMs) {
+  try {
+    let name = 'unknown';
+    let duration = 0;
+
+    if (nameOrObj && typeof nameOrObj === 'object' && !Array.isArray(nameOrObj)) {
+      name = typeof nameOrObj.name === 'string' ? nameOrObj.name.slice(0, 100) : 'unknown';
+      duration = typeof nameOrObj.durationMs === 'number' && Number.isFinite(nameOrObj.durationMs)
+        ? Math.max(0, Math.round(nameOrObj.durationMs))
+        : 0;
+    } else {
+      name = typeof nameOrObj === 'string' ? nameOrObj.slice(0, 100) : 'unknown';
+      duration = typeof durationMs === 'number' && Number.isFinite(durationMs)
+        ? Math.max(0, Math.round(durationMs))
+        : 0;
+    }
+
+    const metric = {
+      name,
+      durationMs: duration
+    };
+
+    perfMetricBuffer.push(metric);
+
+    if (perfMetricBuffer.length > PERF_METRIC_BUFFER_MAX_SIZE) {
+      perfMetricBuffer.shift();
+    }
+
+    return metric;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Returns a copy of the recorded performance metrics buffer.
+ *
+ * @returns {Array<Object>}
+ */
+function getPerformanceMetrics() {
+  return [...perfMetricBuffer];
+}
+
+/**
+ * Clears the performance metrics buffer.
+ */
+function clearPerformanceMetrics() {
+  perfMetricBuffer.length = 0;
+}
+
 function recordRawPerfTiming(label, ms) {
   if (!Array.isArray(perfState.rawTimings)) {
     perfState.rawTimings = [];
@@ -148,6 +245,12 @@ function recordRawPerfTiming(label, ms) {
   if (perfState.rawTimings.length > 80) {
     perfState.rawTimings.shift();
   }
+
+  try {
+    if (typeof label === 'string' && typeof ms === 'number' && Number.isFinite(ms)) {
+      recordPerformanceMetric(label, ms);
+    }
+  } catch (_) {}
 }
 
 function recordIdleTaskPerf(name, status, ms = null) {
@@ -165,6 +268,12 @@ function recordIdleTaskPerf(name, status, ms = null) {
   if (perfState.idleTasks.length > 120) {
     perfState.idleTasks.shift();
   }
+
+  try {
+    if (typeof name === 'string' && typeof ms === 'number' && Number.isFinite(ms)) {
+      recordPerformanceMetric(`idle:${name}`, ms);
+    }
+  } catch (_) {}
 }
 
 function recordObjectUrlCleanup(details) {
@@ -188,6 +297,12 @@ function recordWidgetPerfTiming(key, ms, status = 'done') {
   perfState.widgets[key].ms =
     typeof ms === 'number' && Number.isFinite(ms) ? ms : null;
   perfState.widgets[key].status = status || 'done';
+
+  try {
+    if (typeof key === 'string' && typeof ms === 'number' && Number.isFinite(ms)) {
+      recordPerformanceMetric(`widget:${key}`, ms);
+    }
+  } catch (_) {}
 
   if (perfState.overlayEnabled) {
     updatePerfOverlay(false);
@@ -511,6 +626,10 @@ function recordStartupPerfMeasureRow(name, ms, startMs = null) {
 
 function recordBookmarkPerfTiming(label, ms) {
   if (typeof ms !== 'number' || !Number.isFinite(ms)) return;
+
+  try {
+    recordPerformanceMetric(`bookmark:${label}`, ms);
+  } catch (_) {}
 
   try {
     switch (label) {
@@ -941,6 +1060,24 @@ function ensurePerfOverlayElement() {
     gap: 8px;
   `;
 
+  const pillEl = document.createElement('div');
+  pillEl.dataset.role = 'perf-overlay-pill';
+  pillEl.style.cssText = `
+    display: none;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    user-select: none;
+    line-height: 1.4;
+  `;
+  pillEl.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setPerfOverlayMinimized(false);
+    updatePerfOverlay(false);
+  });
+
   const textEl = document.createElement('div');
   textEl.dataset.role = 'perf-overlay-text';
   textEl.style.cssText = `
@@ -950,12 +1087,19 @@ function ensurePerfOverlayElement() {
     word-break: break-word;
   `;
 
+  const actionsRow = document.createElement('div');
+  actionsRow.dataset.role = 'perf-overlay-actions';
+  actionsRow.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  `;
+
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
   copyBtn.dataset.role = 'perf-copy-report';
   copyBtn.textContent = 'Copy report';
   copyBtn.style.cssText = `
-    align-self: flex-start;
     border: 1px solid rgba(255,255,255,0.28);
     border-radius: 6px;
     background: rgba(255,255,255,0.12);
@@ -973,8 +1117,36 @@ function ensurePerfOverlayElement() {
     copyFullPerfReport();
   });
 
+  const minimizeBtn = document.createElement('button');
+  minimizeBtn.type = 'button';
+  minimizeBtn.dataset.role = 'perf-toggle-minimize';
+  minimizeBtn.textContent = 'Minimize';
+  minimizeBtn.title = 'Minimize performance overlay to status pill';
+  minimizeBtn.style.cssText = `
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.2;
+    padding: 4px 7px;
+    cursor: pointer;
+    flex-shrink: 0;
+  `;
+  minimizeBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setPerfOverlayMinimized(true);
+    updatePerfOverlay(false);
+  });
+
+  actionsRow.appendChild(copyBtn);
+  actionsRow.appendChild(minimizeBtn);
+
+  el.appendChild(pillEl);
   el.appendChild(textEl);
-  el.appendChild(copyBtn);
+  el.appendChild(actionsRow);
 
   perfOverlayEl = el;
 
@@ -1032,6 +1204,81 @@ function updatePerfOverlayDockOffset(el) {
   el.style.setProperty('--hb-perf-overlay-right-offset', `${rightOffset}px`);
 }
 
+let cachedMigrationCount = null;
+
+function checkMigrationCountAsync() {
+  if (cachedMigrationCount !== null) return;
+  if (typeof window !== 'undefined' && typeof window.getMigrationHistory === 'function') {
+    try {
+      const res = window.getMigrationHistory();
+      if (res && typeof res.then === 'function') {
+        res.then((history) => {
+          cachedMigrationCount = Array.isArray(history) ? history.length : 0;
+          if (perfState.overlayEnabled) updatePerfOverlay(false);
+        }).catch(() => {
+          cachedMigrationCount = 0;
+        });
+      }
+    } catch (_) {
+      cachedMigrationCount = 0;
+    }
+  }
+}
+
+/**
+ * Formats storage health diagnostic lines for the monospace overlay.
+ * Strictly reads in-memory cached structures or fallback defaults.
+ * Never executes browser.storage.local.get().
+ *
+ * @param {Object|null} [audit]
+ * @param {number} [anomaliesCount=0]
+ * @param {number|null} [migrationCount=null]
+ * @returns {Array<string>}
+ */
+function formatOverlayStorageHealthRows(audit = null, anomaliesCount = 0, migrationCount = null) {
+  const status = audit?.status || (anomaliesCount > 0 ? 'DEGRADED' : 'HEALTHY');
+  const storedVer = audit?.schemaVersion?.stored ?? (typeof window !== 'undefined' && window.CURRENT_SCHEMA_VERSION ? window.CURRENT_SCHEMA_VERSION : 1);
+  const schemaStatus = audit?.schemaVersion?.status ?? 'ALIGNED';
+  const total = audit?.counts?.total ?? 74;
+  const valid = audit?.counts?.valid ?? 74;
+  const corrupted = audit?.counts?.corrupted ?? 0;
+
+  const rows = [
+    'Storage Health',
+    `Status: ${status}`,
+    `Schema: v${storedVer} (${schemaStatus})`,
+    `Keys: ${valid}/${total} valid (${corrupted} corrupted)`,
+    `Anomalies: ${anomaliesCount} in buffer`
+  ];
+
+  if (typeof migrationCount === 'number') {
+    rows.push(`Migrations: ${migrationCount} recorded`);
+  }
+
+  return rows;
+}
+
+/**
+ * Formats recent performance metrics for the monospace overlay.
+ * Reads from the in-memory circular buffer.
+ *
+ * @param {Array<Object>} [metrics=[]]
+ * @returns {Array<string>}
+ */
+function formatOverlayRecentMetricsRows(metrics = []) {
+  const rows = ['Recent Metrics'];
+  if (Array.isArray(metrics) && metrics.length > 0) {
+    metrics.slice(-3).forEach((m) => {
+      const name = m && typeof m.name === 'string' ? m.name : 'metric';
+      const ms = m && typeof m.durationMs === 'number' ? `${Math.round(m.durationMs)} ms` : '—';
+      rows.push(`- ${name}: ${ms}`);
+    });
+  } else {
+    rows.push('- None recorded');
+  }
+  return rows;
+}
+
 function updatePerfOverlay(forceCacheRefresh = false) {
 
   if (!perfState.overlayEnabled) return;
@@ -1071,6 +1318,26 @@ function updatePerfOverlay(forceCacheRefresh = false) {
     `Storage: ${formatPerfMs(perfState.startup.parallelStorageLoadsMs)}`,
     `Performance: ${appPerformanceModePreference ? 'On' : 'Off'}`
   ];
+
+  checkMigrationCountAsync();
+
+  const cachedAudit = (typeof window !== 'undefined' && window.HomebaseDiagnosticUI && typeof window.HomebaseDiagnosticUI.getCachedAudit === 'function')
+    ? window.HomebaseDiagnosticUI.getCachedAudit()
+    : null;
+
+  const validationAnomaliesCount = (typeof window !== 'undefined' && window.HomebaseDiagnostics && typeof window.HomebaseDiagnostics.getValidationAnomalies === 'function')
+    ? window.HomebaseDiagnostics.getValidationAnomalies().length
+    : 0;
+
+  const storageHealthLines = formatOverlayStorageHealthRows(
+    cachedAudit,
+    validationAnomaliesCount,
+    cachedMigrationCount
+  );
+
+  const recentMetricsLines = formatOverlayRecentMetricsRows(
+    getPerformanceMetrics()
+  );
 
   const startupLines = [
     'Startup Timeline',
@@ -1134,6 +1401,10 @@ function updatePerfOverlay(forceCacheRefresh = false) {
     '',
     ...summaryLines,
     '',
+    ...storageHealthLines,
+    '',
+    ...recentMetricsLines,
+    '',
     ...startupLines,
     '',
     ...bookmarkLines,
@@ -1147,12 +1418,31 @@ function updatePerfOverlay(forceCacheRefresh = false) {
   ].join('\n');
 
   const textEl = el.querySelector('[data-role="perf-overlay-text"]');
-  if (textEl) {
-    textEl.textContent = overlayText;
-  } else {
-    el.textContent = overlayText;
-  }
+  const pillEl = el.querySelector('[data-role="perf-overlay-pill"]');
+  const actionsRow = el.querySelector('[data-role="perf-overlay-actions"]');
+  const isMinimized = isPerfOverlayMinimized();
 
+  if (isMinimized) {
+    if (pillEl) {
+      pillEl.style.display = 'block';
+      const statusIcon = cachedAudit?.status === 'CORRUPTED' ? '🔴' : (cachedAudit?.status === 'DEGRADED' || validationAnomaliesCount > 0 ? '🟡' : '🟢');
+      const readyText = perfState.startup.readyClassMs != null ? `${Math.round(perfState.startup.readyClassMs)}ms` : 'Active';
+      pillEl.textContent = `${statusIcon} HB Perf: ${readyText} | Storage: ${cachedAudit?.status || 'OK'} (Click to expand)`;
+    }
+    if (textEl) textEl.style.display = 'none';
+    if (actionsRow) actionsRow.style.display = 'none';
+    el.style.padding = '6px 12px';
+  } else {
+    if (pillEl) pillEl.style.display = 'none';
+    if (textEl) {
+      textEl.style.display = 'block';
+      textEl.textContent = overlayText;
+    } else {
+      el.textContent = overlayText;
+    }
+    if (actionsRow) actionsRow.style.display = 'flex';
+    el.style.padding = '10px 12px';
+  }
 }
 
 function setPerfOverlayEnabled(enabled) {
@@ -1234,6 +1524,55 @@ function setPerfOverlayEnabled(enabled) {
 
   }
 
+}
+
+// Register performance diagnostics and anomaly adapter
+if (typeof window !== 'undefined') {
+  window.HomebaseDiagnostics = window.HomebaseDiagnostics || {};
+
+  // If storage-diagnostics.js is loaded, wrap recordValidationAnomaly to accept { key, action, category }
+  const existingRecordAnomaly = window.HomebaseDiagnostics.recordValidationAnomaly;
+  if (typeof existingRecordAnomaly === 'function') {
+    window.HomebaseDiagnostics.recordValidationAnomaly = function(keyOrRecord, action, category) {
+      if (keyOrRecord && typeof keyOrRecord === 'object' && !Array.isArray(keyOrRecord)) {
+        return existingRecordAnomaly(
+          keyOrRecord.key || 'unknown',
+          keyOrRecord.action || keyOrRecord.category || 'unspecified',
+          keyOrRecord.category || keyOrRecord.detail || null
+        );
+      }
+      return existingRecordAnomaly(keyOrRecord, action, category);
+    };
+    window.recordValidationAnomaly = window.HomebaseDiagnostics.recordValidationAnomaly;
+  }
+
+  window.HomebaseDiagnostics.recordPerformanceMetric = recordPerformanceMetric;
+  window.HomebaseDiagnostics.getPerformanceMetrics = getPerformanceMetrics;
+  window.HomebaseDiagnostics.clearPerformanceMetrics = clearPerformanceMetrics;
+  window.HomebaseDiagnostics.formatOverlayStorageHealthRows = formatOverlayStorageHealthRows;
+  window.HomebaseDiagnostics.formatOverlayRecentMetricsRows = formatOverlayRecentMetricsRows;
+  window.HomebaseDiagnostics.isPerfOverlayMinimized = isPerfOverlayMinimized;
+  window.HomebaseDiagnostics.setPerfOverlayMinimized = setPerfOverlayMinimized;
+  window.HomebaseDiagnostics.PERF_OVERLAY_MINIMIZED_SESSION_KEY = PERF_OVERLAY_MINIMIZED_SESSION_KEY;
+  window.recordPerformanceMetric = recordPerformanceMetric;
+  window.getPerformanceMetrics = getPerformanceMetrics;
+  window.formatOverlayStorageHealthRows = formatOverlayStorageHealthRows;
+  window.formatOverlayRecentMetricsRows = formatOverlayRecentMetricsRows;
+  window.isPerfOverlayMinimized = isPerfOverlayMinimized;
+  window.setPerfOverlayMinimized = setPerfOverlayMinimized;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    recordPerformanceMetric,
+    getPerformanceMetrics,
+    clearPerformanceMetrics,
+    formatOverlayStorageHealthRows,
+    formatOverlayRecentMetricsRows,
+    isPerfOverlayMinimized,
+    setPerfOverlayMinimized,
+    PERF_OVERLAY_MINIMIZED_SESSION_KEY
+  };
 }
 
 

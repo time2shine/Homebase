@@ -8,6 +8,15 @@ let cachedFolderIndex = null;
 let cachedFolderIndexAt = 0;
 const FOLDER_INDEX_TTL_MS = 30_000;
 
+const folderPickerModal = document.getElementById('folder-picker-modal');
+const folderPickerPanel = document.getElementById('folder-picker-panel');
+const folderPickerSearchInput = document.getElementById('folder-picker-search');
+const folderPickerList = document.getElementById('folder-picker-list');
+const folderPickerBreadcrumb = document.getElementById('folder-picker-breadcrumb');
+const folderPickerConfirmBtn = document.getElementById('folder-picker-confirm');
+const folderPickerCancelBtn = document.getElementById('folder-picker-cancel');
+const folderPickerError = document.getElementById('folder-picker-error');
+
 function buildFolderIndexFromTree(tree) {
   const rootNode = Array.isArray(tree) ? tree[0] : tree;
   if (!rootNode || !rootNode.children) return [];

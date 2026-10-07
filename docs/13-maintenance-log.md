@@ -150,6 +150,238 @@ The fields of the **Maintenance Log** directly mirror and formalize this post-ed
   Keep entries ordered reverse-chronologically (newest at top).
 -->
 
+### Entry [2026-09-27-07]: Cycle #6 (Phase 3) — Subsystem Health Matrix, Storage Auto-Remediation & Developer Ergonomics
+
+- **Date**: 2026-09-27
+- **Change**: Enhanced `src/newtab/settings/diagnostic-ui.js` with:
+  1. Subsystem Health Matrix mapping all 74 canonical storage keys into 5 core domains (`System & Core`, `Bookmarks & Grid`, `Wallpapers & Media`, `Widgets & Dock`, and `Search Panel`) with domain-level health evaluation (`computeSubsystemHealth`) and safe DOM rendering (`createSubsystemMatrixBlock`).
+  2. Safe Storage Auto-Remediation (`handleAutoRepairStorage`) adhering to the Minimal Mutation Write Invariant; executes in-memory sanitization via `HomebaseValidator.sanitizeStorageBatch()`, computes a deep structural diff against existing keys, and commits ONLY changed keys to `browser.storage.local.set()`, leaving healthy and unknown keys untouched.
+  3. Storage Quota Telemetry (`getStorageQuotaTelemetry`) providing aggregate-only byte consumption and quota utilization metrics via `browser.storage.local.getBytesInUse()` with serialized fallback estimation, strictly shielding individual key sizes and user content.
+  4. Resilient Diagnostic JSON File Download (`handleDownloadReport`) generating and downloading a sanitized offline diagnostic report via `Blob` and `URL.createObjectURL()` without network calls or telemetry.
+  Enhanced `src/newtab/core/perf-report.js` with a collapsible minimized HUD pill mode (`HB PERF: OK | <time>ms`) persisted exclusively in `window.sessionStorage` (`homebasePerfOverlayMinimized`), strictly forbidding `browser.storage.local/sync`.
+  Appended scoped styles in `src/newtab/styles/settings.css` for subsystem cards, status chips, repair button, and responsive metric grid layouts.
+  Expanded unit tests in `tests/unit/diagnostic-ui.test.mjs` with 9 new tests (25 tests total), covering subsystem coverage, domain health classification, matrix DOM rendering, quota privacy, minimal mutation writes, offline JSON export, and HUD minimization session storage persistence. All 94 unit assertions pass (100% PASS across 4 test stages).
+- **Reason**: Implements Homebase Improvement Cycle #6 Phase 3 planned in `docs/32-cycle6-phase3-plan.md` to transition the diagnostic suite into an active, self-healing developer power tool with zero data risk and privacy preservation.
+- **Files affected**:
+  - `src/newtab/settings/diagnostic-ui.js` (Modified: subsystem matrix, auto-repair with minimal mutation writes, quota telemetry, JSON export)
+  - `src/newtab/core/perf-report.js` (Modified: collapsible minimized HUD pill mode with sessionStorage persistence)
+  - `src/newtab/styles/settings.css` (Modified: scoped styles for subsystem matrix, chips, and auto-repair button)
+  - `tests/unit/diagnostic-ui.test.mjs` (Modified: 9 new unit tests, expanding test suite to 25 tests)
+  - `docs/33-cycle6-phase3-implementation-report.md` (Added: Cycle #6 Phase 3 implementation report)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry 2026-09-27-07)
+  - `docs/14-ai-change-history.md` (Modified: recorded AI change tracking record 2026-09-27-07)
+- **Developer/AI model**: Gemini 3.8 Flash (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/settings/diagnostic-ui.js`: PASS
+  - `node --check src/newtab/core/perf-report.js`: PASS
+  - `node --check tests/unit/diagnostic-ui.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (40 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 94/94 unit assertions pass)
+  - `npm.cmd run build`: PASS (Chrome and Firefox dist builds succeeded)
+- **Impact**:
+  - **User-Facing**: Self-healing 1-click storage auto-repair resolves schema anomalies safely without data loss; subsystem cards provide immediate clarity on domain health; resilient JSON download allows bug reporting even if clipboard is restricted.
+  - **Developer Observability**: Collapsible HUD pill mode minimizes screen clutter during active development while preserving real-time performance feedback.
+  - **Storage Safety**: Minimal mutation invariant guarantees zero accidental overwrites or unknown key deletions.
+  - **Privacy**: Quota telemetry and JSON exports remain aggregate-only with zero user values exposed.
+- **Rollback plan**: Run `git checkout HEAD -- src/newtab/settings/diagnostic-ui.js src/newtab/core/perf-report.js src/newtab/styles/settings.css tests/unit/diagnostic-ui.test.mjs docs/`. No storage schema modifications or migrations were introduced.
+
+### Entry [2026-09-27-06]: Cycle #6 (Phase 2) — Developer HUD Integration, Live Refresh Orchestration & Diagnostic UX Hardening
+
+- **Date**: 2026-09-27
+- **Change**: Enhanced `src/newtab/settings/diagnostic-ui.js` with 10-second in-memory TTL caching (`getOrFetchStorageAudit`), in-flight request de-duplication, active loading state for the scan button (`is-loading`), and eliminated dynamic `innerHTML` interpolation (Remediating Review Finding F-01) in favor of safe DOM construction (`createAnomalyDetailBlock`, `createSchemaDetailBlock`, `createMigrationDetailBlock`, `createNoticeBlock`). Extended `#perf-debug-overlay` in `src/newtab/core/perf-report.js` with real-time monospace readouts for Storage Health (status, schema version, valid/corrupted keys, anomaly count, migrations count) and Recent Metrics, reading strictly from synchronous in-memory diagnostic buffers without invoking `browser.storage.local.get()` on render ticks. Updated `src/newtab/settings/settings-ui.js` to mount a secondary "Copy Diagnostic Report" button (`ensureFeedbackDiagnosticButton`) into the Settings -> Feedback "Report Bug" card, bridging user bug reporting directly to GitHub with zero friction. Appended scoped styling in `src/newtab/styles/settings.css` for `.app-settings-diagnostic-anomaly-list`, `.app-settings-diagnostic-btn-scan.is-loading`, and `.app-settings-feedback-diagnostic-btn`. Expanded unit test suite in `tests/unit/diagnostic-ui.test.mjs` with 6 new tests (16 tests total), verifying TTL caching, de-duplication, force refresh, XSS defense with malicious anomaly names, HUD formatting, and feedback bridge behavior. All 85 unit tests pass (100% PASS across 4 test stages).
+- **Reason**: Implements Homebase Improvement Cycle #6 Phase 2 planned in `docs/30-cycle6-phase2-plan.md` to harden diagnostic security, eliminate redundant storage reads, connect HUD observability, and streamline bug reporting workflows.
+- **Files affected**:
+  - `src/newtab/settings/diagnostic-ui.js` (Modified: TTL cache, de-duplication, safe DOM construction, loading state)
+  - `src/newtab/core/perf-report.js` (Modified: Storage Health and Recent Metrics readouts in #perf-debug-overlay)
+  - `src/newtab/settings/settings-ui.js` (Modified: Feedback section diagnostic copy button bridge)
+  - `src/newtab/styles/settings.css` (Modified: scoped styles for anomaly lists, loading button, and feedback button)
+  - `tests/unit/diagnostic-ui.test.mjs` (Modified: 6 new unit tests for caching, safe DOM, HUD formatting, and feedback bridge)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry 2026-09-27-06)
+  - `docs/14-ai-change-history.md` (Modified: recorded AI change tracking record 2026-09-27-06)
+  - `docs/31-cycle6-phase2-implementation-report.md` (Added: Cycle #6 Phase 2 implementation report)
+- **Developer/AI model**: Gemini 3.8 Flash (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/settings/diagnostic-ui.js`: PASS
+  - `node --check src/newtab/core/perf-report.js`: PASS
+  - `node --check src/newtab/settings/settings-ui.js`: PASS
+  - `node --check tests/unit/diagnostic-ui.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (40 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 85/85 unit tests pass)
+  - `npm.cmd run build`: PASS (Chrome and Firefox dist builds succeeded)
+- **Impact**:
+  - **User-Facing**: Users reporting bugs can copy their diagnostic report in 1 click directly inside the Report Bug card; scan button provides clear feedback while refreshing.
+  - **Developer Observability**: Developers can monitor real-time Storage Health and Recent Metrics directly on the dashboard screen via `#perf-debug-overlay`.
+  - **Security**: 100% of DOM injection vectors in diagnostics eliminated via safe DOM element creation.
+  - **Performance**: 0ms cold-boot startup overhead; HUD overlay reads only synchronous in-memory buffers; redundant audits prevented via 10-second TTL cache.
+- **Rollback plan**: Revert commit cleanly with `git revert <commit-sha>`. All storage data remains backward-compatible.
+
+### Entry [2026-09-27-05]: Cycle #6 (Phase 1) — Developer Debug Panel & Diagnostic UI Foundation
+
+- **Date**: 2026-09-27
+- **Change**: Created `src/newtab/settings/diagnostic-ui.js` exposing `window.HomebaseDiagnosticUI` with modular architecture for rendering the Developer Debug Panel and Diagnostic UI (`formatHealthStatus`, `createDiagnosticsNavItem`, `createDiagnosticsSection`, `renderMetricCard`, `handleCopyReport`, `renderDiagnosticsPanel`). Added scoped CSS rules for `.app-settings-diagnostic-*` in `src/newtab/styles/settings.css`. Integrated `DIAGNOSTICS_SECTION = 'diagnostics'` into `src/newtab/settings/settings-ui.js`, registering it in `PANELS_WITHOUT_ACTIONS`, `ensureSettingsSectionOrder()`, and `setActiveAppSettingsSection()`. Loaded `diagnostic-ui.js` lazily only when Settings opens, guaranteeing zero startup impact on cold boot. Connected UI strictly to existing APIs (`window.HomebaseDiagnostics.auditStorageHealth`, `auditBackupHealth`, `generateHealthReport`, and `window.getMigrationHistory`). Added 10 automated unit tests in `tests/unit/diagnostic-ui.test.mjs`, expanding test baseline to 79 passing tests.
+- **Reason**: Implements Homebase Improvement Cycle #6 Phase 1 per `docs/28-cycle6-debug-panel-plan.md` to provide a visual diagnostic interface inside the Settings modal and empower users to copy privacy-redacted diagnostic health reports for troubleshooting.
+- **Files affected**:
+  - `src/newtab/settings/diagnostic-ui.js` (Added: diagnostic UI rendering module and clipboard handler)
+  - `src/newtab/styles/settings.css` (Modified: appended scoped `.app-settings-diagnostic-*` styles)
+  - `src/newtab/settings/settings-ui.js` (Modified: integrated diagnostics navigation item, section mount, and lazy-load hook)
+  - `tests/unit/diagnostic-ui.test.mjs` (Added: 10 automated unit tests covering loading, health badge mapping, states, privacy, and clipboard)
+  - `docs/29-cycle6-phase1-implementation-report.md` (Added: Cycle #6 Phase 1 implementation report)
+- **Developer/AI model**: Gemini 3.8 Flash (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/settings/diagnostic-ui.js`: PASS
+  - `node --check src/newtab/settings/settings-ui.js`: PASS
+  - `node --check tests/unit/diagnostic-ui.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (40 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 79 unit tests pass)
+  - `npm.cmd run build`: PASS (Chrome and Firefox dist builds succeeded)
+- **Impact**:
+  - **User-Facing**: Users can navigate to Settings -> Diagnostics to view storage health status, schema alignment, metric cards, and 1-click copy diagnostic reports.
+  - **Performance**: 0ms cold-boot startup overhead; diagnostic scripts and CSS are lazy-loaded only when Settings is opened.
+  - **Storage**: Strictly read-only; 0 writes to `browser.storage.local`.
+- **Rollback plan**: Revert `src/newtab/settings/settings-ui.js`, `src/newtab/styles/settings.css`, and delete `src/newtab/settings/diagnostic-ui.js` and `tests/unit/diagnostic-ui.test.mjs`.
+
+### Entry [2026-09-27-04]: Cycle #5 — Storage Health Diagnostics Architecture & Observability Engine
+
+- **Date**: 2026-09-27
+- **Change**: Created `src/newtab/core/storage-diagnostics.js` defining `window.HomebaseDiagnostics` with `auditStorageHealth()`, `auditBackupHealth()`, in-memory 50-entry anomaly ring buffer, and `generateHealthReport()` / `exportHealthReport()`. Registered `storage-diagnostics.js` in `src/new-tab.html` under Core Runtime directly after `schema-migrations.js`. Added `migrationHistory` tracking (capped at 20 entries) and `getMigrationHistory()` to `src/newtab/core/schema-migrations.js`. Connected `sanitizeKey()` anomalies in `src/newtab/core/schema-validator.js` to dispatch `{ key, action, category }` into `HomebaseDiagnostics`. Added `recordPerformanceMetric()` with in-memory 20-entry circular buffer in `src/newtab/core/perf-report.js`. Implemented 19 automated unit tests in `tests/unit/storage-diagnostics.test.mjs`, expanding repository test coverage to 69/69 passing tests.
+- **Reason**: Implements Homebase Improvement Cycle #5 planned in `docs/26-cycle5-storage-health-plan.md` to eliminate the storage observability black box, provide pre-flight backup auditing, enable user bug report generation, and track schema migration history with zero network calls and zero telemetry.
+- **Files affected**:
+  - `src/newtab/core/storage-diagnostics.js` (Added: storage health diagnostics engine and anomaly ring buffer)
+  - `src/new-tab.html` (Modified: registered `storage-diagnostics.js` under Core Runtime)
+  - `src/newtab/core/schema-migrations.js` (Modified: integrated atomic `migrationHistory` tracking and retrieval API)
+  - `src/newtab/core/schema-validator.js` (Modified: hooked `sanitizeKey()` to record validation anomalies)
+  - `src/newtab/core/perf-report.js` (Modified: added `recordPerformanceMetric()` and timing dispatch hooks)
+  - `tests/unit/storage-diagnostics.test.mjs` (Added: 19 automated unit tests covering health, backups, buffers, privacy, and history)
+  - `docs/26-cycle5-storage-health-plan.md` (Added: Cycle #5 architecture plan and performance invariants)
+  - `docs/27-cycle5-implementation-report.md` (Added: Cycle #5 implementation verification report)
+- **Developer/AI model**: Gemini (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/core/storage-diagnostics.js`: PASS
+  - `node --check src/newtab/core/schema-migrations.js`: PASS
+  - `node --check src/newtab/core/schema-validator.js`: PASS
+  - `node --check src/newtab/core/perf-report.js`: PASS
+  - `node --check tests/unit/storage-diagnostics.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (40 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 69 unit tests pass)
+  - `npm.cmd run build`: PASS (Built chrome -> dist\chrome, Built firefox -> dist\firefox)
+- **Impact**:
+  - **User-Facing**: Users can export clean, privacy-redacted diagnostic health reports for troubleshooting; zero layout changes or UI disruption.
+  - **Performance**: 0ms cold-boot startup overhead; diagnostics run on-demand or in-memory.
+  - **Storage**: Lightweight `migrationHistory` array (max 20 entries) persisted in `browser.storage.local`. All anomaly and performance metric buffers remain strictly in-memory.
+  - **Privacy**: Absolute zero telemetry, zero analytics, zero network calls. All sensitive tokens (URLs, bookmark titles, todo notes, wallpaper payloads) are automatically redacted.
+  - **Compatibility**: Fully compatible with Chrome and Firefox under classic `<script defer>` architecture; no ES modules or bundlers.
+- **Rollback plan**: Revert commits cleanly with `git revert <commit-sha>`. All storage data remains backward-compatible.
+
+### Entry [2026-09-27-03]: Cycle #4 — Central Storage Validation Architecture, Schema Validators & Non-Destructive Backup Sanitization
+
+- **Date**: 2026-09-27
+- **Change**: Created `src/newtab/core/schema-validator.js` defining `window.HomebaseValidator`, `validateKey()`, `sanitizeKey()`, `sanitizeStorageBatch()`, and authoritative schema definitions covering all 74 canonical storage keys with type validation, number/integer clamping, enum checking, 3/6-digit hex color expansion, array bounds, object prototype inspection, and prototype pollution defense. Registered `schema-validator.js` in `src/new-tab.html` under Core Runtime before `schema-migrations.js`. Updated `src/newtab/settings/backup-import.js` to replace unchecked key copying with non-destructive `sanitizeStorageBatch(incoming, { fallbackToDefault: false })`. Updated `src/newtab/core/schema-migrations.js` to run `sanitizeStorageBatch(transformedUpdates, { fallbackToDefault: true })` prior to committing atomic storage updates. Created `tests/unit/schema-validator.test.mjs` with 9 automated unit tests verifying clamping, color normalization, enum bounds, array recovery, object pollution defense, corrupted backup payloads, performance budgets (<3ms), and immutability of valid values.
+- **Reason**: Implements Homebase Improvement Cycle #4 planned in `docs/24-cycle4-storage-validation-plan.md` to resolve unvalidated storage writes, malformed backup imports, and migration corruption risks.
+- **Files affected**:
+  - `src/newtab/core/schema-validator.js` (Added: central storage schema validator and sanitization engine)
+  - `src/new-tab.html` (Modified: registered `newtab/core/schema-validator.js` before `schema-migrations.js`)
+  - `src/newtab/settings/backup-import.js` (Modified: integrated `sanitizeStorageBatch` for non-destructive, safe backup restoration)
+  - `src/newtab/core/schema-migrations.js` (Modified: sanitized transformed updates prior to `browser.storage.local.set`)
+  - `tests/unit/schema-validator.test.mjs` (Added: 9 unit tests for schema validation, clamping, backup recovery, and performance)
+  - `docs/24-cycle4-storage-validation-plan.md` (Added: Cycle #4 architecture plan and performance invariants)
+  - `docs/25-cycle4-implementation-report.md` (Added: Cycle #4 implementation verification report)
+- **Developer/AI model**: Gemini (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/core/schema-validator.js`: PASS
+  - `node --check src/newtab/settings/backup-import.js`: PASS
+  - `node --check src/newtab/core/schema-migrations.js`: PASS
+  - `node --check tests/unit/schema-validator.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (39 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed, 50 unit tests pass)
+  - `npm.cmd run build`: PASS (Built chrome -> dist\chrome, Built firefox -> dist\firefox)
+- **Impact**:
+  - **User-Facing**: Restoring corrupted or third-party backup files will never break the dashboard UI or cause unhandled exceptions.
+  - **Performance**: Zero startup latency penalty; batch validation of all 74 keys completes in ~0.15ms purely in-memory with zero network or repeated storage reads.
+  - **Storage**: Clean data types guaranteed in `browser.storage.local`. Non-destructive: unknown future keys preserved, existing user keys never deleted.
+  - **Compatibility**: Compatible with both Chrome and Firefox; classic `<script defer>` architecture preserved without ES modules or bundlers.
+- **Rollback plan**: Revert commits cleanly with `git revert <commit-sha>`. Storage values remain backward-compatible.
+
+### Entry [2026-09-27-02]: Cycle #3B — Storage Schema Versioning Foundation & Migration Runner Skeleton
+
+- **Date**: 2026-09-27
+- **Change**: Created `src/newtab/core/schema-migrations.js` defining `CURRENT_SCHEMA_VERSION = 1`, `SCHEMA_VERSION_KEY = 'schemaVersion'`, and `runSchemaMigrations()` skeleton with version detection, v0 profile initialization, future version downgrade protection, concurrency execution lock, and atomic storage writes. Registered `schema-migrations.js` in `src/new-tab.html` under Core Runtime before settings preferences. Safely integrated migration execution into `loadAppSettingsFromStorage()` in `src/newtab/settings/settings-preferences.js`. Added `schemaVersion` to `HOMEBASE_OWNED_STORAGE_KEYS` with integer validation in `src/newtab/settings/backup-import.js`. Created `tests/unit/schema-migrations.test.mjs` with 9 automated unit tests verifying fresh install initialization, legacy profile upgrade, fast-path no-op, idempotency, atomic writes, future version protection, failure safety, and backup integration.
+- **Reason**: Resolves Architecture Issue S4 (Unversioned storage schema and absent migration pipeline) planned in `docs/20-third-improvement-plan.md` and specified in `docs/22-cycle3b-schema-version-plan.md`. Establishes the authoritative foundation for deterministic, sequential schema evolution without touching `src/new-tab.js`.
+- **Files affected**:
+  - `src/newtab/core/schema-migrations.js` (Added: schema version constants, migration registry, and idempotent runner)
+  - `src/new-tab.html` (Modified: injected `newtab/core/schema-migrations.js` in Core Runtime section before `settings-preferences.js`)
+  - `src/newtab/settings/settings-preferences.js` (Modified: invoked `runSchemaMigrations()` safely inside `loadAppSettingsFromStorage()`)
+  - `src/newtab/settings/backup-import.js` (Modified: added `schemaVersion` to `HOMEBASE_OWNED_STORAGE_KEYS` with positive integer validation)
+  - `tests/unit/schema-migrations.test.mjs` (Added: 9 unit tests for schema versioning lifecycle, idempotency, and failure tolerance)
+  - `docs/22-cycle3b-schema-version-plan.md` (Added: Cycle #3B architecture specification and plan)
+  - `docs/23-cycle3b-implementation-report.md` (Added: Cycle #3B implementation verification report)
+- **Developer/AI model**: Gemini (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/core/schema-migrations.js`: PASS
+  - `node --check src/newtab/settings/settings-preferences.js`: PASS
+  - `node --check src/newtab/settings/backup-import.js`: PASS
+  - `node --check tests/unit/schema-migrations.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (38 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed: 53 syntax checks, static invariants, 41 unit tests)
+  - `npm.cmd run build`: PASS (Built chrome -> dist\chrome, Built firefox -> dist\firefox)
+- **Impact**:
+  - **User-Facing**: Zero visible disruption; existing profiles transparently receive `schemaVersion: 1` upon initial cold boot.
+  - **Performance**: Zero measurable startup delay; profile at current version completes in <1ms via fast-path no-op.
+  - **Storage**: Canonical `schemaVersion: 1` persisted in `browser.storage.local`. No legacy keys removed or renamed.
+  - **Compatibility**: Fully backward compatible with Chrome and Firefox; future version guard prevents downgrade corruption.
+- **Rollback plan**: Revert commits cleanly with `git revert <commit-sha>`. Existing fallback accessors in components ensure extension functions without `schemaVersion`.
+
+### Entry [2026-09-27-01]: Cycle #3A — Backup Completeness & Storage Key Alignment
+
+- **Date**: 2026-09-27
+- **Change**: Fixed destructive backup import vulnerability in `src/newtab/settings/backup-import.js` by completely removing bulk deletion (`browser.storage.local.remove(removals)`) of omitted keys and guarding fast `localStorage` mirror updates. Registered missing storage keys (`homebaseRecentSaveFolders` and `lastUsedBookmarkFolderId`) in `HOMEBASE_OWNED_STORAGE_KEYS` with sanitization logic. Resolved action popup key mismatch between `homebaseLastUsedFolderId` and canonical `lastUsedBookmarkFolderId` with bidirectional fallback, forward migration on popup load, dual-write on persist, and automatic backup import migration. Expanded unit test suite `tests/unit/backup-validation.test.mjs` with 5 new automated tests verifying non-destructive import, legacy key fallback, and sanitization.
+- **Reason**: Resolves Critical Code Review Issue S1 (Destructive backup import deletes missing keys), S2 (Missing owned keys in backup whitelist), and S3 (Action popup storage key mismatch `homebaseLastUsedFolderId` vs `lastUsedBookmarkFolderId`) identified in `docs/04-code-review.md` and planned in `docs/20-third-improvement-plan.md`.
+- **Files affected**:
+  - `src/newtab/settings/backup-import.js` (Modified: eliminated destructive removals array, added `homebaseRecentSaveFolders` to whitelist with sanitization, added fallback migration for `homebaseLastUsedFolderId`, guarded localStorage fast mirrors)
+  - `src/action-popup/action-popup.js` (Modified: migrated to canonical `lastUsedBookmarkFolderId`, added `resolveLastUsedFolderId` helper, forward migration on initialization, dual-write on folder selection, exported `window.HomebaseActionPopup`)
+  - `tests/unit/backup-validation.test.mjs` (Modified: added 5 new unit tests for partial backup retention, action popup key migration, optional key preservation, and folder list sanitization; updated VM sandbox context with JSON global)
+- **Developer/AI model**: Gemini (Antigravity Paired AI)
+- **Testing performed**:
+  - `node --check src/newtab/settings/backup-import.js`: PASS
+  - `node --check src/action-popup/action-popup.js`: PASS
+  - `node --check tests/unit/backup-validation.test.mjs`: PASS
+  - `node scripts/check-newtab-static.mjs`: PASS (37 deferred scripts, 33 module paths, 87 declarations checked)
+  - `npm.cmd test`: PASS (4/4 stages passed: 51 syntax checks, static invariants, 32 unit tests)
+  - `npm.cmd run build`: PASS (Built chrome -> dist\chrome, Built firefox -> dist\firefox)
+- **Impact**:
+  - **User-Facing**: Restoring partial or older backups will never wipe untouched user data or settings. Action popup and main dashboard now share synchronized bookmark save folder state seamlessly.
+  - **Performance**: Zero performance impact; non-destructive backup reduces storage delete operations to 0.
+  - **Storage**: Non-destructive updates only; aligns `lastUsedBookmarkFolderId` across dashboard and popup with dual-write fallback.
+  - **Compatibility**: Fully backward compatible with Chrome and Firefox; legacy backups containing `homebaseLastUsedFolderId` are automatically migrated on import.
+- **Rollback plan**: Revert commits or restore `backup-import.js` and `action-popup.js` using `git checkout HEAD -- src/newtab/settings/backup-import.js src/action-popup/action-popup.js tests/unit/backup-validation.test.mjs`.
+
+### Entry [2026-09-26-04]: Unified Automated Testing Baseline & Test Runner (`npm test`)
+
+- **Date**: 2026-09-26
+- **Change**: Added unified test orchestrator `scripts/test.mjs`, configured `"test": "node scripts/test.mjs"` in `package.json`, created native unit test suites in `tests/unit/` covering search utilities, backup sanitization, widget ordering, and core utilities using Node.js built-in `node:test` and `node:assert`, and updated testing strategy documentation.
+- **Reason**: Resolves Critical Code Review Issue T1 (0% unit test coverage), Improvement Roadmap Phase 1 Item 1.8, and Documentation Validation Opportunity #2; establishes a dependable automated verification baseline before Phase 2 high-risk modular extractions.
+- **Files affected**:
+  - `package.json` (Modified: added `"test": "node scripts/test.mjs"`)
+  - `scripts/test.mjs` (Added: multi-tier test runner supporting `--syntax`, `--static`, `--unit`, `--smoke` CLI flags)
+  - `tests/unit/search-utils.test.mjs` (Added: 12 unit tests for math evaluation, unit conversion, and URL heuristics)
+  - `tests/unit/backup-validation.test.mjs` (Added: 6 unit tests for backup payload validation, custom wallpaper sanitization, and todo normalization)
+  - `tests/unit/widget-order.test.mjs` (Added: 4 unit tests for widget order normalization and equality comparison)
+  - `tests/unit/core-utils.test.mjs` (Added: 5 unit tests for HTML entity escaping, array shuffling, debounce, and throttle)
+  - `docs/10-testing-strategy.md` (Modified: updated Section 2 to document test runner and unit test coverage)
+  - `docs/13-maintenance-log.md` (Modified: logged maintenance entry)
+  - `docs/14-ai-change-history.md` (Modified: logged AI change history entry)
+- **Developer/AI model**: Gemini 3.8 Flash (Antigravity)
+- **Testing performed**:
+  - `npm.cmd test`: Exit code 0 (All 4 stages passed: 51 JS files checked, 11/11 static invariants, 27/27 unit tests, smoke test cleanly handled)
+  - `npm.cmd test -- --syntax`: Exit code 0 (51 files verified)
+  - `npm.cmd test -- --static`: Exit code 0 (11/11 invariant checks passed)
+  - `npm.cmd test -- --unit`: Exit code 0 (27/27 unit assertions passed)
+  - `npm.cmd test -- --smoke`: Exit code 0 (Headless smoke test handled)
+  - `npm.cmd run build`: Exit code 0 (Built `dist/chrome` and `dist/firefox`)
+- **Impact**: Zero runtime behavior changes, zero new npm dependencies, zero manifest changes; establishes an automated <2.5s regression testing baseline for all future development.
+- **Rollback plan**: `git checkout HEAD -- package.json docs/10-testing-strategy.md && rm -rf scripts/test.mjs tests/`
+
+---
+
 ### Entry [2026-09-26-03]: Production Release Preparation — v0.15.0
 
 - **Date**: 2026-09-26

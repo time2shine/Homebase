@@ -2,6 +2,27 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.16.0 — 2026-10-07
+### Added
+- Modular storage architecture with unified `HomebaseStorage` facade and decoupled `StorageDispatcher` event pipeline.
+- Schema versioning foundation (`CURRENT_SCHEMA_VERSION = 1`) with automated migration handling and future-version safety.
+- Comprehensive storage health observability engine and interactive Diagnostic HUD panel in Settings.
+- Transactional settings backup import engine with atomic rollback protection, schema validation, and custom wallpaper deduplication.
+- Four-stage native automated test suite with 367 unit and integration tests executing natively on `node:test`.
+
+### Improved
+- Complete decomposition of the new-tab monolith into over 25 focused first-party controllers and services under `src/newtab/`.
+- Bookmark subsystem modularization covering grid reconciliation, tree traversal, root folder management, and folder picker.
+- Clean separation of search interaction, engine preferences, settings management, and dashboard widgets.
+- Static verification toolchain with dynamic declaration scanners to enforce script order and prevent identifier collisions.
+- Wallpaper subsystem runtime modularization with dedicated asset caching, daily rotation, and video playback lifecycles.
+
+### Fixed
+- Prevented potential `<script defer>` top-level declaration collisions across extracted modules.
+- Fixed bookmark title desynchronization between grid items and the bookmark editor dialog after rename actions.
+- Hardened weather widget against Open-Meteo network and API errors with defensive fallback handling.
+- Fixed widget ordering reference errors during instant startup and ensured synchronized layout initialization.
+
 ## v0.15.0 — 2026-09-26
 ### Added
 - Custom wallpaper collections in "My Wallpapers" are now included in Settings backup export and restore.

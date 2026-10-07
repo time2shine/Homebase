@@ -2,11 +2,7 @@ const WIDGET_ORDER_KEY = 'widgetOrder';
 
 const FAST_WIDGET_ORDER_KEY = 'fast-widget-order';
 
-const DEFAULT_WIDGET_ORDER = ['weather', 'quote', 'todo', 'news'];
-
-const WIDGET_ORDER_SET = new Set(DEFAULT_WIDGET_ORDER);
-
-let widgetOrderPreference = DEFAULT_WIDGET_ORDER.slice();
+let widgetOrderPreference = ((typeof window !== 'undefined' && window.DEFAULT_WIDGET_ORDER) || ['weather', 'quote', 'todo', 'news']).slice();
 
 let widgetSettingsSortable = null;
 
@@ -29,7 +25,11 @@ function applySidebarVisibility(showSidebar = true) {
     // Ignore; instant mirror is best-effort only
   }
 
-  if (browser && browser.storage && browser.storage.local) {
+  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+    HomebaseStorage.set(APP_SHOW_SIDEBAR_KEY, appShowSidebarPreference).catch((err) => {
+      console.warn('Failed to save sidebar visibility preference', err);
+    });
+  } else if (browser && browser.storage && browser.storage.local) {
     browser.storage.local
       .set({ [APP_SHOW_SIDEBAR_KEY]: appShowSidebarPreference })
       .catch((err) => {
@@ -43,37 +43,6 @@ function applySidebarVisibility(showSidebar = true) {
 
 }
 
-function normalizeWidgetOrder(order) {
-  const normalized = [];
-  const seen = new Set();
-
-  if (Array.isArray(order)) {
-    order.forEach((value) => {
-      if (typeof value !== 'string') return;
-      const key = value.trim();
-      if (!WIDGET_ORDER_SET.has(key) || seen.has(key)) return;
-      seen.add(key);
-      normalized.push(key);
-    });
-  }
-
-  DEFAULT_WIDGET_ORDER.forEach((key) => {
-    if (seen.has(key)) return;
-    seen.add(key);
-    normalized.push(key);
-  });
-
-  return normalized;
-}
-
-function areWidgetOrdersEqual(left, right) {
-  if (!Array.isArray(left) || !Array.isArray(right)) return false;
-  if (left.length !== right.length) return false;
-  for (let i = 0; i < left.length; i += 1) {
-    if (left[i] !== right[i]) return false;
-  }
-  return true;
-}
 
 function writeFastWidgetOrderMirror(order) {
   try {
@@ -86,7 +55,11 @@ function writeFastWidgetOrderMirror(order) {
 }
 
 function applyWidgetOrderToSidebar(order = widgetOrderPreference) {
-  const sidebarEl = sidebar || document.querySelector('.sidebar');
+  const sidebarEl = (typeof window !== 'undefined' && window.HomebaseDockNavigation && typeof window.HomebaseDockNavigation.getSidebarElement === 'function')
+    ? window.HomebaseDockNavigation.getSidebarElement()
+    : (typeof getSidebarElement === 'function'
+      ? getSidebarElement()
+      : (typeof document !== 'undefined' ? document.querySelector('.sidebar') : null));
   if (!sidebarEl) return;
 
   const widgets = {
@@ -142,12 +115,18 @@ function setWidgetOrderPreference(order, options = {}) {
     applyWidgetOrderToSettings(normalized);
   }
 
-  if (shouldPersist && browser && browser.storage && browser.storage.local) {
-    browser.storage.local
-      .set({ [WIDGET_ORDER_KEY]: normalized })
-      .catch((err) => {
+  if (shouldPersist) {
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set(WIDGET_ORDER_KEY, normalized).catch((err) => {
         console.warn('Failed to save widget order', err);
       });
+    } else if (browser && browser.storage && browser.storage.local) {
+      browser.storage.local
+        .set({ [WIDGET_ORDER_KEY]: normalized })
+        .catch((err) => {
+          console.warn('Failed to save widget order', err);
+        });
+    }
   }
 
   return normalized;
@@ -178,7 +157,11 @@ function setupWidgetOrderSortable() {
       return;
     }
 
-    if (browser && browser.storage && browser.storage.local) {
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set(WIDGET_ORDER_KEY, order).catch((err) => {
+        console.warn('Failed to save widget order', err);
+      });
+    } else if (browser && browser.storage && browser.storage.local) {
       browser.storage.local
         .set({ [WIDGET_ORDER_KEY]: order })
         .catch((err) => {
@@ -244,4 +227,15 @@ function applyWidgetVisibility() {
 
   }
 
+}
+
+function revealWidget(selector) {
+  const el = (typeof document !== 'undefined' && document.querySelector) ? document.querySelector(selector) : null;
+  if (!el) return;
+  el.classList.remove('widget-hidden');
+  el.classList.add('widget-visible');
+}
+
+if (typeof window !== 'undefined') {
+  window.revealWidget = revealWidget;
 }

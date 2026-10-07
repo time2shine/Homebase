@@ -1,18 +1,21 @@
 function setupQuickActions() {
+  const quickAddBookmarkBtn = (typeof document !== 'undefined') ? document.getElementById('quick-add-bookmark') : null;
+  const quickAddFolderBtn = (typeof document !== 'undefined') ? document.getElementById('quick-add-folder') : null;
+  const quickOpenBookmarksBtn = (typeof document !== 'undefined') ? document.getElementById('quick-open-bookmarks') : null;
 
-  
+  if (quickAddBookmarkBtn) {
+    quickAddBookmarkBtn.addEventListener('click', showAddBookmarkModal);
+  }
 
-  quickAddBookmarkBtn.addEventListener('click', showAddBookmarkModal);
+  if (quickAddFolderBtn) {
+    quickAddFolderBtn.addEventListener('click', showAddFolderModal);
+  }
 
-  
+  const blankMenu = (typeof gridBlankMenu !== 'undefined' && gridBlankMenu)
+    || (typeof document !== 'undefined' ? document.getElementById('bookmark-grid-blank-menu') : null);
 
-  quickAddFolderBtn.addEventListener('click', showAddFolderModal);
-
-
-
-  if (quickOpenBookmarksBtn && gridBlankMenu) {
+  if (quickOpenBookmarksBtn && blankMenu) {
     const moreBtn = quickOpenBookmarksBtn;
-    const blankMenu = gridBlankMenu;
 
     const closeMenuOutside = (e) => {
       if (!moreBtn.contains(e.target) && !blankMenu.contains(e.target)) {
@@ -59,5 +62,8 @@ function setupQuickActions() {
       }
     });
   }
+}
 
+if (typeof window !== 'undefined') {
+  window.setupQuickActions = setupQuickActions;
 }

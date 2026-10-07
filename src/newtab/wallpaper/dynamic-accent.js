@@ -1,64 +1,56 @@
 function extractAverageColor(imgUrl) {
-
   return new Promise((resolve) => {
+    if (!imgUrl || typeof imgUrl !== 'string') {
+      resolve('#2ca5ff');
+      return;
+    }
 
     const img = new Image();
-
     img.crossOrigin = 'anonymous';
 
-    img.src = imgUrl;
-
-
-
-    img.onload = () => {
-
-      const canvas = document.createElement('canvas');
-
-      canvas.width = img.width;
-
-      canvas.height = img.height;
-
-      const ctx = canvas.getContext('2d');
-
-
-
-      ctx.drawImage(img, 0, 0);
-
-      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-
-
-
-      let r = 0; let g = 0; let b = 0;
-
-      let count = 0;
-
-
-
-      for (let i = 0; i < data.length; i += 200) {
-
-        r += data[i];
-
-        g += data[i + 1];
-
-        b += data[i + 2];
-
-        count++;
-
-      }
-
-
-
-      resolve(`rgb(${Math.round(r / count)}, ${Math.round(g / count)}, ${Math.round(b / count)})`);
-
+    let settled = false;
+    const safeResolve = (color) => {
+      if (settled) return;
+      settled = true;
+      img.onload = null;
+      img.onerror = null;
+      resolve(color);
     };
 
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          safeResolve('#2ca5ff');
+          return;
+        }
 
+        ctx.drawImage(img, 0, 0, 1, 1);
+        const pixel = ctx.getImageData(0, 0, 1, 1).data;
 
-    img.onerror = () => resolve('#2ca5ff');
+        // Defensive cleanup: reset canvas dimensions immediately to release backing buffer
+        canvas.width = 0;
+        canvas.height = 0;
 
+        if (!pixel || pixel.length < 3) {
+          safeResolve('#2ca5ff');
+          return;
+        }
+
+        safeResolve(`rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`);
+      } catch (err) {
+        safeResolve('#2ca5ff');
+      }
+    };
+
+    img.onerror = () => safeResolve('#2ca5ff');
+    img.src = imgUrl;
   });
-
 }
+
 
 
 
@@ -84,4 +76,9 @@ async function updateDynamicAccent() {
     console.warn('Dynamic accent update failed', err);
   }
 
+}
+
+if (typeof window !== 'undefined') {
+  window.extractAverageColor = extractAverageColor;
+  window.updateDynamicAccent = updateDynamicAccent;
 }

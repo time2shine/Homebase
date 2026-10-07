@@ -41,8 +41,13 @@ function applyGlassStyle(styleId) {
 // --- Function to Load Preference ---
 async function loadGlassStylePref() {
   try {
-    const stored = await browser.storage.local.get(APP_GLASS_STYLE_KEY);
-    const pref = stored[APP_GLASS_STYLE_KEY];
+    let pref;
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.get) {
+      pref = await HomebaseStorage.get(APP_GLASS_STYLE_KEY, 'original');
+    } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      const stored = await browser.storage.local.get(APP_GLASS_STYLE_KEY);
+      pref = stored ? stored[APP_GLASS_STYLE_KEY] : 'original';
+    }
     applyGlassStyle(pref || 'original');
   } catch (e) {
     applyGlassStyle('original');
@@ -75,8 +80,13 @@ function applyGridAnimation(animationKey) {
 
 async function loadGridAnimationPref() {
   try {
-    const stored = await browser.storage.local.get(APP_GRID_ANIMATION_KEY);
-    const pref = stored[APP_GRID_ANIMATION_KEY];
+    let pref;
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.get) {
+      pref = await HomebaseStorage.get(APP_GRID_ANIMATION_KEY, 'default');
+    } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      const stored = await browser.storage.local.get(APP_GRID_ANIMATION_KEY);
+      pref = stored ? stored[APP_GRID_ANIMATION_KEY] : 'default';
+    }
     applyGridAnimation(pref);
   } catch (e) {
     applyGridAnimation('default');

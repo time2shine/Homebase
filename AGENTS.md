@@ -269,3 +269,165 @@ During release prep:
 - Do not create separate feature and release commits if the release prompt requests one combined commit.
 - Do not invent release notes.
 - Do not claim build, push, ZIP, or GitHub release success unless it actually happened.
+
+## Homebase Project Continuity Guide
+
+### Owner Development Workflow
+
+The preferred and mandatory workflow for all AI agents working on Homebase is:
+
+```text
+Audit → Plan → Implement → Verify → Report → Approval → Commit → Approval → Push
+```
+
+Rules:
+- Always audit before coding.
+- Create a plan document before implementation.
+- Make isolated changes only.
+- Do not commit automatically.
+- Do not push automatically.
+- Wait for owner approval at commit and push stages.
+- Do not continue to the next phase without approval.
+
+### Improvement Cycle Structure
+
+Cycle format:
+
+```text
+Cycle X
+ ├── Audit
+ ├── Phase Plan
+ ├── Implementation
+ ├── Verification
+ ├── Commit
+ ├── Push
+ └── Next Phase
+```
+
+Each phase should have:
+- Plan document (`docs/<N>-cycleX-phaseY-plan.md`)
+- Implementation (isolated module under `src/newtab/` and lightweight wrappers in `src/new-tab.js`)
+- Verification report (`docs/<N+1>-cycleX-phaseY-implementation-report.md`)
+- Commit summary (after explicit approval)
+
+### Extraction Architecture Rules
+
+`src/new-tab.js` is the legacy monolith.
+
+Future extraction should move responsibilities into:
+
+```text
+src/newtab/
+ ├── core/
+ ├── search/
+ ├── wallpaper/
+ ├── bookmarks/
+ └── settings/
+```
+
+New modules should:
+- Own implementation
+- Expose `window.Homebase<Name>Controller` or `window.Homebase<Name>Service`
+- Maintain backward compatibility
+
+`src/new-tab.js` should keep:
+- Startup orchestration
+- Compatibility wrappers
+- Integration points
+
+Avoid:
+- Unrelated refactoring
+- Behavior changes during extraction
+- Breaking existing callers
+
+### Verification Rules
+
+Before every commit run:
+
+```powershell
+node --check <changed files>
+node scripts/check-newtab-static.mjs
+node scripts/smoke-newtab-file.mjs
+npm.cmd test
+npm.cmd run build
+git diff --check
+git diff src/preload.js src/instant_load.js manifests/ dist/
+```
+
+Protected files:
+- `src/preload.js`
+- `src/instant_load.js`
+- `manifests/*`
+- `dist/*`
+
+must remain untouched unless explicitly approved.
+
+### Manual Browser Verification Decision Process
+
+Do not request manual browser testing after every implementation.
+
+Before requesting manual testing, analyze risk.
+
+Manual browser verification is required when changes affect:
+- browser extension APIs
+- Firefox-specific APIs
+- Chrome/Firefox permissions
+- browser storage persistence
+- bookmarks API
+- context menus
+- Cache Storage API
+- video/media playback
+- real DOM interactions
+- startup loading sequence
+- features difficult to simulate automatically
+
+If manual testing is required, report:
+1. Why manual testing is needed.
+2. When it should happen:
+   - before commit
+   - after commit
+   - before push
+   - before release
+3. Provide checklist:
+
+Chrome:
+- reload extension
+- open new tab
+- test affected feature
+- check console
+
+Firefox:
+- reload extension
+- test Firefox-specific behavior
+- check console
+
+Expected behavior:
+- describe expected result
+
+Console:
+- mention errors/warnings to watch.
+
+If manual testing is not required, explicitly state:
+"Manual browser verification is not required for this phase because the changes are isolated and covered by automated validation."
+
+### Freeze / Regression Debugging Workflow
+
+When new-tab freezes:
+1. Check browser console error.
+2. Identify file and line.
+3. Inspect recently extracted modules.
+4. Check script loading order.
+5. Check duplicate top-level declarations.
+6. Check shared global variables.
+7. Apply smallest possible fix.
+8. Run full verification again.
+
+**Important Note on Global Lexical Scope**:
+Deferred scripts (`<script defer>`) evaluate in the same global execution context and share the global lexical declarative environment record. A top-level `const` or `let` declaration in one script will clash with a duplicate declaration in another script.
+
+Example failure:
+- In `wallpaper-storage.js`: `const wallpaperObjectUrlCache = new Map();`
+- In `new-tab.js`: `const wallpaperObjectUrlCache = new Map();`
+- Causes browser runtime error: `Uncaught SyntaxError: Identifier 'wallpaperObjectUrlCache' has already been declared`
+
+All moved/extracted top-level declarations must be removed from `src/new-tab.js` and added to `movedDeclarationNames` in `scripts/check-newtab-static.mjs` for permanent static protection.

@@ -781,3 +781,272 @@
   cursor: grab;
   flex: 1; /* Take up remaining space so you can drag from anywhere in the text area */
 }
+
+/* ===============================================
+ * Homebase — Diagnostic UI Scoped Styles
+ * =============================================== */
+
+.app-settings-diagnostic-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.app-settings-diagnostic-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.app-settings-diagnostic-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.app-settings-diagnostic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+.app-settings-diagnostic-badge--healthy {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.app-settings-diagnostic-badge--degraded {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.app-settings-diagnostic-badge--corrupted {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.app-settings-diagnostic-status-text {
+  font-size: 0.9em;
+  color: #334155;
+  font-weight: 600;
+}
+
+.app-settings-diagnostic-timestamp {
+  font-size: 0.8em;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.app-settings-diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .app-settings-diagnostic-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.app-settings-diagnostic-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.app-settings-diagnostic-card-value {
+  font-size: 1.4em;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.1;
+}
+
+.app-settings-diagnostic-card-label {
+  font-size: 0.82em;
+  font-weight: 700;
+  color: #475569;
+}
+
+.app-settings-diagnostic-card-hint {
+  font-size: 0.75em;
+  color: #94a3b8;
+}
+
+.app-settings-diagnostic-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.app-settings-diagnostic-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-settings-diagnostic-detail-item {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.app-settings-diagnostic-detail-title {
+  font-size: 0.9em;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.app-settings-diagnostic-detail-body {
+  font-size: 0.82em;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.app-settings-diagnostic-detail-code {
+  font-family: monospace;
+  font-size: 0.8em;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #0f172a;
+}
+
+.app-settings-diagnostic-notice {
+  font-size: 0.82em;
+  color: #64748b;
+  line-height: 1.5;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 3px solid #2ca5ff;
+}
+
+.app-settings-diagnostic-empty {
+  font-size: 0.85em;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.app-settings-diagnostic-anomaly-list {
+  margin: 4px 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-settings-diagnostic-btn-scan.is-loading {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.app-settings-feedback-diagnostic-btn {
+  margin-top: 8px;
+  width: 100%;
+}
+
+/* Subsystem Health Matrix */
+.app-settings-diagnostic-subsystems {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-settings-diagnostic-subsystems-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.app-settings-diagnostic-subsystem-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.app-settings-diagnostic-subsystem-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-settings-diagnostic-subsystem-name {
+  font-size: 0.8em;
+  font-weight: 700;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-settings-diagnostic-chip {
+  font-size: 0.7em;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.app-settings-diagnostic-chip--healthy {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.app-settings-diagnostic-chip--degraded {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.app-settings-diagnostic-chip--corrupted {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.app-settings-diagnostic-subsystem-counts {
+  font-size: 0.75em;
+  color: #64748b;
+}
+
+.app-settings-diagnostic-btn-repair {
+  border: 1px solid #059669;
+  background: #10b981;
+  color: #ffffff;
+}
+
+.app-settings-diagnostic-btn-repair:hover {
+  background: #059669;
+}
+

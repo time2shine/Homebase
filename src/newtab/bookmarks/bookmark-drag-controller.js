@@ -131,6 +131,31 @@
     return null;
   }
 
+  function resolveScrollActiveFolderTabIntoView(options = { behavior: 'smooth' }) {
+    if (typeof window !== 'undefined' && window.HomebaseBookmarkTabsScroll && typeof window.HomebaseBookmarkTabsScroll.scrollActiveFolderTabIntoView === 'function') {
+      return window.HomebaseBookmarkTabsScroll.scrollActiveFolderTabIntoView(options);
+    }
+    if (typeof window !== 'undefined' && typeof window.scrollActiveFolderTabIntoView === 'function') {
+      return window.scrollActiveFolderTabIntoView(options);
+    }
+    if (typeof scrollActiveFolderTabIntoView === 'function') {
+      return scrollActiveFolderTabIntoView(options);
+    }
+  }
+
+  function resolveHandleTabDrop(evt) {
+    if (typeof _options.handleTabDrop === 'function') {
+      return _options.handleTabDrop(evt);
+    }
+    if (typeof window !== 'undefined' && typeof window.handleTabDrop === 'function') {
+      return window.handleTabDrop(evt);
+    }
+    if (typeof handleTabDrop === 'function') {
+      return handleTabDrop(evt);
+    }
+    return Promise.resolve();
+  }
+
   // =========================================================================
   // Pointer Movement & Tab Hover Tracking
   // =========================================================================
@@ -525,7 +550,7 @@
 
     /**
      * Initializes Sortable.js on the folder tabs container.
-     * In Phase 3-B, delegates to setupTabsSortable in new-tab.js until Phase 3-C.
+     * Canonical owner for folder tabs Sortable configuration and lifecycle.
      *
      * @param {HTMLElement} tabsContainer The DOM element for the tabs container
      * @returns {Sortable|null}
@@ -533,10 +558,55 @@
     setupTabsSortable(tabsContainer) {
       if (!tabsContainer) return null;
 
-      if (typeof window !== 'undefined' && typeof window.setupTabsSortable === 'function' && window.setupTabsSortable !== this.setupTabsSortable) {
-        return window.setupTabsSortable(tabsContainer);
+      const sortableStart = safeGetPerfMeasureStart();
+      safeRecordSortableLibraryAvailability();
+
+      if (_tabsSortable && typeof _tabsSortable.destroy === 'function') {
+        _tabsSortable.destroy();
       }
-      return null;
+
+      try {
+        _tabsSortable = Sortable.create(tabsContainer, {
+          animation: 350, // Slightly increased duration
+          easing: "cubic-bezier(0.25, 1, 0.5, 1)", // Adds a smooth "snap" effect
+          draggable: '.bookmark-folder-tab',
+          filter: '.bookmark-folder-add-btn',
+          ghostClass: 'sortable-ghost-tab',
+          chosenClass: 'sortable-chosen-tab',
+          dragClass: 'sortable-drag-tab',
+          forceFallback: true,
+          fallbackOnBody: true,
+          fallbackClass: 'bookmark-fallback-ghost-tab',
+          fallbackTolerance: 5,
+
+          setData: (dataTransfer, dragEl) => {
+            dataTransfer.setData('text/plain', (dragEl && dragEl.dataset && dragEl.dataset.folderId) || '');
+          },
+
+          onStart: () => {
+            HomebaseBookmarkDragController.setTabDragging(true);
+            document.body.classList.add('is-tab-dragging');
+          },
+
+          onEnd: (evt) => {
+            setTimeout(() => {
+              HomebaseBookmarkDragController.setTabDragging(false);
+            }, 50);
+
+            document.body.classList.remove('is-tab-dragging');
+            resolveHandleTabDrop(evt);
+            requestAnimationFrame(() => resolveScrollActiveFolderTabIntoView({ behavior: 'smooth' }));
+          },
+
+          preventOnFilter: true
+        });
+
+        safeRecordSortablePerfTiming('tabs', sortableStart, 'done');
+        return _tabsSortable;
+      } catch (err) {
+        safeRecordSortablePerfTiming('tabs', sortableStart, 'failed');
+        throw err;
+      }
     },
 
     /**
@@ -544,9 +614,6 @@
      * @returns {boolean}
      */
     isGridDragging() {
-      if (typeof window !== 'undefined' && 'isGridDragging' in window) {
-        return Boolean(window.isGridDragging);
-      }
       return _isGridDragging;
     },
 
@@ -568,9 +635,6 @@
      * @returns {boolean}
      */
     isTabDragging() {
-      if (typeof window !== 'undefined' && 'isTabDragging' in window) {
-        return Boolean(window.isTabDragging);
-      }
       return _isTabDragging;
     },
 
@@ -664,12 +728,10 @@
       return HomebaseBookmarkDragController.setupGridSortable(gridElement);
     };
 
-    // Define window.setupTabsSortable forwarder if not already set
-    if (typeof window.setupTabsSortable !== 'function') {
-      window.setupTabsSortable = function(tabsContainer) {
-        return HomebaseBookmarkDragController.setupTabsSortable(tabsContainer);
-      };
-    }
+    // Define window.setupTabsSortable bridge
+    window.setupTabsSortable = function(tabsContainer) {
+      return HomebaseBookmarkDragController.setupTabsSortable(tabsContainer);
+    };
 
     // Direct helper exports for multi-script compatibility
     window.moveItemInLocalTree = moveItemInLocalTree;

@@ -424,7 +424,7 @@ let activeHomebaseFolderId = null; // ID of the selected folder tab
 
 
 // === GRID/TABS DRAG-AND-DROP GLOBALS ===
-let tabsSortable = null;          // Instance for the folder tabs (managed by setupTabsSortable)
+// Canonical Sortable instances live in HomebaseBookmarkDragController
 
 let isGridDragging = false;       // Track active drag to block click navigation
 if (typeof window !== 'undefined') {
@@ -454,8 +454,18 @@ let isTabDragging = false;        // Track tab drag state to avoid click misfire
 if (typeof window !== 'undefined') {
   try {
     Object.defineProperty(window, 'isTabDragging', {
-      get: () => isTabDragging,
-      set: (val) => { isTabDragging = Boolean(val); },
+      get: () => {
+        if (window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.isTabDragging === 'function') {
+          return window.HomebaseBookmarkDragController.isTabDragging();
+        }
+        return isTabDragging;
+      },
+      set: (val) => {
+        isTabDragging = Boolean(val);
+        if (window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.setTabDragging === 'function') {
+          window.HomebaseBookmarkDragController.setTabDragging(val);
+        }
+      },
       configurable: true,
       enumerable: true
     });
@@ -532,94 +542,16 @@ if (typeof window !== 'undefined') {
 
 
 
-// --- NEW: Tab Drag-and-Drop Handlers (Using Sortable.js) ---
-
-
-
-/**
-
- * NEW: Initializes Sortable.js on the folder tabs.
-
- * This is called by createFolderTabs.
-
- */
+// =============================================================================
+// Backward compatibility bridge for Bookmark Tab Drag Controller
+// Canonical implementation lives in src/newtab/bookmarks/bookmark-drag-controller.js
+// =============================================================================
 
 function setupTabsSortable(tabsContainer) {
-
-  const sortableStart = getPerfMeasureStart();
-  recordSortableLibraryAvailability();
-
-  if (tabsSortable) {
-
-    tabsSortable.destroy();
-
+  if (typeof window !== 'undefined' && window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.setupTabsSortable === 'function') {
+    return window.HomebaseBookmarkDragController.setupTabsSortable(tabsContainer);
   }
-
-  try {
-    tabsSortable = Sortable.create(tabsContainer, {
-
-      animation: 350, // Slightly increased duration
-
-      easing: "cubic-bezier(0.25, 1, 0.5, 1)", //  <-- ADD THIS: Adds a smooth "snap" effect
-
-      draggable: '.bookmark-folder-tab',
-
-      filter: '.bookmark-folder-add-btn',
-
-      ghostClass: 'sortable-ghost-tab',
-
-      chosenClass: 'sortable-chosen-tab',
-
-      dragClass: 'sortable-drag-tab',
-
-      forceFallback: true,
-
-      fallbackOnBody: true,
-
-      fallbackClass: 'bookmark-fallback-ghost-tab',
-
-      fallbackTolerance: 5,
-
-      setData: (dataTransfer, dragEl) => {
-
-        dataTransfer.setData('text/plain', dragEl.dataset.folderId || '');
-
-      },
-
-      onStart: () => {
-
-        isTabDragging = true;
-
-        document.body.classList.add('is-tab-dragging');
-
-      },
-
-      onEnd: (evt) => {
-
-        setTimeout(() => {
-
-          isTabDragging = false;
-
-        }, 50);
-
-        document.body.classList.remove('is-tab-dragging');
-
-        handleTabDrop(evt);
-
-        requestAnimationFrame(() => scrollActiveFolderTabIntoView({ behavior: 'smooth' }));
-
-      },
-
-      preventOnFilter: true
-
-    });
-
-    recordSortablePerfTiming('tabs', sortableStart, 'done');
-  } catch (err) {
-    recordSortablePerfTiming('tabs', sortableStart, 'failed');
-    throw err;
-  }
-
+  return null;
 }
 if (typeof window !== 'undefined') {
   window.setupTabsSortable = setupTabsSortable;
@@ -755,6 +687,9 @@ async function handleTabDrop(evt) {
 
   }
 
+}
+if (typeof window !== 'undefined') {
+  window.handleTabDrop = handleTabDrop;
 }
 
 // =============================================================================

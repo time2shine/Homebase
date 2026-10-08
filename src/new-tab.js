@@ -1081,17 +1081,6 @@ function logInitSettled(name, result) {
   }
 
   setupPasteListener();
-
-
-
-
-
-  // === All manual D&D listeners for bookmarkFolderTabsContainer removed ===
-
-  // They are now handled by setupTabsSortable() which is
-
-  // called at the end of createFolderTabs()
-
 }
 
 

@@ -173,8 +173,7 @@
 
     _pointerMoveAttached = true;
     window.addEventListener('pointermove', (e) => {
-      const isDragging = _isGridDragging || (typeof window !== 'undefined' && Boolean(window.isGridDragging));
-      if (!isDragging) return;
+      if (!_isGridDragging) return;
 
       _lastDragX = e.clientX;
       _lastDragY = e.clientY;
@@ -190,8 +189,7 @@
   }
 
   function handleGridDragPointerMove(evt) {
-    const isDragging = _isGridDragging || (typeof window !== 'undefined' && Boolean(window.isGridDragging));
-    if (!isDragging) {
+    if (!_isGridDragging) {
       if (_activeTabDropTarget) {
         clearTabDropHighlight();
       }

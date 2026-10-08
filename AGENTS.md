@@ -147,3 +147,70 @@ npm.cmd run zip:firefox      # Generate Firefox ZIP archive
 - Update release metadata simultaneously in `package.json`, `manifests/manifest.chrome.json`, `manifests/manifest.firefox.json`, and `src/CHANGELOG.md`.
 - Never commit or stage generated ZIP archives.
 - Ensure dual browser packages pass structural validation with root-level `manifest.json`.
+
+---
+
+## 8. AI Handoff Completion Protocol
+
+### Purpose
+Make every successful Antigravity task easy to review by ChatGPT. After completing work, always provide a clean copy-ready summary at the end of the response.
+
+### Protocol Requirements
+After every successfully completed implementation, refactor, release, or documentation task that changes repository state:
+- Do not only provide terminal commands and execution logs.
+- Always include a final section named:
+
+# ChatGPT Review Package
+
+This section must be easy to copy and paste into ChatGPT.
+
+Use this exact format:
+
+```markdown
+# ChatGPT Review Package
+
+## Task Completed
+[One or two sentence summary of what was done]
+
+## Files Changed
+- File:
+- Change:
+- Purpose:
+
+## Architecture Impact
+- Ownership changes:
+- New modules/components:
+- Removed responsibilities:
+- Potential risks:
+
+## Verification
+- Syntax checks:
+- Tests:
+- Build:
+- Static checks:
+
+## Git Status
+- Branch:
+- Commit status:
+- Commit hash (if created):
+- Commit message (if created):
+- Push status:
+
+## Current State
+[Current repository state after completion]
+
+## Review Notes
+[Important context, tradeoffs, risks, or decisions for review]
+
+## Next Decision Needed
+[What requires review, approval, or next action]
+```
+
+### Rules
+- Only create this section after successful completion.
+- Keep it concise.
+- Do not include every terminal command unless debugging is required.
+- Do not repeat large documentation contents.
+- Preserve important technical details.
+- This section exists specifically for handing work from Antigravity to ChatGPT for architecture review.
+

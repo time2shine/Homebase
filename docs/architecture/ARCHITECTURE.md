@@ -1,6 +1,6 @@
 # Homebase System Architecture
 
-**Document:** `docs/ARCHITECTURE.md`  
+**Document:** `docs/architecture/ARCHITECTURE.md`  
 **Status:** Living System Specification  
 **Version Alignment:** Homebase `v0.17.0+`  
 

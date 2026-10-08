@@ -65,10 +65,12 @@ Homebase/
 ├── tests/                            # Automated test specifications
 │   └── unit/                         # Native node:test specifications (367 passing tests)
 ├── docs/                             # Project documentation, plans, and reports
-│   ├── archive/                      # Historical cycle records (Cycle 11, Cycle 12)
-│   ├── cycles/                       # Active cycle documentation (Cycle 13)
+│   ├── README.md                     # Central documentation directory index
+│   ├── architecture/                 # Permanent system architectural specifications
 │   ├── decisions/                    # Architecture Decision Records (ADRs)
-│   └── ARCHITECTURE.md               # Detailed system architectural specification
+│   ├── cycles/                       # Development cycle plans and phase tracking
+│   ├── releases/                     # Release preparation, notes, and asset verification
+│   └── archive/                      # Historical cycle records (Cycles 1–10)
 ├── AGENTS.md                         # Guidelines and rules for AI collaboration
 └── PROJECT_CONTEXT.md                # This document
 ```

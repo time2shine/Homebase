@@ -1,6 +1,6 @@
 # Homebase Cycle #13 — Phase 1: New Tab Architecture Audit
 
-**Document:** `docs/233-cycle13-phase1-new-tab-architecture-audit.md`  
+**Document:** `docs/cycles/cycle-13/phase-1/architecture-audit.md` (formerly `docs/233-cycle13-phase1-new-tab-architecture-audit.md`)  
 **Date:** October 9, 2026  
 **Status:** COMPLETE (READ-ONLY AUDIT — NO SOURCE CODE MODIFICATIONS)  
 **Target File:** [`src/new-tab.js`](file:///c:/Users/Administrator/Desktop/Homebase/src/new-tab.js) (Baseline Size: **1,148 lines**)  

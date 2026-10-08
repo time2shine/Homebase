@@ -23,7 +23,7 @@ With the completion of Cycle #12 (which decoupled the entire bookmark drag-and-d
 
 | Phase | Description | Deliverable Document | Target Reduction | Status |
 |:---:|---|---|:---:|:---:|
-| **Phase 1** | **New Tab Architecture Audit** | [`docs/233-cycle13-phase1-new-tab-architecture-audit.md`](file:///c:/Users/Administrator/Desktop/Homebase/docs/233-cycle13-phase1-new-tab-architecture-audit.md) | Baseline (1,148 lines) | **COMPLETE** |
+| **Phase 1** | **New Tab Architecture Audit** | [`phase-1/architecture-audit.md`](file:///c:/Users/Administrator/Desktop/Homebase/docs/cycles/cycle-13/phase-1/architecture-audit.md) | Baseline (1,148 lines) | **COMPLETE** |
 | **Phase 2** | **Bookmark Bridges & State Pruning** | `docs/235-cycle13-phase2-bookmark-bridges-plan.md` | -160 lines (~988 lines) | Pending |
 | **Phase 3** | **Wallpaper Startup Priming Extraction** | `docs/237-cycle13-phase3-wallpaper-priming-plan.md` | -65 lines (~923 lines) | Pending |
 | **Phase 4** | **Startup Hydration Task Registry Extraction** | `docs/239-cycle13-phase4-startup-hydration-plan.md` | -200 lines (~723 lines) | Pending |

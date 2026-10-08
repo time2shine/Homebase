@@ -214,3 +214,20 @@ Use this exact format:
 - Preserve important technical details.
 - This section exists specifically for handing work from Antigravity to ChatGPT for architecture review.
 
+---
+
+## 9. Context Loading Rule
+
+Before starting any repository modification task:
+1. Read AGENTS.md
+2. Read PROJECT_CONTEXT.md
+3. Read ARCHITECTURE.md when architecture changes are involved
+4. Read the active cycle README under docs/cycles/
+
+For simple read-only analysis, file inspection, or review tasks, this step is optional.
+
+Purpose:
+Ensure every AI implementation starts with current repository context.
+
+
+

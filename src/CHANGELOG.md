@@ -2,6 +2,21 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.17.0 — 2026-10-09
+### Added
+- Dedicated first-party `HomebaseBookmarkDragController` subsystem (`src/newtab/bookmarks/bookmark-drag-controller.js`) orchestrating grid and tab drag-and-drop operations.
+- Fine-grained drag lifecycle management, raycast pointer tracking, and folder hover layout locking.
+
+### Improved
+- Complete extraction of SortableJS grid and tab drag-and-drop ownership from the main new-tab monolith into modular controllers.
+- Smooth folder tab reordering and drag visual feedback.
+- Decoupled bookmark virtualizer item reordering and optimistic tree model mutations.
+- Reduced `src/new-tab.js` by over 690 lines, significantly simplifying new-tab startup and maintenance.
+
+### Fixed
+- Fixed subfolder drag shadowing bug where bookmark tiles dropped into subfolder tabs or back buttons referenced stale parent nodes.
+- Cleaned up obsolete drag event comments and consolidated internal drag-state verification.
+
 ## v0.16.0 — 2026-10-07
 ### Added
 - Modular storage architecture with unified `HomebaseStorage` facade and decoupled `StorageDispatcher` event pipeline.

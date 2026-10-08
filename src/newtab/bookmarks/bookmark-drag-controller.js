@@ -131,6 +131,19 @@
     return null;
   }
 
+  function getRootDisplayFolderId() {
+    if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.getRootDisplayFolderId === 'function') {
+      return window.HomebaseBookmarkLoader.getRootDisplayFolderId();
+    }
+    if (typeof window !== 'undefined' && window.rootDisplayFolderId) {
+      return window.rootDisplayFolderId;
+    }
+    if (typeof rootDisplayFolderId !== 'undefined') {
+      return rootDisplayFolderId;
+    }
+    return null;
+  }
+
   function resolveScrollActiveFolderTabIntoView(options = { behavior: 'smooth' }) {
     if (typeof window !== 'undefined' && window.HomebaseBookmarkTabsScroll && typeof window.HomebaseBookmarkTabsScroll.scrollActiveFolderTabIntoView === 'function') {
       return window.HomebaseBookmarkTabsScroll.scrollActiveFolderTabIntoView(options);
@@ -147,13 +160,7 @@
     if (typeof _options.handleTabDrop === 'function') {
       return _options.handleTabDrop(evt);
     }
-    if (typeof window !== 'undefined' && typeof window.handleTabDrop === 'function') {
-      return window.handleTabDrop(evt);
-    }
-    if (typeof handleTabDrop === 'function') {
-      return handleTabDrop(evt);
-    }
-    return Promise.resolve();
+    return handleTabDrop(evt);
   }
 
   // =========================================================================
@@ -444,6 +451,80 @@
     }
   }
 
+  /**
+   * Unified handler for folder tab drop (re-ordering).
+   * This is a Sortable.js `onEnd` callback.
+   */
+  async function handleTabDrop(evt) {
+    if (!evt || evt.oldIndex === evt.newIndex) return; // No change
+
+    const previouslyActiveFolderId = getActiveHomebaseFolderId();
+    const draggedFolderId = evt.item && evt.item.dataset ? evt.item.dataset.folderId : null;
+    const rootFolderId = getRootDisplayFolderId();
+    const tree = getBookmarkTreeState();
+
+    if (!draggedFolderId || !rootFolderId || !tree || !tree[0]) return;
+
+    const parentNode = resolveFindBookmarkNodeById(tree[0], rootFolderId);
+    if (!parentNode || !parentNode.children) return;
+
+    // Only folder nodes inside rootDisplayFolderId
+    const folderNodes = parentNode.children.filter(node => node && !node.url && node.children);
+    const draggedNode = folderNodes.find(node => node && node.id === draggedFolderId);
+    if (!draggedNode) return;
+
+    const originalBookmarkIndex = draggedNode.index;
+    let targetBookmarkIndex;
+
+    // If we dragged to the *last* visible tab from the left,
+    // treat this as "drop at the very end".
+    const movingDownIntoLast =
+      evt.newIndex === folderNodes.length - 1 && evt.oldIndex < evt.newIndex;
+
+    if (movingDownIntoLast) {
+      // Put it after all existing children
+      targetBookmarkIndex = parentNode.children.length;
+    } else {
+      // Normal case: dropped before some existing tab
+      const targetNode = folderNodes[evt.newIndex];
+      if (!targetNode) return;
+      targetBookmarkIndex = targetNode.index;
+    }
+
+    // If nothing effectively changes, bail out
+    if (targetBookmarkIndex === originalBookmarkIndex) {
+      return;
+    }
+
+    const browserApi = getBrowserApi();
+    try {
+      if (browserApi && browserApi.bookmarks && typeof browserApi.bookmarks.move === 'function') {
+        await browserApi.bookmarks.move(draggedFolderId, {
+          parentId: rootFolderId,
+          index: targetBookmarkIndex
+        });
+      }
+
+      const folderToKeepOpen = previouslyActiveFolderId || draggedFolderId;
+      const currentActiveFolderId = getActiveHomebaseFolderId();
+
+      // If the active folder isn't changing, avoid a full reload to prevent UI flash
+      if (folderToKeepOpen === currentActiveFolderId) {
+        const newTree = await resolveGetBookmarkTree(true);
+        if (typeof window !== 'undefined') {
+          window.bookmarkTree = newTree;
+        }
+        return;
+      }
+
+      // Otherwise reload, keeping the previously selected tab active
+      resolveLoadBookmarks(folderToKeepOpen);
+    } catch (err) {
+      console.error('Error moving bookmark folder:', err);
+      resolveLoadBookmarks(); // Fallback
+    }
+  }
+
   // =========================================================================
   // Public Controller Object
   // =========================================================================
@@ -669,6 +750,7 @@
 
     // Handlers exposed for testing and delegation
     handleGridDrop,
+    handleTabDrop,
     moveItemInLocalTree,
     handleGridMove,
     handleGridDragPointerMove,
@@ -736,5 +818,8 @@
     // Direct helper exports for multi-script compatibility
     window.moveItemInLocalTree = moveItemInLocalTree;
     window.clearTabDropHighlight = clearTabDropHighlight;
+    window.handleTabDrop = function(evt) {
+      return HomebaseBookmarkDragController.handleTabDrop(evt);
+    };
   }
 })();

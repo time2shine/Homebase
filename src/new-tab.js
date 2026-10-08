@@ -559,138 +559,21 @@ if (typeof window !== 'undefined') {
 
 
 
-/**
+// =============================================================================
+// Backward compatibility bridge for Bookmark Tab Drop Handler
+// Canonical implementation lives in src/newtab/bookmarks/bookmark-drag-controller.js
+// =============================================================================
 
- * NEW: Handler for folder tab drop (re-ordering).
-
- * This is a Sortable.js `onEnd` callback.
-
- */
-
-async function handleTabDrop(evt) {
-
-  if (evt.oldIndex === evt.newIndex) return; // No change
-
-
-
-  const previouslyActiveFolderId = activeHomebaseFolderId;
-
-
-
-  const draggedFolderId = evt.item.dataset.folderId;
-
-  const parentNode = findBookmarkNodeById(bookmarkTree[0], rootDisplayFolderId);
-
-
-
-  if (!draggedFolderId || !parentNode || !parentNode.children) return;
-
-
-
-  // Only folder nodes inside rootDisplayFolderId
-
-  const folderNodes = parentNode.children.filter(node => !node.url && node.children);
-
-
-
-  const draggedNode = folderNodes.find(node => node.id === draggedFolderId);
-
-  if (!draggedNode) return;
-
-
-
-  const originalBookmarkIndex = draggedNode.index;
-
-
-
-  let targetBookmarkIndex;
-
-
-
-  // If we dragged to the *last* visible tab from the left,
-
-  // treat this as "drop at the very end".
-
-  const movingDownIntoLast =
-
-    evt.newIndex === folderNodes.length - 1 && evt.oldIndex < evt.newIndex;
-
-
-
-  if (movingDownIntoLast) {
-
-    // Put it after all existing children
-
-    targetBookmarkIndex = parentNode.children.length;
-
-  } else {
-
-    // Normal case: dropped before some existing tab
-
-    const targetNode = folderNodes[evt.newIndex];
-
-    if (!targetNode) return;
-
-    targetBookmarkIndex = targetNode.index;
-
+function handleTabDrop(evt) {
+  if (typeof window !== 'undefined' && window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.handleTabDrop === 'function') {
+    return window.HomebaseBookmarkDragController.handleTabDrop(evt);
   }
-
-
-
-  // If nothing effectively changes, bail out
-
-  if (targetBookmarkIndex === originalBookmarkIndex) {
-
-    return;
-
-  }
-
-
-
-  try {
-
-    await browser.bookmarks.move(draggedFolderId, {
-
-      parentId: rootDisplayFolderId,
-
-      index: targetBookmarkIndex
-
-    });
-
-    const folderToKeepOpen = previouslyActiveFolderId || draggedFolderId;
-
-
-
-    // If the active folder isn't changing, avoid a full reload to prevent UI flash
-
-    if (folderToKeepOpen === activeHomebaseFolderId) {
-
-      const newTree = await getBookmarkTree(true);
-
-      bookmarkTree = newTree;
-
-      return;
-
-    }
-
-
-
-    // Otherwise reload, keeping the previously selected tab active
-
-    loadBookmarks(folderToKeepOpen);
-
-  } catch (err) {
-
-    console.error("Error moving bookmark folder:", err);
-
-    loadBookmarks(); // Fallback
-
-  }
-
+  return Promise.resolve();
 }
 if (typeof window !== 'undefined') {
   window.handleTabDrop = handleTabDrop;
 }
+
 
 // =============================================================================
 // Backward compatibility bridges for Bookmark Loader Service

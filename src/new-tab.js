@@ -407,19 +407,7 @@ updateBookmarkTabOverflow();
 
 
 
-let allBookmarks = [];
-
 let suggestionAbortController = null; // To cancel old requests
-
-
-
-// --- BOOKMARK LOGIC UPDATES ---
-
-const bookmarkFolderTabsContainer = document.getElementById('bookmark-folder-tabs');
-
-let rootDisplayFolderId = null; // ID of the main folder being displayed (e.g., "homebase")
-
-let activeHomebaseFolderId = null; // ID of the selected folder tab
 
 
 
@@ -502,12 +490,6 @@ if (typeof window !== 'undefined' && window.HomebaseFaviconPipeline) {
     window.HomebaseFaviconPipeline.resolveFaviconForImageTarget;
 }
 
-let bookmarkMetadata = {};
-
-let folderMetadata = {};
-
-let lastUsedBookmarkFolderId = null;
-
 // app*Preference state variables extracted to settings-preferences.js
 
 
@@ -582,31 +564,25 @@ if (typeof window !== 'undefined') {
 
 function processBookmarks(nodes, activeFolderId = null, rootNodeOverride = null) {
   if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.processBookmarks === 'function') {
-    const res = window.HomebaseBookmarkLoader.processBookmarks(nodes, activeFolderId, rootNodeOverride);
-    allBookmarks = window.HomebaseBookmarkLoader.getAllBookmarks();
-    rootDisplayFolderId = window.HomebaseBookmarkLoader.getRootDisplayFolderId();
-    return res;
+    return window.HomebaseBookmarkLoader.processBookmarks(nodes, activeFolderId, rootNodeOverride);
   }
 }
 
 async function loadBookmarkMetadata() {
   if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadBookmarkMetadata === 'function') {
-    bookmarkMetadata = await window.HomebaseBookmarkLoader.loadBookmarkMetadata();
-    return bookmarkMetadata;
+    return await window.HomebaseBookmarkLoader.loadBookmarkMetadata();
   }
   return {};
 }
 
 async function loadLastUsedFolderId() {
   if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadLastUsedFolderId === 'function') {
-    lastUsedBookmarkFolderId = await window.HomebaseBookmarkLoader.loadLastUsedFolderId();
-    return lastUsedBookmarkFolderId;
+    return await window.HomebaseBookmarkLoader.loadLastUsedFolderId();
   }
   return null;
 }
 
 async function setLastUsedFolderId(id) {
-  lastUsedBookmarkFolderId = id || null;
   if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.setLastUsedFolderId === 'function') {
     return await window.HomebaseBookmarkLoader.setLastUsedFolderId(id);
   }
@@ -614,21 +590,14 @@ async function setLastUsedFolderId(id) {
 
 async function loadFolderMetadata() {
   if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadFolderMetadata === 'function') {
-    folderMetadata = await window.HomebaseBookmarkLoader.loadFolderMetadata();
-    return folderMetadata;
+    return await window.HomebaseBookmarkLoader.loadFolderMetadata();
   }
   return {};
 }
 
 async function loadBookmarks(activeFolderId = null) {
   if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadBookmarks === 'function') {
-    const res = await window.HomebaseBookmarkLoader.loadBookmarks(activeFolderId);
-    allBookmarks = window.HomebaseBookmarkLoader.getAllBookmarks();
-    rootDisplayFolderId = window.HomebaseBookmarkLoader.getRootDisplayFolderId();
-    if (typeof window.bookmarkTree !== 'undefined') {
-      bookmarkTree = window.bookmarkTree;
-    }
-    return res;
+    return await window.HomebaseBookmarkLoader.loadBookmarks(activeFolderId);
   }
 }
 
@@ -1049,7 +1018,9 @@ function logInitSettled(name, result) {
   }
   if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.initialize === 'function') {
     window.HomebaseContextMenuController.initialize({
-      getBookmarkTree: () => bookmarkTree,
+      getBookmarkTree: () => (window.HomebaseBookmarkTreeService && typeof window.HomebaseBookmarkTreeService.getBookmarkTree === 'function'
+        ? window.HomebaseBookmarkTreeService.getBookmarkTree()
+        : (typeof window !== 'undefined' ? window.bookmarkTree : null)),
       findBookmarkNodeById: (root, id) => findBookmarkNodeById(root, id),
       openFolderFromContext: (folderId) => openFolderFromContext(folderId),
       openFolderAll: (folderId) => (window.openFolderAll ? window.openFolderAll(folderId) : undefined),
@@ -1098,9 +1069,9 @@ function handleNewTabStorageChange(changes, area) {
   }
 
   if (changes[LAST_USED_BOOKMARK_FOLDER_KEY]) {
-    lastUsedBookmarkFolderId = changes[LAST_USED_BOOKMARK_FOLDER_KEY].newValue || null;
+    const nextLastUsedId = changes[LAST_USED_BOOKMARK_FOLDER_KEY].newValue || null;
     if (typeof window !== 'undefined') {
-      window.lastUsedBookmarkFolderId = lastUsedBookmarkFolderId;
+      window.lastUsedBookmarkFolderId = nextLastUsedId;
     }
   }
 }

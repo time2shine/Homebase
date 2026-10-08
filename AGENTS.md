@@ -1,433 +1,149 @@
-# Homebase Codex Instructions
+# Homebase AI Agent Guidelines & Codex Instructions
 
-Homebase is a dual-browser new-tab dashboard extension for Chrome and Firefox.
+Homebase is a high-performance Manifest V3 new-tab dashboard extension for Chrome and Firefox.
 
-These instructions are for Codex and AI coding agents working in this repository.
+These instructions are the source of truth for Codex, AI agents, and developers collaborating in this repository.
 
-## Project rules
+---
 
-- Keep the extension compatible with both Chrome and Firefox.
-- Keep scripts as classic `<script defer>` files.
-- Do not convert files to ES modules.
-- Do not introduce a bundler unless explicitly requested.
-- Do not add new dependencies unless explicitly requested.
-- Do not run broad formatters.
-- Do not refactor unrelated code.
-- Do not rename functions, variables, storage keys, DOM IDs, or CSS classes unless explicitly requested.
-- Do not change function signatures unless explicitly requested.
-- Do not change extension permissions unless explicitly requested.
-- Do not edit generated files in `dist/`.
-- Do not commit generated ZIP files.
-- Do not edit files in `node_modules/`.
+## 1. Project Overview & Primary Goals
 
-## Windows commands
+Homebase transforms the browser new-tab experience into a fast, customizable dashboard for bookmark organization, search, weather, news, and productivity.
 
-On Windows, prefer `npm.cmd` over `npm`.
+Primary development goals:
+- **Fast new-tab loading**: Instant first paint (<50ms synchronous preload, sub-100ms ready state).
+- **Reliable bookmark management**: Zero data loss, robust WebExtension tree synchronization, responsive drag-and-drop.
+- **Clean modular architecture**: Single canonical owner per subsystem, decoupled services, clear domain boundaries.
+- **Cross-browser compatibility**: Native dual-browser support for both Chromium (Chrome, Edge, Brave) and Gecko (Firefox).
 
-Use:
+---
 
-```powershell
-npm.cmd run build
-npm.cmd run build:chrome
-npm.cmd run zip:chrome
-npm.cmd run zip:firefox
-```
+## 2. Mandatory Collaboration Workflow
 
-Only fall back to `npm` if `npm.cmd` is unavailable.
-
-## Source layout
-
-Main source lives in:
+Every code and architectural change in this repository must strictly follow the 7-step development lifecycle:
 
 ```text
-src/
-```
-
-Browser-specific manifests live in:
-
-```text
-manifests/manifest.chrome.json
-manifests/manifest.firefox.json
-```
-
-Generated browser outputs live in:
-
-```text
-dist/chrome/
-dist/firefox/
-```
-
-Extracted new-tab modules live in:
-
-```text
-src/newtab/
-```
-
-Current module folders:
-
-```text
-src/newtab/core/
-src/newtab/settings/
-src/newtab/tips/
-src/newtab/widgets/
-src/newtab/integrations/
-src/newtab/search/
-src/newtab/bookmarks/
-src/newtab/wallpaper/
-```
-
-Keep first-party Homebase modules under `src/newtab/`.
-
-Keep vendor or legacy asset scripts under:
-
-```text
-src/assets/js/
-```
-
-Do not move `src/assets/js/Sortable.min.js` unless explicitly requested.
-
-## Script loading rules
-
-- Preserve script order unless the task requires a specific dependency order change.
-- New extracted files must load before `src/new-tab.js`.
-- If an extracted file provides globals used by another extracted file, load the provider first.
-- Keep `src/settings-ui.js` lazy-loaded unless explicitly requested.
-- Keep `src/gallery-ui.js` lazy-loaded unless explicitly requested.
-- Keep `src/tips.js` as the data source for `window.HOMEBASE_TIPS`; do not replace it with `homebase-tips-ui.js`.
-
-## Extraction rules
-
-For code extraction tasks:
-
-- Move only the requested cohesive block.
-- Do not change behavior.
-- Do not refactor while moving.
-- Do not rename functions.
-- Do not change function signatures.
-- Do not convert to modules.
-- Do not wrap extracted code in an IIFE unless explicitly requested.
-- Do not move unrelated helpers.
-- Do not move startup wrappers unless explicitly requested.
-- Leave `initializePage` in `src/new-tab.js` unless explicitly requested.
-- Leave startup orchestration in `src/new-tab.js` unless explicitly requested.
-- Leave idle scheduler logic in `src/new-tab.js` unless explicitly requested.
-- Avoid moving bookmark, wallpaper/video, live search, or startup code unless the prompt explicitly asks for it.
-- For small extraction tasks, prefer path-only or move-only changes and avoid improving code during the move.
-- If a requested extraction reveals unrelated bugs, report them separately instead of fixing them unless explicitly asked.
-
-When extracting a function used by another extracted module, update script order so the dependency loads first.
-
-## Current high-risk areas
-
-Treat these as high-risk. Do not edit unless explicitly requested:
-
-```text
-initializePage
-startup orchestration
-idle scheduler
-bookmark grid/rendering/tabs
-drag and reorder behavior
-wallpaper/video/cache/startup path
-live search input and keyboard behavior
-search suggestions async/cancellation behavior
-Firefox container bookmark opening
-favicon resolution/cache pipeline
-```
-
-## Testing rules
-
-For normal edits, run:
-
-```powershell
-node --check <changed-js-file>
-node scripts/check-newtab-static.mjs
-node scripts/smoke-newtab-file.mjs
-npm.cmd run build:chrome
-```
-
-For extraction tasks, also verify:
-
-- moved functions exist exactly once
-- no duplicate declarations remain
-- old paths are no longer referenced
-- new script order is correct
-- browser console has no `ReferenceError` if a browser harness is used
-
-For small extractions, do not run full release builds or ZIP packaging unless explicitly requested.
-
-## Chrome/CDP harness limit
-
-Use the Chrome/CDP harness for a fast verification pass when useful, but do not spend unlimited time debugging the harness.
-
-For small extractions or settings/widget changes:
-
-- Try the harness once.
-- If the mock/browser setup fails, try one fix.
-- Do not spend more than about 10–15 minutes debugging the harness.
-
-If the harness still fails, stop harness debugging and continue with:
-
-```text
-1. node --check on changed JS files
-2. npm.cmd run build:chrome
-3. static verification that moved functions exist exactly once
-4. static verification that no duplicate declarations remain
-5. clear note that manual Firefox testing is required
-```
-
-Only spend more harness time for high-risk tasks such as bookmarks, wallpaper/video, live search, or startup orchestration.
-
-## Manual Firefox testing
-
-For extension behavior, automated Chrome/CDP checks are not final proof.
-
-Always tell the user when manual Firefox testing is required for:
-
-```text
-browser.* APIs
-bookmarks
-storage persistence
-new-tab startup behavior
-wallpaper/video behavior
-Firefox containers
-settings persistence
-network/cache widgets
-```
-
-## Codex prompt generation rules
-
-When the user asks for a "Codex prompt", "VS Code Codex prompt", "implementation prompt", or "give me prompt", generate a strict implementation prompt for Codex.
-
-The generated prompt must be written for VS Code Codex working inside this Homebase repository and must include:
-
-```text
-Task:
-ADD:
-REMOVE:
-MODIFY:
-DO NOT MODIFY:
-Goal:
-Move / Change:
-Important:
-Script order:
-Testing limit:
-After editing, verify:
-Post-edit verification report required:
-```
-
-If a section does not apply, write `None`.
-
-Every generated Codex prompt must:
-
-- say `Follow AGENTS.md.`
-- specify exact file paths and function names when known
-- explicitly list what must not be edited
-- prevent unrelated refactors, broad formatting, scope creep, ES modules, bundlers, and new dependencies
-- require cleanup of duplicate, dead, stale, or redundant logic directly related to the requested change
-- require `node --check` on changed JS files
-- require `npm.cmd run build:chrome`
-- include the Chrome/CDP harness time cap from this file
-- require manual Firefox testing notes when browser APIs, storage, bookmarks, settings persistence, network/cache widgets, wallpaper/video, or Firefox containers are involved
-- require a post-edit verification report with files changed, functions modified, variables changed, full final code blocks for modified functions, explanation, verification, build result, unverified items, and confirmation unrelated areas were not changed
-
-For Homebase extraction prompts, also include the target file under `src/newtab/`, exact functions/constants to move, script-order dependencies, high-risk "do not move" areas, and confirmation that startup wrappers stay in `src/new-tab.js` unless explicitly requested.
-
-For Homebase release prompts, do not use the short implementation prompt style. Use the full release-manager prompt.
-
-## Post-edit report rules
-
-After every code edit, report:
-
-```text
-Files changed
-Functions moved/modified
-Variables/constants moved/added/removed
-Functions intentionally left in place
-Globals/dependencies used by new files
-Verification performed
-Build result
-Anything not verified
-```
-
-For modified functions, include final function signatures. For large functions, do not paste the whole function unless explicitly requested.
-
-## Git rules
-
-- Do not commit unless explicitly asked.
-- Do not stage generated files, `dist/`, or generated ZIP files.
-- Prefer small commits after each successful extraction.
-- Use clear commit messages such as `Extract weather widget` or `Refresh feedback settings`.
-
-## Release rules
-
-Use the full release-manager prompt only for actual releases.
-
-During release prep:
-
-- Edit only release metadata files unless pre-existing source/UI changes are approved.
-- Do not edit source/UI files during release prep.
-- Do not create separate feature and release commits if the release prompt requests one combined commit.
-- Do not invent release notes.
-- Do not claim build, push, ZIP, or GitHub release success unless it actually happened.
-
-## Homebase Project Continuity Guide
-
-### Owner Development Workflow
-
-The preferred and mandatory workflow for all AI agents working on Homebase is:
-
-```text
-Audit → Plan → Implement → Verify → Report → Approval → Commit → Approval → Push
+1. Audit → 2. Plan → 3. Wait for Approval → 4. Implement → 5. Verify → 6. Commit → 7. Push
 ```
 
 Rules:
-- Always audit before coding.
-- Create a plan document before implementation.
-- Make isolated changes only.
-- Do not commit automatically.
-- Do not push automatically.
-- Wait for owner approval at commit and push stages.
-- Do not continue to the next phase without approval.
+- **Never skip phases**: Do not implement without an approved plan; do not commit without explicit approval; do not push without commit review.
+- **Audit first**: Perform a read-only audit of relevant code before drafting a plan or modifying files.
+- **Document each phase**: Each development cycle phase produces a dedicated plan document (`docs/<N>-cycleX-phaseY-plan.md`) and implementation report (`docs/<N+1>-cycleX-phaseY-implementation-report.md`).
+- **Wait for user approval**: Pause and present reports at commit and push boundaries.
 
-### Improvement Cycle Structure
+---
 
-Cycle format:
+## 3. Architecture Principles
 
+### 3.1 Controller Ownership
+Each functional subsystem must have **one canonical owner**. Avoid splitting ownership or creating duplicate controllers.
+
+- **Bookmark Subsystem** (`src/newtab/bookmarks/`):
+  - `HomebaseBookmarkDragController`: Owns SortableJS drag lifecycle, pointer raycasting, folder hover locking, tile/tab move dispatch.
+  - `HomebaseBookmarkGridController`: Owns virtualized tile rendering, DOM layout, grid click delegation, and active folder state.
+  - `HomebaseBookmarkLoader`: Owns bookmark tree fetching, root display folder resolution, and bookmark metadata loading.
+  - `HomebaseBookmarkTreeService`: Owns in-memory tree traversal, node search by ID, and parent-child hierarchy.
+  - `HomebaseBookmarkRootController`: Owns WebExtension `browser.bookmarks` listener integration and tree invalidation.
+  - `HomebaseBookmarkTabsScroll`: Owns folder tab strip overflow calculation and smooth scrolling.
+- **Wallpaper Subsystem** (`src/newtab/wallpaper/`):
+  - `HomebaseWallpaperController`: Owns video and static wallpaper presentation, daily rotation, and gallery integration.
+  - `HomebaseWallpaperStorage`: Owns asset caching, video blob storage, and poster data persistence.
+  - `HomebaseDynamicAccent`: Owns accent color extraction and UI adaptation.
+- **Core & Storage Infrastructure** (`src/newtab/core/`):
+  - `HomebaseStorage`: Owns unified storage facade, schema migrations, and batch persistence.
+  - `HomebaseStorageDispatcher`: Owns cross-component storage event dispatching.
+  - `HomebaseContextMenuController`: Owns custom context menu actions and lifecycle.
+  - `HomebaseDialogController`: Owns modal dialog presentation and focus management.
+  - `HomebaseDockNavigation`: Owns dock shortcuts and responsive layouts.
+- **Main New-Tab Runtime** (`src/new-tab.js`):
+  - Pure **Startup Orchestrator**: Owns high-level initialization sequence (`initializePage`), ready-state class toggling, and top-level DOM lifecycle coordination.
+
+### 3.2 Global Scope & Script Execution Model
+- **Classic `<script defer>` Scripts**: Scripts execute in document order in a shared global lexical declarative environment record.
+- **No ES Modules or Bundlers**: Do not convert files to ES modules (`type="module"`) or introduce build bundlers (Webpack, Vite, Rollup) unless explicitly requested.
+- **Collision Invariant**: Top-level `const` or `let` declarations with identical names across deferred scripts will cause fatal browser `SyntaxError` crashes. Every extracted declaration must exist in exactly one file.
+
+---
+
+## 4. Repository Rules & File Boundaries
+
+### 4.1 Protected Files
+The following files are **strictly protected** and must never be modified unless explicitly instructed by the repository owner:
+- `src/preload.js`
+- `src/instant_load.js`
+- `manifests/*` (except during authorized release version bumps)
+- `dist/*` (generated build artifacts; never manually edit or stage)
+
+### 4.2 Source Layout
 ```text
-Cycle X
- ├── Audit
- ├── Phase Plan
- ├── Implementation
- ├── Verification
- ├── Commit
- ├── Push
- └── Next Phase
+src/
+├── new-tab.html              # Main dashboard HTML & script tag manifest
+├── new-tab.css               # Core styling tokens & layout rules
+├── new-tab.js                # Startup orchestrator
+├── preload.js                # Synchronous head preloader (Theme & poster apply)
+├── instant_load.js           # Instant synchronous cached UI hydrator
+├── data.js                   # Application presets & What's New metadata
+├── tips.js                   # Tips data source (HOMEBASE_TIPS)
+├── assets/                   # Static icons, fallback video, vendor scripts (Sortable.min.js)
+└── newtab/                   # Extracted first-party controllers & services
+    ├── core/                 # Storage, dialogs, dock, context menu, utils
+    ├── bookmarks/            # Grid, drag, loader, tree, scroll, styling
+    ├── search/               # Search interaction, UI, storage, suggestions
+    ├── settings/             # Settings UI, preferences, backup, visual effects
+    ├── wallpaper/            # Wallpaper playback, caching, gallery
+    ├── widgets/              # Time, weather, news, quote, todo
+    ├── integrations/         # App launcher, Firefox containers
+    └── tips/                 # Tips UI controller
 ```
 
-Each phase should have:
-- Plan document (`docs/<N>-cycleX-phaseY-plan.md`)
-- Implementation (isolated module under `src/newtab/` and lightweight wrappers in `src/new-tab.js`)
-- Verification report (`docs/<N+1>-cycleX-phaseY-implementation-report.md`)
-- Commit summary (after explicit approval)
+### 4.3 Script Loading Rules
+- New extracted scripts must be added to `src/new-tab.html` as `<script src="..." defer></script>` **before** `src/new-tab.js`.
+- Dependencies must load before their dependents.
+- `src/settings-ui.js` and `src/gallery-ui.js` must remain lazy-loaded on demand.
+- Do not move `src/assets/js/Sortable.min.js`.
 
-### Extraction Architecture Rules
+---
 
-`src/new-tab.js` is the legacy monolith.
+## 5. Verification Toolchain
 
-Future extraction should move responsibilities into:
-
-```text
-src/newtab/
- ├── core/
- ├── search/
- ├── wallpaper/
- ├── bookmarks/
- └── settings/
-```
-
-New modules should:
-- Own implementation
-- Expose `window.Homebase<Name>Controller` or `window.Homebase<Name>Service`
-- Maintain backward compatibility
-
-`src/new-tab.js` should keep:
-- Startup orchestration
-- Compatibility wrappers
-- Integration points
-
-Avoid:
-- Unrelated refactoring
-- Behavior changes during extraction
-- Breaking existing callers
-
-### Verification Rules
-
-Before every commit run:
+Before every commit, run the mandatory verification suite:
 
 ```powershell
-node --check <changed files>
+node --check <changed-js-files>
 node scripts/check-newtab-static.mjs
-node scripts/smoke-newtab-file.mjs
 npm.cmd test
 npm.cmd run build
-git diff --check
 git diff src/preload.js src/instant_load.js manifests/ dist/
 ```
 
-Protected files:
-- `src/preload.js`
-- `src/instant_load.js`
-- `manifests/*`
-- `dist/*`
+Expected verification standards:
+- **`node --check`**: Clean syntax on all modified JavaScript files.
+- **`check-newtab-static.mjs`**: All 63 deferred scripts verified, zero top-level declaration collisions, script order intact.
+- **`npm.cmd test`**: 100% passing across all 367 unit tests on `node:test` + headless browser smoke test.
+- **`npm.cmd run build`**: Clean dual builds in `dist/chrome/` and `dist/firefox/`.
+- **Protected files diff**: Empty output.
 
-must remain untouched unless explicitly approved.
+---
 
-### Manual Browser Verification Decision Process
+## 6. Windows Commands Reference
 
-Do not request manual browser testing after every implementation.
+Always use Windows-compatible commands (`npm.cmd` preferred):
 
-Before requesting manual testing, analyze risk.
+```powershell
+npm.cmd test                 # Run 4-stage automated test suite
+npm.cmd run build            # Build Chrome and Firefox outputs
+npm.cmd run build:chrome     # Build Chrome distribution only
+npm.cmd run build:firefox    # Build Firefox distribution only
+npm.cmd run zip:chrome       # Generate Chrome ZIP archive
+npm.cmd run zip:firefox      # Generate Firefox ZIP archive
+```
 
-Manual browser verification is required when changes affect:
-- browser extension APIs
-- Firefox-specific APIs
-- Chrome/Firefox permissions
-- browser storage persistence
-- bookmarks API
-- context menus
-- Cache Storage API
-- video/media playback
-- real DOM interactions
-- startup loading sequence
-- features difficult to simulate automatically
+---
 
-If manual testing is required, report:
-1. Why manual testing is needed.
-2. When it should happen:
-   - before commit
-   - after commit
-   - before push
-   - before release
-3. Provide checklist:
+## 7. Release Governance
 
-Chrome:
-- reload extension
-- open new tab
-- test affected feature
-- check console
-
-Firefox:
-- reload extension
-- test Firefox-specific behavior
-- check console
-
-Expected behavior:
-- describe expected result
-
-Console:
-- mention errors/warnings to watch.
-
-If manual testing is not required, explicitly state:
-"Manual browser verification is not required for this phase because the changes are isolated and covered by automated validation."
-
-### Freeze / Regression Debugging Workflow
-
-When new-tab freezes:
-1. Check browser console error.
-2. Identify file and line.
-3. Inspect recently extracted modules.
-4. Check script loading order.
-5. Check duplicate top-level declarations.
-6. Check shared global variables.
-7. Apply smallest possible fix.
-8. Run full verification again.
-
-**Important Note on Global Lexical Scope**:
-Deferred scripts (`<script defer>`) evaluate in the same global execution context and share the global lexical declarative environment record. A top-level `const` or `let` declaration in one script will clash with a duplicate declaration in another script.
-
-Example failure:
-- In `wallpaper-storage.js`: `const wallpaperObjectUrlCache = new Map();`
-- In `new-tab.js`: `const wallpaperObjectUrlCache = new Map();`
-- Causes browser runtime error: `Uncaught SyntaxError: Identifier 'wallpaperObjectUrlCache' has already been declared`
-
-All moved/extracted top-level declarations must be removed from `src/new-tab.js` and added to `movedDeclarationNames` in `scripts/check-newtab-static.mjs` for permanent static protection.
+- Follow the Release Manager process only for version publications.
+- Update release metadata simultaneously in `package.json`, `manifests/manifest.chrome.json`, `manifests/manifest.firefox.json`, and `src/CHANGELOG.md`.
+- Never commit or stage generated ZIP archives.
+- Ensure dual browser packages pass structural validation with root-level `manifest.json`.

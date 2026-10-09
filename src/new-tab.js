@@ -318,79 +318,7 @@ function scheduleIdleChunkedTask(label, stepFn, initialState) {
   };
 
   scheduleIdleTask(runner, label);
-
 }
-
-
-
-
-(async function primeWallpaperBackground() {
-
-  try {
-
-    const stored = await getWallpaperRotationState();
-
-    let selection = stored.selection;
-
-    const now = Date.now();
-    const allowDailyRotation = stored.allowDailyRotation;
-
-    if (selection && isDailyWallpaperRotationDue(selection, allowDailyRotation, now)) {
-
-      const manifest = await getVideosManifest();
-      const nextSelection = await pickNextWallpaper(manifest);
-
-      if (nextSelection) {
-
-        selection = nextSelection;
-
-        await clearPendingDailyRotation();
-
-      }
-
-    }
-
-    if (selection) {
-
-      syncWallpaperStartupState(selection, allowDailyRotation);
-
-      const hydrated = await hydrateWallpaperSelection(selection);
-
-      const poster = hydrated.posterUrl || 'assets/fallback.webp';
-
-      setWallpaperFallbackPoster(poster, hydrated.posterCacheKey || hydrated.posterUrl || '');
-
-      applyWallpaperBackground(poster);
-
-      return;
-
-    }
-
-
-
-    // Only reach here if there is truly no wallpaper set
-
-    const fallbackSelection = buildFallbackSelection(now);
-
-    setWallpaperFallbackPoster(fallbackSelection.posterUrl, fallbackSelection.posterCacheKey || fallbackSelection.posterUrl || '');
-
-    applyWallpaperBackground(fallbackSelection.posterUrl);
-
-
-
-    await setWallpaperSelectionWithFallback(fallbackSelection, now);
-
-    syncWallpaperStartupState(fallbackSelection, allowDailyRotation);
-
-  } catch (err) {
-
-    console.warn('primeWallpaperBackground failed:', err);
-
-  }
-
-})();
-
-
 
 if (window.HomebaseDockNavigation) {
   window.HomebaseDockNavigation.setupResponsiveLayoutListener();

@@ -411,56 +411,7 @@ let suggestionAbortController = null; // To cancel old requests
 
 
 
-// === GRID/TABS DRAG-AND-DROP GLOBALS ===
-// Canonical Sortable instances live in HomebaseBookmarkDragController
-
-let isGridDragging = false;       // Track active drag to block click navigation
-if (typeof window !== 'undefined') {
-  try {
-    Object.defineProperty(window, 'isGridDragging', {
-      get: () => {
-        if (window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.isGridDragging === 'function') {
-          return window.HomebaseBookmarkDragController.isGridDragging();
-        }
-        return isGridDragging;
-      },
-      set: (val) => {
-        isGridDragging = Boolean(val);
-        if (window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.setGridDragging === 'function') {
-          window.HomebaseBookmarkDragController.setGridDragging(val);
-        }
-      },
-      configurable: true,
-      enumerable: true
-    });
-  } catch (_) {
-    window.isGridDragging = isGridDragging;
-  }
-}
-
-let isTabDragging = false;        // Track tab drag state to avoid click misfires
-if (typeof window !== 'undefined') {
-  try {
-    Object.defineProperty(window, 'isTabDragging', {
-      get: () => {
-        if (window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.isTabDragging === 'function') {
-          return window.HomebaseBookmarkDragController.isTabDragging();
-        }
-        return isTabDragging;
-      },
-      set: (val) => {
-        isTabDragging = Boolean(val);
-        if (window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.setTabDragging === 'function') {
-          window.HomebaseBookmarkDragController.setTabDragging(val);
-        }
-      },
-      configurable: true,
-      enumerable: true
-    });
-  } catch (_) {
-    window.isTabDragging = isTabDragging;
-  }
-}
+// Drag state ownership (isGridDragging, isTabDragging) lives canonically in HomebaseBookmarkDragController
 
 
 
@@ -505,56 +456,8 @@ if (typeof window !== 'undefined' && window.HomebaseFaviconPipeline) {
 
 
 
-// =============================================================================
-// Backward compatibility bridge for Bookmark Grid Drag Controller
-// Canonical implementation lives in src/newtab/bookmarks/bookmark-drag-controller.js
-// =============================================================================
-
-function setupGridSortable(gridElement) {
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.setupGridSortable === 'function') {
-    return window.HomebaseBookmarkDragController.setupGridSortable(gridElement);
-  }
-  return null;
-}
-if (typeof window !== 'undefined') {
-  window.setupGridSortable = setupGridSortable;
-}
-
-
-
-
-
-// =============================================================================
-// Backward compatibility bridge for Bookmark Tab Drag Controller
-// Canonical implementation lives in src/newtab/bookmarks/bookmark-drag-controller.js
-// =============================================================================
-
-function setupTabsSortable(tabsContainer) {
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.setupTabsSortable === 'function') {
-    return window.HomebaseBookmarkDragController.setupTabsSortable(tabsContainer);
-  }
-  return null;
-}
-if (typeof window !== 'undefined') {
-  window.setupTabsSortable = setupTabsSortable;
-}
-
-
-
-// =============================================================================
-// Backward compatibility bridge for Bookmark Tab Drop Handler
-// Canonical implementation lives in src/newtab/bookmarks/bookmark-drag-controller.js
-// =============================================================================
-
-function handleTabDrop(evt) {
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.handleTabDrop === 'function') {
-    return window.HomebaseBookmarkDragController.handleTabDrop(evt);
-  }
-  return Promise.resolve();
-}
-if (typeof window !== 'undefined') {
-  window.handleTabDrop = handleTabDrop;
-}
+// Bookmark Drag & Drop lifecycle (setupGridSortable, setupTabsSortable, handleTabDrop)
+// lives canonically in src/newtab/bookmarks/bookmark-drag-controller.js
 
 // ===============================================
 // --- SEARCH BAR ---

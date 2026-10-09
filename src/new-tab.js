@@ -400,32 +400,7 @@ tabsScrollController = initTabsScrollController();
 
 updateBookmarkTabOverflow();
 
-
-
-
-
-
-
-
 let suggestionAbortController = null; // To cancel old requests
-
-
-
-// Drag state ownership (isGridDragging, isTabDragging) lives canonically in HomebaseBookmarkDragController
-
-
-
-
-
-
-// Settings DOM element handles and APP_*_KEY constants extracted to settings-preferences.js
-
-
-
-
-// Animation Dictionary (Name -> CSS Keyframes)
-// Map to store per-folder customization (id -> { color, icon })
-// Map to store per-bookmark customization (id -> { icon })
 
 // ==========================
 // FAVICON RUNTIME DELEGATION
@@ -440,24 +415,6 @@ if (typeof window !== 'undefined' && window.HomebaseFaviconPipeline) {
   window.resolveFaviconForImageTarget =
     window.HomebaseFaviconPipeline.resolveFaviconForImageTarget;
 }
-
-// app*Preference state variables extracted to settings-preferences.js
-
-
-// ===============================================
-
-// --- BOOKMARKS ---
-
-// ===============================================
-
-
-
-
-
-
-
-// Bookmark Drag & Drop lifecycle (setupGridSortable, setupTabsSortable, handleTabDrop)
-// lives canonically in src/newtab/bookmarks/bookmark-drag-controller.js
 
 // ===============================================
 // --- SEARCH BAR ---
@@ -474,17 +431,9 @@ const searchSelect = document.getElementById('search-select');
 // ===============================================
 // Extracted to firefox-containers.js (openFolderAll)
 
-
-
-// ===============================================
-
 function logInitSettled(name, result) {
   if (result.status === 'rejected') console.warn('[init]', name, 'failed:', result.reason);
 }
-
-// --- INITIALIZE THE PAGE (MODIFIED) ---
-
-// ===============================================
 
 // ===============================================
 // STARTUP CONTRACT

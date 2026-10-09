@@ -556,60 +556,6 @@ if (typeof window !== 'undefined') {
   window.handleTabDrop = handleTabDrop;
 }
 
-
-// =============================================================================
-// Backward compatibility bridges for Bookmark Loader Service
-// Canonical implementation lives in src/newtab/bookmarks/bookmark-loader-service.js
-// =============================================================================
-
-function processBookmarks(nodes, activeFolderId = null, rootNodeOverride = null) {
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.processBookmarks === 'function') {
-    return window.HomebaseBookmarkLoader.processBookmarks(nodes, activeFolderId, rootNodeOverride);
-  }
-}
-
-async function loadBookmarkMetadata() {
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadBookmarkMetadata === 'function') {
-    return await window.HomebaseBookmarkLoader.loadBookmarkMetadata();
-  }
-  return {};
-}
-
-async function loadLastUsedFolderId() {
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadLastUsedFolderId === 'function') {
-    return await window.HomebaseBookmarkLoader.loadLastUsedFolderId();
-  }
-  return null;
-}
-
-async function setLastUsedFolderId(id) {
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.setLastUsedFolderId === 'function') {
-    return await window.HomebaseBookmarkLoader.setLastUsedFolderId(id);
-  }
-}
-
-async function loadFolderMetadata() {
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadFolderMetadata === 'function') {
-    return await window.HomebaseBookmarkLoader.loadFolderMetadata();
-  }
-  return {};
-}
-
-async function loadBookmarks(activeFolderId = null) {
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadBookmarks === 'function') {
-    return await window.HomebaseBookmarkLoader.loadBookmarks(activeFolderId);
-  }
-}
-
-if (typeof window !== 'undefined') {
-  window.loadBookmarks = loadBookmarks;
-  window.processBookmarks = processBookmarks;
-  window.loadBookmarkMetadata = loadBookmarkMetadata;
-  window.loadFolderMetadata = loadFolderMetadata;
-  window.loadLastUsedFolderId = loadLastUsedFolderId;
-  window.setLastUsedFolderId = setLastUsedFolderId;
-}
-
 // ===============================================
 // --- SEARCH BAR ---
 // ===============================================
@@ -659,8 +605,12 @@ function logInitSettled(name, result) {
     const settingsP = (window.HomebaseSettingsPreferences && typeof window.HomebaseSettingsPreferences.load === 'function')
       ? window.HomebaseSettingsPreferences.load()
       : loadAppSettingsFromStorage();
-    const bookmarkMetaP = loadBookmarkMetadata();
-    const lastFolderP = loadLastUsedFolderId();
+    const bookmarkMetaP = (window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadBookmarkMetadata === 'function')
+      ? window.HomebaseBookmarkLoader.loadBookmarkMetadata()
+      : Promise.resolve({});
+    const lastFolderP = (window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadLastUsedFolderId === 'function')
+      ? window.HomebaseBookmarkLoader.loadLastUsedFolderId()
+      : Promise.resolve(null);
 
     const type = await wallpaperTypeP;
     recordStartupPerfEvent('newtab:wallpaper-type-loaded', { type });
@@ -688,7 +638,9 @@ function logInitSettled(name, result) {
       DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
         ? performance.now()
         : 0;
-    await loadFolderMetadata();
+    if (window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadFolderMetadata === 'function') {
+      await window.HomebaseBookmarkLoader.loadFolderMetadata();
+    }
     hbPerfTime('loadFolderMetadata', folderMetaStart);
 
     document.querySelectorAll('.sub-settings-container').forEach((container) => {
@@ -746,7 +698,9 @@ function logInitSettled(name, result) {
       DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
         ? performance.now()
         : 0;
-    await loadBookmarks();
+    if (window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadBookmarks === 'function') {
+      await window.HomebaseBookmarkLoader.loadBookmarks();
+    }
     hbPerfTime('loadBookmarks total', bookmarksStart);
     hbPerfMark('bookmarks-done');
 

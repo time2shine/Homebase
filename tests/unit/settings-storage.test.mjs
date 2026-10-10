@@ -13,6 +13,7 @@ const migrationsScriptPath = path.join(rootDir, 'src/newtab/core/schema-migratio
 const diagnosticsScriptPath = path.join(rootDir, 'src/newtab/core/storage-diagnostics.js');
 const storageServiceScriptPath = path.join(rootDir, 'src/newtab/core/storage-service.js');
 
+const settingsStorageScriptPath = path.join(rootDir, 'src/newtab/settings/settings-storage.js');
 const settingsPreferencesScriptPath = path.join(rootDir, 'src/newtab/settings/settings-preferences.js');
 const searchEngineSettingsScriptPath = path.join(rootDir, 'src/newtab/settings/search-engine-settings.js');
 const visualEffectsSettingsScriptPath = path.join(rootDir, 'src/newtab/settings/visual-effects-settings.js');
@@ -24,6 +25,7 @@ const migrationsScriptCode = fs.readFileSync(migrationsScriptPath, 'utf8');
 const diagnosticsScriptCode = fs.readFileSync(diagnosticsScriptPath, 'utf8');
 const storageServiceScriptCode = fs.readFileSync(storageServiceScriptPath, 'utf8');
 
+const settingsStorageScriptCode = fs.readFileSync(settingsStorageScriptPath, 'utf8');
 const settingsPreferencesScriptCode = fs.readFileSync(settingsPreferencesScriptPath, 'utf8');
 const searchEngineSettingsScriptCode = fs.readFileSync(searchEngineSettingsScriptPath, 'utf8');
 const visualEffectsSettingsScriptCode = fs.readFileSync(visualEffectsSettingsScriptPath, 'utf8');
@@ -403,6 +405,8 @@ function createSettingsTestEnvironment(options = {}) {
     delete sandbox.window.HomebaseStorage;
   }
 
+  vm.runInContext(settingsStorageScriptCode, context);
+
   return {
     context,
     sandbox,
@@ -643,3 +647,64 @@ test('settings-ui: fallback to browser.storage.local when HomebaseStorage is abs
   await env.sandbox.browser.storage.local.remove('currentSearchEngineId');
   assert.equal(env.storageData['currentSearchEngineId'], undefined);
 });
+
+// -------------------------------------------------------------
+// Tests for src/newtab/settings/settings-storage.js
+// -------------------------------------------------------------
+
+test('settings-storage: canonical API surface and default values', async () => {
+  const env = createSettingsTestEnvironment();
+  const storageModule = env.sandbox.HomebaseSettingsStorage;
+
+  assert.ok(storageModule, 'HomebaseSettingsStorage must be defined');
+  assert.ok(storageModule.keys, 'HomebaseSettingsStorage.keys must exist');
+  assert.ok(storageModule.defaults, 'HomebaseSettingsStorage.defaults must exist');
+  assert.ok(storageModule.state, 'HomebaseSettingsStorage.state must exist');
+  assert.equal(typeof storageModule.initialize, 'function');
+  assert.equal(typeof storageModule.load, 'function');
+  assert.equal(typeof storageModule.save, 'function');
+  assert.equal(typeof storageModule.get, 'function');
+  assert.equal(typeof storageModule.set, 'function');
+  assert.equal(typeof storageModule.getAll, 'function');
+
+  assert.equal(storageModule.defaults.timeFormat, '12-hour');
+  assert.equal(storageModule.defaults.backgroundDim, 0);
+  assert.equal(storageModule.defaults.showSidebar, true);
+  assert.equal(storageModule.defaults.showWeather, true);
+  assert.equal(storageModule.defaults.showQuote, true);
+  assert.equal(storageModule.defaults.showNews, false);
+  assert.equal(storageModule.defaults.showTodo, true);
+});
+
+test('settings-storage: save updates state and writes batch to storage', async () => {
+  const env = createSettingsTestEnvironment();
+  const storageModule = env.sandbox.HomebaseSettingsStorage;
+
+  await storageModule.save({
+    timeFormat: '24-hour',
+    backgroundDim: 45,
+    showNews: true
+  });
+
+  assert.equal(storageModule.get('timeFormat'), '24-hour');
+  assert.equal(storageModule.get('backgroundDim'), 45);
+  assert.equal(storageModule.get('showNews'), true);
+
+  assert.equal(env.storageData['appTimeFormatPreference'], '24-hour');
+  assert.equal(env.storageData['appBackgroundDim'], 45);
+  assert.equal(env.storageData['appShowNews'], true);
+  assert.equal(env.localStorageData['fast-bg-dim'], '45');
+  assert.equal(env.localStorageData['fast-time-format'], '24-hour');
+});
+
+test('settings-storage: preference bridges read and write through to state', async () => {
+  const env = createSettingsTestEnvironment();
+  const storageModule = env.sandbox.HomebaseSettingsStorage;
+
+  env.sandbox.appTimeFormatPreference = '24-hour';
+  assert.equal(storageModule.get('timeFormat'), '24-hour');
+
+  storageModule.set('showSidebar', false);
+  assert.equal(env.sandbox.appShowSidebarPreference, false);
+});
+

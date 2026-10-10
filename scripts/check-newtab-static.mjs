@@ -21,6 +21,7 @@ const keyExtractedModulePaths = [
   "newtab/core/storage-dispatcher.js",
   "newtab/settings/sub-settings-ui.js",
   "newtab/settings/search-engine-settings.js",
+  "newtab/settings/settings-storage.js",
   "newtab/settings/settings-preferences.js",
   "newtab/settings/material-color-picker.js",
   "newtab/settings/backup-import.js",

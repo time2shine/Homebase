@@ -2,6 +2,21 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.18.0 — 2026-10-11
+### Added
+- Dedicated cooperative Idle Task Scheduler subsystem (`src/newtab/core/idle-scheduler.js`) providing bounded 12ms slicing, unified scheduling diagnostics, and early boot registration.
+- Dedicated Startup Hydration Task Registry (`src/newtab/core/startup-hydration.js`) encapsulating all widget and runtime setup tasks with error isolation and dependency injection.
+
+### Improved
+- Deconstructed monolithic `src/new-tab.js` from 1,148 lines down to a 333-line pure Startup Orchestration Coordinator (-815 lines, -71.0% reduction).
+- Consolidated wallpaper startup background priming directly into `HomebaseWallpaperController`.
+- Direct subsystem dispatch for bookmark tree and virtual grid operations, pruning legacy wrapper functions and dead state mirrors.
+- Cleaned up redundant favicon bridge and removed obsolete declarations and comment blocks.
+
+### Fixed
+- Resolved scheduler dependency inversion by registering `HomebaseIdleScheduler` early in boot order, guaranteeing synchronous availability for downstream controllers.
+- Eliminated cross-script state shadowing between `new-tab.js` and extracted bookmark/wallpaper controllers.
+
 ## v0.17.0 — 2026-10-09
 ### Added
 - Dedicated first-party `HomebaseBookmarkDragController` subsystem (`src/newtab/bookmarks/bookmark-drag-controller.js`) orchestrating grid and tab drag-and-drop operations.

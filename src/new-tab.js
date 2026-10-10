@@ -32,22 +32,6 @@ tabsScrollController = initTabsScrollController();
 
 updateBookmarkTabOverflow();
 
-let suggestionAbortController = null; // To cancel old requests
-
-// ==========================
-// FAVICON RUNTIME DELEGATION
-// ==========================
-if (typeof window !== 'undefined' && window.HomebaseFaviconPipeline) {
-  window.ensureFaviconObserver =
-    window.HomebaseFaviconPipeline.ensureFaviconObserver;
-  window.getDomainKeyFromUrl =
-    window.HomebaseFaviconPipeline.getDomainKeyFromUrl;
-  window.getFaviconUrlForRawUrl =
-    window.HomebaseFaviconPipeline.getFaviconUrlForRawUrl;
-  window.resolveFaviconForImageTarget =
-    window.HomebaseFaviconPipeline.resolveFaviconForImageTarget;
-}
-
 // ===============================================
 // --- SEARCH BAR ---
 // ===============================================
@@ -55,13 +39,6 @@ if (typeof window !== 'undefined' && window.HomebaseFaviconPipeline) {
 const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
 const searchSelect = document.getElementById('search-select');
-
-
-
-// ===============================================
-// --- FIREFOX CONTAINER LOGIC ---
-// ===============================================
-// Extracted to firefox-containers.js (openFolderAll)
 
 function logInitSettled(name, result) {
   if (result.status === 'rejected') console.warn('[init]', name, 'failed:', result.reason);

@@ -849,5 +849,6 @@
     window.getDomainKeyFromUrl = getDomainKey;
     window.buildFaviconCandidates = buildCandidates;
     window.getFaviconUrlForRawUrl = getUrlForRawUrl;
+    window.resolveFaviconForImageTarget = resolveForImageTarget;
   }
 })();

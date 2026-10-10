@@ -11,6 +11,7 @@ const newtabModulesDir = path.join(srcDir, "newtab");
 const keyExtractedModulePaths = [
   "newtab/core/perf-report.js",
   "newtab/core/startup-perf-runtime.js",
+  "newtab/core/idle-scheduler.js",
   "newtab/core/dialogs.js",
   "newtab/core/utils.js",
   "newtab/core/asset-loader.js",
@@ -33,6 +34,7 @@ const keyExtractedModulePaths = [
   "newtab/bookmarks/bookmark-tabs-scroll.js",
   "newtab/bookmarks/folder-picker.js",
   "newtab/bookmarks/bookmark-grid-controller.js",
+  "newtab/bookmarks/bookmark-drag-controller.js",
   "newtab/bookmarks/bookmark-editor-adapter.js",
   "newtab/bookmarks/bookmark-root-controller.js",
   "newtab/bookmarks/bookmark-action-controller.js",

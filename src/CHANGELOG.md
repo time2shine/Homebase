@@ -2,6 +2,36 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v0.18.0 — 2026-10-11
+### Added
+- Dedicated cooperative Idle Task Scheduler subsystem (`src/newtab/core/idle-scheduler.js`) providing bounded 12ms slicing, unified scheduling diagnostics, and early boot registration.
+- Dedicated Startup Hydration Task Registry (`src/newtab/core/startup-hydration.js`) encapsulating all widget and runtime setup tasks with error isolation and dependency injection.
+
+### Improved
+- Deconstructed monolithic `src/new-tab.js` from 1,148 lines down to a 333-line pure Startup Orchestration Coordinator (-815 lines, -71.0% reduction).
+- Consolidated wallpaper startup background priming directly into `HomebaseWallpaperController`.
+- Direct subsystem dispatch for bookmark tree and virtual grid operations, pruning legacy wrapper functions and dead state mirrors.
+- Cleaned up redundant favicon bridge and removed obsolete declarations and comment blocks.
+
+### Fixed
+- Resolved scheduler dependency inversion by registering `HomebaseIdleScheduler` early in boot order, guaranteeing synchronous availability for downstream controllers.
+- Eliminated cross-script state shadowing between `new-tab.js` and extracted bookmark/wallpaper controllers.
+
+## v0.17.0 — 2026-10-09
+### Added
+- Dedicated first-party `HomebaseBookmarkDragController` subsystem (`src/newtab/bookmarks/bookmark-drag-controller.js`) orchestrating grid and tab drag-and-drop operations.
+- Fine-grained drag lifecycle management, raycast pointer tracking, and folder hover layout locking.
+
+### Improved
+- Complete extraction of SortableJS grid and tab drag-and-drop ownership from the main new-tab monolith into modular controllers.
+- Smooth folder tab reordering and drag visual feedback.
+- Decoupled bookmark virtualizer item reordering and optimistic tree model mutations.
+- Reduced `src/new-tab.js` by over 690 lines, significantly simplifying new-tab startup and maintenance.
+
+### Fixed
+- Fixed subfolder drag shadowing bug where bookmark tiles dropped into subfolder tabs or back buttons referenced stale parent nodes.
+- Cleaned up obsolete drag event comments and consolidated internal drag-state verification.
+
 ## v0.16.0 — 2026-10-07
 ### Added
 - Modular storage architecture with unified `HomebaseStorage` facade and decoupled `StorageDispatcher` event pipeline.

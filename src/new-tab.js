@@ -43,18 +43,7 @@ let idleTaskScheduled = false;
 
 hbPerfMark('script-start');
 
-const STARTUP_IDLE_LABELS = new Set([
-  'startup:loadCachedWeather',
-  'startup:quoteIndex',
-  'startup:setupQuoteWidget',
-  'startup:setupNewsWidget',
-  'startup:setupTodoWidget',
-  'startup:setupSearch',
-  'startup:setupWeather',
-  'startup:setupAppLauncher',
-  'startup:fetchQuote',
-  'startup:ensureDailyWallpaper',
-]);
+
 
 async function processIdleTasks(deadline) {
 
@@ -528,219 +517,18 @@ function logInitSettled(name, result) {
     }
   };
 
-  const loadCachedWeatherSafe = async () => {
-    if (!document || !document.body || !weatherWidget) return;
-    const start = performance.now();
-    recordIdleTaskPerf('startup:loadCachedWeather', 'start');
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:loadCachedWeather start');
-    try {
-      await loadCachedWeather();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:loadCachedWeather', err);
-    } finally {
-      const elapsedMs = performance.now() - start;
-      recordWidgetPerfTiming('loadCachedWeather', elapsedMs);
-      recordIdleTaskPerf('startup:loadCachedWeather', 'end', elapsedMs);
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:loadCachedWeather end in', Math.round(elapsedMs), 'ms');
-    }
-  };
-
-  const buildQuoteIndexSafe = async () => {
-    if (!document || !document.body) return;
-    const start = performance.now();
-    let quoteIndexSkipped = false;
-    recordIdleTaskPerf('startup:quoteIndex', 'start');
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex start');
-    try {
-      const cachedState = readCachedQuoteState();
-      if (!shouldLoadQuoteCatalog({ state: cachedState })) {
-        if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex skipped');
-        quoteIndexSkipped = true;
-        recordWidgetPerfTiming('quoteIndex', 0, 'skipped');
-        recordIdleTaskPerf('startup:quoteIndex', 'skipped', 0);
-        return;
-      }
-      await ensureQuoteIndexBuilt();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:quoteIndex', err);
-    } finally {
-      const elapsedMs = performance.now() - start;
-      if (!quoteIndexSkipped) {
-        recordWidgetPerfTiming('quoteIndex', elapsedMs);
-      }
-      recordIdleTaskPerf('startup:quoteIndex', 'end', elapsedMs);
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex end in', Math.round(elapsedMs), 'ms');
-    }
-  };
-
-  const setupQuoteWidgetSafe = () => {
-    if (!document || !document.body || !quoteWidget) return;
-    const start = performance.now();
-    recordIdleTaskPerf('startup:setupQuoteWidget', 'start');
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupQuoteWidget start');
-    try {
-      setupQuoteWidget();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:setupQuoteWidget', err);
-    } finally {
-      const elapsedMs = performance.now() - start;
-      recordWidgetPerfTiming('setupQuoteWidget', elapsedMs);
-      recordIdleTaskPerf('startup:setupQuoteWidget', 'end', elapsedMs);
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupQuoteWidget end in', Math.round(elapsedMs), 'ms');
-    }
-  };
-
-  const setupNewsWidgetSafe = () => {
-    if (!document || !document.body || !newsWidget) return;
-    const start = performance.now();
-    recordIdleTaskPerf('startup:setupNewsWidget', 'start');
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupNewsWidget start');
-    try {
-      setupNewsWidget();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:setupNewsWidget', err);
-    } finally {
-      const elapsedMs = performance.now() - start;
-      recordWidgetPerfTiming('setupNewsWidget', elapsedMs);
-      recordIdleTaskPerf('startup:setupNewsWidget', 'end', elapsedMs);
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupNewsWidget end in', Math.round(elapsedMs), 'ms');
-    }
-  };
-
-  const setupTodoWidgetSafe = async () => {
-    if (!document || !document.body || !todoWidget) return;
-    const start = performance.now();
-    recordIdleTaskPerf('startup:setupTodoWidget', 'start');
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupTodoWidget start');
-    try {
-      await setupTodoWidget();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:setupTodoWidget', err);
-    } finally {
-      const elapsedMs = performance.now() - start;
-      recordWidgetPerfTiming('setupTodoWidget', elapsedMs);
-      recordIdleTaskPerf('startup:setupTodoWidget', 'end', elapsedMs);
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupTodoWidget end in', Math.round(elapsedMs), 'ms');
-    }
-  };
-
-  const setupSearchSafe = async () => {
-    if (!document || !document.body || !searchForm || !searchInput || !searchSelect || !searchResultsPanel || !searchWidget) return;
-    const start = performance.now();
-    recordIdleTaskPerf('startup:setupSearch', 'start');
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupSearch start');
-    try {
-      await setupSearch();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:setupSearch', err);
-    } finally {
-      const elapsedMs = performance.now() - start;
-      recordWidgetPerfTiming('setupSearch', elapsedMs);
-      recordIdleTaskPerf('startup:setupSearch', 'end', elapsedMs);
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupSearch end in', Math.round(elapsedMs), 'ms');
-    }
-    if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
-      console.warn('[startup guard] setupSearchSafe ran during critical phase');
-    }
-  };
-
-  const setupWeatherSafe = async () => {
-    if (!document || !document.body || !weatherWidget) return;
-    const start = performance.now();
-    recordIdleTaskPerf('startup:setupWeather', 'start');
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupWeather start');
-    try {
-      await setupWeather();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:setupWeather', err);
-    } finally {
-      const elapsedMs = performance.now() - start;
-      recordWidgetPerfTiming('setupWeather', elapsedMs);
-      recordIdleTaskPerf('startup:setupWeather', 'end', elapsedMs);
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupWeather end in', Math.round(elapsedMs), 'ms');
-    }
-    if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
-      console.warn('[startup guard] setupWeatherSafe ran during critical phase');
-    }
-  };
-
-  const setupAppLauncherSafe = () => {
-    if (!document || !document.body || !googleAppsBtn || !googleAppsPanel) return;
-    const start = performance.now();
-    recordIdleTaskPerf('startup:setupAppLauncher', 'start');
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupAppLauncher start');
-    try {
-      setupAppLauncher();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:setupAppLauncher', err);
-    } finally {
-      const elapsedMs = performance.now() - start;
-      recordWidgetPerfTiming('setupAppLauncher', elapsedMs);
-      recordIdleTaskPerf('startup:setupAppLauncher', 'end', elapsedMs);
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupAppLauncher end in', Math.round(elapsedMs), 'ms');
-    }
-  };
-
-  const fetchQuoteSafe = () => {
-    if (!document || !document.body || !quoteText || !quoteAuthor) return;
-    const start = performance.now();
-    recordIdleTaskPerf('startup:fetchQuote', 'start');
-    if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote start');
-    try {
-      const cachedState = readCachedQuoteState();
-      if (!shouldLoadQuoteCatalog({ state: cachedState })) {
-        renderCachedQuoteState(cachedState);
-        return;
-      }
-      fetchQuote();
-    } catch (err) {
-      console.warn('Startup task failed:', 'startup:fetchQuote', err);
-    } finally {
-      const elapsedMs = performance.now() - start;
-      recordWidgetPerfTiming('fetchQuote', elapsedMs);
-      recordIdleTaskPerf('startup:fetchQuote', 'end', elapsedMs);
-      if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote end in', Math.round(elapsedMs), 'ms');
-    }
-    if (DEBUG_STARTUP_GUARDS && STARTUP_PHASE === 'critical') {
-      console.warn('[startup guard] fetchQuoteSafe ran during critical phase');
-    }
-  };
-
-  const scheduleStartupHydrationTasks = () => {
-    const scheduleLabeled = (fn, label) => {
-      if (!label.startsWith('startup:')) {
-        console.warn('[startup guard] startup task label missing prefix', label);
-      }
-      if (!STARTUP_IDLE_LABELS.has(label)) {
-        console.warn('[startup guard] startup task label not in allowlist', label);
-      }
-      scheduleIdleTask(async () => {
-        try {
-          await fn();
-        } catch (err) {
-          console.warn('Startup task failed:', label, err);
-        }
-      }, label);
-    };
-
-    scheduleLabeled(() => loadCachedWeatherSafe(), 'startup:loadCachedWeather');
-    scheduleLabeled(() => buildQuoteIndexSafe(), 'startup:quoteIndex');
-    scheduleLabeled(() => setupQuoteWidgetSafe(), 'startup:setupQuoteWidget');
-    scheduleLabeled(() => setupNewsWidgetSafe(), 'startup:setupNewsWidget');
-    scheduleLabeled(() => setupTodoWidgetSafe(), 'startup:setupTodoWidget');
-    scheduleLabeled(() => setupSearchSafe(), 'startup:setupSearch');
-    scheduleLabeled(() => setupWeatherSafe(), 'startup:setupWeather');
-    scheduleLabeled(() => setupAppLauncherSafe(), 'startup:setupAppLauncher');
-    scheduleLabeled(() => fetchQuoteSafe(), 'startup:fetchQuote');
-  };
-
   requestAnimationFrame(markPageReadyOnce);
   requestAnimationFrame(() => {
     scheduleIdleTask(() => ensureDailyWallpaper().catch(() => {}), 'startup:ensureDailyWallpaper');
   });
 
   runWhenIdle(() => {
-    scheduleStartupHydrationTasks();
+    if (window.HomebaseStartupHydration && typeof window.HomebaseStartupHydration.scheduleStartupHydrationTasks === 'function') {
+      window.HomebaseStartupHydration.scheduleStartupHydrationTasks({
+        scheduleTask: scheduleIdleTask,
+        getStartupPhase: () => STARTUP_PHASE
+      });
+    }
   });
 
 

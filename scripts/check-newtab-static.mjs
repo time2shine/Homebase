@@ -11,6 +11,7 @@ const newtabModulesDir = path.join(srcDir, "newtab");
 const keyExtractedModulePaths = [
   "newtab/core/perf-report.js",
   "newtab/core/startup-perf-runtime.js",
+  "newtab/core/idle-scheduler.js",
   "newtab/core/dialogs.js",
   "newtab/core/utils.js",
   "newtab/core/asset-loader.js",

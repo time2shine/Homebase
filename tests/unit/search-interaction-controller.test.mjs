@@ -8,11 +8,13 @@ import { fileURLToPath } from 'node:url';
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const searchUtilsScriptPath = path.join(rootDir, 'src/newtab/search/search-utils.js');
 const searchSuggestionCacheScriptPath = path.join(rootDir, 'src/newtab/search/search-suggestion-cache.js');
+const searchSuggestionServiceScriptPath = path.join(rootDir, 'src/newtab/search/search-suggestion-service.js');
 const searchUiControllerScriptPath = path.join(rootDir, 'src/newtab/search/search-ui-controller.js');
 const searchInteractionControllerScriptPath = path.join(rootDir, 'src/newtab/search/search-interaction-controller.js');
 
 const searchUtilsScriptCode = fs.readFileSync(searchUtilsScriptPath, 'utf8');
 const searchSuggestionCacheScriptCode = fs.readFileSync(searchSuggestionCacheScriptPath, 'utf8');
+const searchSuggestionServiceScriptCode = fs.readFileSync(searchSuggestionServiceScriptPath, 'utf8');
 const searchUiControllerScriptCode = fs.readFileSync(searchUiControllerScriptPath, 'utf8');
 const searchInteractionControllerScriptCode = fs.readFileSync(searchInteractionControllerScriptPath, 'utf8');
 
@@ -377,6 +379,7 @@ function setupTestEnvironment() {
   const ctx = vm.createContext(sandbox);
   vm.runInContext(searchUtilsScriptCode, ctx);
   vm.runInContext(searchSuggestionCacheScriptCode, ctx);
+  vm.runInContext(searchSuggestionServiceScriptCode, ctx);
   vm.runInContext(searchUiControllerScriptCode, ctx);
   vm.runInContext(searchInteractionControllerScriptCode, ctx);
 
@@ -646,3 +649,58 @@ test('search-interaction-controller: bindEvents wires form, input, panel, and ke
 
   assert.doesNotThrow(() => controller.destroy());
 });
+
+// 10. HomebaseSearchSuggestionService Delegation
+test('search-interaction-controller: delegates fetchSuggestions, abort, and bang resolution to HomebaseSearchSuggestionService', async () => {
+  const { controller, sandbox, elements } = setupTestEnvironment();
+
+  let fetchCalled = false;
+  let fetchArgs = null;
+  let abortCalled = false;
+  let bangCalled = false;
+
+  const originalService = sandbox.window.HomebaseSearchSuggestionService;
+  sandbox.window.HomebaseSearchSuggestionService = {
+    fetchSuggestions: async (query, engine, options) => {
+      fetchCalled = true;
+      fetchArgs = { query, engine, options };
+      return ['delegated result 1', 'delegated result 2'];
+    },
+    abort: () => {
+      abortCalled = true;
+    },
+    getBangSuggestions: (query, engines) => {
+      bangCalled = true;
+      return [{ bang: 'g', engine: { id: 'google', name: 'Google' } }];
+    },
+    getBangMap: () => ({ g: 'google' }),
+    getSuggestionsPreference: () => true
+  };
+
+  // 1. fetchSuggestions delegates
+  const res = await controller.fetchSuggestions('test query', { id: 'google', suggestionUrl: 'https://example.com' });
+  assert.strictEqual(fetchCalled, true, 'controller.fetchSuggestions should call service.fetchSuggestions');
+  assert.strictEqual(fetchArgs.query, 'test query');
+  assert.strictEqual(res.length, 2);
+
+  // 2. abortSuggestionFetch delegates
+  controller.abortSuggestionFetch();
+  assert.strictEqual(abortCalled, true, 'controller.abortSuggestionFetch should call service.abort');
+
+  // 3. getBangSuggestions delegates
+  const bangs = controller.getBangSuggestions('!g');
+  assert.strictEqual(bangCalled, true, 'controller.getBangSuggestions should call service.getBangSuggestions');
+  assert.strictEqual(bangs.length, 1);
+  assert.strictEqual(bangs[0].bang, 'g');
+
+  // 4. Rendering behavior with suggestions
+  elements.searchInput.value = 'my search';
+  await controller.handleInput();
+
+  const renderedItems = elements.suggestionResultsContainer.querySelectorAll('.result-item-suggestion');
+  assert.ok(renderedItems.length > 0, 'Suggestions should be rendered in container');
+
+  // Restore service
+  sandbox.window.HomebaseSearchSuggestionService = originalService;
+});
+

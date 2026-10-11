@@ -56,6 +56,7 @@ const keyExtractedModulePaths = [
   "newtab/search/search-storage.js",
   "newtab/search/search-utils.js",
   "newtab/search/search-suggestion-cache.js",
+  "newtab/search/search-suggestion-service.js",
   "newtab/search/search-ui-controller.js",
   "newtab/search/search-interaction-controller.js",
   "newtab/tips/homebase-tips-ui.js",

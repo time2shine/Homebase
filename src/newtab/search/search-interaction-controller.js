@@ -18,7 +18,6 @@
   let searchNavigationLocked = false;
   let isBookmarkGridPointerOver = false;
   let bookmarkGridPointerListenersAttached = false;
-  let suggestionAbortController = null;
   let boundEventListeners = false;
   let boundFormSubmitHandler = null;
   let boundInputHandler = null;
@@ -186,6 +185,9 @@
   }
 
   function getBangMap() {
+    if (typeof window !== 'undefined' && window.HomebaseSearchSuggestionService && typeof window.HomebaseSearchSuggestionService.getBangMap === 'function') {
+      return window.HomebaseSearchSuggestionService.getBangMap();
+    }
     if (typeof bangMap !== 'undefined' && bangMap) {
       return bangMap;
     }
@@ -1079,11 +1081,9 @@
   }
 
   function abortSuggestionFetch() {
-    if (!suggestionAbortController) return;
-    try {
-      suggestionAbortController.abort();
-    } catch (_) {}
-    suggestionAbortController = null;
+    if (typeof window !== 'undefined' && window.HomebaseSearchSuggestionService && typeof window.HomebaseSearchSuggestionService.abort === 'function') {
+      window.HomebaseSearchSuggestionService.abort();
+    }
   }
 
   function clearExternalSuggestionResults() {
@@ -1121,128 +1121,23 @@
     }
   }
 
-  async function fetchSuggestions(query, engine) {
+  async function fetchSuggestions(query, engine, options) {
     if (!getSearchSuggestionsPreference()) return [];
     if (!engine) return [];
     if (!engine.suggestionUrl) return [];
 
-    const cacheKey = `${engine.id}:${query}`;
-    const cached = getCacheEntry(cacheKey);
-    if (cached) {
-      return cached;
+    if (typeof window !== 'undefined' && window.HomebaseSearchSuggestionService && typeof window.HomebaseSearchSuggestionService.fetchSuggestions === 'function') {
+      return window.HomebaseSearchSuggestionService.fetchSuggestions(query, engine, options);
     }
 
-    if (suggestionAbortController) {
-      try {
-        suggestionAbortController.abort();
-      } catch (_) {}
-    }
-
-    suggestionAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const signal = suggestionAbortController ? suggestionAbortController.signal : undefined;
-
-    if (typeof fetch === 'undefined') {
-      return [];
-    }
-
-    try {
-      const res = await fetch(engine.suggestionUrl + encodeURIComponent(query), { signal });
-      if (!res.ok) return [];
-
-      const raw = await res.text();
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch (parseErr) {
-        data = raw;
-      }
-
-      let results = [];
-      const openSearchEngines = ['Google', 'Bing', 'YouTube', 'Wikipedia', 'Amazon', 'Maps'];
-      if (openSearchEngines.includes(engine.name)) {
-        results = Array.isArray(data) && Array.isArray(data[1]) ? data[1].filter(val => typeof val === 'string') : [];
-        setCacheEntry(cacheKey, results);
-        return results;
-      }
-
-      if (engine.name === 'DuckDuckGo') {
-        results = Array.isArray(data) ? data.map(item => item && item.phrase).filter(val => typeof val === 'string') : [];
-        setCacheEntry(cacheKey, results);
-        return results;
-      }
-
-      if (engine.name === 'Yahoo') {
-        const yahooResults = data?.gossip?.results;
-        if (Array.isArray(yahooResults)) {
-          results = yahooResults
-            .flatMap(entry => (entry?.nodes || []).map(node => node && node.key))
-            .filter(val => typeof val === 'string');
-        } else {
-          results = [];
-        }
-        setCacheEntry(cacheKey, results);
-        return results;
-      }
-
-      if (engine.name === 'Yandex') {
-        let parsedArray = data;
-        if (typeof parsedArray === 'string') {
-          try {
-            parsedArray = JSON.parse(parsedArray);
-          } catch {
-            parsedArray = [];
-          }
-        }
-        const suggestionBucket = Array.isArray(parsedArray) && parsedArray.length > 1 ? parsedArray[1] : [];
-        results = Array.isArray(suggestionBucket)
-          ? suggestionBucket
-              .map(item => (Array.isArray(item) ? item[1] : item))
-              .filter(val => typeof val === 'string')
-          : [];
-        setCacheEntry(cacheKey, results);
-        return results;
-      }
-
-      setCacheEntry(cacheKey, results);
-      return results;
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        return null;
-      }
-      console.error('Suggestion fetch error:', err);
-      return [];
-    }
+    return [];
   }
 
   function getBangSuggestions(query) {
-    const term = query.substring(1).toLowerCase().trim();
-    const matches = [];
-    const seenIds = new Set();
-    const map = getBangMap();
-    const engines = getSearchEngines();
-
-    Object.entries(map).forEach(([bang, engineId]) => {
-      if (bang.startsWith(term)) {
-        const engine = engines.find(e => e.id === engineId);
-        if (engine) {
-          matches.push({ bang, engine });
-          seenIds.add(engineId);
-        }
-      }
-    });
-
-    engines.forEach(engine => {
-      const isMatch = engine.id.startsWith(term);
-      if (isMatch && !matches.find(m => m.engine.id === engine.id && m.bang === engine.id) && !seenIds.has(engine.id)) {
-        matches.push({ bang: engine.id, engine });
-      }
-    });
-
-    return matches.sort((a, b) => {
-      if (a.bang === term) return -1;
-      if (b.bang === term) return 1;
-      return a.bang.localeCompare(b.bang);
-    });
+    if (typeof window !== 'undefined' && window.HomebaseSearchSuggestionService && typeof window.HomebaseSearchSuggestionService.getBangSuggestions === 'function') {
+      return window.HomebaseSearchSuggestionService.getBangSuggestions(query, getSearchEngines());
+    }
+    return [];
   }
 
   function updatePanelVisibility() {

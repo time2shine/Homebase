@@ -704,3 +704,123 @@ test('search-interaction-controller: delegates fetchSuggestions, abort, and bang
   sandbox.window.HomebaseSearchSuggestionService = originalService;
 });
 
+// 11. Lifecycle Hardening & State Teardown
+test('search-interaction-controller: destroy resets all internal state and is idempotent across multiple calls', async () => {
+  const { controller, elements } = setupTestEnvironment();
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  // Simulate active search
+  elements.searchInput.value = 'active search query';
+  await controller.handleInput();
+
+  // Verify state is populated
+  const activeState = controller.getState();
+  assert.ok(activeState.latestSearchToken > 0, 'latestSearchToken should be bumped during search');
+
+  // First destroy call
+  controller.destroy();
+  const resetState = controller.getState();
+
+  assert.strictEqual(resetState.currentSelectionIndex, -1, 'currentSelectionIndex should be -1');
+  assert.strictEqual(resetState.currentSectionIndex, 0, 'currentSectionIndex should be 0');
+  assert.strictEqual(resetState.selectionExplicit, false, 'selectionExplicit should be false');
+  assert.strictEqual(resetState.lastSelectedText, '', 'lastSelectedText should be empty');
+  assert.strictEqual(resetState.userIsTyping, false, 'userIsTyping should be false');
+  assert.strictEqual(resetState.latestSearchToken, 0, 'latestSearchToken should be reset to 0');
+  assert.strictEqual(resetState.lastBookmarkHtml, '', 'lastBookmarkHtml should be empty');
+  assert.strictEqual(resetState.lastSuggestionHtml, '', 'lastSuggestionHtml should be empty');
+
+  // Multiple destroy calls should be safe and idempotent
+  assert.doesNotThrow(() => controller.destroy());
+  assert.doesNotThrow(() => controller.destroy());
+});
+
+// 12. Keyboard Navigation Priorities & Section Bounds
+test('search-interaction-controller: keyboard navigation handles section bounds, Escape, and Enter priority', async () => {
+  const { controller, elements, openedTabs, updatedTabs } = setupTestEnvironment();
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  // 1. Escape key closes results panel
+  elements.searchResultsPanel.classList.remove('hidden');
+  controller.handleKeydown({ key: 'Escape', preventDefault: () => {} });
+  // Escape delegates to hideSearchResultsPanel
+
+  // 2. Enter priority: Direct URL navigation when query is a URL
+  elements.searchResultsPanel.classList.remove('hidden');
+  elements.searchInput.value = 'https://example.org/path';
+  controller.handleKeydown({ key: 'Enter', target: elements.searchInput, preventDefault: () => {} });
+  assert.ok(
+    updatedTabs.some(t => t.url === 'https://example.org/path') || openedTabs.some(t => t.url === 'https://example.org/path'),
+    'Direct URL should be opened on Enter'
+  );
+
+  // 3. Enter priority: Search engine query when query is search terms
+  updatedTabs.length = 0;
+  openedTabs.length = 0;
+  elements.searchResultsPanel.classList.remove('hidden');
+  elements.searchInput.value = 'hello world query';
+  controller.handleKeydown({ key: 'Enter', target: elements.searchInput, preventDefault: () => {} });
+  assert.ok(
+    updatedTabs.some(t => t.url && t.url.includes('hello%20world%20query')) || openedTabs.some(t => t.url && t.url.includes('hello%20world%20query')),
+    'Search engine URL should be opened on Enter'
+  );
+
+  // 4. Enter priority: Selected item execution overrides raw input
+  const selectedBtn = createMockElement('button', 'selected-item');
+  selectedBtn.className = 'result-item selected';
+  selectedBtn.dataset.url = 'https://selected-bookmark.com';
+  elements.bookmarkResultsContainer.appendChild(selectedBtn);
+
+  updatedTabs.length = 0;
+  openedTabs.length = 0;
+  elements.searchResultsPanel.classList.remove('hidden');
+  controller.selectItem(selectedBtn, true);
+  controller.handleKeydown({ key: 'Enter', target: elements.searchInput, preventDefault: () => {} });
+  assert.ok(
+    updatedTabs.some(t => t.url === 'https://selected-bookmark.com') || openedTabs.some(t => t.url === 'https://selected-bookmark.com'),
+    'Selected item URL should be opened with highest priority'
+  );
+
+  controller.destroy();
+});
+
+// 13. Defensive Guards for Null Bookmarks and Missing History
+test('search-interaction-controller: defensive guards handle null/sparse bookmarks and history errors gracefully', async () => {
+  const { controller, elements, sandbox } = setupTestEnvironment();
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  // 1. Sparse / null bookmarks array
+  sandbox.allBookmarks = [
+    null,
+    undefined,
+    { title: 'Homebase Repository', url: 'https://github.com/time2shine/Homebase' },
+    { title: null, url: null }
+  ];
+
+  elements.searchInput.value = 'Homebase';
+  await assert.doesNotReject(async () => {
+    await controller.handleInput();
+  }, 'handleInput should not throw on null bookmark objects');
+
+  const bookmarkItems = elements.bookmarkResultsContainer.querySelectorAll('.result-item');
+  assert.ok(bookmarkItems.length > 0, 'Valid bookmark should be rendered');
+
+  // 2. History API throwing error
+  sandbox.chrome = {
+    history: {
+      search: () => { throw new Error('Permission denied'); }
+    }
+  };
+
+  elements.searchInput.value = 'history query';
+  await assert.doesNotReject(async () => {
+    await controller.handleInput();
+  }, 'handleInput should not throw when history API throws');
+
+  controller.destroy();
+});
+
+

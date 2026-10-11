@@ -1360,6 +1360,7 @@
       const allBms = getAllBookmarks();
       bookmarkResults = allBms
         .filter(b => {
+          if (!b) return false;
           const title = (b.title || '').toLowerCase();
           const url = (b.url || '').toLowerCase();
           return queryTerms.every(term => title.includes(term) || url.includes(term));
@@ -1499,13 +1500,23 @@
 
     // 5. Async suggestions & history
     let historyPromise = Promise.resolve([]);
-    if (getSearchShowHistoryPreference() && typeof browser !== 'undefined' && browser.history && typeof browser.history.search === 'function') {
-      const startTime = Date.now() - (90 * 24 * 60 * 60 * 1000);
-      historyPromise = browser.history.search({
-        text: query,
-        maxResults: 5,
-        startTime
-      }).catch(() => []);
+    if (getSearchShowHistoryPreference()) {
+      const historyApi = (typeof browser !== 'undefined' && browser?.history)
+        ? browser.history
+        : (typeof chrome !== 'undefined' && chrome?.history ? chrome.history : null);
+      if (historyApi && typeof historyApi.search === 'function') {
+        const startTime = Date.now() - (90 * 24 * 60 * 60 * 1000);
+        try {
+          const res = historyApi.search({
+            text: query,
+            maxResults: 5,
+            startTime
+          });
+          historyPromise = Promise.resolve(res).then((items) => (Array.isArray(items) ? items : [])).catch(() => []);
+        } catch (_) {
+          historyPromise = Promise.resolve([]);
+        }
+      }
     }
 
     if (!getSearchSuggestionsPreference()) {
@@ -1785,6 +1796,11 @@
       boundBeforeUnloadHandler = null;
       boundEventListeners = false;
     }
+    currentSelectionIndex = -1;
+    currentSectionIndex = 0;
+    selectionExplicit = false;
+    lastSelectedText = '';
+    userIsTyping = false;
     latestSearchToken = 0;
     lastBookmarkHtml = '';
     lastSuggestionHtml = '';

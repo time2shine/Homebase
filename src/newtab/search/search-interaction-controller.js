@@ -289,7 +289,24 @@
     if (typeof window !== 'undefined' && typeof window.setSuggestionCacheEntry === 'function') return window.setSuggestionCacheEntry(key, val);
   }
 
+  function getRenderer() {
+    if (customOptions && customOptions.renderer) {
+      return customOptions.renderer;
+    }
+    if (typeof window !== 'undefined' && window.HomebaseSearchResultsRenderer) {
+      return window.HomebaseSearchResultsRenderer;
+    }
+    if (typeof HomebaseSearchResultsRenderer !== 'undefined') {
+      return HomebaseSearchResultsRenderer;
+    }
+    return null;
+  }
+
   function createSvgIcon(id) {
+    const renderer = getRenderer();
+    if (renderer && typeof renderer.createSvgIcon === 'function') {
+      return renderer.createSvgIcon(id);
+    }
     if (typeof createSvgIconElement === 'function') return createSvgIconElement(id);
     if (typeof window !== 'undefined' && typeof window.createSvgIconElement === 'function') return window.createSvgIconElement(id);
     return null;
@@ -1088,37 +1105,14 @@
 
   function clearExternalSuggestionResults() {
     const container = getSuggestionResultsContainer();
-    if (!container || typeof container.querySelectorAll !== 'function') return;
+    if (!container) return;
 
-    const removable = new Set();
-    Array.from(container.children || []).forEach((node) => {
-      if (!isElementOrObject(node)) return;
-      if (node.classList && node.classList.contains('result-item-suggestion')) {
-        removable.add(node);
-        const previous = node.previousElementSibling;
-        if (
-          previous &&
-          previous.classList &&
-          previous.classList.contains('result-header') &&
-          (previous.dataset?.externalSuggestions === 'true' || (previous.textContent || '').trim().endsWith(' Search'))
-        ) {
-          removable.add(previous);
-        }
-        return;
-      }
-      if (node.classList && node.classList.contains('result-header') && node.dataset?.externalSuggestions === 'true') {
-        removable.add(node);
-      }
-    });
-
-    removable.forEach(node => {
-      if (node && typeof node.remove === 'function') node.remove();
-    });
-
-    if (removable.size > 0) {
-      lastSuggestionHtml = '';
-      updatePanelVisibility();
+    const renderer = getRenderer();
+    if (renderer && typeof renderer.clearSuggestions === 'function') {
+      renderer.clearSuggestions(container);
     }
+    lastSuggestionHtml = '';
+    updatePanelVisibility();
   }
 
   async function fetchSuggestions(query, engine, options) {
@@ -1146,6 +1140,17 @@
     const panel = getSearchResultsPanel();
     const widget = getSearchWidget();
 
+    const renderer = getRenderer();
+    if (renderer && typeof renderer.updatePanelVisibility === 'function') {
+      renderer.updatePanelVisibility({
+        panel,
+        widget,
+        topContainer: bookmarkContainer,
+        bottomContainer: suggestionContainer
+      });
+      return;
+    }
+
     const hasBookmarks = bookmarkContainer && (bookmarkContainer.innerHTML || '').trim().length > 0;
     const hasSuggestions = suggestionContainer && (suggestionContainer.innerHTML || '').trim().length > 0;
 
@@ -1159,66 +1164,10 @@
   }
 
   function hydrateSearchResultFavicons(container) {
-    if (!container || typeof container.querySelectorAll !== 'function') return;
-    const targets = Array.from(container.querySelectorAll('.result-favicon[data-favicon-raw-url]'));
-    if (!targets.length) return;
-
-    targets.forEach((img) => {
-      if (!img.decoding) img.decoding = 'async';
-      if (!img.loading) img.loading = 'lazy';
-      if (typeof img.getAttribute === 'function' && !img.getAttribute('fetchpriority')) {
-        img.setAttribute('fetchpriority', 'low');
-      }
-      if (!img.referrerPolicy) img.referrerPolicy = 'no-referrer';
-
-      const rawUrl = img.dataset?.faviconRawUrl || '';
-      const hideImg = () => {
-        if (img.style) img.style.display = 'none';
-        if (typeof revokeFaviconObjectUrl === 'function') {
-          revokeFaviconObjectUrl(img);
-        }
-        if (typeof img.removeAttribute === 'function') {
-          img.removeAttribute('src');
-        }
-      };
-
-      if (!rawUrl) {
-        hideImg();
-        return;
-      }
-
-      const domainKey = typeof getDomainKeyFromUrl === 'function' ? getDomainKeyFromUrl(rawUrl) : null;
-      if (!domainKey) {
-        hideImg();
-        return;
-      }
-
-      const candidates = typeof buildFaviconCandidates === 'function' ? buildFaviconCandidates(rawUrl) : [];
-      if (!candidates.length) {
-        hideImg();
-        return;
-      }
-
-      const shouldAbort = () => img.dataset?.faviconRawUrl !== rawUrl;
-      if (typeof resolveFaviconForImageTarget === 'function') {
-        resolveFaviconForImageTarget({
-          img,
-          domainKey,
-          candidates,
-          shouldAbort,
-          onResolved: (resolvedUrl, meta) => {
-            if (img.style) img.style.display = '';
-            if (!meta?.sourceAlreadySet && typeof setFaviconImageSrc === 'function') {
-              setFaviconImageSrc(img, resolvedUrl);
-            }
-          },
-          onFailed: () => hideImg(),
-          onNegativeCacheHit: () => hideImg(),
-          onAbort: () => {},
-          acceptCandidate: () => true
-        });
-      }
-    });
+    const renderer = getRenderer();
+    if (renderer && typeof renderer.hydrateFavicons === 'function') {
+      renderer.hydrateFavicons(container);
+    }
   }
 
   // --- Main Input Orchestration ---
@@ -1294,11 +1243,8 @@
     const suggestionContainer = getSuggestionResultsContainer();
 
     // 3. Calculator & Bookmarks
-    let topFragment = typeof document !== 'undefined' && typeof document.createDocumentFragment === 'function'
-      ? document.createDocumentFragment()
-      : null;
     const shownUrls = new Set();
-    let calcResultValue = null;
+    let calcData = null;
     let bookmarkResults = [];
 
     if (getSearchMathPreference() && !isBangSearch) {
@@ -1307,51 +1253,10 @@
 
       const mathResult = mathFn ? mathFn(queryLower.trim()) : null;
       const unitResult = (mathResult === null && unitsFn) ? unitsFn(queryLower.trim()) : null;
-      calcResultValue = mathResult !== null ? mathResult : unitResult;
+      const calcResultValue = mathResult !== null ? mathResult : unitResult;
 
-      if (calcResultValue !== null && topFragment && typeof document !== 'undefined') {
-        const displayResult = String(calcResultValue);
-        const header = document.createElement('div');
-        header.className = 'result-header';
-        header.textContent = 'Calculator';
-
-        const item = document.createElement('div');
-        item.className = 'result-item calc-item';
-        item.dataset.copy = displayResult;
-
-        const left = document.createElement('div');
-        left.className = 'calc-left';
-
-        const icon = document.createElement('div');
-        icon.className = 'calc-icon';
-        icon.textContent = String.fromCodePoint(129518);
-
-        const textWrap = document.createElement('div');
-        textWrap.className = 'calc-text';
-
-        const answer = document.createElement('div');
-        answer.className = 'calc-answer';
-        answer.textContent = displayResult;
-
-        const expression = document.createElement('div');
-        expression.className = 'calc-expression';
-        expression.textContent = query;
-
-        textWrap.appendChild(answer);
-        textWrap.appendChild(expression);
-        left.appendChild(icon);
-        left.appendChild(textWrap);
-
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'calc-copy';
-        copyBtn.dataset.copy = displayResult;
-        copyBtn.textContent = 'Copy';
-
-        item.appendChild(left);
-        item.appendChild(copyBtn);
-
-        topFragment.appendChild(header);
-        topFragment.appendChild(item);
+      if (calcResultValue !== null) {
+        calcData = { value: String(calcResultValue), query };
       }
     }
 
@@ -1367,98 +1272,17 @@
         })
         .slice(0, 5);
 
-      if (bookmarkResults.length > 0 && topFragment && typeof document !== 'undefined') {
-        const header = document.createElement('div');
-        header.className = 'result-header';
-        header.textContent = 'Bookmarks';
-        topFragment.appendChild(header);
-
-        bookmarkResults.forEach(bookmark => {
-          const bookmarkUrl = bookmark.url || '';
-          if (!bookmarkUrl) return;
-          shownUrls.add(bookmarkUrl);
-
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'result-item';
-          button.dataset.url = bookmarkUrl;
-
-          const favicon = document.createElement('img');
-          favicon.className = 'result-favicon';
-          favicon.dataset.faviconRawUrl = bookmarkUrl;
-          favicon.loading = 'lazy';
-          favicon.decoding = 'async';
-          favicon.alt = '';
-
-          const info = document.createElement('div');
-          info.className = 'result-item-info';
-
-          const label = document.createElement('strong');
-          label.className = 'result-label';
-          label.textContent = bookmark.title || 'No Title';
-
-          info.appendChild(label);
-          button.appendChild(favicon);
-          button.appendChild(info);
-          topFragment.appendChild(button);
-        });
-      }
+      bookmarkResults.forEach(bookmark => {
+        if (bookmark && bookmark.url) shownUrls.add(bookmark.url);
+      });
     }
 
     // 4. Bang Autocomplete Dropdown
     if (isBangSearch) {
       const bangSuggestions = getBangSuggestions(queryLower);
-      if (typeof document !== 'undefined') {
-        const bangFragment = document.createDocumentFragment();
-        const header = document.createElement('div');
-        header.className = 'result-header';
-        header.textContent = 'Bang Shortcuts';
-        bangFragment.appendChild(header);
-
-        if (bangSuggestions.length === 0) {
-          const item = document.createElement('div');
-          item.className = 'result-item';
-          const info = document.createElement('div');
-          info.className = 'result-item-info';
-          info.style.justifyContent = 'center';
-          info.style.color = '#888';
-          info.textContent = 'No matching bangs';
-          item.appendChild(info);
-          bangFragment.appendChild(item);
-        } else {
-          bangSuggestions.forEach(item => {
-            const bangCode = `!${item.bang}`;
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'result-item';
-            button.dataset.bangInsert = `${bangCode} `;
-
-            const badge = document.createElement('span');
-            badge.className = 'bang-badge';
-            badge.textContent = bangCode;
-            button.appendChild(badge);
-
-            if (item.engine && item.engine.symbolId) {
-              const engineIcon = createSvgIcon(item.engine.symbolId);
-              if (engineIcon) {
-                button.appendChild(engineIcon);
-              }
-            }
-
-            const info = document.createElement('div');
-            info.className = 'result-item-info';
-            const label = document.createElement('strong');
-            label.className = 'result-label';
-            label.textContent = item.engine?.name || '';
-            info.appendChild(label);
-            button.appendChild(info);
-            bangFragment.appendChild(button);
-          });
-        }
-
-        if (suggestionContainer && typeof suggestionContainer.replaceChildren === 'function') {
-          suggestionContainer.replaceChildren(bangFragment);
-        }
+      const renderer = getRenderer();
+      if (renderer && typeof renderer.renderBangResults === 'function') {
+        renderer.renderBangResults(suggestionContainer, bangSuggestions);
         if (bookmarkContainer && typeof bookmarkContainer.replaceChildren === 'function') {
           bookmarkContainer.replaceChildren();
         }
@@ -1479,20 +1303,14 @@
 
     if (isStaleSearch(currentToken, queryLower)) return;
 
-    const topSignature = JSON.stringify({
-      calc: calcResultValue !== null ? { value: String(calcResultValue), query } : null,
-      bookmarks: bookmarkResults.map(bookmark => ({
-        url: bookmark.url || '',
-        title: bookmark.title || ''
-      }))
-    });
-
-    if (topSignature !== lastBookmarkHtml && bookmarkContainer) {
-      if (topFragment && typeof bookmarkContainer.replaceChildren === 'function') {
-        bookmarkContainer.replaceChildren(topFragment);
-      }
-      lastBookmarkHtml = topSignature;
-      hydrateSearchResultFavicons(bookmarkContainer);
+    const renderer = getRenderer();
+    if (renderer && typeof renderer.renderTopResults === 'function') {
+      const topRes = renderer.renderTopResults(bookmarkContainer, {
+        calc: calcData,
+        bookmarks: bookmarkResults,
+        query
+      });
+      lastBookmarkHtml = topRes?.signature || '';
     }
 
     applySelectionToCurrentResults(previousSelection, query.trim());
@@ -1536,116 +1354,17 @@
       clearExternalSuggestionResults();
     }
 
-    // 6. Build bottom section UI
-    if (typeof document !== 'undefined') {
-      const bottomFragment = document.createDocumentFragment();
-
-      if (historyResults && historyResults.length > 0) {
-        const uniqueHistory = historyResults.filter(item => !shownUrls.has(item.url));
-        if (uniqueHistory.length > 0) {
-          const header = document.createElement('div');
-          header.className = 'result-header';
-          header.textContent = 'Recent History';
-          bottomFragment.appendChild(header);
-
-          uniqueHistory.forEach(item => {
-            const url = item.url;
-            const title = item.title || url;
-
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'result-item result-item-history';
-            button.dataset.url = url;
-
-            const icon = createSvgIcon('historyClock');
-            if (icon) {
-              button.appendChild(icon);
-            }
-
-            const info = document.createElement('div');
-            info.className = 'result-item-info';
-            const label = document.createElement('strong');
-            label.className = 'result-label';
-            label.textContent = title;
-            info.appendChild(label);
-
-            button.appendChild(info);
-            bottomFragment.appendChild(button);
-          });
-        }
-      }
-
-      if (suggestionResults === null) {
-        attachHoverSync();
-        return;
-      }
-
+    // 6. Build bottom section UI via renderer
+    if (renderer && typeof renderer.renderBottomResults === 'function') {
       const activeEngine = getCurrentSearchEngine();
-      if (suggestionResults && suggestionResults.length > 0) {
-        const header = document.createElement('div');
-        header.className = 'result-header';
-        header.dataset.externalSuggestions = 'true';
-        header.textContent = `${activeEngine.name} Search`;
-        bottomFragment.appendChild(header);
-
-        const searchUrl = `${activeEngine.url}${encodeURIComponent(query)}`;
-        const directButton = document.createElement('button');
-        directButton.type = 'button';
-        directButton.className = 'result-item result-item-suggestion';
-        directButton.dataset.url = searchUrl;
-
-        const directIcon = createSvgIcon('search');
-        if (directIcon) {
-          directButton.appendChild(directIcon);
-        }
-        const directInfo = document.createElement('div');
-        directInfo.className = 'result-item-info';
-        const directLabel = document.createElement('strong');
-        directLabel.className = 'result-label';
-        directLabel.textContent = query;
-        directInfo.appendChild(directLabel);
-        directButton.appendChild(directInfo);
-        bottomFragment.appendChild(directButton);
-
-        suggestionResults.slice(0, 10).forEach(suggestion => {
-          if (suggestion.toLowerCase() === query.toLowerCase()) return;
-          const suggestionUrl = `${activeEngine.url}${encodeURIComponent(suggestion)}`;
-
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'result-item result-item-suggestion';
-          button.dataset.url = suggestionUrl;
-
-          const icon = createSvgIcon('search');
-          if (icon) {
-            button.appendChild(icon);
-          }
-
-          const info = document.createElement('div');
-          info.className = 'result-item-info';
-          const label = document.createElement('strong');
-          label.className = 'result-label';
-          label.textContent = suggestion;
-          info.appendChild(label);
-
-          button.appendChild(info);
-          bottomFragment.appendChild(button);
-        });
-      }
-
-      const bottomSignature = JSON.stringify({
-        history: (historyResults || []).map(item => ({ url: item.url || '', title: item.title || '' })),
-        suggestions: suggestionResults ? suggestionResults.slice(0, 10) : [],
-        engine: activeEngine.id || '',
-        query
+      const bottomRes = renderer.renderBottomResults(suggestionContainer, {
+        history: historyResults,
+        suggestions: suggestionResults,
+        engine: activeEngine,
+        query,
+        shownUrls
       });
-
-      if (bottomSignature !== lastSuggestionHtml && suggestionContainer) {
-        if (typeof suggestionContainer.replaceChildren === 'function') {
-          suggestionContainer.replaceChildren(bottomFragment);
-        }
-        lastSuggestionHtml = bottomSignature;
-      }
+      lastSuggestionHtml = bottomRes?.signature || '';
     }
 
     applySelectionToCurrentResults(previousSelection, query.trim());

@@ -9,12 +9,14 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.
 const searchUtilsScriptPath = path.join(rootDir, 'src/newtab/search/search-utils.js');
 const searchSuggestionCacheScriptPath = path.join(rootDir, 'src/newtab/search/search-suggestion-cache.js');
 const searchSuggestionServiceScriptPath = path.join(rootDir, 'src/newtab/search/search-suggestion-service.js');
+const searchResultsRendererScriptPath = path.join(rootDir, 'src/newtab/search/search-results-renderer.js');
 const searchUiControllerScriptPath = path.join(rootDir, 'src/newtab/search/search-ui-controller.js');
 const searchInteractionControllerScriptPath = path.join(rootDir, 'src/newtab/search/search-interaction-controller.js');
 
 const searchUtilsScriptCode = fs.readFileSync(searchUtilsScriptPath, 'utf8');
 const searchSuggestionCacheScriptCode = fs.readFileSync(searchSuggestionCacheScriptPath, 'utf8');
 const searchSuggestionServiceScriptCode = fs.readFileSync(searchSuggestionServiceScriptPath, 'utf8');
+const searchResultsRendererScriptCode = fs.readFileSync(searchResultsRendererScriptPath, 'utf8');
 const searchUiControllerScriptCode = fs.readFileSync(searchUiControllerScriptPath, 'utf8');
 const searchInteractionControllerScriptCode = fs.readFileSync(searchInteractionControllerScriptPath, 'utf8');
 
@@ -380,11 +382,13 @@ function setupTestEnvironment() {
   vm.runInContext(searchUtilsScriptCode, ctx);
   vm.runInContext(searchSuggestionCacheScriptCode, ctx);
   vm.runInContext(searchSuggestionServiceScriptCode, ctx);
+  vm.runInContext(searchResultsRendererScriptCode, ctx);
   vm.runInContext(searchUiControllerScriptCode, ctx);
   vm.runInContext(searchInteractionControllerScriptCode, ctx);
 
   return {
     controller: sandbox.window.HomebaseSearchInteractionController,
+    renderer: sandbox.window.HomebaseSearchResultsRenderer,
     elements,
     mockDocument,
     mockBrowser,
@@ -819,6 +823,147 @@ test('search-interaction-controller: defensive guards handle null/sparse bookmar
   await assert.doesNotReject(async () => {
     await controller.handleInput();
   }, 'handleInput should not throw when history API throws');
+
+  controller.destroy();
+});
+
+// 14. Renderer Delegation Test
+test('search-interaction-controller: delegates rendering, visibility, and clearing to HomebaseSearchResultsRenderer', async () => {
+  const { controller, elements, sandbox } = setupTestEnvironment();
+
+  let renderTopCalled = false;
+  let renderBottomCalled = false;
+  let updateVisibilityCalled = false;
+  let clearSuggestionsCalled = false;
+
+  const originalRenderer = sandbox.window.HomebaseSearchResultsRenderer;
+  sandbox.window.HomebaseSearchResultsRenderer = {
+    ...originalRenderer,
+    renderTopResults: (...args) => {
+      renderTopCalled = true;
+      return originalRenderer.renderTopResults(...args);
+    },
+    renderBottomResults: (...args) => {
+      renderBottomCalled = true;
+      return originalRenderer.renderBottomResults(...args);
+    },
+    updatePanelVisibility: (...args) => {
+      updateVisibilityCalled = true;
+      return originalRenderer.updatePanelVisibility(...args);
+    },
+    clearSuggestions: (...args) => {
+      clearSuggestionsCalled = true;
+      return originalRenderer.clearSuggestions(...args);
+    }
+  };
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  elements.searchInput.value = 'test query';
+  await controller.handleInput();
+
+  assert.ok(renderTopCalled, 'renderTopResults should be called on renderer');
+  assert.ok(renderBottomCalled, 'renderBottomResults should be called on renderer');
+  assert.ok(updateVisibilityCalled, 'updatePanelVisibility should be called on renderer');
+
+  controller.clearExternalSuggestionResults();
+  assert.ok(clearSuggestionsCalled, 'clearSuggestions should be called on renderer');
+
+  controller.destroy();
+  sandbox.window.HomebaseSearchResultsRenderer = originalRenderer;
+});
+
+// 15. DOM Output Compatibility Test
+test('search-interaction-controller: rendered DOM preserves expected classes, datasets, and buttons', async () => {
+  const { controller, elements, sandbox } = setupTestEnvironment();
+
+  sandbox.allBookmarks = [
+    { title: 'Homebase Dashboard', url: 'https://homebase.local' }
+  ];
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  // 1. Math query -> Calculator DOM
+  elements.searchInput.value = '12 * 12';
+  await controller.handleInput();
+
+  const calcItem = elements.bookmarkResultsContainer.querySelector('.calc-item');
+  assert.ok(calcItem, 'Calculator item should be present');
+  assert.strictEqual(calcItem.dataset.copy, '144');
+  const copyBtn = calcItem.querySelector('.calc-copy');
+  assert.ok(copyBtn, 'Copy button should be present');
+  assert.strictEqual(copyBtn.dataset.copy, '144');
+
+  // 2. Bookmark query -> Bookmark DOM
+  elements.searchInput.value = 'Homebase';
+  await controller.handleInput();
+
+  const bookmarkItem = elements.bookmarkResultsContainer.querySelector('.result-item');
+  assert.ok(bookmarkItem, 'Bookmark item should be present');
+  assert.strictEqual(bookmarkItem.dataset.url, 'https://homebase.local');
+  const favicon = bookmarkItem.querySelector('.result-favicon');
+  assert.ok(favicon, 'Favicon should be present');
+  assert.strictEqual(favicon.dataset.faviconRawUrl, 'https://homebase.local');
+  const label = bookmarkItem.querySelector('.result-label');
+  assert.ok(label, 'Label should be present');
+  assert.strictEqual(label.textContent, 'Homebase Dashboard');
+
+  controller.destroy();
+});
+
+// 16. Selection Restoration After Renderer Update
+test('search-interaction-controller: restores active selection after subsequent renderer updates', async () => {
+  const { controller, elements, sandbox } = setupTestEnvironment();
+
+  sandbox.allBookmarks = [
+    { title: 'Doc One', url: 'https://doc1.local' },
+    { title: 'Doc Two', url: 'https://doc2.local' }
+  ];
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  elements.searchInput.value = 'Doc';
+  await controller.handleInput();
+
+  const items = elements.bookmarkResultsContainer.querySelectorAll('.result-item');
+  assert.ok(items.length >= 2, 'Should render at least 2 items');
+
+  // Explicitly select second item
+  controller.selectItem(items[1], true);
+  const selectedBefore = controller.getSelectedResult();
+  assert.ok(selectedBefore);
+  assert.strictEqual(selectedBefore.dataset.url, 'https://doc2.local');
+
+  // Re-run handleInput with similar query matching the same items
+  elements.searchInput.value = 'Doc';
+  await controller.handleInput();
+
+  const selectedAfter = elements.bookmarkResultsContainer.querySelector('.result-item.selected');
+  assert.ok(selectedAfter, 'Selection should be restored after re-render');
+  assert.strictEqual(selectedAfter.dataset.url, 'https://doc2.local', 'Same item should remain selected');
+  assert.strictEqual(controller.getState().currentSelectionIndex, 1);
+
+  controller.destroy();
+});
+
+// 17. Rapid Typing Race Test
+test('search-interaction-controller: rapid typing race condition protection ignores stale search tokens', async () => {
+  const { controller, elements } = setupTestEnvironment();
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  // First input starts with token 1
+  elements.searchInput.value = 'first query';
+  const firstPromise = controller.handleInput();
+
+  // Second input immediately updates with token 2
+  elements.searchInput.value = 'second query';
+  const secondPromise = controller.handleInput();
+
+  await Promise.all([firstPromise, secondPromise]);
+
+  const state = controller.getState();
+  assert.ok(state.latestSearchToken >= 2, 'Latest search token should be updated to latest search');
 
   controller.destroy();
 });

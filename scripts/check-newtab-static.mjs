@@ -53,8 +53,11 @@ const keyExtractedModulePaths = [
   "newtab/widgets/news.js",
   "newtab/integrations/app-launcher.js",
   "newtab/integrations/firefox-containers.js",
+  "newtab/search/search-storage.js",
   "newtab/search/search-utils.js",
   "newtab/search/search-suggestion-cache.js",
+  "newtab/search/search-ui-controller.js",
+  "newtab/search/search-interaction-controller.js",
   "newtab/tips/homebase-tips-ui.js",
   "newtab/wallpaper/dynamic-accent.js"
 ];

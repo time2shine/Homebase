@@ -238,7 +238,11 @@ function setupSearchEnginesModal() {
 
 
     try {
-      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.setSearchEnginesConfig) {
+        await HomebaseSearchStorage.setSearchEnginesConfig(storageData);
+      } else if (typeof setSearchEnginesConfig === 'function') {
+        await setSearchEnginesConfig(storageData);
+      } else if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
         await HomebaseStorage.set(SEARCH_ENGINES_PREF_KEY, storageData);
       } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
         await browser.storage.local.set({ [SEARCH_ENGINES_PREF_KEY]: storageData });
@@ -256,7 +260,11 @@ function setupSearchEnginesModal() {
     if (defaultEngineId && previousDefaultEngineId !== defaultEngineId) {
 
       try {
-        if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+        if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.setDefaultSearchEngineId) {
+          await HomebaseSearchStorage.setDefaultSearchEngineId(defaultEngineId);
+        } else if (typeof setDefaultSearchEngineId === 'function') {
+          await setDefaultSearchEngineId(defaultEngineId);
+        } else if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
           await HomebaseStorage.set(APP_SEARCH_DEFAULT_ENGINE_KEY, defaultEngineId);
         } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
           await browser.storage.local.set({ [APP_SEARCH_DEFAULT_ENGINE_KEY]: defaultEngineId });
@@ -271,7 +279,11 @@ function setupSearchEnginesModal() {
 
       const defaultEngine = searchEngines.find((engine) => engine.id === defaultEngineId);
 
-      writeFastSearchCache(defaultEngine);
+      if (typeof writeFastSearchCache === 'function') {
+        writeFastSearchCache(defaultEngine);
+      } else if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.writeFastSearchCache) {
+        HomebaseSearchStorage.writeFastSearchCache(defaultEngine);
+      }
 
     }
 

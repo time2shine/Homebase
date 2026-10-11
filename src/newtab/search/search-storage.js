@@ -3,7 +3,14 @@
 // search configuration, and fast-search mirror synchronization via HomebaseStorage
 // with defensive fallback to browser.storage.local.
 
-const CURRENT_SEARCH_ENGINE_ID_KEY = 'currentSearchEngineId';
+(function () {
+  'use strict';
+
+  const globalScope = typeof window !== 'undefined'
+    ? window
+    : (typeof globalThis !== 'undefined' ? globalThis : this);
+
+  const CURRENT_SEARCH_ENGINE_ID_KEY = 'currentSearchEngineId';
 const APP_SEARCH_DEFAULT_ENGINE_KEY = 'appSearchDefaultEngine';
 const APP_SEARCH_REMEMBER_ENGINE_KEY = 'appSearchRememberEngine';
 const SEARCH_ENGINES_PREF_KEY = 'searchEnginesConfig';
@@ -407,44 +414,7 @@ function clearFastSearchCache() {
   }
 }
 
-// Window & namespace exports
-if (typeof window !== 'undefined') {
-  window.CURRENT_SEARCH_ENGINE_ID_KEY = CURRENT_SEARCH_ENGINE_ID_KEY;
-  window.APP_SEARCH_DEFAULT_ENGINE_KEY = APP_SEARCH_DEFAULT_ENGINE_KEY;
-  window.APP_SEARCH_REMEMBER_ENGINE_KEY = APP_SEARCH_REMEMBER_ENGINE_KEY;
-  window.SEARCH_ENGINES_PREF_KEY = SEARCH_ENGINES_PREF_KEY;
-  window.FAST_SEARCH_STORAGE_KEY = FAST_SEARCH_STORAGE_KEY;
-
-  window.getCurrentSearchEngineId = getCurrentSearchEngineId;
-  window.getCurrentSearchEngine = getCurrentSearchEngineId;
-  window.setCurrentSearchEngine = setCurrentSearchEngine;
-  window.setCurrentSearchEngineId = setCurrentSearchEngineId;
-
-  window.getDefaultSearchEngineId = getDefaultSearchEngineId;
-  window.setDefaultSearchEngineId = setDefaultSearchEngineId;
-  window.getSearchDefaultEngine = getDefaultSearchEngineId;
-  window.setSearchDefaultEngine = setDefaultSearchEngineId;
-  window.getSearchEnginePreference = getDefaultSearchEngineId;
-  window.setSearchEnginePreference = setDefaultSearchEngineId;
-
-  window.getSearchRememberEnginePreference = getSearchRememberEnginePreference;
-  window.setSearchRememberEnginePreference = setSearchRememberEnginePreference;
-
-  window.getSearchEnginesConfig = getSearchEnginesConfig;
-  window.setSearchEnginesConfig = setSearchEnginesConfig;
-
-  window.getSearchPreferences = getSearchPreferences;
-  window.setSearchPreferences = setSearchPreferences;
-
-  window.getFastSearchPayload = getFastSearchPayload;
-  window.writeFastSearchCache = writeFastSearchCache;
-  window.getFastSearchCache = getFastSearchCache;
-  window.clearFastSearchCache = clearFastSearchCache;
-
-  window.DEFAULT_SEARCH_ENGINES = DEFAULT_SEARCH_ENGINES;
-  window.searchEngines = window.searchEngines || DEFAULT_SEARCH_ENGINES.map((e) => ({ ...e }));
-
-  window.HomebaseSearchStorage = {
+  const HomebaseSearchStorage = {
     CURRENT_SEARCH_ENGINE_ID_KEY,
     APP_SEARCH_DEFAULT_ENGINE_KEY,
     APP_SEARCH_REMEMBER_ENGINE_KEY,
@@ -473,4 +443,48 @@ if (typeof window !== 'undefined') {
     getFastSearchCache,
     clearFastSearchCache
   };
-}
+
+  // Window & namespace exports
+  if (globalScope) {
+    globalScope.CURRENT_SEARCH_ENGINE_ID_KEY = CURRENT_SEARCH_ENGINE_ID_KEY;
+    globalScope.APP_SEARCH_DEFAULT_ENGINE_KEY = APP_SEARCH_DEFAULT_ENGINE_KEY;
+    globalScope.APP_SEARCH_REMEMBER_ENGINE_KEY = APP_SEARCH_REMEMBER_ENGINE_KEY;
+    globalScope.SEARCH_ENGINES_PREF_KEY = SEARCH_ENGINES_PREF_KEY;
+    globalScope.FAST_SEARCH_STORAGE_KEY = FAST_SEARCH_STORAGE_KEY;
+
+    globalScope.getCurrentSearchEngineId = getCurrentSearchEngineId;
+    globalScope.getCurrentSearchEngine = getCurrentSearchEngineId;
+    globalScope.setCurrentSearchEngine = setCurrentSearchEngine;
+    globalScope.setCurrentSearchEngineId = setCurrentSearchEngineId;
+
+    globalScope.getDefaultSearchEngineId = getDefaultSearchEngineId;
+    globalScope.setDefaultSearchEngineId = setDefaultSearchEngineId;
+    globalScope.getSearchDefaultEngine = getDefaultSearchEngineId;
+    globalScope.setSearchDefaultEngine = setDefaultSearchEngineId;
+    globalScope.getSearchEnginePreference = getDefaultSearchEngineId;
+    globalScope.setSearchEnginePreference = setDefaultSearchEngineId;
+
+    globalScope.getSearchRememberEnginePreference = getSearchRememberEnginePreference;
+    globalScope.setSearchRememberEnginePreference = setSearchRememberEnginePreference;
+
+    globalScope.getSearchEnginesConfig = getSearchEnginesConfig;
+    globalScope.setSearchEnginesConfig = setSearchEnginesConfig;
+
+    globalScope.getSearchPreferences = getSearchPreferences;
+    globalScope.setSearchPreferences = setSearchPreferences;
+
+    globalScope.getFastSearchPayload = getFastSearchPayload;
+    globalScope.writeFastSearchCache = writeFastSearchCache;
+    globalScope.getFastSearchCache = getFastSearchCache;
+    globalScope.clearFastSearchCache = clearFastSearchCache;
+
+    globalScope.DEFAULT_SEARCH_ENGINES = DEFAULT_SEARCH_ENGINES;
+    globalScope.searchEngines = globalScope.searchEngines || DEFAULT_SEARCH_ENGINES.map((e) => ({ ...e }));
+
+    globalScope.HomebaseSearchStorage = HomebaseSearchStorage;
+  }
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = HomebaseSearchStorage;
+  }
+})();

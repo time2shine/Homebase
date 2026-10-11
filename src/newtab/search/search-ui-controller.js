@@ -5,10 +5,10 @@
 (function() {
   'use strict';
 
-  // Constants
-  const SEARCH_ENGINES_PREF_KEY = 'searchEngines';
-  const APP_SEARCH_REMEMBER_ENGINE_KEY = 'appSearchRememberEnginePreference';
-  const APP_SEARCH_DEFAULT_ENGINE_KEY = 'appSearchDefaultEnginePreference';
+  // Constants - canonical storage keys with defensive fallback
+  const SEARCH_ENGINES_PREF_KEY = (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.SEARCH_ENGINES_PREF_KEY) || 'searchEnginesConfig';
+  const APP_SEARCH_REMEMBER_ENGINE_KEY = (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.APP_SEARCH_REMEMBER_ENGINE_KEY) || 'appSearchRememberEngine';
+  const APP_SEARCH_DEFAULT_ENGINE_KEY = (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.APP_SEARCH_DEFAULT_ENGINE_KEY) || 'appSearchDefaultEngine';
   const ICON_SIZE = 36;
   const GAP = 6;
   const VISIBLE_COUNT = 1;
@@ -636,15 +636,19 @@
       stored = await HomebaseSearchStorage.getSearchPreferences();
     }
 
-    const savedConfig = stored[SEARCH_ENGINES_PREF_KEY];
+    const savedConfig = stored[SEARCH_ENGINES_PREF_KEY] !== undefined ? stored[SEARCH_ENGINES_PREF_KEY] : stored.searchEngines;
     applySearchEngineConfig(savedConfig);
 
     if (Object.prototype.hasOwnProperty.call(stored, APP_SEARCH_REMEMBER_ENGINE_KEY)) {
       setRememberPreference(stored[APP_SEARCH_REMEMBER_ENGINE_KEY] !== false);
+    } else if (Object.prototype.hasOwnProperty.call(stored, 'appSearchRememberEnginePreference')) {
+      setRememberPreference(stored.appSearchRememberEnginePreference !== false);
     }
 
     if (stored[APP_SEARCH_DEFAULT_ENGINE_KEY]) {
       setDefaultEnginePreference(stored[APP_SEARCH_DEFAULT_ENGINE_KEY]);
+    } else if (stored.appSearchDefaultEnginePreference) {
+      setDefaultEnginePreference(stored.appSearchDefaultEnginePreference);
     }
 
     const remember = getRememberPreference();
@@ -653,7 +657,7 @@
     if (remember) {
       targetEngineId = stored.currentSearchEngineId;
     } else {
-      targetEngineId = stored[APP_SEARCH_DEFAULT_ENGINE_KEY] || getDefaultEnginePreference();
+      targetEngineId = stored[APP_SEARCH_DEFAULT_ENGINE_KEY] || stored.appSearchDefaultEnginePreference || getDefaultEnginePreference();
     }
 
     targetEngineId = getSafeEnabledSearchEngineId(targetEngineId);

@@ -26,6 +26,9 @@ let todoItems = [];
 
 let todoHideDone = false;
 
+let todoListenerRegistry = null;
+let todoInitialized = false;
+
 function generateTodoId() {
   return `todo-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -272,46 +275,69 @@ function setTodoHideDone(nextHideDone) {
   commitTodoState();
 }
 
+const HomebaseTodoWidgetController = {
+  async initialize() {
+    if (!todoWidget || !todoList || !todoInput) return;
+    if (todoInitialized) return;
+    todoInitialized = true;
+
+    if (typeof HomebaseWidgetLifecycle !== 'undefined' && HomebaseWidgetLifecycle.createListenerRegistry) {
+      todoListenerRegistry = HomebaseWidgetLifecycle.createListenerRegistry();
+    } else {
+      todoListenerRegistry = {
+        on(target, type, fn, opt) { target?.addEventListener(type, fn, opt); },
+        removeAll() {}
+      };
+    }
+
+    if (todoAddBtn) {
+      todoListenerRegistry.on(todoAddBtn, 'click', addTodoFromInput);
+    }
+
+    if (todoInput) {
+      todoListenerRegistry.on(todoInput, 'keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          addTodoFromInput();
+        }
+      });
+    }
+
+    if (todoList) {
+      todoListenerRegistry.on(todoList, 'change', handleTodoToggle);
+      todoListenerRegistry.on(todoList, 'click', handleTodoDelete);
+    }
+
+    if (todoClearBtn) {
+      todoListenerRegistry.on(todoClearBtn, 'click', clearCompletedTodos);
+    }
+
+    if (todoFilterAllBtn) {
+      todoListenerRegistry.on(todoFilterAllBtn, 'click', () => {
+        setTodoHideDone(false);
+      });
+    }
+
+    if (todoFilterActiveBtn) {
+      todoListenerRegistry.on(todoFilterActiveBtn, 'click', () => {
+        setTodoHideDone(true);
+      });
+    }
+
+    await loadTodoState();
+  },
+
+  destroy() {
+    if (todoListenerRegistry) {
+      todoListenerRegistry.removeAll();
+      todoListenerRegistry = null;
+    }
+    todoInitialized = false;
+  }
+};
+
 async function setupTodoWidget() {
-  if (!todoWidget || !todoList || !todoInput) return;
-  if (todoWidget.dataset.ready === '1') return;
-  todoWidget.dataset.ready = '1';
-
-  if (todoAddBtn) {
-    todoAddBtn.addEventListener('click', addTodoFromInput);
-  }
-
-  if (todoInput) {
-    todoInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        addTodoFromInput();
-      }
-    });
-  }
-
-  if (todoList) {
-    todoList.addEventListener('change', handleTodoToggle);
-    todoList.addEventListener('click', handleTodoDelete);
-  }
-
-  if (todoClearBtn) {
-    todoClearBtn.addEventListener('click', clearCompletedTodos);
-  }
-
-  if (todoFilterAllBtn) {
-    todoFilterAllBtn.addEventListener('click', () => {
-      setTodoHideDone(false);
-    });
-  }
-
-  if (todoFilterActiveBtn) {
-    todoFilterActiveBtn.addEventListener('click', () => {
-      setTodoHideDone(true);
-    });
-  }
-
-  await loadTodoState();
+  return HomebaseTodoWidgetController.initialize();
 }
 
 function setTodoPreference(show = true, options = {}) {
@@ -372,4 +398,11 @@ function handleTodoStorageChange(changes, area) {
     updateTodoCache();
     renderTodoList();
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.HomebaseTodoWidgetController = HomebaseTodoWidgetController;
+}
+if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.registerWidget === 'function') {
+  HomebaseWidgetLifecycle.registerWidget('todo', HomebaseTodoWidgetController);
 }

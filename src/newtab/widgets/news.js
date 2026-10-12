@@ -60,6 +60,9 @@ let newsVisibilityObserver = null;
 
 let newsLazyLoadTriggered = false;
 
+let newsListenerRegistry = null;
+let newsInitialized = false;
+
 const newsHeaderTooltipMap = new WeakMap();
 
 function resolveNewsSourceId(sourceId) {
@@ -453,23 +456,31 @@ function setupNewsHoverPreview() {
   if (!newsList || newsList.dataset.previewReady === '1') return;
   newsList.dataset.previewReady = '1';
 
-  newsList.addEventListener('mouseover', (event) => {
+  const regOn = (target, type, fn, opt) => {
+    if (newsListenerRegistry) {
+      newsListenerRegistry.on(target, type, fn, opt);
+    } else if (target && typeof target.addEventListener === 'function') {
+      target.addEventListener(type, fn, opt);
+    }
+  };
+
+  regOn(newsList, 'mouseover', (event) => {
     const item = event.target.closest('.news-item');
     if (!item || !newsList.contains(item) || item === newsHoverTarget) return;
     newsHoverTarget = item;
     showNewsHoverPreview(item);
   });
 
-  newsList.addEventListener('mouseout', (event) => {
+  regOn(newsList, 'mouseout', (event) => {
     const item = event.target.closest('.news-item');
     if (!item || item !== newsHoverTarget) return;
     if (event.relatedTarget && item.contains(event.relatedTarget)) return;
     hideNewsHoverPreview();
   });
 
-  newsList.addEventListener('mouseleave', hideNewsHoverPreview);
-  window.addEventListener('resize', hideNewsHoverPreview);
-  document.addEventListener('scroll', hideNewsHoverPreview, true);
+  regOn(newsList, 'mouseleave', hideNewsHoverPreview);
+  regOn(window, 'resize', hideNewsHoverPreview);
+  regOn(document, 'scroll', hideNewsHoverPreview, true);
 }
 
 function readFastNewsCache(sourceId) {
@@ -711,100 +722,157 @@ function attachNewsHeaderTooltip(buttonEl) {
   if (!tooltip) return;
   newsHeaderTooltipMap.set(buttonEl, tooltip);
   buttonEl.dataset.newsTooltipReady = '1';
-  buttonEl.addEventListener('mouseenter', () => showNewsHeaderTooltip(buttonEl));
-  buttonEl.addEventListener('focus', () => showNewsHeaderTooltip(buttonEl));
-  buttonEl.addEventListener('mouseleave', () => hideNewsHeaderTooltip(buttonEl));
-  buttonEl.addEventListener('blur', () => hideNewsHeaderTooltip(buttonEl));
+
+  const regOn = (target, type, fn, opt) => {
+    if (newsListenerRegistry) {
+      newsListenerRegistry.on(target, type, fn, opt);
+    } else if (target && typeof target.addEventListener === 'function') {
+      target.addEventListener(type, fn, opt);
+    }
+  };
+
+  regOn(buttonEl, 'mouseenter', () => showNewsHeaderTooltip(buttonEl));
+  regOn(buttonEl, 'focus', () => showNewsHeaderTooltip(buttonEl));
+  regOn(buttonEl, 'mouseleave', () => hideNewsHeaderTooltip(buttonEl));
+  regOn(buttonEl, 'blur', () => hideNewsHeaderTooltip(buttonEl));
 }
 
-function setupNewsWidget() {
-  setupNewsHoverPreview();
-  if (newsSettingsBtn) {
-    newsSettingsBtn.addEventListener('click', () => {
-      openNewsSettingsModal(newsSettingsBtn);
-    });
-  }
+const HomebaseNewsWidgetController = {
+  initialize() {
+    if (newsInitialized) return;
+    newsInitialized = true;
 
-  if (newsRefreshBtn) {
-    newsRefreshBtn.addEventListener('click', async () => {
-      if (newsRefreshInFlight) return;
-      newsRefreshInFlight = true;
-      newsRefreshBtn.disabled = true;
+    if (typeof HomebaseWidgetLifecycle !== 'undefined' && HomebaseWidgetLifecycle.createListenerRegistry) {
+      newsListenerRegistry = HomebaseWidgetLifecycle.createListenerRegistry();
+    } else {
+      newsListenerRegistry = {
+        on(target, type, fn, opt) { target?.addEventListener(type, fn, opt); },
+        removeAll() {}
+      };
+    }
 
-      try {
+    setupNewsHoverPreview();
+
+    if (newsSettingsBtn) {
+      newsListenerRegistry.on(newsSettingsBtn, 'click', () => {
+        openNewsSettingsModal(newsSettingsBtn);
+      });
+    }
+
+    if (newsRefreshBtn) {
+      newsListenerRegistry.on(newsRefreshBtn, 'click', async () => {
+        if (newsRefreshInFlight) return;
+        newsRefreshInFlight = true;
+        newsRefreshBtn.disabled = true;
+
         try {
-          if (window.localStorage) {
-            localStorage.removeItem('fast-news');
-          }
-        } catch (err) {
-          // Ignore; fast cache is best-effort only
-        }
-
-        await fetchAndRenderNews({ force: true });
-      } finally {
-        newsRefreshInFlight = false;
-        newsRefreshBtn.disabled = false;
-      }
-    });
-  }
-
-  attachNewsHeaderTooltip(newsSettingsBtn);
-  attachNewsHeaderTooltip(newsRefreshBtn);
-
-  if (newsSettingsCloseBtn) {
-    newsSettingsCloseBtn.addEventListener('click', closeNewsSettingsModal);
-  }
-
-  if (newsSettingsCancelBtn) {
-    newsSettingsCancelBtn.addEventListener('click', closeNewsSettingsModal);
-  }
-
-  if (newsSettingsModal) {
-    newsSettingsModal.addEventListener('click', (e) => {
-      if (e.target === newsSettingsModal) {
-        closeNewsSettingsModal();
-      }
-    });
-  }
-
-  if (newsSettingsSaveBtn) {
-    newsSettingsSaveBtn.addEventListener('click', async () => {
-      const selected = resolveNewsSourceId(newsSourceSelect?.value);
-      appNewsSourcePreference = selected;
-      if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setNewsCache) {
-        try {
-          await HomebaseWidgetStorage.setNewsCache({ source: selected, items: [], fetchedAt: 0 });
-        } catch (err) {
-          console.warn('Failed to save news source preference', err);
-        }
-      } else {
-        if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
           try {
-            await HomebaseStorage.set(APP_NEWS_SOURCE_KEY, selected);
+            if (window.localStorage) {
+              localStorage.removeItem('fast-news');
+            }
+          } catch (err) {
+            // Ignore; fast cache is best-effort only
+          }
+
+          await fetchAndRenderNews({ force: true });
+        } finally {
+          newsRefreshInFlight = false;
+          newsRefreshBtn.disabled = false;
+        }
+      });
+    }
+
+    attachNewsHeaderTooltip(newsSettingsBtn);
+    attachNewsHeaderTooltip(newsRefreshBtn);
+
+    if (newsSettingsCloseBtn) {
+      newsListenerRegistry.on(newsSettingsCloseBtn, 'click', closeNewsSettingsModal);
+    }
+
+    if (newsSettingsCancelBtn) {
+      newsListenerRegistry.on(newsSettingsCancelBtn, 'click', closeNewsSettingsModal);
+    }
+
+    if (newsSettingsModal) {
+      newsListenerRegistry.on(newsSettingsModal, 'click', (e) => {
+        if (e.target === newsSettingsModal) {
+          closeNewsSettingsModal();
+        }
+      });
+    }
+
+    if (newsSettingsSaveBtn) {
+      newsListenerRegistry.on(newsSettingsSaveBtn, 'click', async () => {
+        const selected = resolveNewsSourceId(newsSourceSelect?.value);
+        appNewsSourcePreference = selected;
+        if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setNewsCache) {
+          try {
+            await HomebaseWidgetStorage.setNewsCache({ source: selected, items: [], fetchedAt: 0 });
           } catch (err) {
             console.warn('Failed to save news source preference', err);
           }
         } else {
+          if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+            try {
+              await HomebaseStorage.set(APP_NEWS_SOURCE_KEY, selected);
+            } catch (err) {
+              console.warn('Failed to save news source preference', err);
+            }
+          } else {
+            try {
+              await browser.storage.local.set({ [APP_NEWS_SOURCE_KEY]: selected });
+            } catch (err) {
+              console.warn('Failed to save news source preference', err);
+            }
+          }
           try {
-            await browser.storage.local.set({ [APP_NEWS_SOURCE_KEY]: selected });
+            if (window.localStorage) {
+              localStorage.removeItem('fast-news');
+            }
           } catch (err) {
-            console.warn('Failed to save news source preference', err);
+            // Ignore; fast cache is best-effort only
           }
         }
-        try {
-          if (window.localStorage) {
-            localStorage.removeItem('fast-news');
-          }
-        } catch (err) {
-          // Ignore; fast cache is best-effort only
-        }
-      }
-      fetchAndRenderNews({ force: true });
-      closeNewsSettingsModal();
-    });
-  }
+        fetchAndRenderNews({ force: true });
+        closeNewsSettingsModal();
+      });
+    }
 
-  observeNewsWidgetVisibility();
+    observeNewsWidgetVisibility();
+  },
+
+  destroy() {
+    if (newsListenerRegistry) {
+      newsListenerRegistry.removeAll();
+      newsListenerRegistry = null;
+    }
+    if (newsVisibilityObserver) {
+      newsVisibilityObserver.disconnect();
+      newsVisibilityObserver = null;
+    }
+    if (newsFetchAbortController) {
+      try {
+        newsFetchAbortController.abort();
+      } catch (_) {}
+      newsFetchAbortController = null;
+    }
+    if (newsList) {
+      delete newsList.dataset.previewReady;
+    }
+    if (newsSettingsBtn) {
+      delete newsSettingsBtn.dataset.newsTooltipReady;
+    }
+    if (newsRefreshBtn) {
+      delete newsRefreshBtn.dataset.newsTooltipReady;
+    }
+    newsHoverTarget = null;
+    newsRefreshInFlight = false;
+    newsInitialized = false;
+  }
+};
+
+function setupNewsWidget() {
+  return HomebaseNewsWidgetController.initialize();
 }
 
 function setNewsPreference(show = true, options = {}) {
@@ -848,4 +916,8 @@ function setNewsPreference(show = true, options = {}) {
 
 if (typeof window !== 'undefined') {
   window.fetchAndRenderNews = fetchAndRenderNews;
+  window.HomebaseNewsWidgetController = HomebaseNewsWidgetController;
+}
+if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.registerWidget === 'function') {
+  HomebaseWidgetLifecycle.registerWidget('news', HomebaseNewsWidgetController);
 }

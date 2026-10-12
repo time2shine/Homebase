@@ -1,32 +1,49 @@
 // ===============================================
-
 // --- TIME AND DATE ---
-
 // ===============================================
 
 let timeFormatPreference = '12-hour';
+let timeIntervalId = null;
+let timeInitialized = false;
 
 function updateTime() {
-
   const now = new Date();
-
   const timeEl = document.getElementById('current-time');
-
   const dateEl = document.getElementById('current-date');
-
   const useHour12 = timeFormatPreference === '12-hour';
 
-  timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: useHour12 });
+  if (timeEl) {
+    timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: useHour12 });
+  }
 
   const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' };
-
-  dateEl.textContent = now.toLocaleDateString('en-US', dateOptions);
-
-
+  if (dateEl) {
+    dateEl.textContent = now.toLocaleDateString('en-US', dateOptions);
+  }
 
   revealWidget('.widget-time');
-
 }
+
+const HomebaseTimeWidgetController = {
+  initialize() {
+    if (timeInitialized) return;
+    timeInitialized = true;
+
+    updateTime();
+
+    if (!timeIntervalId) {
+      timeIntervalId = setInterval(updateTime, 1000 * 60);
+    }
+  },
+
+  destroy() {
+    if (timeIntervalId) {
+      clearInterval(timeIntervalId);
+      timeIntervalId = null;
+    }
+    timeInitialized = false;
+  }
+};
 
 function applyTimeFormatPreference(format = '12-hour', options = {}) {
   timeFormatPreference = format === '12-hour' ? '12-hour' : '24-hour';
@@ -62,6 +79,11 @@ function setTimeFormatPreference(format = '12-hour', options = {}) {
 }
 
 if (typeof window !== 'undefined') {
+  window.updateTime = updateTime;
   window.applyTimeFormatPreference = applyTimeFormatPreference;
   window.setTimeFormatPreference = setTimeFormatPreference;
+  window.HomebaseTimeWidgetController = HomebaseTimeWidgetController;
+}
+if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.registerWidget === 'function') {
+  HomebaseWidgetLifecycle.registerWidget('time', HomebaseTimeWidgetController);
 }

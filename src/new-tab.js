@@ -118,9 +118,11 @@ function logInitSettled(name, result) {
 
     setupContainerMode();
 
-    updateTime();
-
-  setInterval(updateTime, 1000 * 60);
+    if (window.HomebaseTimeWidgetController && typeof window.HomebaseTimeWidgetController.initialize === 'function') {
+      window.HomebaseTimeWidgetController.initialize();
+    } else if (typeof updateTime === 'function') {
+      updateTime();
+    }
 
   setupDockNavigation();
   setupLazySettingsButton();

@@ -28,6 +28,11 @@ const quoteCopyBtn = document.getElementById('quote-copy-btn');
 
 const quoteNextBtn = document.getElementById('quote-next-btn');
 
+let quoteListenerRegistry = null;
+let quoteInitialized = false;
+let quoteCopyTimeout = null;
+let quoteRotateTimeout = null;
+
 const QUOTE_FREQUENCY_KEY = 'quoteUpdateFrequency';
 
 const QUOTES_JSON_PATH = 'assets/quotes.json';
@@ -756,147 +761,132 @@ async function openQuoteSettingsModal(triggerSource) {
   openModalWithAnimation('quote-settings-modal', triggerSource || null, '.dialog-content');
 }
 
-function setupQuoteWidget() {
+const HomebaseQuoteWidgetController = {
+  initialize() {
+    if (quoteInitialized) return;
+    quoteInitialized = true;
 
-  renderCachedQuoteState();
+    if (typeof HomebaseWidgetLifecycle !== 'undefined' && HomebaseWidgetLifecycle.createListenerRegistry) {
+      quoteListenerRegistry = HomebaseWidgetLifecycle.createListenerRegistry();
+    } else {
+      quoteListenerRegistry = {
+        on(target, type, fn, opt) { target?.addEventListener(type, fn, opt); },
+        removeAll() {}
+      };
+    }
 
-  if (quoteSettingsBtn) {
+    renderCachedQuoteState();
 
-    quoteSettingsBtn.addEventListener('click', () => openQuoteSettingsModal(quoteSettingsBtn));
+    if (quoteSettingsBtn) {
+      quoteListenerRegistry.on(quoteSettingsBtn, 'click', () => openQuoteSettingsModal(quoteSettingsBtn));
+    }
 
-  }
+    if (quoteSettingsCloseBtn) {
+      quoteListenerRegistry.on(quoteSettingsCloseBtn, 'click', closeQuoteSettingsModal);
+    }
 
-  if (quoteSettingsCloseBtn) {
+    if (quoteSettingsCancelBtn) {
+      quoteListenerRegistry.on(quoteSettingsCancelBtn, 'click', closeQuoteSettingsModal);
+    }
 
-    quoteSettingsCloseBtn.addEventListener('click', closeQuoteSettingsModal);
+    if (quoteCopyBtn) {
+      quoteListenerRegistry.on(quoteCopyBtn, 'click', () => {
+        const text = quoteText ? quoteText.textContent : '';
+        const author = quoteAuthor ? quoteAuthor.textContent : '';
+        const fullQuote = `${text} ${author}`.trim();
 
-  }
+        navigator.clipboard.writeText(fullQuote).then(() => {
+          if (typeof HomebaseQuoteCardRenderer !== 'undefined' && HomebaseQuoteCardRenderer.renderCopySuccess) {
+            HomebaseQuoteCardRenderer.renderCopySuccess(quoteCopyBtn, 1500);
+            return;
+          }
 
-  if (quoteSettingsCancelBtn) {
+          const originalNodes = Array.from(quoteCopyBtn.childNodes).map(node => node.cloneNode(true));
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('width', '24');
+          svg.setAttribute('height', '24');
+          svg.setAttribute('viewBox', '0 0 24 24');
+          svg.setAttribute('fill', 'none');
+          svg.setAttribute('stroke', '#4ade80');
+          svg.setAttribute('stroke-width', '2');
+          const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          polyline.setAttribute('points', '20 6 9 17 4 12');
+          svg.appendChild(polyline);
 
-    quoteSettingsCancelBtn.addEventListener('click', closeQuoteSettingsModal);
+          quoteCopyBtn.replaceChildren(svg);
 
-  }
+          clearTimeout(quoteCopyTimeout);
+          quoteCopyTimeout = setTimeout(() => {
+            quoteCopyBtn.replaceChildren(...originalNodes);
+          }, 1500);
+        });
+      });
+    }
 
-  if (quoteCopyBtn) {
+    if (quoteNextBtn) {
+      quoteListenerRegistry.on(quoteNextBtn, 'click', () => {
+        const icon = quoteNextBtn.querySelector('svg');
+        if (icon) {
+          icon.style.transition = 'transform 0.4s ease';
+          icon.style.transform = 'rotate(360deg)';
+          clearTimeout(quoteRotateTimeout);
+          quoteRotateTimeout = setTimeout(() => {
+            icon.style.transition = 'none';
+            icon.style.transform = 'none';
+          }, 400);
+        }
+        fetchQuote({ forceRefresh: true });
+      });
+    }
 
-    quoteCopyBtn.addEventListener('click', () => {
+    if (quoteSettingsModal) {
+      quoteListenerRegistry.on(quoteSettingsModal, 'click', (e) => {
+        if (e.target === quoteSettingsModal) {
+          closeQuoteSettingsModal();
+        }
+      });
+    }
 
-      const text = quoteText.textContent;
+    if (quoteSettingsSaveBtn) {
+      quoteListenerRegistry.on(quoteSettingsSaveBtn, 'click', async () => {
+        const allPill = quoteCategoriesList ? quoteCategoriesList.querySelector('.quote-category-pill[data-value="__all__"]') : null;
+        const categoryPills = quoteCategoriesList ? quoteCategoriesList.querySelectorAll('.quote-category-pill') : [];
+        const selectedTags = Array.from(categoryPills)
+          .filter((pill) => pill.dataset.value !== '__all__' && pill.classList.contains('selected'))
+          .map((pill) => pill.dataset.value);
+        const allSelected = allPill ? allPill.classList.contains('selected') : selectedTags.length === 0;
+        const tagsToSave = allSelected ? [] : selectedTags;
+        const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : QUOTE_DEFAULT_FREQUENCY;
 
-      const author = quoteAuthor.textContent;
-
-      const fullQuote = `${text} ${author}`.trim();
-
-      navigator.clipboard.writeText(fullQuote).then(() => {
-        if (typeof HomebaseQuoteCardRenderer !== 'undefined' && HomebaseQuoteCardRenderer.renderCopySuccess) {
-          HomebaseQuoteCardRenderer.renderCopySuccess(quoteCopyBtn, 1500);
-          return;
+        if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setQuoteCache) {
+          await HomebaseWidgetStorage.setQuoteCache({ tags: tagsToSave, frequency });
+        } else if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
+          await HomebaseStorage.setMany({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });
+        } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+          await browser.storage.local.set({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });
         }
 
-        const originalNodes = Array.from(quoteCopyBtn.childNodes).map(node => node.cloneNode(true));
-
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('width', '24');
-        svg.setAttribute('height', '24');
-        svg.setAttribute('viewBox', '0 0 24 24');
-        svg.setAttribute('fill', 'none');
-        svg.setAttribute('stroke', '#4ade80');
-        svg.setAttribute('stroke-width', '2');
-        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-        polyline.setAttribute('points', '20 6 9 17 4 12');
-        svg.appendChild(polyline);
-
-        quoteCopyBtn.replaceChildren(svg);
-
-        setTimeout(() => {
-
-          quoteCopyBtn.replaceChildren(...originalNodes);
-
-        }, 1500);
-
-      });
-
-    });
-
-  }
-
-  if (quoteNextBtn) {
-
-    quoteNextBtn.addEventListener('click', () => {
-
-      const icon = quoteNextBtn.querySelector('svg');
-
-      if (icon) {
-
-        icon.style.transition = 'transform 0.4s ease';
-
-        icon.style.transform = 'rotate(360deg)';
-
-        setTimeout(() => {
-
-          icon.style.transition = 'none';
-
-          icon.style.transform = 'none';
-
-        }, 400);
-
-      }
-
-      fetchQuote({ forceRefresh: true });
-
-    });
-
-  }
-
-  if (quoteSettingsModal) {
-
-    quoteSettingsModal.addEventListener('click', (e) => {
-
-      if (e.target === quoteSettingsModal) {
-
         closeQuoteSettingsModal();
+        fetchQuote({ forceRefresh: true, ignorePrefetched: true });
+      });
+    }
+  },
 
-      }
-
-    });
-
+  destroy() {
+    if (quoteListenerRegistry) {
+      quoteListenerRegistry.removeAll();
+      quoteListenerRegistry = null;
+    }
+    clearTimeout(quoteCopyTimeout);
+    quoteCopyTimeout = null;
+    clearTimeout(quoteRotateTimeout);
+    quoteRotateTimeout = null;
+    quoteInitialized = false;
   }
+};
 
-  if (quoteSettingsSaveBtn) {
-
-    quoteSettingsSaveBtn.addEventListener('click', async () => {
-
-      const allPill = quoteCategoriesList ? quoteCategoriesList.querySelector('.quote-category-pill[data-value="__all__"]') : null;
-
-      const categoryPills = quoteCategoriesList ? quoteCategoriesList.querySelectorAll('.quote-category-pill') : [];
-
-      const selectedTags = Array.from(categoryPills)
-        .filter((pill) => pill.dataset.value !== '__all__' && pill.classList.contains('selected'))
-        .map((pill) => pill.dataset.value);
-
-      const allSelected = allPill ? allPill.classList.contains('selected') : selectedTags.length === 0;
-
-      const tagsToSave = allSelected ? [] : selectedTags;
-
-      const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : QUOTE_DEFAULT_FREQUENCY;
-
-      if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setQuoteCache) {
-        await HomebaseWidgetStorage.setQuoteCache({ tags: tagsToSave, frequency });
-      } else if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
-        await HomebaseStorage.setMany({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });
-      } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
-        await browser.storage.local.set({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });
-      }
-
-      closeQuoteSettingsModal();
-
-      fetchQuote({ forceRefresh: true, ignorePrefetched: true });
-
-    });
-
-  }
-
+function setupQuoteWidget() {
+  return HomebaseQuoteWidgetController.initialize();
 }
 
 function setQuotePreference(show = true, options = {}) {
@@ -936,4 +926,11 @@ function setQuotePreference(show = true, options = {}) {
   if (options.updateUI !== false) {
     updateWidgetSettingsUI();
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.HomebaseQuoteWidgetController = HomebaseQuoteWidgetController;
+}
+if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.registerWidget === 'function') {
+  HomebaseWidgetLifecycle.registerWidget('quote', HomebaseQuoteWidgetController);
 }

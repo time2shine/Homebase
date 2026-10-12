@@ -68,14 +68,18 @@
     }
   };
 
-  const setupQuoteWidgetSafe = () => {
+  const setupQuoteWidgetSafe = async () => {
     const qWidget = (typeof quoteWidget !== 'undefined' && quoteWidget) || document.querySelector('.widget-quote');
     if (!document || !document.body || !qWidget) return;
     const start = performance.now();
     recordIdleTaskPerf('startup:setupQuoteWidget', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupQuoteWidget start');
     try {
-      setupQuoteWidget();
+      if (typeof HomebaseQuoteWidgetController !== 'undefined' && typeof HomebaseQuoteWidgetController.initialize === 'function') {
+        await HomebaseQuoteWidgetController.initialize();
+      } else if (typeof setupQuoteWidget === 'function') {
+        setupQuoteWidget();
+      }
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupQuoteWidget', err);
     } finally {
@@ -86,14 +90,18 @@
     }
   };
 
-  const setupNewsWidgetSafe = () => {
+  const setupNewsWidgetSafe = async () => {
     const nWidget = (typeof newsWidget !== 'undefined' && newsWidget) || document.querySelector('.widget-news');
     if (!document || !document.body || !nWidget) return;
     const start = performance.now();
     recordIdleTaskPerf('startup:setupNewsWidget', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupNewsWidget start');
     try {
-      setupNewsWidget();
+      if (typeof HomebaseNewsWidgetController !== 'undefined' && typeof HomebaseNewsWidgetController.initialize === 'function') {
+        await HomebaseNewsWidgetController.initialize();
+      } else if (typeof setupNewsWidget === 'function') {
+        setupNewsWidget();
+      }
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupNewsWidget', err);
     } finally {
@@ -111,7 +119,11 @@
     recordIdleTaskPerf('startup:setupTodoWidget', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupTodoWidget start');
     try {
-      await setupTodoWidget();
+      if (typeof HomebaseTodoWidgetController !== 'undefined' && typeof HomebaseTodoWidgetController.initialize === 'function') {
+        await HomebaseTodoWidgetController.initialize();
+      } else if (typeof setupTodoWidget === 'function') {
+        await setupTodoWidget();
+      }
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupTodoWidget', err);
     } finally {
@@ -156,7 +168,11 @@
     recordIdleTaskPerf('startup:setupWeather', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupWeather start');
     try {
-      await setupWeather();
+      if (typeof HomebaseWeatherWidgetController !== 'undefined' && typeof HomebaseWeatherWidgetController.initialize === 'function') {
+        await HomebaseWeatherWidgetController.initialize();
+      } else if (typeof setupWeather === 'function') {
+        await setupWeather();
+      }
     } catch (err) {
       console.warn('Startup task failed:', 'startup:setupWeather', err);
     } finally {

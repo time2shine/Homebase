@@ -7,9 +7,8 @@
 
 const weatherWidget = document.querySelector('.widget-weather');
 
-const settingsBtn = document.getElementById('settings-btn');
-
-const setLocationBtn = document.getElementById('set-location-btn');
+let weatherListenerRegistry = null;
+let weatherInitialized = false;
 
 const weatherSetup = document.getElementById('weather-setup');
 
@@ -1025,176 +1024,202 @@ async function openWeatherSettingsModal(triggerSource) {
   }
   openModalWithAnimation('weather-settings-modal', triggerSource || null, '.dialog-content');
 }
-async function setupWeather() {
 
-  if (settingsBtn) {
-    settingsBtn.addEventListener('click', () => {
-      openWeatherSettingsModal(settingsBtn);
-    });
-  }
+const HomebaseWeatherWidgetController = {
+  async initialize() {
+    if (weatherInitialized) return;
+    weatherInitialized = true;
 
-  if (setLocationBtn) {
-    setLocationBtn.addEventListener('click', async () => {
-      await weatherStorageRemove(['weatherLat', 'weatherLon', 'weatherCityName']);
-      startGeolocation();
-    });
-  }
+    if (typeof HomebaseWidgetLifecycle !== 'undefined' && HomebaseWidgetLifecycle.createListenerRegistry) {
+      weatherListenerRegistry = HomebaseWidgetLifecycle.createListenerRegistry();
+    } else {
+      weatherListenerRegistry = {
+        on(target, type, fn, opt) { target?.addEventListener(type, fn, opt); },
+        removeAll() {}
+      };
+    }
 
-  if (weatherChooseCityBtn) {
-    weatherChooseCityBtn.addEventListener('click', async () => {
-      await openWeatherSettingsModal(weatherChooseCityBtn);
-      if (weatherLocationInput) weatherLocationInput.focus();
-    });
-  }
+    if (weatherChooseCityBtn) {
+      weatherListenerRegistry.on(weatherChooseCityBtn, 'click', async () => {
+        await openWeatherSettingsModal(weatherChooseCityBtn);
+        if (weatherLocationInput) weatherLocationInput.focus();
+      });
+    }
 
-  if (weatherUseCurrentBtn) {
-    weatherUseCurrentBtn.addEventListener('click', async () => {
-      await weatherStorageRemove(['weatherLat', 'weatherLon', 'weatherCityName']);
-      startGeolocation();
-      closeWeatherSettingsModal();
-    });
-  }
+    if (weatherUseCurrentBtn) {
+      weatherListenerRegistry.on(weatherUseCurrentBtn, 'click', async () => {
+        await weatherStorageRemove(['weatherLat', 'weatherLon', 'weatherCityName']);
+        startGeolocation();
+        closeWeatherSettingsModal();
+      });
+    }
 
-  if (weatherRefreshBtn) {
-    weatherRefreshBtn.addEventListener('click', async () => {
-      if (weatherRefreshInFlight) return;
-      weatherRefreshInFlight = true;
-      setWeatherLoadingState(true);
+    if (weatherRefreshBtn) {
+      weatherListenerRegistry.on(weatherRefreshBtn, 'click', async () => {
+        if (weatherRefreshInFlight) return;
+        weatherRefreshInFlight = true;
+        setWeatherLoadingState(true);
 
-      try {
-        const data = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherUnits', 'weatherCityName']);
-        const units = data.weatherUnits || 'celsius';
+        try {
+          const data = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherUnits', 'weatherCityName']);
+          const units = data.weatherUnits || 'celsius';
 
-        if (data.weatherLat && data.weatherLon) {
-          await fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName || 'Current Location');
+          if (data.weatherLat && data.weatherLon) {
+            await fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName || 'Current Location');
+          } else {
+            showWeatherSetupUI();
+          }
+        } finally {
+          weatherRefreshInFlight = false;
+          setWeatherLoadingState(false);
+        }
+      });
+    }
+
+    if (weatherLocationInput) {
+      weatherListenerRegistry.on(weatherLocationInput, 'input', () => {
+        clearTimeout(searchTimeout);
+        const value = weatherLocationInput.value;
+        searchTimeout = setTimeout(() => searchForLocation(value), 300);
+      });
+    }
+
+    if (weatherSettingsCloseBtn) {
+      weatherListenerRegistry.on(weatherSettingsCloseBtn, 'click', closeWeatherSettingsModal);
+    }
+
+    if (weatherSettingsCancelBtn) {
+      weatherListenerRegistry.on(weatherSettingsCancelBtn, 'click', closeWeatherSettingsModal);
+    }
+
+    if (weatherSettingsModal) {
+      weatherListenerRegistry.on(weatherSettingsModal, 'click', (e) => {
+        if (e.target === weatherSettingsModal) {
+          closeWeatherSettingsModal();
+        }
+      });
+    }
+
+    if (weatherSettingsSaveBtn) {
+      weatherListenerRegistry.on(weatherSettingsSaveBtn, 'click', async () => {
+        const newUnit = weatherTempUnitToggle?.checked ? 'fahrenheit' : 'celsius';
+        const existingLocation = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherCityName']);
+        const settingsToSave = { weatherUnits: newUnit };
+
+        if (selectedLocation) {
+          settingsToSave.weatherLat = selectedLocation.latitude;
+          settingsToSave.weatherLon = selectedLocation.longitude;
+          settingsToSave.weatherCityName = selectedLocation.name;
+        } else if (existingLocation.weatherLat && existingLocation.weatherLon && existingLocation.weatherCityName) {
+          settingsToSave.weatherLat = existingLocation.weatherLat;
+          settingsToSave.weatherLon = existingLocation.weatherLon;
+          settingsToSave.weatherCityName = existingLocation.weatherCityName;
+        }
+
+        await weatherStorageSet(settingsToSave);
+
+        const data = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherCityName', 'weatherUnits']);
+        if (data.weatherLat) {
+          fetchWeather(data.weatherLat, data.weatherLon, data.weatherUnits, data.weatherCityName);
         } else {
           showWeatherSetupUI();
         }
-      } finally {
-        weatherRefreshInFlight = false;
-        setWeatherLoadingState(false);
-      }
-    });
-  }
 
-  if (weatherLocationInput) {
-    weatherLocationInput.addEventListener('input', () => {
-      clearTimeout(searchTimeout);
-      const value = weatherLocationInput.value;
-      searchTimeout = setTimeout(() => searchForLocation(value), 300);
-    });
-  }
-
-  if (weatherSettingsCloseBtn) {
-    weatherSettingsCloseBtn.addEventListener('click', closeWeatherSettingsModal);
-  }
-
-  if (weatherSettingsCancelBtn) {
-    weatherSettingsCancelBtn.addEventListener('click', closeWeatherSettingsModal);
-  }
-
-  if (weatherSettingsModal) {
-    weatherSettingsModal.addEventListener('click', (e) => {
-      if (e.target === weatherSettingsModal) {
         closeWeatherSettingsModal();
-      }
-    });
-  }
-
-  if (weatherSettingsSaveBtn) {
-    weatherSettingsSaveBtn.addEventListener('click', async () => {
-      const newUnit = weatherTempUnitToggle?.checked ? 'fahrenheit' : 'celsius';
-      const existingLocation = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherCityName']);
-      const settingsToSave = { weatherUnits: newUnit };
-
-      if (selectedLocation) {
-        settingsToSave.weatherLat = selectedLocation.latitude;
-        settingsToSave.weatherLon = selectedLocation.longitude;
-        settingsToSave.weatherCityName = selectedLocation.name;
-      } else if (existingLocation.weatherLat && existingLocation.weatherLon && existingLocation.weatherCityName) {
-        settingsToSave.weatherLat = existingLocation.weatherLat;
-        settingsToSave.weatherLon = existingLocation.weatherLon;
-        settingsToSave.weatherCityName = existingLocation.weatherCityName;
-      }
-
-      await weatherStorageSet(settingsToSave);
-
-      const data = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherCityName', 'weatherUnits']);
-      if (data.weatherLat) {
-        fetchWeather(data.weatherLat, data.weatherLon, data.weatherUnits, data.weatherCityName);
-      } else {
-        showWeatherSetupUI();
-      }
-
-      closeWeatherSettingsModal();
-    });
-  }
-
-
-
-  const data = await weatherStorageGet([
-    'weatherLat',
-    'weatherLon',
-    'weatherCityName',
-    'weatherUnits',
-    'weatherFetchedAt',
-    'cachedWeatherData',
-    'cachedCityName',
-    'cachedUnits'
-  ]);
-
-  const units = data.weatherUnits || data.cachedUnits || 'celsius';
-  const cachedTs = getCachedWeatherTimestamp(data);
-  const hasCachedWeather = hasUsableCachedWeather(data.cachedWeatherData) && data.cachedCityName;
-  const renderCachedWeather = (options = getCachedWeatherDisplayOptions(cachedTs, { skipCacheSave: true })) => {
-    updateWeatherUI(
-      data.cachedWeatherData,
-      data.cachedCityName,
-      data.cachedUnits || units,
-      cachedTs ?? Date.now(),
-      options
-    );
-  };
-
-  if (data.weatherLat && data.weatherLon) {
-
-    if (hasCachedWeather) {
-      renderCachedWeather();
-    } else {
-      hideWeatherSetupUI();
+      });
     }
 
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    const data = await weatherStorageGet([
+      'weatherLat',
+      'weatherLon',
+      'weatherCityName',
+      'weatherUnits',
+      'weatherFetchedAt',
+      'cachedWeatherData',
+      'cachedCityName',
+      'cachedUnits'
+    ]);
+
+    const units = data.weatherUnits || data.cachedUnits || 'celsius';
+    const cachedTs = getCachedWeatherTimestamp(data);
+    const hasCachedWeather = hasUsableCachedWeather(data.cachedWeatherData) && data.cachedCityName;
+    const renderCachedWeather = (options = getCachedWeatherDisplayOptions(cachedTs, { skipCacheSave: true })) => {
+      updateWeatherUI(
+        data.cachedWeatherData,
+        data.cachedCityName,
+        data.cachedUnits || units,
+        cachedTs ?? Date.now(),
+        options
+      );
+    };
+
+    if (data.weatherLat && data.weatherLon) {
       if (hasCachedWeather) {
-        hbDebugInfo('Weather is offline. Using cached weather data.');
+        renderCachedWeather();
       } else {
-        showWeatherOfflineNoCache();
+        hideWeatherSetupUI();
       }
+
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        if (hasCachedWeather) {
+          hbDebugInfo('Weather is offline. Using cached weather data.');
+        } else {
+          showWeatherOfflineNoCache();
+        }
+        return;
+      }
+
+      const lastFetch = normalizeWeatherTimestamp(data.weatherFetchedAt) ?? cachedTs ?? 0;
+
+      if (!hasCachedWeather || !lastFetch || isWeatherCacheStale(lastFetch, WEATHER_CACHE_TTL_MS)) {
+        hbDebugInfo('Weather cache expired. Fetching new data...');
+        fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName);
+      } else {
+        hbDebugInfo('Using cached weather data.');
+      }
+
       return;
     }
 
-    const lastFetch = normalizeWeatherTimestamp(data.weatherFetchedAt) ?? cachedTs ?? 0;
-
-    if (!hasCachedWeather || !lastFetch || isWeatherCacheStale(lastFetch, WEATHER_CACHE_TTL_MS)) {
-      hbDebugInfo('Weather cache expired. Fetching new data...');
-      fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName);
-    } else {
-      hbDebugInfo('Using cached weather data.');
+    if (hasCachedWeather) {
+      renderCachedWeather();
+      return;
     }
 
-    return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      showWeatherOfflineNoCache();
+      return;
+    }
+
+    showWeatherSetupUI();
+  },
+
+  destroy() {
+    if (weatherListenerRegistry) {
+      weatherListenerRegistry.removeAll();
+      weatherListenerRegistry = null;
+    }
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+    if (geoAbortController) {
+      try {
+        geoAbortController.abort();
+      } catch (_) {}
+      geoAbortController = null;
+    }
+    selectedLocation = null;
+    weatherRefreshInFlight = false;
+    weatherInitialized = false;
   }
+};
 
-  if (hasCachedWeather) {
-    renderCachedWeather();
-    return;
-  }
+async function setupWeather() {
+  return HomebaseWeatherWidgetController.initialize();
+}
 
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    showWeatherOfflineNoCache();
-    return;
-  }
-
-  showWeatherSetupUI();
-
+if (typeof window !== 'undefined') {
+  window.HomebaseWeatherWidgetController = HomebaseWeatherWidgetController;
+}
+if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.registerWidget === 'function') {
+  HomebaseWidgetLifecycle.registerWidget('weather', HomebaseWeatherWidgetController);
 }

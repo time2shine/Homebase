@@ -18,6 +18,9 @@
   let searchNavigationLocked = false;
   let isBookmarkGridPointerOver = false;
   let bookmarkGridPointerListenersAttached = false;
+  let boundGridPointerEnterHandler = null;
+  let boundGridPointerLeaveHandler = null;
+  let trackedGridEl = null;
   let boundEventListeners = false;
   let boundFormSubmitHandler = null;
   let boundInputHandler = null;
@@ -302,23 +305,6 @@
     return null;
   }
 
-  function createSvgIcon(id) {
-    const renderer = getRenderer();
-    if (renderer && typeof renderer.createSvgIcon === 'function') {
-      return renderer.createSvgIcon(id);
-    }
-    if (typeof createSvgIconElement === 'function') return createSvgIconElement(id);
-    if (typeof window !== 'undefined' && typeof window.createSvgIconElement === 'function') return window.createSvgIconElement(id);
-    return null;
-  }
-
-  function syncGlobals() {
-    if (typeof currentSelectionIndex !== 'undefined') {
-      try {
-        currentSelectionIndex = currentSelectionIndex;
-      } catch (_) {}
-    }
-  }
 
   // --- Bookmark Grid Scroll Support ---
   function isBookmarkGridScrollKey(key) {
@@ -395,12 +381,16 @@
       (typeof document !== 'undefined' ? document.getElementById('bookmarks-grid') : null);
     if (!grid || bookmarkGridPointerListenersAttached || typeof grid.addEventListener !== 'function') return;
 
-    grid.addEventListener('pointerenter', () => {
+    boundGridPointerEnterHandler = () => {
       isBookmarkGridPointerOver = true;
-    });
-    grid.addEventListener('pointerleave', () => {
+    };
+    boundGridPointerLeaveHandler = () => {
       isBookmarkGridPointerOver = false;
-    });
+    };
+
+    grid.addEventListener('pointerenter', boundGridPointerEnterHandler);
+    grid.addEventListener('pointerleave', boundGridPointerLeaveHandler);
+    trackedGridEl = grid;
     bookmarkGridPointerListenersAttached = true;
   }
 
@@ -1110,6 +1100,8 @@
     const renderer = getRenderer();
     if (renderer && typeof renderer.clearSuggestions === 'function') {
       renderer.clearSuggestions(container);
+    } else if (typeof container.replaceChildren === 'function') {
+      container.replaceChildren();
     }
     lastSuggestionHtml = '';
     updatePanelVisibility();
@@ -1515,6 +1507,19 @@
       boundBeforeUnloadHandler = null;
       boundEventListeners = false;
     }
+    if (trackedGridEl && typeof trackedGridEl.removeEventListener === 'function') {
+      if (boundGridPointerEnterHandler) {
+        trackedGridEl.removeEventListener('pointerenter', boundGridPointerEnterHandler);
+      }
+      if (boundGridPointerLeaveHandler) {
+        trackedGridEl.removeEventListener('pointerleave', boundGridPointerLeaveHandler);
+      }
+    }
+    trackedGridEl = null;
+    boundGridPointerEnterHandler = null;
+    boundGridPointerLeaveHandler = null;
+    bookmarkGridPointerListenersAttached = false;
+    isBookmarkGridPointerOver = false;
     currentSelectionIndex = -1;
     currentSectionIndex = 0;
     selectionExplicit = false;

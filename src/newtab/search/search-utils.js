@@ -285,5 +285,18 @@ function isLikelyUrl(query) {
 
 
   return false;
-
 }
+
+(function() {
+  const globalScope = typeof window !== 'undefined'
+    ? window
+    : (typeof globalThis !== 'undefined' ? globalThis : null);
+
+  if (globalScope) {
+    globalScope.HomebaseSearchUtils = {
+      evaluateMath,
+      evaluateUnits,
+      isLikelyUrl
+    };
+  }
+})();

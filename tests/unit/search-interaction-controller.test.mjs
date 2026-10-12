@@ -968,4 +968,119 @@ test('search-interaction-controller: rapid typing race condition protection igno
   controller.destroy();
 });
 
+// 18. Repeated init/destroy Lifecycle Test
+test('search-interaction-controller: repeated initialize and destroy safely rebinds and detaches pointer tracking', () => {
+  const { controller, elements } = setupTestEnvironment();
+
+  // First initialization
+  controller.initialize({ bindEvents: true });
+  let state = controller.getState();
+  assert.strictEqual(state.bookmarkGridPointerListenersAttached, true, 'Pointer tracking should be attached');
+  assert.strictEqual(state.isBookmarkGridPointerOver, false);
+
+  // Trigger pointerenter on bookmarksGrid
+  elements.bookmarksGrid.dispatchMockEvent('pointerenter');
+  state = controller.getState();
+  assert.strictEqual(state.isBookmarkGridPointerOver, true, 'Pointer hover should update state');
+
+  // Destroy
+  controller.destroy();
+  state = controller.getState();
+  assert.strictEqual(state.bookmarkGridPointerListenersAttached, false, 'Pointer tracking should be detached on destroy');
+  assert.strictEqual(state.isBookmarkGridPointerOver, false, 'Pointer hover state should be reset');
+
+  // Idempotent second destroy
+  assert.doesNotThrow(() => controller.destroy());
+
+  // Second initialization
+  controller.initialize({ bindEvents: true });
+  state = controller.getState();
+  assert.strictEqual(state.bookmarkGridPointerListenersAttached, true, 'Pointer tracking should re-attach cleanly');
+
+  controller.destroy();
+});
+
+// 19. Renderer Missing Fallback Test
+test('search-interaction-controller: missing renderer falls back gracefully without throwing', async () => {
+  const { controller, elements, sandbox } = setupTestEnvironment();
+
+  // Remove renderer from window
+  const originalRenderer = sandbox.window.HomebaseSearchResultsRenderer;
+  delete sandbox.window.HomebaseSearchResultsRenderer;
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  elements.searchInput.value = 'query with no renderer';
+  await assert.doesNotReject(async () => {
+    await controller.handleInput();
+  }, 'handleInput should not throw when HomebaseSearchResultsRenderer is absent');
+
+  // clearExternalSuggestionResults should safely clear container via replaceChildren fallback
+  assert.doesNotThrow(() => {
+    controller.clearExternalSuggestionResults();
+  });
+
+  // updatePanelVisibility should fall back to DOM child count check
+  assert.doesNotThrow(() => {
+    controller.updatePanelVisibility();
+  });
+
+  // Restore renderer
+  sandbox.window.HomebaseSearchResultsRenderer = originalRenderer;
+  controller.destroy();
+});
+
+// 20. Keyboard Navigation Boundary Edge Cases
+test('search-interaction-controller: keyboard navigation handles empty sections and section boundary cycling', () => {
+  const { controller, elements } = setupTestEnvironment();
+
+  controller.initialize({ bindEvents: true });
+
+  // When no items exist in results containers
+  assert.doesNotThrow(() => {
+    controller.handleKeydown({ key: 'ArrowDown', target: elements.searchInput, preventDefault: () => {} });
+  });
+  assert.strictEqual(controller.getState().currentSelectionIndex, -1, 'Selection should remain -1 when empty');
+
+  // Tab with empty panel does not throw
+  assert.doesNotThrow(() => {
+    controller.handleKeydown({ key: 'Tab', target: elements.searchInput, preventDefault: () => {} });
+  });
+
+  // Escape clears panel and resets state
+  elements.searchResultsPanel.classList.remove('hidden');
+  controller.handleKeydown({ key: 'Escape', target: elements.searchInput, preventDefault: () => {} });
+  assert.ok(elements.searchResultsPanel.classList.contains('hidden'), 'Escape should hide results panel');
+  assert.strictEqual(controller.getState().currentSelectionIndex, -1);
+
+  controller.destroy();
+});
+
+// 21. Empty and Malformed History/Bookmark Data Handling
+test('search-interaction-controller: handles malformed history and bookmark data gracefully', async () => {
+  const { controller, elements, sandbox } = setupTestEnvironment();
+
+  // Bookmarks with null entries, missing title, and missing url
+  sandbox.allBookmarksCache = [
+    null,
+    { id: '1' },
+    { id: '2', title: null, url: 'https://null-title.org' },
+    { id: '3', title: 'Valid Title', url: undefined }
+  ];
+
+  // Browser history returning rejected promise
+  sandbox.browser.history = {
+    search: async () => { throw new Error('History disk I/O error'); }
+  };
+
+  controller.initialize({ bindEvents: true, debounceWait: 0 });
+
+  elements.searchInput.value = 'Title';
+  await assert.doesNotReject(async () => {
+    await controller.handleInput();
+  }, 'handleInput should handle malformed bookmarks and history errors safely');
+
+  controller.destroy();
+});
+
 

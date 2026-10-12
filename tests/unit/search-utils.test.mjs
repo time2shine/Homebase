@@ -117,3 +117,12 @@ test('isLikelyUrl() - search queries return false', () => {
   assert.strictEqual(isLikelyUrl('how to bake sourdough bread'), false);
   assert.strictEqual(isLikelyUrl('weather in tokyo'), false);
 });
+
+test('HomebaseSearchUtils - exports namespace on globalScope', () => {
+  const context = createSearchUtilsContext();
+  assert.ok(context.HomebaseSearchUtils, 'HomebaseSearchUtils should be exported on context');
+  assert.strictEqual(typeof context.HomebaseSearchUtils.evaluateMath, 'function');
+  assert.strictEqual(typeof context.HomebaseSearchUtils.evaluateUnits, 'function');
+  assert.strictEqual(typeof context.HomebaseSearchUtils.isLikelyUrl, 'function');
+  assert.strictEqual(context.HomebaseSearchUtils.evaluateMath('3 + 5'), 8);
+});

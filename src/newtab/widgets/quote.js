@@ -60,9 +60,11 @@ function readCachedQuoteState(options = {}) {
   let localStateRaw = null;
 
   try {
-
-    localStateRaw = localStorage.getItem('fast-quote-state');
-
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.getFastMirror) {
+      localStateRaw = HomebaseWidgetStorage.getFastMirror('fast-quote-v2') || HomebaseWidgetStorage.getFastMirror('fast-quote-state');
+    } else {
+      localStateRaw = localStorage.getItem('fast-quote-state');
+    }
   } catch (err) {
 
     if (options.warnOnParse) console.warn('Failed to read quote state', err);
@@ -132,6 +134,9 @@ function isQuoteWidgetEnabled() {
 }
 
 function renderQuoteToWidget(q) {
+  if (typeof HomebaseQuoteCardRenderer !== 'undefined' && HomebaseQuoteCardRenderer.renderQuoteCard) {
+    return HomebaseQuoteCardRenderer.renderQuoteCard(q, { quoteText, quoteAuthor });
+  }
 
   if (!isUsableCachedQuote(q) || !quoteText || !quoteAuthor) return false;
 
@@ -142,7 +147,6 @@ function renderQuoteToWidget(q) {
   revealWidget('.widget-quote');
 
   return true;
-
 }
 
 function renderCachedQuoteState(state = readCachedQuoteState()) {
@@ -257,7 +261,12 @@ async function ensureQuoteIndexBuilt() {
   quoteIndexPromise = (async () => {
 
     let storedIndex = null;
-    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.get) {
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.getQuoteCache) {
+      try {
+        const cache = await HomebaseWidgetStorage.getQuoteCache();
+        storedIndex = cache.index;
+      } catch (_) {}
+    } else if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.get) {
       storedIndex = await HomebaseStorage.get(QUOTE_INDEX_KEY);
     } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
       const stored = await browser.storage.local.get([QUOTE_INDEX_KEY]);
@@ -308,7 +317,9 @@ async function ensureQuoteIndexBuilt() {
 
     quoteIndexCache = newIndex;
 
-    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setQuoteCache) {
+      await HomebaseWidgetStorage.setQuoteCache({ index: newIndex });
+    } else if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
       await HomebaseStorage.set(QUOTE_INDEX_KEY, newIndex);
     } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
       await browser.storage.local.set({ [QUOTE_INDEX_KEY]: newIndex });
@@ -512,11 +523,19 @@ async function fetchQuote(options = {}) {
 
     }
 
-    localStorage.setItem('fast-quote-state', JSON.stringify({
-      current: localState.current,
-      next: localState.next,
-      config: localState.config
-    }));
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setQuoteCache) {
+      HomebaseWidgetStorage.setQuoteCache({
+        current: localState.current,
+        next: localState.next,
+        config: localState.config
+      }).catch(() => {});
+    } else {
+      localStorage.setItem('fast-quote-state', JSON.stringify({
+        current: localState.current,
+        next: localState.next,
+        config: localState.config
+      }));
+    }
 
   } catch (e) {
 
@@ -549,13 +568,13 @@ async function fetchQuote(options = {}) {
     renderQuoteToWidget(QUOTE_FALLBACK);
 
     try {
-
-      localStorage.setItem('fast-quote-state', JSON.stringify(fallbackState));
-
+      if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setQuoteCache) {
+        HomebaseWidgetStorage.setQuoteCache(fallbackState).catch(() => {});
+      } else {
+        localStorage.setItem('fast-quote-state', JSON.stringify(fallbackState));
+      }
     } catch (storageErr) {
-
       console.warn('Failed to cache fallback quote state', storageErr);
-
     }
 
   }
@@ -582,6 +601,10 @@ async function populateQuoteCategories() {
   const savedTags = new Set(savedRaw);
 
   const render = (tags) => {
+    if (typeof HomebaseQuoteCardRenderer !== 'undefined' && HomebaseQuoteCardRenderer.renderCategoryPills) {
+      HomebaseQuoteCardRenderer.renderCategoryPills(quoteCategoriesList, tags, savedTags);
+      return;
+    }
 
     quoteCategoriesList.innerHTML = '';
 
@@ -766,6 +789,10 @@ function setupQuoteWidget() {
       const fullQuote = `${text} ${author}`.trim();
 
       navigator.clipboard.writeText(fullQuote).then(() => {
+        if (typeof HomebaseQuoteCardRenderer !== 'undefined' && HomebaseQuoteCardRenderer.renderCopySuccess) {
+          HomebaseQuoteCardRenderer.renderCopySuccess(quoteCopyBtn, 1500);
+          return;
+        }
 
         const originalNodes = Array.from(quoteCopyBtn.childNodes).map(node => node.cloneNode(true));
 
@@ -854,7 +881,9 @@ function setupQuoteWidget() {
 
       const frequency = quoteFrequencySelect ? quoteFrequencySelect.value : QUOTE_DEFAULT_FREQUENCY;
 
-      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
+      if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setQuoteCache) {
+        await HomebaseWidgetStorage.setQuoteCache({ tags: tagsToSave, frequency });
+      } else if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
         await HomebaseStorage.setMany({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });
       } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
         await browser.storage.local.set({ quoteTags: tagsToSave, [QUOTE_FREQUENCY_KEY]: frequency });

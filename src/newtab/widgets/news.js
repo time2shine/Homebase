@@ -283,11 +283,19 @@ function formatTimeAgo(timestampMs) {
 }
 
 function updateNewsUpdated(timestamp) {
+  if (typeof HomebaseNewsCardRenderer !== 'undefined' && HomebaseNewsCardRenderer.updateNewsUpdated) {
+    HomebaseNewsCardRenderer.updateNewsUpdated(newsUpdatedEl, timestamp);
+    return;
+  }
   if (!newsUpdatedEl) return;
   setText(newsUpdatedEl, formatNewsUpdated(timestamp));
 }
 
 function renderNewsItems(items, options = {}) {
+  if (typeof HomebaseNewsCardRenderer !== 'undefined' && HomebaseNewsCardRenderer.renderNewsList) {
+    HomebaseNewsCardRenderer.renderNewsList(newsList, items, options);
+    return;
+  }
   if (!newsList) return;
   const list = Array.isArray(items) ? items.filter((item) => item && item.title && item.link) : [];
   if (list.length === 0) {
@@ -389,6 +397,10 @@ function positionNewsHoverPreview(targetEl, previewEl) {
 }
 
 function showNewsHoverPreview(itemEl) {
+  if (typeof HomebaseNewsCardRenderer !== 'undefined' && HomebaseNewsCardRenderer.showNewsHoverPreview) {
+    HomebaseNewsCardRenderer.showNewsHoverPreview(itemEl);
+    return;
+  }
   const preview = ensureNewsHoverPreview();
   if (!preview || !itemEl) return;
   preview.classList.remove('is-visible');
@@ -426,6 +438,11 @@ function showNewsHoverPreview(itemEl) {
 }
 
 function hideNewsHoverPreview() {
+  if (typeof HomebaseNewsCardRenderer !== 'undefined' && HomebaseNewsCardRenderer.hideNewsHoverPreview) {
+    HomebaseNewsCardRenderer.hideNewsHoverPreview();
+    newsHoverTarget = null;
+    return;
+  }
   if (newsHoverPreviewEl) {
     newsHoverPreviewEl.classList.remove('is-visible');
   }
@@ -457,8 +474,12 @@ function setupNewsHoverPreview() {
 
 function readFastNewsCache(sourceId) {
   try {
-    if (!window.localStorage) return null;
-    const raw = localStorage.getItem('fast-news');
+    let raw = null;
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.getFastMirror) {
+      raw = HomebaseWidgetStorage.getFastMirror('fast-news-v2') || HomebaseWidgetStorage.getFastMirror('fast-news');
+    } else if (window.localStorage) {
+      raw = localStorage.getItem('fast-news');
+    }
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (!data || !data.__timestamp || !Array.isArray(data.items)) return null;
@@ -552,14 +573,21 @@ async function fetchAndRenderNews(options = {}) {
       updateNewsUpdated(fetchedAt);
     }
     try {
-      if (window.localStorage) {
-        const cachedHeadroomItems = orderedItems.slice(0, 20).map((item) => ({
-          title: String((item && item.title) || ''),
-          link: String((item && item.link) || ''),
-          description: String((item && item.description) || ''),
-          image: String((item && item.image) || ''),
-          publishedAt: item && item.publishedAt != null ? item.publishedAt : ''
-        }));
+      const cachedHeadroomItems = orderedItems.slice(0, 20).map((item) => ({
+        title: String((item && item.title) || ''),
+        link: String((item && item.link) || ''),
+        description: String((item && item.description) || ''),
+        image: String((item && item.image) || ''),
+        publishedAt: item && item.publishedAt != null ? item.publishedAt : ''
+      }));
+
+      if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setNewsCache) {
+        HomebaseWidgetStorage.setNewsCache({
+          source: source.id,
+          items: cachedHeadroomItems,
+          fetchedAt
+        }).catch(() => {});
+      } else if (window.localStorage) {
         localStorage.setItem('fast-news', JSON.stringify({
           __timestamp: fetchedAt,
           source: source.id,
@@ -743,25 +771,33 @@ function setupNewsWidget() {
     newsSettingsSaveBtn.addEventListener('click', async () => {
       const selected = resolveNewsSourceId(newsSourceSelect?.value);
       appNewsSourcePreference = selected;
-      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setNewsCache) {
         try {
-          await HomebaseStorage.set(APP_NEWS_SOURCE_KEY, selected);
+          await HomebaseWidgetStorage.setNewsCache({ source: selected, items: [], fetchedAt: 0 });
         } catch (err) {
           console.warn('Failed to save news source preference', err);
         }
       } else {
+        if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+          try {
+            await HomebaseStorage.set(APP_NEWS_SOURCE_KEY, selected);
+          } catch (err) {
+            console.warn('Failed to save news source preference', err);
+          }
+        } else {
+          try {
+            await browser.storage.local.set({ [APP_NEWS_SOURCE_KEY]: selected });
+          } catch (err) {
+            console.warn('Failed to save news source preference', err);
+          }
+        }
         try {
-          await browser.storage.local.set({ [APP_NEWS_SOURCE_KEY]: selected });
+          if (window.localStorage) {
+            localStorage.removeItem('fast-news');
+          }
         } catch (err) {
-          console.warn('Failed to save news source preference', err);
+          // Ignore; fast cache is best-effort only
         }
-      }
-      try {
-        if (window.localStorage) {
-          localStorage.removeItem('fast-news');
-        }
-      } catch (err) {
-        // Ignore; fast cache is best-effort only
       }
       fetchAndRenderNews({ force: true });
       closeNewsSettingsModal();

@@ -84,6 +84,10 @@ async function weatherStorageRemove(keys) {
 }
 
 function setWeatherLoadingState(isLoading) {
+  if (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.setWeatherLoadingState) {
+    HomebaseWeatherCardRenderer.setWeatherLoadingState(isLoading, { weatherWidget, weatherRefreshBtn });
+    return;
+  }
   const loading = Boolean(isLoading);
 
   if (weatherWidget) {
@@ -140,6 +144,10 @@ function markWeatherAsCachedOrStale(options = {}) {
 }
 
 function showWeatherOfflineNoCache() {
+  if (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.renderWeatherOfflineUI) {
+    HomebaseWeatherCardRenderer.renderWeatherOfflineUI({ weatherWidget, weatherSetup, weatherBody, weatherFooter, updatedEl: weatherUpdatedEl });
+    return;
+  }
   setText(document.getElementById('weather-city'), 'Weather Offline');
   setText(document.getElementById('weather-temp'), '--\u00b0');
   setText(document.getElementById('weather-desc'), 'No cached weather yet');
@@ -188,6 +196,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = WEATHER_FETCH_TIM
 }
 
 function showWeatherSetupUI(options = {}) {
+  if (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.setWeatherSetupUIState) {
+    HomebaseWeatherCardRenderer.setWeatherSetupUIState({ visible: true, ...options }, { weatherWidget, weatherSetup, weatherBody, weatherFooter });
+    return;
+  }
   const { hideBody = true, isError = false } = options;
   if (weatherWidget) {
     weatherWidget.classList.toggle('weather-error', Boolean(isError));
@@ -205,6 +217,10 @@ function showWeatherSetupUI(options = {}) {
 }
 
 function hideWeatherSetupUI() {
+  if (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.setWeatherSetupUIState) {
+    HomebaseWeatherCardRenderer.setWeatherSetupUIState({ visible: false }, { weatherWidget, weatherSetup, weatherBody, weatherFooter });
+    return;
+  }
   if (weatherSetup) weatherSetup.classList.add('hidden');
   if (weatherBody) weatherBody.classList.remove('hidden');
   if (weatherFooter) weatherFooter.classList.remove('hidden');
@@ -313,19 +329,34 @@ async function loadCachedWeather() {
 
   try {
 
-    const data = await weatherStorageGet(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
+    let cachedData = null;
+    let cachedCityName = '';
+    let cachedUnits = 'celsius';
+    let cachedTs = null;
 
-    const cachedTs = getCachedWeatherTimestamp(data);
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.getWeatherCache) {
+      const cache = await HomebaseWidgetStorage.getWeatherCache();
+      cachedData = cache?.data || null;
+      cachedCityName = cache?.cityName || '';
+      cachedUnits = cache?.units || 'celsius';
+      cachedTs = cache?.fetchedAt ? Number(cache.fetchedAt) : null;
+    } else {
+      const data = await weatherStorageGet(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
+      cachedData = data.cachedWeatherData;
+      cachedCityName = data.cachedCityName;
+      cachedUnits = data.cachedUnits || 'celsius';
+      cachedTs = getCachedWeatherTimestamp(data);
+    }
 
     if (
-      hasUsableCachedWeather(data.cachedWeatherData) &&
-      data.cachedCityName
+      hasUsableCachedWeather(cachedData) &&
+      cachedCityName
     ) {
 
       updateWeatherUI(
-        data.cachedWeatherData,
-        data.cachedCityName,
-        data.cachedUnits || 'celsius',
+        cachedData,
+        cachedCityName,
+        cachedUnits,
         cachedTs ?? Date.now(),
         getCachedWeatherDisplayOptions(cachedTs, { skipCacheSave: true })
       );
@@ -538,66 +569,55 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options 
 
   const updatedEl = weatherUpdatedEl || document.getElementById('weather-updated');
 
-  const display = normalizeWeatherDisplay(data, cityName, units, fetchedAt, options);
+  const display = (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.normalizeWeatherDisplay)
+    ? HomebaseWeatherCardRenderer.normalizeWeatherDisplay(data, cityName, units, fetchedAt, options)
+    : normalizeWeatherDisplay(data, cityName, units, fetchedAt, options);
 
   if (!display) {
-
     showWeatherError(new Error('Weather data missing'));
-
     return;
-
   }
 
-  setText(cityEl, display.cityName);
+  if (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.renderWeatherUI) {
+    HomebaseWeatherCardRenderer.renderWeatherUI(display, {
+      cityEl,
+      tempEl,
+      descEl,
+      pressureEl,
+      humidityEl,
+      cloudcoverEl,
+      precipProbEl,
+      sunriseEl,
+      sunsetEl,
+      updatedEl,
+      iconEl,
+      weatherWidget,
+      weatherSetup,
+      weatherBody,
+      weatherFooter
+    });
+  } else {
+    setText(cityEl, display.cityName);
+    setText(tempEl, display.temperature);
+    setText(descEl, display.description);
+    setText(pressureEl, display.pressure);
+    setText(humidityEl, display.humidity);
+    setText(cloudcoverEl, display.cloudCover);
+    setText(precipProbEl, display.precipitationProbability);
+    setText(sunriseEl, display.sunrise);
+    setText(sunsetEl, display.sunset);
+    if (updatedEl) setText(updatedEl, display.updatedLabel);
 
-  setText(tempEl, display.temperature);
+    setText(iconEl, display.emoji);
+    setAttr(iconEl, 'data-weather-code', display.weatherCode);
+    if (iconEl) iconEl.classList.add('is-instant-icon');
 
-  setText(descEl, display.description);
-
-  setText(pressureEl, display.pressure);
-
-  setText(humidityEl, display.humidity);
-
-  setText(cloudcoverEl, display.cloudCover);
-
-  setText(precipProbEl, display.precipitationProbability);
-
-  setText(sunriseEl, display.sunrise);
-
-  setText(sunsetEl, display.sunset);
-
-  if (updatedEl) setText(updatedEl, display.updatedLabel);
-
-  setText(iconEl, display.emoji);
-
-  setAttr(iconEl, 'data-weather-code', display.weatherCode);
-
-  if (iconEl) iconEl.classList.add('is-instant-icon');
-
-  markWeatherAsCachedOrStale(display);
-
-  hideWeatherSetupUI();
+    markWeatherAsCachedOrStale(display);
+    hideWeatherSetupUI();
+    revealWidget('.widget-weather');
+  }
 
   if (!options.skipCacheSave) {
-    weatherStorageSet({
-
-      cachedWeatherData: data,
-
-      cachedCityName: display.cityName,
-
-      cachedUnits: display.units,
-
-      weatherFetchedAt: display.fetchedAt
-
-    }).catch(() => {});
-  }
-
-
-
-  revealWidget('.widget-weather');
-
-  // Mirror simplified weather info to localStorage for instant paint on next load
-  try {
     const fastWeather = {
       city: display.cityName,
       temp: display.temperature,
@@ -612,11 +632,32 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options 
       updated: display.updatedLabel,
       __timestamp: display.fetchedAt
     };
-    localStorage.setItem('fast-weather', JSON.stringify(fastWeather));
-  } catch (e) {
-    // If localStorage is unavailable, fail silently; the async path still works.
+
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setWeatherCache) {
+      HomebaseWidgetStorage.setWeatherCache({
+        data,
+        cityName: display.cityName,
+        units: display.units,
+        fetchedAt: display.fetchedAt,
+        fastWeather
+      }).catch(() => {});
+    } else {
+      weatherStorageSet({
+        cachedWeatherData: data,
+        cachedCityName: display.cityName,
+        cachedUnits: display.units,
+        weatherFetchedAt: display.fetchedAt
+      }).catch(() => {});
+
+      try {
+        localStorage.setItem('fast-weather', JSON.stringify(fastWeather));
+      } catch (e) {
+        // If localStorage is unavailable, fail silently; the async path still works.
+      }
+    }
   }
 
+  revealWidget('.widget-weather');
 }
 
 
@@ -662,16 +703,33 @@ async function showWeatherError(error, options = {}) {
   }
 
   try {
-    const data = await weatherStorageGet(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
+    let cachedData = null;
+    let cachedCityName = '';
+    let cachedUnits = 'celsius';
+    let cachedTs = null;
 
-    if (hasUsableCachedWeather(data.cachedWeatherData) && data.cachedCityName) {
-      const cachedTs = getCachedWeatherTimestamp(data) ?? Date.now();
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.getWeatherCache) {
+      const cache = await HomebaseWidgetStorage.getWeatherCache();
+      cachedData = cache?.data || null;
+      cachedCityName = cache?.cityName || '';
+      cachedUnits = cache?.units || 'celsius';
+      cachedTs = cache?.fetchedAt ? Number(cache.fetchedAt) : null;
+    } else {
+      const data = await weatherStorageGet(['cachedWeatherData', 'cachedCityName', 'cachedUnits', 'weatherFetchedAt']);
+      cachedData = data.cachedWeatherData;
+      cachedCityName = data.cachedCityName;
+      cachedUnits = data.cachedUnits || 'celsius';
+      cachedTs = getCachedWeatherTimestamp(data);
+    }
+
+    if (hasUsableCachedWeather(cachedData) && cachedCityName) {
+      const finalTs = cachedTs ?? Date.now();
       updateWeatherUI(
-        data.cachedWeatherData,
-        data.cachedCityName,
-        data.cachedUnits || 'celsius',
-        cachedTs,
-        getCachedWeatherDisplayOptions(cachedTs, { cacheReason, forceCached: true, skipCacheSave: true })
+        cachedData,
+        cachedCityName,
+        cachedUnits,
+        finalTs,
+        getCachedWeatherDisplayOptions(finalTs, { cacheReason, forceCached: true, skipCacheSave: true })
       );
       return;
     }

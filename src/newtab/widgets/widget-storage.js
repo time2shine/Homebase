@@ -18,6 +18,7 @@
   const APP_TIME_FORMAT_KEY = 'appTimeFormatPreference';
 
   // Weather Keys
+  const APP_SHOW_WEATHER_KEY = 'appShowWeather';
   const CACHED_WEATHER_DATA_KEY = 'cachedWeatherData';
   const CACHED_CITY_NAME_KEY = 'cachedCityName';
   const CACHED_UNITS_KEY = 'cachedUnits';
@@ -38,6 +39,7 @@
   // Fast Preload Mirror Keys (localStorage)
   const FAST_WIDGET_ORDER_KEY = 'fast-widget-order';
   const FAST_SHOW_SIDEBAR_KEY = 'fast-show-sidebar';
+  const FAST_SHOW_WEATHER_KEY = 'fast-show-weather';
   const FAST_TIME_FORMAT_KEY = 'fast-time-format';
   const FAST_WEATHER_KEY = 'fast-weather';
   const FAST_WEATHER_V2_KEY = 'fast-weather-v2';
@@ -178,6 +180,24 @@
       }
     } catch (err) {
       console.warn('[HomebaseWidgetStorage] Failed to write batch:', err);
+    }
+  }
+
+  async function storageRemove(keys) {
+    const list = Array.isArray(keys) ? keys : [keys];
+    if (list.length === 0) return;
+    try {
+      const storage = getStorageService();
+      if (storage && typeof storage.remove === 'function') {
+        await storage.remove(list);
+        return;
+      }
+      const browserLocal = getBrowserStorage();
+      if (browserLocal && typeof browserLocal.remove === 'function') {
+        await browserLocal.remove(list);
+      }
+    } catch (err) {
+      console.warn('[HomebaseWidgetStorage] Failed to remove keys:', err);
     }
   }
 
@@ -322,6 +342,57 @@
     setFastMirror(FAST_WEATHER_KEY, JSON.stringify(legacyMirror));
 
     return { data, cityName, units, fetchedAt };
+  }
+
+  async function getWeatherSettings(keys) {
+    const defaultKeys = [
+      'weatherLat',
+      'weatherLon',
+      'weatherCityName',
+      'weatherUnits',
+      'weatherFetchedAt',
+      'cachedWeatherData',
+      'cachedCityName',
+      'cachedUnits'
+    ];
+    const requestedKeys = Array.isArray(keys)
+      ? keys
+      : (typeof keys === 'string' ? [keys] : defaultKeys);
+    return await storageGetMany(requestedKeys);
+  }
+
+  async function setWeatherSettings(settings) {
+    if (!settings || typeof settings !== 'object') return {};
+    await storageSetMany(settings);
+    return settings;
+  }
+
+  async function removeWeatherSettings(keys) {
+    const list = Array.isArray(keys) ? keys : (typeof keys === 'string' ? [keys] : [
+      'weatherLat',
+      'weatherLon',
+      'weatherCityName'
+    ]);
+    await storageRemove(list);
+  }
+
+  async function getWeatherVisibility() {
+    const val = await storageGet(APP_SHOW_WEATHER_KEY, null);
+    if (val !== null && val !== undefined) {
+      return val !== false;
+    }
+    const mirror = getFastMirror(FAST_SHOW_WEATHER_KEY);
+    if (mirror !== null) {
+      return mirror !== '0';
+    }
+    return true;
+  }
+
+  async function setWeatherVisibility(visible) {
+    const isVisible = visible !== false;
+    setFastMirror(FAST_SHOW_WEATHER_KEY, isVisible ? '1' : '0');
+    await storageSet(APP_SHOW_WEATHER_KEY, isVisible);
+    return isVisible;
   }
 
   // --- Quote Cache ---
@@ -487,6 +558,8 @@
     FAST_WIDGET_ORDER_KEY,
     APP_SHOW_SIDEBAR_KEY,
     FAST_SHOW_SIDEBAR_KEY,
+    APP_SHOW_WEATHER_KEY,
+    FAST_SHOW_WEATHER_KEY,
     APP_TIME_FORMAT_KEY,
     FAST_TIME_FORMAT_KEY,
     CACHED_WEATHER_DATA_KEY,
@@ -513,10 +586,15 @@
     setWidgetOrder,
     getSidebarVisibility,
     setSidebarVisibility,
+    getWeatherVisibility,
+    setWeatherVisibility,
     getTimeFormat,
     setTimeFormat,
     getWeatherCache,
     setWeatherCache,
+    getWeatherSettings,
+    setWeatherSettings,
+    removeWeatherSettings,
     getQuoteCache,
     setQuoteCache,
     getNewsCache,

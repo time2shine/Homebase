@@ -1,55 +1,80 @@
 // ===============================================
-// --- WEATHER WIDGET & SETTINGS ---
+// --- WEATHER WIDGET & SETTINGS CONTROLLER ---
 // ===============================================
-// =============================
-// Weather widget (single impl)
-// =============================
 
-const weatherWidget = document.querySelector('.widget-weather');
+(function () {
+  'use strict';
 
-let weatherListenerRegistry = null;
-let weatherInitialized = false;
+  const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
+  const WEATHER_FETCH_TIMEOUT_MS = 7000;
+  const APP_SHOW_WEATHER_KEY = 'appShowWeather';
 
-const weatherSetup = document.getElementById('weather-setup');
+  // Private state
+  let weatherListenerRegistry = null;
+  let weatherInitialized = false;
+  let selectedLocation = null;
+  let searchTimeout = null;
+  let geoAbortController = null;
+  let geoRequestId = 0;
+  let weatherAbortController = null;
+  let weatherRefreshInFlight = false;
 
-const weatherChooseCityBtn = document.getElementById('weather-choose-city-btn');
+  // Private DOM element cache
+  let domElements = null;
 
-const weatherSettingsModal = document.getElementById('weather-settings-modal');
+  function resolveDomElements() {
+    if (typeof document === 'undefined') {
+      return {
+        weatherWidget: null,
+        weatherSetup: null,
+        weatherChooseCityBtn: null,
+        weatherSettingsModal: null,
+        weatherSettingsCloseBtn: null,
+        weatherSettingsCancelBtn: null,
+        weatherSettingsSaveBtn: null,
+        weatherTempUnitToggle: null,
+        weatherLocationInput: null,
+        weatherLocationResults: null,
+        weatherUseCurrentBtn: null,
+        weatherRefreshBtn: null,
+        weatherUpdatedEl: null,
+        weatherBody: null,
+        weatherFooter: null
+      };
+    }
+    const weatherWidget = document.querySelector('.widget-weather');
+    return {
+      weatherWidget,
+      weatherSetup: document.getElementById('weather-setup'),
+      weatherChooseCityBtn: document.getElementById('weather-choose-city-btn'),
+      weatherSettingsModal: document.getElementById('weather-settings-modal'),
+      weatherSettingsCloseBtn: document.getElementById('weather-settings-close-btn'),
+      weatherSettingsCancelBtn: document.getElementById('weather-settings-cancel-btn'),
+      weatherSettingsSaveBtn: document.getElementById('weather-settings-save-btn'),
+      weatherTempUnitToggle: document.getElementById('modal-temp-unit-toggle'),
+      weatherLocationInput: document.getElementById('modal-location-input'),
+      weatherLocationResults: document.getElementById('modal-location-results'),
+      weatherUseCurrentBtn: document.getElementById('modal-set-location-auto-btn'),
+      weatherRefreshBtn: document.getElementById('weather-refresh-btn'),
+      weatherUpdatedEl: document.getElementById('weather-updated'),
+      weatherBody: weatherWidget ? weatherWidget.querySelector('.weather-body') : null,
+      weatherFooter: weatherWidget ? weatherWidget.querySelector('.weather-footer') : null
+    };
+  }
 
-const weatherSettingsCloseBtn = document.getElementById('weather-settings-close-btn');
-
-const weatherSettingsCancelBtn = document.getElementById('weather-settings-cancel-btn');
-
-const weatherSettingsSaveBtn = document.getElementById('weather-settings-save-btn');
-
-const weatherTempUnitToggle = document.getElementById('modal-temp-unit-toggle');
-
-const weatherLocationInput = document.getElementById('modal-location-input');
-
-const weatherLocationResults = document.getElementById('modal-location-results');
-
-const weatherUseCurrentBtn = document.getElementById('modal-set-location-auto-btn');
-
-const weatherRefreshBtn = document.getElementById('weather-refresh-btn');
-
-const weatherUpdatedEl = document.getElementById('weather-updated');
-
-const weatherBody = weatherWidget ? weatherWidget.querySelector('.weather-body') : null;
-
-const weatherFooter = weatherWidget ? weatherWidget.querySelector('.weather-footer') : null;
-
-const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
-const WEATHER_FETCH_TIMEOUT_MS = 7000;
-
-let selectedLocation = null;
-let searchTimeout = null;
-// Abort stale geocode lookups and ignore late responses
-let geoAbortController = null;
-let geoRequestId = 0;
-let weatherFetchAbortController = null;
-let weatherRefreshInFlight = false;
+  function getDomElements() {
+    if (!domElements || !domElements.weatherWidget) {
+      domElements = resolveDomElements();
+    }
+    return domElements;
+  }
 
 async function weatherStorageGet(keys) {
+  if (typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.getWeatherSettings === 'function') {
+    const res = await HomebaseWidgetStorage.getWeatherSettings(keys);
+    if (typeof keys === 'string') return { [keys]: res[keys] };
+    return res;
+  }
   if (typeof HomebaseStorage !== 'undefined') {
     if (typeof keys === 'string' && HomebaseStorage.get) {
       const val = await HomebaseStorage.get(keys);
@@ -66,6 +91,9 @@ async function weatherStorageGet(keys) {
 }
 
 async function weatherStorageSet(items) {
+  if (typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.setWeatherSettings === 'function') {
+    return await HomebaseWidgetStorage.setWeatherSettings(items);
+  }
   if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
     return await HomebaseStorage.setMany(items);
   }
@@ -75,6 +103,9 @@ async function weatherStorageSet(items) {
 }
 
 async function weatherStorageRemove(keys) {
+  if (typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.removeWeatherSettings === 'function') {
+    return await HomebaseWidgetStorage.removeWeatherSettings(keys);
+  }
   if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.remove) {
     return await HomebaseStorage.remove(keys);
   }
@@ -84,20 +115,21 @@ async function weatherStorageRemove(keys) {
 }
 
 function setWeatherLoadingState(isLoading) {
+  const dom = getDomElements();
   if (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.setWeatherLoadingState) {
-    HomebaseWeatherCardRenderer.setWeatherLoadingState(isLoading, { weatherWidget, weatherRefreshBtn });
+    HomebaseWeatherCardRenderer.setWeatherLoadingState(isLoading, { weatherWidget: dom.weatherWidget, weatherRefreshBtn: dom.weatherRefreshBtn });
     return;
   }
   const loading = Boolean(isLoading);
 
-  if (weatherWidget) {
-    weatherWidget.classList.toggle('weather-loading', loading);
-    weatherWidget.setAttribute('aria-busy', loading ? 'true' : 'false');
+  if (dom.weatherWidget) {
+    dom.weatherWidget.classList.toggle('weather-loading', loading);
+    dom.weatherWidget.setAttribute('aria-busy', loading ? 'true' : 'false');
   }
 
-  if (weatherRefreshBtn) {
-    weatherRefreshBtn.disabled = loading;
-    weatherRefreshBtn.setAttribute('aria-label', loading ? 'Refreshing weather' : 'Refresh weather');
+  if (dom.weatherRefreshBtn) {
+    dom.weatherRefreshBtn.disabled = loading;
+    dom.weatherRefreshBtn.setAttribute('aria-label', loading ? 'Refreshing weather' : 'Refresh weather');
   }
 }
 
@@ -138,14 +170,22 @@ function getCachedWeatherDisplayOptions(timestamp, options = {}) {
 }
 
 function markWeatherAsCachedOrStale(options = {}) {
-  if (!weatherWidget) return;
+  const dom = getDomElements();
+  if (!dom.weatherWidget) return;
   const marked = Boolean(options.isCached || options.cacheReason);
-  weatherWidget.classList.toggle('weather-cached', marked);
+  dom.weatherWidget.classList.toggle('weather-cached', marked);
 }
 
 function showWeatherOfflineNoCache() {
+  const dom = getDomElements();
   if (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.renderWeatherOfflineUI) {
-    HomebaseWeatherCardRenderer.renderWeatherOfflineUI({ weatherWidget, weatherSetup, weatherBody, weatherFooter, updatedEl: weatherUpdatedEl });
+    HomebaseWeatherCardRenderer.renderWeatherOfflineUI({
+      weatherWidget: dom.weatherWidget,
+      weatherSetup: dom.weatherSetup,
+      weatherBody: dom.weatherBody,
+      weatherFooter: dom.weatherFooter,
+      updatedEl: dom.weatherUpdatedEl
+    });
     return;
   }
   setText(document.getElementById('weather-city'), 'Weather Offline');
@@ -160,16 +200,18 @@ function showWeatherOfflineNoCache() {
   setText(document.getElementById('weather-sunset'), '--');
   setAttr(document.getElementById('weather-icon'), 'data-weather-code', '');
 
-  const updatedEl = weatherUpdatedEl || document.getElementById('weather-updated');
+  const updatedEl = dom.weatherUpdatedEl || document.getElementById('weather-updated');
   if (updatedEl) setText(updatedEl, 'Connect to the internet to load weather');
 
-  if (weatherSetup) weatherSetup.classList.add('hidden');
-  if (weatherBody) weatherBody.classList.remove('hidden');
-  if (weatherFooter) weatherFooter.classList.remove('hidden');
-  if (weatherWidget) {
-    weatherWidget.classList.remove('weather-error', 'weather-cached');
+  if (dom.weatherSetup) dom.weatherSetup.classList.add('hidden');
+  if (dom.weatherBody) dom.weatherBody.classList.remove('hidden');
+  if (dom.weatherFooter) dom.weatherFooter.classList.remove('hidden');
+  if (dom.weatherWidget) {
+    dom.weatherWidget.classList.remove('weather-error', 'weather-cached');
   }
-  revealWidget('.widget-weather');
+  if (typeof revealWidget === 'function') {
+    revealWidget('.widget-weather');
+  }
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = WEATHER_FETCH_TIMEOUT_MS) {
@@ -204,35 +246,49 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = WEATHER_FETCH_TIM
 }
 
 function showWeatherSetupUI(options = {}) {
+  const dom = getDomElements();
   if (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.setWeatherSetupUIState) {
-    HomebaseWeatherCardRenderer.setWeatherSetupUIState({ visible: true, ...options }, { weatherWidget, weatherSetup, weatherBody, weatherFooter });
+    HomebaseWeatherCardRenderer.setWeatherSetupUIState({ visible: true, ...options }, {
+      weatherWidget: dom.weatherWidget,
+      weatherSetup: dom.weatherSetup,
+      weatherBody: dom.weatherBody,
+      weatherFooter: dom.weatherFooter
+    });
     return;
   }
   const { hideBody = true, isError = false } = options;
-  if (weatherWidget) {
-    weatherWidget.classList.toggle('weather-error', Boolean(isError));
-    weatherWidget.classList.remove('weather-cached');
+  if (dom.weatherWidget) {
+    dom.weatherWidget.classList.toggle('weather-error', Boolean(isError));
+    dom.weatherWidget.classList.remove('weather-cached');
   }
-  if (weatherSetup) weatherSetup.classList.remove('hidden');
+  if (dom.weatherSetup) dom.weatherSetup.classList.remove('hidden');
   if (hideBody) {
-    if (weatherBody) weatherBody.classList.add('hidden');
-    if (weatherFooter) weatherFooter.classList.add('hidden');
+    if (dom.weatherBody) dom.weatherBody.classList.add('hidden');
+    if (dom.weatherFooter) dom.weatherFooter.classList.add('hidden');
   } else {
-    if (weatherBody) weatherBody.classList.remove('hidden');
-    if (weatherFooter) weatherFooter.classList.remove('hidden');
+    if (dom.weatherBody) dom.weatherBody.classList.remove('hidden');
+    if (dom.weatherFooter) dom.weatherFooter.classList.remove('hidden');
   }
-  revealWidget('.widget-weather');
+  if (typeof revealWidget === 'function') {
+    revealWidget('.widget-weather');
+  }
 }
 
 function hideWeatherSetupUI() {
+  const dom = getDomElements();
   if (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.setWeatherSetupUIState) {
-    HomebaseWeatherCardRenderer.setWeatherSetupUIState({ visible: false }, { weatherWidget, weatherSetup, weatherBody, weatherFooter });
+    HomebaseWeatherCardRenderer.setWeatherSetupUIState({ visible: false }, {
+      weatherWidget: dom.weatherWidget,
+      weatherSetup: dom.weatherSetup,
+      weatherBody: dom.weatherBody,
+      weatherFooter: dom.weatherFooter
+    });
     return;
   }
-  if (weatherSetup) weatherSetup.classList.add('hidden');
-  if (weatherBody) weatherBody.classList.remove('hidden');
-  if (weatherFooter) weatherFooter.classList.remove('hidden');
-  if (weatherWidget) weatherWidget.classList.remove('weather-error');
+  if (dom.weatherSetup) dom.weatherSetup.classList.add('hidden');
+  if (dom.weatherBody) dom.weatherBody.classList.remove('hidden');
+  if (dom.weatherFooter) dom.weatherFooter.classList.remove('hidden');
+  if (dom.weatherWidget) dom.weatherWidget.classList.remove('weather-error');
 }
 
 
@@ -575,7 +631,8 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options 
 
   const sunsetEl = document.getElementById('weather-sunset');
 
-  const updatedEl = weatherUpdatedEl || document.getElementById('weather-updated');
+  const dom = getDomElements();
+  const updatedEl = dom.weatherUpdatedEl || document.getElementById('weather-updated');
 
   const display = (typeof HomebaseWeatherCardRenderer !== 'undefined' && HomebaseWeatherCardRenderer.normalizeWeatherDisplay)
     ? HomebaseWeatherCardRenderer.normalizeWeatherDisplay(data, cityName, units, fetchedAt, options)
@@ -599,10 +656,10 @@ function updateWeatherUI(data, cityName, units, fetchedAt = Date.now(), options 
       sunsetEl,
       updatedEl,
       iconEl,
-      weatherWidget,
-      weatherSetup,
-      weatherBody,
-      weatherFooter
+      weatherWidget: dom.weatherWidget,
+      weatherSetup: dom.weatherSetup,
+      weatherBody: dom.weatherBody,
+      weatherFooter: dom.weatherFooter
     });
   } else {
     setText(cityEl, display.cityName);
@@ -778,13 +835,13 @@ async function fetchWeather(lat, lon, units, cityName) {
     return;
   }
 
-  if (weatherFetchAbortController) {
+  if (weatherAbortController) {
     try {
-      weatherFetchAbortController.abort();
+      weatherAbortController.abort();
     } catch (_) {}
   }
   const abortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-  weatherFetchAbortController = abortCtrl;
+  weatherAbortController = abortCtrl;
 
   try {
 
@@ -819,8 +876,8 @@ async function fetchWeather(lat, lon, units, cityName) {
     await showWeatherError(error, { cacheReason });
 
   } finally {
-    if (weatherFetchAbortController === abortCtrl) {
-      weatherFetchAbortController = null;
+    if (weatherAbortController === abortCtrl) {
+      weatherAbortController = null;
     }
   }
 
@@ -831,26 +888,32 @@ async function fetchWeather(lat, lon, units, cityName) {
 
 function setWeatherPreference(show = true, options = {}) {
   const shouldShow = show !== false;
-  appShowWeatherPreference = shouldShow;
+  if (typeof appShowWeatherPreference !== 'undefined') {
+    appShowWeatherPreference = shouldShow;
+  }
+  const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+  if (globalScope && 'appShowWeatherPreference' in globalScope) {
+    globalScope.appShowWeatherPreference = shouldShow;
+  }
 
-  if (document.documentElement) {
+  if (typeof document !== 'undefined' && document.documentElement) {
     document.documentElement.classList.toggle('weather-hidden', !shouldShow);
   }
 
-  try {
-    if (window.localStorage) {
-      localStorage.setItem('fast-show-weather', shouldShow ? '1' : '0');
-    }
-  } catch (e) {
-    // Ignore; instant mirror is best-effort only
+  if (typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.setFastMirror === 'function') {
+    HomebaseWidgetStorage.setFastMirror('fast-show-weather', shouldShow ? '1' : '0');
   }
 
   if (options.persist !== false) {
-    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+    if (typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.setWeatherVisibility === 'function') {
+      HomebaseWidgetStorage.setWeatherVisibility(shouldShow).catch((err) => {
+        console.warn('Failed to save weather visibility preference', err);
+      });
+    } else if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
       HomebaseStorage.set(APP_SHOW_WEATHER_KEY, shouldShow).catch((err) => {
         console.warn('Failed to save weather visibility preference', err);
       });
-    } else if (browser && browser.storage && browser.storage.local) {
+    } else if (typeof browser !== 'undefined' && browser.storage?.local?.set) {
       browser.storage.local
         .set({ [APP_SHOW_WEATHER_KEY]: shouldShow })
         .catch((err) => {
@@ -859,11 +922,11 @@ function setWeatherPreference(show = true, options = {}) {
     }
   }
 
-  if (options.applyVisibility !== false) {
+  if (options.applyVisibility !== false && typeof applyWidgetVisibility === 'function') {
     applyWidgetVisibility();
   }
 
-  if (options.updateUI !== false) {
+  if (options.updateUI !== false && typeof updateWidgetSettingsUI === 'function') {
     updateWidgetSettingsUI();
   }
 }
@@ -932,9 +995,10 @@ function startGeolocation() {
 
 async function searchForLocation(searchTerm) {
 
-  if (!weatherLocationInput || !weatherLocationResults) return;
+  const dom = getDomElements();
+  if (!dom.weatherLocationInput || !dom.weatherLocationResults) return;
 
-  const query = (typeof searchTerm === 'string' ? searchTerm : weatherLocationInput.value || '').trim();
+  const query = (typeof searchTerm === 'string' ? searchTerm : dom.weatherLocationInput.value || '').trim();
 
   const requestId = ++geoRequestId;
 
@@ -948,9 +1012,9 @@ async function searchForLocation(searchTerm) {
 
   if (query.length < 3) {
 
-    weatherLocationResults.innerHTML = '';
+    dom.weatherLocationResults.innerHTML = '';
 
-    weatherLocationResults.classList.add('hidden');
+    dom.weatherLocationResults.classList.add('hidden');
 
     return;
 
@@ -970,7 +1034,7 @@ async function searchForLocation(searchTerm) {
 
     if (requestId !== geoRequestId) return;
 
-    weatherLocationResults.innerHTML = '';
+    dom.weatherLocationResults.innerHTML = '';
 
     if (geoData.results && geoData.results.length > 0) {
 
@@ -990,23 +1054,24 @@ async function searchForLocation(searchTerm) {
 
           selectedLocation = result;
 
-          weatherLocationInput.value = `${result.name}, ${result.country}`;
+          if (dom.weatherLocationInput) dom.weatherLocationInput.value = `${result.name}, ${result.country}`;
 
-          weatherLocationResults.classList.add('hidden');
-
-          weatherLocationResults.innerHTML = '';
+          if (dom.weatherLocationResults) {
+            dom.weatherLocationResults.classList.add('hidden');
+            dom.weatherLocationResults.innerHTML = '';
+          }
 
         });
 
-        weatherLocationResults.appendChild(item);
+        dom.weatherLocationResults.appendChild(item);
 
       });
 
-      weatherLocationResults.classList.remove('hidden');
+      dom.weatherLocationResults.classList.remove('hidden');
 
     } else {
 
-      weatherLocationResults.classList.add('hidden');
+      dom.weatherLocationResults.classList.add('hidden');
 
     }
 
@@ -1030,32 +1095,40 @@ async function searchForLocation(searchTerm) {
 
 
 function closeWeatherSettingsModal() {
-  closeModalWithAnimation('weather-settings-modal', '.dialog-content');
+  if (typeof closeModalWithAnimation === 'function') {
+    closeModalWithAnimation('weather-settings-modal', '.dialog-content');
+  }
 }
 
 async function openWeatherSettingsModal(triggerSource) {
-  if (!weatherSettingsModal) return;
+  const dom = getDomElements();
+  if (!dom.weatherSettingsModal) return;
   const data = await weatherStorageGet(['weatherCityName', 'weatherUnits']);
-  if (weatherTempUnitToggle) {
-    weatherTempUnitToggle.checked = data.weatherUnits === 'fahrenheit';
+  if (dom.weatherTempUnitToggle) {
+    dom.weatherTempUnitToggle.checked = data.weatherUnits === 'fahrenheit';
   }
-  if (weatherLocationInput) {
-    weatherLocationInput.value = (data.weatherCityName === 'Current Location') ? '' : (data.weatherCityName || '');
+  if (dom.weatherLocationInput) {
+    dom.weatherLocationInput.value = (data.weatherCityName === 'Current Location') ? '' : (data.weatherCityName || '');
   }
   selectedLocation = null;
-  if (weatherLocationResults) {
-    weatherLocationResults.classList.add('hidden');
-    weatherLocationResults.innerHTML = '';
+  if (dom.weatherLocationResults) {
+    dom.weatherLocationResults.classList.add('hidden');
+    dom.weatherLocationResults.innerHTML = '';
   }
-  openModalWithAnimation('weather-settings-modal', triggerSource || null, '.dialog-content');
+  if (typeof openModalWithAnimation === 'function') {
+    openModalWithAnimation('weather-settings-modal', triggerSource || null, '.dialog-content');
+  }
 }
 
-const HomebaseWeatherWidgetController = {
-  async initialize() {
+
+  async function initialize() {
     if (weatherInitialized) return;
     weatherInitialized = true;
 
-    if (typeof HomebaseWidgetLifecycle !== 'undefined' && HomebaseWidgetLifecycle.createListenerRegistry) {
+    domElements = resolveDomElements();
+    const dom = domElements;
+
+    if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.createListenerRegistry === 'function') {
       weatherListenerRegistry = HomebaseWidgetLifecycle.createListenerRegistry();
     } else {
       weatherListenerRegistry = {
@@ -1064,23 +1137,23 @@ const HomebaseWeatherWidgetController = {
       };
     }
 
-    if (weatherChooseCityBtn) {
-      weatherListenerRegistry.on(weatherChooseCityBtn, 'click', async () => {
-        await openWeatherSettingsModal(weatherChooseCityBtn);
-        if (weatherLocationInput) weatherLocationInput.focus();
+    if (dom.weatherChooseCityBtn) {
+      weatherListenerRegistry.on(dom.weatherChooseCityBtn, 'click', async () => {
+        await openWeatherSettingsModal(dom.weatherChooseCityBtn);
+        if (dom.weatherLocationInput) dom.weatherLocationInput.focus();
       });
     }
 
-    if (weatherUseCurrentBtn) {
-      weatherListenerRegistry.on(weatherUseCurrentBtn, 'click', async () => {
+    if (dom.weatherUseCurrentBtn) {
+      weatherListenerRegistry.on(dom.weatherUseCurrentBtn, 'click', async () => {
         await weatherStorageRemove(['weatherLat', 'weatherLon', 'weatherCityName']);
         startGeolocation();
         closeWeatherSettingsModal();
       });
     }
 
-    if (weatherRefreshBtn) {
-      weatherListenerRegistry.on(weatherRefreshBtn, 'click', async () => {
+    if (dom.weatherRefreshBtn) {
+      weatherListenerRegistry.on(dom.weatherRefreshBtn, 'click', async () => {
         if (weatherRefreshInFlight) return;
         weatherRefreshInFlight = true;
         setWeatherLoadingState(true);
@@ -1101,33 +1174,33 @@ const HomebaseWeatherWidgetController = {
       });
     }
 
-    if (weatherLocationInput) {
-      weatherListenerRegistry.on(weatherLocationInput, 'input', () => {
+    if (dom.weatherLocationInput) {
+      weatherListenerRegistry.on(dom.weatherLocationInput, 'input', () => {
         clearTimeout(searchTimeout);
-        const value = weatherLocationInput.value;
+        const value = dom.weatherLocationInput ? dom.weatherLocationInput.value : '';
         searchTimeout = setTimeout(() => searchForLocation(value), 300);
       });
     }
 
-    if (weatherSettingsCloseBtn) {
-      weatherListenerRegistry.on(weatherSettingsCloseBtn, 'click', closeWeatherSettingsModal);
+    if (dom.weatherSettingsCloseBtn) {
+      weatherListenerRegistry.on(dom.weatherSettingsCloseBtn, 'click', closeWeatherSettingsModal);
     }
 
-    if (weatherSettingsCancelBtn) {
-      weatherListenerRegistry.on(weatherSettingsCancelBtn, 'click', closeWeatherSettingsModal);
+    if (dom.weatherSettingsCancelBtn) {
+      weatherListenerRegistry.on(dom.weatherSettingsCancelBtn, 'click', closeWeatherSettingsModal);
     }
 
-    if (weatherSettingsModal) {
-      weatherListenerRegistry.on(weatherSettingsModal, 'click', (e) => {
-        if (e.target === weatherSettingsModal) {
+    if (dom.weatherSettingsModal) {
+      weatherListenerRegistry.on(dom.weatherSettingsModal, 'click', (e) => {
+        if (e.target === dom.weatherSettingsModal) {
           closeWeatherSettingsModal();
         }
       });
     }
 
-    if (weatherSettingsSaveBtn) {
-      weatherListenerRegistry.on(weatherSettingsSaveBtn, 'click', async () => {
-        const newUnit = weatherTempUnitToggle?.checked ? 'fahrenheit' : 'celsius';
+    if (dom.weatherSettingsSaveBtn) {
+      weatherListenerRegistry.on(dom.weatherSettingsSaveBtn, 'click', async () => {
+        const newUnit = dom.weatherTempUnitToggle?.checked ? 'fahrenheit' : 'celsius';
         const existingLocation = await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherCityName']);
         const settingsToSave = { weatherUnits: newUnit };
 
@@ -1187,7 +1260,7 @@ const HomebaseWeatherWidgetController = {
 
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         if (hasCachedWeather) {
-          hbDebugInfo('Weather is offline. Using cached weather data.');
+          if (typeof hbDebugInfo === 'function') hbDebugInfo('Weather is offline. Using cached weather data.');
         } else {
           showWeatherOfflineNoCache();
         }
@@ -1197,10 +1270,10 @@ const HomebaseWeatherWidgetController = {
       const lastFetch = normalizeWeatherTimestamp(data.weatherFetchedAt) ?? cachedTs ?? 0;
 
       if (!hasCachedWeather || !lastFetch || isWeatherCacheStale(lastFetch, WEATHER_CACHE_TTL_MS)) {
-        hbDebugInfo('Weather cache expired. Fetching new data...');
+        if (typeof hbDebugInfo === 'function') hbDebugInfo('Weather cache expired. Fetching new data...');
         fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName);
       } else {
-        hbDebugInfo('Using cached weather data.');
+        if (typeof hbDebugInfo === 'function') hbDebugInfo('Using cached weather data.');
       }
 
       return;
@@ -1217,9 +1290,9 @@ const HomebaseWeatherWidgetController = {
     }
 
     showWeatherSetupUI();
-  },
+  }
 
-  destroy() {
+  function destroy() {
     if (weatherListenerRegistry) {
       weatherListenerRegistry.removeAll();
       weatherListenerRegistry = null;
@@ -1232,18 +1305,19 @@ const HomebaseWeatherWidgetController = {
       } catch (_) {}
       geoAbortController = null;
     }
-    if (weatherFetchAbortController) {
+    if (weatherAbortController) {
       try {
-        weatherFetchAbortController.abort();
+        weatherAbortController.abort();
       } catch (_) {}
-      weatherFetchAbortController = null;
+      weatherAbortController = null;
     }
     selectedLocation = null;
     weatherRefreshInFlight = false;
     weatherInitialized = false;
-  },
+    domElements = null;
+  }
 
-  onHide() {
+  function onHide() {
     clearTimeout(searchTimeout);
     searchTimeout = null;
     if (geoAbortController) {
@@ -1252,50 +1326,144 @@ const HomebaseWeatherWidgetController = {
       } catch (_) {}
       geoAbortController = null;
     }
-    if (weatherFetchAbortController) {
+    if (weatherAbortController) {
       try {
-        weatherFetchAbortController.abort();
+        weatherAbortController.abort();
       } catch (_) {}
-      weatherFetchAbortController = null;
+      weatherAbortController = null;
     }
-  },
+  }
 
-  pause() {
+  function pause() {
     clearTimeout(searchTimeout);
     searchTimeout = null;
-  },
+    if (geoAbortController) {
+      try {
+        geoAbortController.abort();
+      } catch (_) {}
+      geoAbortController = null;
+    }
+    if (weatherAbortController) {
+      try {
+        weatherAbortController.abort();
+      } catch (_) {}
+      weatherAbortController = null;
+    }
+  }
 
-  async resume() {
+  async function resume() {
     if (!weatherInitialized) return;
     try {
       const data = await loadCachedWeather();
-      const cachedTs = normalizeWeatherTimestamp(data.weatherTimestamp);
-      const lastFetch = normalizeWeatherTimestamp(data.weatherFetchedAt) ?? cachedTs ?? 0;
-      if (data.weatherLat && data.weatherLon && (!lastFetch || isWeatherCacheStale(lastFetch, WEATHER_CACHE_TTL_MS))) {
-        const units = data.weatherUnits || 'celsius';
-        fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName);
-      }
-    } catch (_) {
-      // Ignore background refresh errors
-    }
-  },
+      const cachedTs = normalizeWeatherTimestamp(data?.weatherTimestamp);
+      const lastFetch = normalizeWeatherTimestamp(data?.weatherFetchedAt) ?? cachedTs ?? 0;
+      const settings = (typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.getWeatherSettings === 'function')
+        ? await HomebaseWidgetStorage.getWeatherSettings()
+        : await weatherStorageGet(['weatherLat', 'weatherLon', 'weatherUnits', 'weatherCityName']);
 
-  async onShow() {
+      const lat = settings?.weatherLat || data?.weatherLat;
+      const lon = settings?.weatherLon || data?.weatherLon;
+      const units = settings?.weatherUnits || data?.cachedUnits || 'celsius';
+      const cityName = settings?.weatherCityName || data?.cachedCityName || 'Current Location';
+
+      if (lat && lon && (!lastFetch || isWeatherCacheStale(lastFetch, WEATHER_CACHE_TTL_MS))) {
+        fetchWeather(lat, lon, units, cityName);
+      }
+    } catch (_) {}
+  }
+
+  async function onShow() {
     if (!weatherInitialized) {
-      await HomebaseWeatherWidgetController.initialize();
+      await initialize();
       return;
     }
-    await HomebaseWeatherWidgetController.resume();
+    await resume();
   }
-};
 
-async function setupWeather() {
-  return HomebaseWeatherWidgetController.initialize();
-}
+  const HomebaseWidgetWeather = {
+    initialize,
+    init: initialize,
+    destroy,
+    onShow,
+    onHide,
+    pause,
+    resume,
+    fetchWeather,
+    updateWeatherUI,
+    loadCachedWeather,
+    getWeatherLocation: () => selectedLocation,
+    openWeatherSettingsModal,
+    closeWeatherSettingsModal,
+    setWeatherPreference
+  };
 
-if (typeof window !== 'undefined') {
-  window.HomebaseWeatherWidgetController = HomebaseWeatherWidgetController;
-}
-if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.registerWidget === 'function') {
-  HomebaseWidgetLifecycle.registerWidget('weather', HomebaseWeatherWidgetController);
-}
+  async function setupWeather() {
+    return HomebaseWidgetWeather.initialize();
+  }
+
+  const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+  if (globalScope) {
+    globalScope.HomebaseWidgetWeather = HomebaseWidgetWeather;
+    globalScope.HomebaseWeatherWidgetController = HomebaseWidgetWeather;
+    globalScope.setupWeather = setupWeather;
+    globalScope.setWeatherPreference = setWeatherPreference;
+    globalScope.fetchWeather = fetchWeather;
+    globalScope.updateWeatherUI = updateWeatherUI;
+    globalScope.loadCachedWeather = loadCachedWeather;
+    globalScope.getWeatherLocation = () => HomebaseWidgetWeather.getWeatherLocation();
+    globalScope.openWeatherSettingsModal = openWeatherSettingsModal;
+    globalScope.closeWeatherSettingsModal = closeWeatherSettingsModal;
+    globalScope.startGeolocation = startGeolocation;
+    globalScope.searchForLocation = searchForLocation;
+    globalScope.getWeatherEmoji = getWeatherEmoji;
+    globalScope.getWeatherDescription = getWeatherDescription;
+    globalScope.formatWeatherUpdated = formatWeatherUpdated;
+    globalScope.getCurrentHourlyWeatherIndex = getCurrentHourlyWeatherIndex;
+    globalScope.getHourlyValueAtIndex = getHourlyValueAtIndex;
+    globalScope.normalizeWeatherDisplay = normalizeWeatherDisplay;
+    globalScope.normalizeWeatherTimestamp = normalizeWeatherTimestamp;
+    globalScope.isWeatherCacheStale = isWeatherCacheStale;
+    globalScope.getCachedWeatherTimestamp = getCachedWeatherTimestamp;
+    globalScope.hasUsableCachedWeather = hasUsableCachedWeather;
+    globalScope.getCachedWeatherDisplayOptions = getCachedWeatherDisplayOptions;
+    globalScope.markWeatherAsCachedOrStale = markWeatherAsCachedOrStale;
+    globalScope.showWeatherOfflineNoCache = showWeatherOfflineNoCache;
+    globalScope.showWeatherSetupUI = showWeatherSetupUI;
+    globalScope.hideWeatherSetupUI = hideWeatherSetupUI;
+    globalScope.showWeatherError = showWeatherError;
+  }
+  if (typeof window !== 'undefined' && globalScope !== window) {
+    window.HomebaseWidgetWeather = HomebaseWidgetWeather;
+    window.HomebaseWeatherWidgetController = HomebaseWidgetWeather;
+    window.setupWeather = setupWeather;
+    window.setWeatherPreference = setWeatherPreference;
+    window.fetchWeather = fetchWeather;
+    window.updateWeatherUI = updateWeatherUI;
+    window.loadCachedWeather = loadCachedWeather;
+    window.getWeatherLocation = () => HomebaseWidgetWeather.getWeatherLocation();
+    window.openWeatherSettingsModal = openWeatherSettingsModal;
+    window.closeWeatherSettingsModal = closeWeatherSettingsModal;
+    window.startGeolocation = startGeolocation;
+    window.searchForLocation = searchForLocation;
+    window.getWeatherEmoji = getWeatherEmoji;
+    window.getWeatherDescription = getWeatherDescription;
+    window.formatWeatherUpdated = formatWeatherUpdated;
+    window.getCurrentHourlyWeatherIndex = getCurrentHourlyWeatherIndex;
+    window.getHourlyValueAtIndex = getHourlyValueAtIndex;
+    window.normalizeWeatherDisplay = normalizeWeatherDisplay;
+    window.normalizeWeatherTimestamp = normalizeWeatherTimestamp;
+    window.isWeatherCacheStale = isWeatherCacheStale;
+    window.getCachedWeatherTimestamp = getCachedWeatherTimestamp;
+    window.hasUsableCachedWeather = hasUsableCachedWeather;
+    window.getCachedWeatherDisplayOptions = getCachedWeatherDisplayOptions;
+    window.markWeatherAsCachedOrStale = markWeatherAsCachedOrStale;
+    window.showWeatherOfflineNoCache = showWeatherOfflineNoCache;
+    window.showWeatherSetupUI = showWeatherSetupUI;
+    window.hideWeatherSetupUI = hideWeatherSetupUI;
+    window.showWeatherError = showWeatherError;
+  }
+
+  if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.registerWidget === 'function') {
+    HomebaseWidgetLifecycle.registerWidget('weather', HomebaseWidgetWeather);
+  }
+})();

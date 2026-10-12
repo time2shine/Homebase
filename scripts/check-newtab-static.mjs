@@ -47,6 +47,7 @@ const keyExtractedModulePaths = [
   "newtab/bookmarks/bookmark-ui-state.js",
   "newtab/widgets/widget-visibility.js",
   "newtab/widgets/widget-storage.js",
+  "newtab/widgets/widget-lifecycle.js",
   "newtab/widgets/weather-card-renderer.js",
   "newtab/widgets/news-card-renderer.js",
   "newtab/widgets/quote-card-renderer.js",

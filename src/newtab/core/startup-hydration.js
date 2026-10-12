@@ -47,15 +47,36 @@
     recordIdleTaskPerf('startup:quoteIndex', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex start');
     try {
-      const cachedState = readCachedQuoteState();
-      if (!shouldLoadQuoteCatalog({ state: cachedState })) {
+      const readFn = typeof readCachedQuoteState === 'function'
+        ? readCachedQuoteState
+        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.readCachedQuoteState === 'function'
+          ? HomebaseWidgetQuote.readCachedQuoteState
+          : null);
+      const cachedState = readFn ? readFn() : null;
+
+      const shouldLoadFn = typeof shouldLoadQuoteCatalog === 'function'
+        ? shouldLoadQuoteCatalog
+        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.shouldLoadQuoteCatalog === 'function'
+          ? HomebaseWidgetQuote.shouldLoadQuoteCatalog
+          : null);
+
+      if (shouldLoadFn && !shouldLoadFn({ state: cachedState })) {
         if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex skipped');
         quoteIndexSkipped = true;
         recordWidgetPerfTiming('quoteIndex', 0, 'skipped');
         recordIdleTaskPerf('startup:quoteIndex', 'skipped', 0);
         return;
       }
-      await ensureQuoteIndexBuilt();
+
+      const ensureIndexFn = typeof ensureQuoteIndexBuilt === 'function'
+        ? ensureQuoteIndexBuilt
+        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.ensureQuoteIndexBuilt === 'function'
+          ? HomebaseWidgetQuote.ensureQuoteIndexBuilt
+          : null);
+
+      if (ensureIndexFn) {
+        await ensureIndexFn();
+      }
     } catch (err) {
       console.warn('Startup task failed:', 'startup:quoteIndex', err);
     } finally {
@@ -216,12 +237,33 @@
     recordIdleTaskPerf('startup:fetchQuote', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote start');
     try {
-      const cachedState = readCachedQuoteState();
-      if (!shouldLoadQuoteCatalog({ state: cachedState })) {
-        renderCachedQuoteState(cachedState);
+      const readFn = typeof readCachedQuoteState === 'function'
+        ? readCachedQuoteState
+        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.readCachedQuoteState === 'function'
+          ? HomebaseWidgetQuote.readCachedQuoteState
+          : null);
+      const cachedState = readFn ? readFn() : null;
+
+      const shouldLoadFn = typeof shouldLoadQuoteCatalog === 'function'
+        ? shouldLoadQuoteCatalog
+        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.shouldLoadQuoteCatalog === 'function'
+          ? HomebaseWidgetQuote.shouldLoadQuoteCatalog
+          : null);
+
+      if (shouldLoadFn && !shouldLoadFn({ state: cachedState })) {
+        if (typeof renderCachedQuoteState === 'function') {
+          renderCachedQuoteState(cachedState);
+        } else if (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.renderCachedQuoteState === 'function') {
+          HomebaseWidgetQuote.renderCachedQuoteState(cachedState);
+        }
         return;
       }
-      fetchQuote();
+
+      if (typeof fetchQuote === 'function') {
+        fetchQuote();
+      } else if (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.fetchQuote === 'function') {
+        HomebaseWidgetQuote.fetchQuote();
+      }
     } catch (err) {
       console.warn('Startup task failed:', 'startup:fetchQuote', err);
     } finally {

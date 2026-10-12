@@ -46,6 +46,7 @@ let searchTimeout = null;
 // Abort stale geocode lookups and ignore late responses
 let geoAbortController = null;
 let geoRequestId = 0;
+let weatherFetchAbortController = null;
 let weatherRefreshInFlight = false;
 
 async function weatherStorageGet(keys) {
@@ -179,6 +180,14 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = WEATHER_FETCH_TIM
     didTimeout = true;
     controller.abort();
   }, timeout);
+
+  if (options && options.signal) {
+    if (options.signal.aborted) {
+      controller.abort();
+    } else {
+      options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
 
   try {
     return await fetch(url, { ...options, signal: controller.signal });
@@ -769,6 +778,14 @@ async function fetchWeather(lat, lon, units, cityName) {
     return;
   }
 
+  if (weatherFetchAbortController) {
+    try {
+      weatherFetchAbortController.abort();
+    } catch (_) {}
+  }
+  const abortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  weatherFetchAbortController = abortCtrl;
+
   try {
 
     const hourlyParams = 'relative_humidity_2m,wind_speed_10m,cloudcover,precipitation_probability';
@@ -783,7 +800,8 @@ async function fetchWeather(lat, lon, units, cityName) {
       `&hourly=${hourlyParams}&daily=${dailyParams}` +
       `&forecast_days=1&timezone=auto${windSpeedUnitParam}`;
 
-    const weatherResponse = await fetchWithTimeout(weatherUrl, {}, WEATHER_FETCH_TIMEOUT_MS);
+    const fetchOpts = abortCtrl ? { signal: abortCtrl.signal } : {};
+    const weatherResponse = await fetchWithTimeout(weatherUrl, fetchOpts, WEATHER_FETCH_TIMEOUT_MS);
 
     if (!weatherResponse.ok) throw new Error('Weather data not available');
 
@@ -793,10 +811,17 @@ async function fetchWeather(lat, lon, units, cityName) {
 
   } catch (error) {
 
+    if (abortCtrl && abortCtrl.signal.aborted) {
+      return;
+    }
     const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
     const cacheReason = isOffline ? 'Offline cache' : 'Cached data';
     await showWeatherError(error, { cacheReason });
 
+  } finally {
+    if (weatherFetchAbortController === abortCtrl) {
+      weatherFetchAbortController = null;
+    }
   }
 
 }
@@ -1207,9 +1232,60 @@ const HomebaseWeatherWidgetController = {
       } catch (_) {}
       geoAbortController = null;
     }
+    if (weatherFetchAbortController) {
+      try {
+        weatherFetchAbortController.abort();
+      } catch (_) {}
+      weatherFetchAbortController = null;
+    }
     selectedLocation = null;
     weatherRefreshInFlight = false;
     weatherInitialized = false;
+  },
+
+  onHide() {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+    if (geoAbortController) {
+      try {
+        geoAbortController.abort();
+      } catch (_) {}
+      geoAbortController = null;
+    }
+    if (weatherFetchAbortController) {
+      try {
+        weatherFetchAbortController.abort();
+      } catch (_) {}
+      weatherFetchAbortController = null;
+    }
+  },
+
+  pause() {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+  },
+
+  async resume() {
+    if (!weatherInitialized) return;
+    try {
+      const data = await loadCachedWeather();
+      const cachedTs = normalizeWeatherTimestamp(data.weatherTimestamp);
+      const lastFetch = normalizeWeatherTimestamp(data.weatherFetchedAt) ?? cachedTs ?? 0;
+      if (data.weatherLat && data.weatherLon && (!lastFetch || isWeatherCacheStale(lastFetch, WEATHER_CACHE_TTL_MS))) {
+        const units = data.weatherUnits || 'celsius';
+        fetchWeather(data.weatherLat, data.weatherLon, units, data.weatherCityName);
+      }
+    } catch (_) {
+      // Ignore background refresh errors
+    }
+  },
+
+  async onShow() {
+    if (!weatherInitialized) {
+      await HomebaseWeatherWidgetController.initialize();
+      return;
+    }
+    await HomebaseWeatherWidgetController.resume();
   }
 };
 

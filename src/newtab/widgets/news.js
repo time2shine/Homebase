@@ -868,6 +868,47 @@ const HomebaseNewsWidgetController = {
     newsHoverTarget = null;
     newsRefreshInFlight = false;
     newsInitialized = false;
+  },
+
+  onShow() {
+    if (!newsInitialized) {
+      HomebaseNewsWidgetController.initialize();
+      return;
+    }
+    if (!newsLazyLoadTriggered) {
+      observeNewsWidgetVisibility();
+    }
+  },
+
+  onHide() {
+    if (newsVisibilityObserver) {
+      newsVisibilityObserver.disconnect();
+      newsVisibilityObserver = null;
+    }
+    if (newsFetchAbortController) {
+      try {
+        newsFetchAbortController.abort();
+      } catch (_) {}
+      newsFetchAbortController = null;
+    }
+    newsRefreshInFlight = false;
+  },
+
+  pause() {
+    if (newsFetchAbortController) {
+      try {
+        newsFetchAbortController.abort();
+      } catch (_) {}
+      newsFetchAbortController = null;
+    }
+    newsRefreshInFlight = false;
+  },
+
+  resume() {
+    if (!newsInitialized) return;
+    if (!newsLazyLoadTriggered) {
+      observeNewsWidgetVisibility();
+    }
   }
 };
 

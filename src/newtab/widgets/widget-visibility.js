@@ -47,6 +47,7 @@ function applySidebarVisibility(showSidebar = true) {
 
   updateWidgetSettingsUI();
 
+  applyWidgetVisibility();
 }
 
 
@@ -244,6 +245,13 @@ function applyWidgetVisibility() {
 
   }
 
+  if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.setWidgetVisibility === 'function') {
+    HomebaseWidgetLifecycle.setWidgetVisibility('weather', shouldShowWeather);
+    HomebaseWidgetLifecycle.setWidgetVisibility('quote', shouldShowQuote);
+    HomebaseWidgetLifecycle.setWidgetVisibility('news', shouldShowNews);
+    HomebaseWidgetLifecycle.setWidgetVisibility('todo', shouldShowTodo);
+    HomebaseWidgetLifecycle.setWidgetVisibility('time', true);
+  }
 }
 
 function revealWidget(selector) {

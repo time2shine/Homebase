@@ -882,6 +882,33 @@ const HomebaseQuoteWidgetController = {
     clearTimeout(quoteRotateTimeout);
     quoteRotateTimeout = null;
     quoteInitialized = false;
+  },
+
+  onShow() {
+    if (!quoteInitialized) {
+      HomebaseQuoteWidgetController.initialize();
+      return;
+    }
+    renderCachedQuoteState();
+  },
+
+  onHide() {
+    clearTimeout(quoteCopyTimeout);
+    quoteCopyTimeout = null;
+    clearTimeout(quoteRotateTimeout);
+    quoteRotateTimeout = null;
+  },
+
+  pause() {
+    clearTimeout(quoteCopyTimeout);
+    quoteCopyTimeout = null;
+    clearTimeout(quoteRotateTimeout);
+    quoteRotateTimeout = null;
+  },
+
+  resume() {
+    if (!quoteInitialized) return;
+    renderCachedQuoteState();
   }
 };
 

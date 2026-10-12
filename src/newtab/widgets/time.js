@@ -42,6 +42,21 @@ const HomebaseTimeWidgetController = {
       timeIntervalId = null;
     }
     timeInitialized = false;
+  },
+
+  pause() {
+    if (timeIntervalId) {
+      clearInterval(timeIntervalId);
+      timeIntervalId = null;
+    }
+  },
+
+  resume() {
+    if (!timeInitialized) return;
+    updateTime();
+    if (!timeIntervalId) {
+      timeIntervalId = setInterval(updateTime, 1000 * 60);
+    }
   }
 };
 

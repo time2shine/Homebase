@@ -333,6 +333,23 @@ const HomebaseTodoWidgetController = {
       todoListenerRegistry = null;
     }
     todoInitialized = false;
+  },
+
+  onShow() {
+    if (!todoInitialized) {
+      HomebaseTodoWidgetController.initialize();
+      return;
+    }
+    renderTodoList();
+  },
+
+  onHide() {},
+
+  pause() {},
+
+  resume() {
+    if (!todoInitialized) return;
+    renderTodoList();
   }
 };
 

@@ -15,7 +15,7 @@
 
   /**
    * Internal widget registry map: widgetId -> WidgetRecord
-   * @type {Map<string, { id: string, controller: object|function, isInitialized: boolean, isVisible: boolean, isDestroyed: boolean }>}
+   * @type {Map<string, { id: string, controller: object|function, isInitialized: boolean, isVisible: boolean, isActive: boolean, isDestroyed: boolean }>}
    */
   const widgetRegistry = new Map();
 
@@ -26,15 +26,45 @@
   let visibilityListenerAttached = false;
 
   /**
+   * Safe helper to invoke optional lifecycle callbacks.
+   */
+  function safeInvoke(fn, callbackName, widgetId) {
+    if (typeof fn === 'function') {
+      try {
+        fn();
+      } catch (err) {
+        console.warn(`[HomebaseWidgetLifecycle] Error in ${callbackName} on widget '${widgetId}':`, err);
+      }
+    }
+  }
+
+  /**
    * Internal visibility change handler.
    */
   function handleVisibilityChange() {
-    const visible = isTabVisible();
+    const tabVisible = isTabVisible();
+
     visibilitySubscribers.forEach((callback) => {
       try {
-        callback(visible);
+        callback(tabVisible);
       } catch (err) {
         console.warn('[HomebaseWidgetLifecycle] Visibility callback error:', err);
+      }
+    });
+
+    widgetRegistry.forEach((record) => {
+      if (!record.isInitialized || record.isDestroyed) return;
+      if (!record.isVisible) return;
+
+      const prevActive = record.isActive;
+      const targetActive = tabVisible;
+
+      if (targetActive && !prevActive) {
+        record.isActive = true;
+        safeInvoke(record.controller?.resume, 'resume', record.id);
+      } else if (!targetActive && prevActive) {
+        record.isActive = false;
+        safeInvoke(record.controller?.pause, 'pause', record.id);
       }
     });
   }
@@ -118,7 +148,7 @@
    * Registers a widget controller with the lifecycle service.
    * @param {string} widgetId
    * @param {object|function} controller
-   * @returns {{ id: string, controller: object|function, isInitialized: boolean, isVisible: boolean, isDestroyed: boolean }}
+   * @returns {{ id: string, controller: object|function, isInitialized: boolean, isVisible: boolean, isActive: boolean, isDestroyed: boolean }}
    */
   function registerWidget(widgetId, controller) {
     if (!widgetId || typeof widgetId !== 'string') {
@@ -127,6 +157,8 @@
     if (!controller || (typeof controller !== 'object' && typeof controller !== 'function')) {
       throw new TypeError('[HomebaseWidgetLifecycle] controller must be an object or function');
     }
+
+    ensureVisibilityListener();
 
     if (widgetRegistry.has(widgetId)) {
       const existing = widgetRegistry.get(widgetId);
@@ -144,6 +176,7 @@
       controller,
       isInitialized: false,
       isVisible: false,
+      isActive: false,
       isDestroyed: false
     };
 
@@ -160,17 +193,28 @@
     if (!widgetRegistry.has(widgetId)) return false;
 
     const record = widgetRegistry.get(widgetId);
-    if (!record.isDestroyed && record.controller && typeof record.controller.destroy === 'function') {
-      try {
-        record.controller.destroy();
-      } catch (err) {
-        console.warn('[HomebaseWidgetLifecycle] Error destroying unregistered widget', widgetId, err);
+    if (!record.isDestroyed) {
+      if (record.isActive) {
+        record.isActive = false;
+        safeInvoke(record.controller?.pause, 'pause', widgetId);
+      }
+      if (record.isVisible) {
+        record.isVisible = false;
+        safeInvoke(record.controller?.onHide, 'onHide', widgetId);
+      }
+      if (record.controller && typeof record.controller.destroy === 'function') {
+        try {
+          record.controller.destroy();
+        } catch (err) {
+          console.warn('[HomebaseWidgetLifecycle] Error destroying unregistered widget', widgetId, err);
+        }
       }
     }
 
     record.isDestroyed = true;
     record.isInitialized = false;
     record.isVisible = false;
+    record.isActive = false;
     widgetRegistry.delete(widgetId);
     return true;
   }
@@ -178,7 +222,7 @@
   /**
    * Retrieves a registered widget record.
    * @param {string} widgetId
-   * @returns {{ id: string, controller: object|function, isInitialized: boolean, isVisible: boolean, isDestroyed: boolean } | null}
+   * @returns {{ id: string, controller: object|function, isInitialized: boolean, isVisible: boolean, isActive: boolean, isDestroyed: boolean } | null}
    */
   function getWidget(widgetId) {
     return widgetRegistry.get(widgetId) || null;
@@ -186,22 +230,77 @@
 
   /**
    * Returns all currently registered widget records.
-   * @returns {Array<{ id: string, controller: object|function, isInitialized: boolean, isVisible: boolean, isDestroyed: boolean }>}
+   * @returns {Array<{ id: string, controller: object|function, isInitialized: boolean, isVisible: boolean, isActive: boolean, isDestroyed: boolean }>}
    */
   function getAllWidgets() {
     return Array.from(widgetRegistry.values());
   }
 
   /**
-   * Updates a widget's visibility status.
+   * Checks if a widget is currently marked as UI visible.
+   * @param {string} widgetId
+   * @returns {boolean}
+   */
+  function isWidgetVisible(widgetId) {
+    const record = widgetRegistry.get(widgetId);
+    return Boolean(record && record.isVisible);
+  }
+
+  /**
+   * Checks if a widget is currently active (UI visible and tab active).
+   * @param {string} widgetId
+   * @returns {boolean}
+   */
+  function isWidgetActive(widgetId) {
+    const record = widgetRegistry.get(widgetId);
+    return Boolean(record && record.isActive);
+  }
+
+  /**
+   * Updates a widget's visibility status and triggers lifecycle transition callbacks.
    * @param {string} widgetId
    * @param {boolean} isVisible
    */
   function setWidgetVisibility(widgetId, isVisible) {
     const record = widgetRegistry.get(widgetId);
-    if (record) {
-      record.isVisible = Boolean(isVisible);
+    if (!record || record.isDestroyed) return;
+
+    const targetVisible = Boolean(isVisible);
+    const prevVisible = record.isVisible;
+    const tabVisible = isTabVisible();
+    const targetActive = targetVisible && tabVisible;
+    const prevActive = record.isActive;
+
+    record.isVisible = targetVisible;
+
+    if (record.isInitialized) {
+      if (targetVisible && !prevVisible) {
+        safeInvoke(record.controller?.onShow, 'onShow', widgetId);
+        if (targetActive && !prevActive) {
+          record.isActive = true;
+          safeInvoke(record.controller?.resume, 'resume', widgetId);
+        }
+      } else if (!targetVisible && prevVisible) {
+        if (prevActive) {
+          record.isActive = false;
+          safeInvoke(record.controller?.pause, 'pause', widgetId);
+        }
+        safeInvoke(record.controller?.onHide, 'onHide', widgetId);
+      }
+    } else {
+      record.isActive = false;
     }
+  }
+
+  /**
+   * Bulk synchronizes visibility states from a key-value map.
+   * @param {Record<string, boolean>} visibilityMap
+   */
+  function syncAllWidgetVisibilities(visibilityMap) {
+    if (!visibilityMap || typeof visibilityMap !== 'object') return;
+    Object.keys(visibilityMap).forEach((id) => {
+      setWidgetVisibility(id, visibilityMap[id]);
+    });
   }
 
   /**
@@ -211,6 +310,7 @@
    */
   async function initializeAll() {
     const records = Array.from(widgetRegistry.values());
+    ensureVisibilityListener();
 
     for (const record of records) {
       if (record.isInitialized || record.isDestroyed) {
@@ -228,6 +328,14 @@
         }
         record.isInitialized = true;
         record.isDestroyed = false;
+
+        if (record.isVisible) {
+          safeInvoke(controller.onShow, 'onShow', record.id);
+          if (isTabVisible()) {
+            record.isActive = true;
+            safeInvoke(controller.resume, 'resume', record.id);
+          }
+        }
       } catch (err) {
         console.warn('[HomebaseWidgetLifecycle] Failed to initialize widget:', record.id, err);
       }
@@ -241,16 +349,27 @@
     const records = Array.from(widgetRegistry.values());
 
     records.forEach((record) => {
-      if (!record.isDestroyed && record.controller && typeof record.controller.destroy === 'function') {
-        try {
-          record.controller.destroy();
-        } catch (err) {
-          console.warn('[HomebaseWidgetLifecycle] Error destroying widget during destroyAll:', record.id, err);
+      if (!record.isDestroyed) {
+        if (record.isActive) {
+          record.isActive = false;
+          safeInvoke(record.controller?.pause, 'pause', record.id);
+        }
+        if (record.isVisible) {
+          record.isVisible = false;
+          safeInvoke(record.controller?.onHide, 'onHide', record.id);
+        }
+        if (record.controller && typeof record.controller.destroy === 'function') {
+          try {
+            record.controller.destroy();
+          } catch (err) {
+            console.warn('[HomebaseWidgetLifecycle] Error destroying widget during destroyAll:', record.id, err);
+          }
         }
       }
       record.isDestroyed = true;
       record.isInitialized = false;
       record.isVisible = false;
+      record.isActive = false;
     });
 
     widgetRegistry.clear();
@@ -264,7 +383,10 @@
     unregisterWidget,
     getWidget,
     getAllWidgets,
+    isWidgetVisible,
+    isWidgetActive,
     setWidgetVisibility,
+    syncAllWidgetVisibilities,
     initializeAll,
     destroyAll,
     createListenerRegistry,

@@ -435,11 +435,17 @@ function handleSettingsStorageChange(changes, area) {
         localStorage.setItem('fast-time-format', nextFormat);
       }
     } catch (e) {}
-    if (typeof applyTimeFormatPreference === 'function') {
-      applyTimeFormatPreference(nextFormat);
+    const applyFmt = (typeof HomebaseWidgetTime !== 'undefined' && typeof HomebaseWidgetTime.applyTimeFormatPreference === 'function')
+      ? HomebaseWidgetTime.applyTimeFormatPreference
+      : (typeof applyTimeFormatPreference === 'function' ? applyTimeFormatPreference : null);
+    if (applyFmt) {
+      applyFmt(nextFormat);
     }
-    if (typeof updateTime === 'function') {
-      updateTime();
+    const updTime = (typeof HomebaseWidgetTime !== 'undefined' && typeof HomebaseWidgetTime.update === 'function')
+      ? HomebaseWidgetTime.update
+      : (typeof updateTime === 'function' ? updateTime : null);
+    if (updTime) {
+      updTime();
     }
   }
 
@@ -480,8 +486,11 @@ function handleSettingsStorageChange(changes, area) {
     const nextWeather = changes[APP_SHOW_WEATHER_KEY].newValue !== false;
     settingsState.showWeather = nextWeather;
     stateUpdated = true;
-    if (typeof setWeatherPreference === 'function') {
-      setWeatherPreference(nextWeather, { persist: false, applyVisibility: true, updateUI: true });
+    const setWeather = (typeof HomebaseWidgetWeather !== 'undefined' && typeof HomebaseWidgetWeather.setWeatherPreference === 'function')
+      ? HomebaseWidgetWeather.setWeatherPreference
+      : (typeof setWeatherPreference === 'function' ? setWeatherPreference : null);
+    if (setWeather) {
+      setWeather(nextWeather, { persist: false, applyVisibility: true, updateUI: true });
     }
   }
 
@@ -489,8 +498,11 @@ function handleSettingsStorageChange(changes, area) {
     const nextQuote = changes[APP_SHOW_QUOTE_KEY].newValue !== false;
     settingsState.showQuote = nextQuote;
     stateUpdated = true;
-    if (typeof setQuotePreference === 'function') {
-      setQuotePreference(nextQuote, { persist: false, applyVisibility: true, updateUI: true });
+    const setQuote = (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.setQuotePreference === 'function')
+      ? HomebaseWidgetQuote.setQuotePreference
+      : (typeof setQuotePreference === 'function' ? setQuotePreference : null);
+    if (setQuote) {
+      setQuote(nextQuote, { persist: false, applyVisibility: true, updateUI: true });
     }
   }
 
@@ -498,8 +510,11 @@ function handleSettingsStorageChange(changes, area) {
     const nextNews = changes[APP_SHOW_NEWS_KEY].newValue === true;
     settingsState.showNews = nextNews;
     stateUpdated = true;
-    if (typeof setNewsPreference === 'function') {
-      setNewsPreference(nextNews, { persist: false, applyVisibility: true, updateUI: true });
+    const setNews = (typeof HomebaseWidgetNews !== 'undefined' && typeof HomebaseWidgetNews.setNewsPreference === 'function')
+      ? HomebaseWidgetNews.setNewsPreference
+      : (typeof setNewsPreference === 'function' ? setNewsPreference : null);
+    if (setNews) {
+      setNews(nextNews, { persist: false, applyVisibility: true, updateUI: true });
     }
   }
 
@@ -507,14 +522,20 @@ function handleSettingsStorageChange(changes, area) {
     const nextTodo = changes[APP_SHOW_TODO_KEY].newValue !== false;
     settingsState.showTodo = nextTodo;
     stateUpdated = true;
-    if (typeof setTodoPreference === 'function') {
-      setTodoPreference(nextTodo, { persist: false, applyVisibility: true, updateUI: true });
+    const setTodo = (typeof HomebaseWidgetTodo !== 'undefined' && typeof HomebaseWidgetTodo.setTodoPreference === 'function')
+      ? HomebaseWidgetTodo.setTodoPreference
+      : (typeof setTodoPreference === 'function' ? setTodoPreference : null);
+    if (setTodo) {
+      setTodo(nextTodo, { persist: false, applyVisibility: true, updateUI: true });
     }
   }
 
   if (changes[APP_NEWS_SOURCE_KEY]) {
-    const nextSource = typeof resolveNewsSourceId === 'function'
-      ? resolveNewsSourceId(changes[APP_NEWS_SOURCE_KEY].newValue)
+    const resolveSource = (typeof HomebaseWidgetNews !== 'undefined' && typeof HomebaseWidgetNews.resolveNewsSourceId === 'function')
+      ? HomebaseWidgetNews.resolveNewsSourceId
+      : (typeof resolveNewsSourceId === 'function' ? resolveNewsSourceId : null);
+    const nextSource = resolveSource
+      ? resolveSource(changes[APP_NEWS_SOURCE_KEY].newValue)
       : (changes[APP_NEWS_SOURCE_KEY].newValue || defaultSettingsState.newsSource);
     settingsState.newsSource = nextSource;
     stateUpdated = true;
@@ -612,8 +633,11 @@ function handleSettingsStorageChange(changes, area) {
     const nextFormat = changes[APP_TIME_FORMAT_KEY].newValue || defaultSettingsState.timeFormat;
     settingsState.timeFormat = nextFormat;
     stateUpdated = true;
-    if (typeof applyTimeFormatPreference === 'function') {
-      applyTimeFormatPreference(nextFormat);
+    const applyFmt = (typeof HomebaseWidgetTime !== 'undefined' && typeof HomebaseWidgetTime.applyTimeFormatPreference === 'function')
+      ? HomebaseWidgetTime.applyTimeFormatPreference
+      : (typeof applyTimeFormatPreference === 'function' ? applyTimeFormatPreference : null);
+    if (applyFmt) {
+      applyFmt(nextFormat);
     }
   }
 

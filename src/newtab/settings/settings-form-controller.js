@@ -235,10 +235,26 @@
     if (!values || !values.updates) return;
     const u = values.updates;
 
-    if (typeof globalScope.applyTimeFormatPreference === 'function') globalScope.applyTimeFormatPreference(u.timeFormat);
-    if (typeof globalScope.setWeatherPreference === 'function') globalScope.setWeatherPreference(u.showWeather, { applyVisibility: false, updateUI: false });
-    if (typeof globalScope.setQuotePreference === 'function') globalScope.setQuotePreference(u.showQuote, { applyVisibility: false, updateUI: false });
-    if (typeof globalScope.setNewsPreference === 'function') globalScope.setNewsPreference(u.showNews, { applyVisibility: false, updateUI: false });
+    const applyTimeFormat = (globalScope.HomebaseWidgetTime && typeof globalScope.HomebaseWidgetTime.applyTimeFormatPreference === 'function')
+      ? (fmt) => globalScope.HomebaseWidgetTime.applyTimeFormatPreference(fmt)
+      : (typeof globalScope.applyTimeFormatPreference === 'function' ? globalScope.applyTimeFormatPreference : null);
+    if (applyTimeFormat) applyTimeFormat(u.timeFormat);
+
+    const setWeather = (globalScope.HomebaseWidgetWeather && typeof globalScope.HomebaseWidgetWeather.setWeatherPreference === 'function')
+      ? (val, opt) => globalScope.HomebaseWidgetWeather.setWeatherPreference(val, opt)
+      : (typeof globalScope.setWeatherPreference === 'function' ? globalScope.setWeatherPreference : null);
+    if (setWeather) setWeather(u.showWeather, { applyVisibility: false, updateUI: false });
+
+    const setQuote = (globalScope.HomebaseWidgetQuote && typeof globalScope.HomebaseWidgetQuote.setQuotePreference === 'function')
+      ? (val, opt) => globalScope.HomebaseWidgetQuote.setQuotePreference(val, opt)
+      : (typeof globalScope.setQuotePreference === 'function' ? globalScope.setQuotePreference : null);
+    if (setQuote) setQuote(u.showQuote, { applyVisibility: false, updateUI: false });
+
+    const setNews = (globalScope.HomebaseWidgetNews && typeof globalScope.HomebaseWidgetNews.setNewsPreference === 'function')
+      ? (val, opt) => globalScope.HomebaseWidgetNews.setNewsPreference(val, opt)
+      : (typeof globalScope.setNewsPreference === 'function' ? globalScope.setNewsPreference : null);
+    if (setNews) setNews(u.showNews, { applyVisibility: false, updateUI: false });
+
     if (typeof globalScope.applySidebarVisibility === 'function') globalScope.applySidebarVisibility(u.showSidebar);
     if (typeof globalScope.applyWidgetVisibility === 'function') globalScope.applyWidgetVisibility();
 
@@ -305,7 +321,10 @@
     if (typeof globalScope.setupCinemaModeListeners === 'function') globalScope.setupCinemaModeListeners();
     if (typeof globalScope.resetCinemaMode === 'function') globalScope.resetCinemaMode();
     if (typeof globalScope.applyGridAnimationEnabled === 'function') globalScope.applyGridAnimationEnabled(u.gridAnimationEnabled);
-    if (typeof globalScope.updateTime === 'function') globalScope.updateTime();
+    const timeUpdate = (globalScope.HomebaseWidgetTime && typeof globalScope.HomebaseWidgetTime.update === 'function')
+      ? () => globalScope.HomebaseWidgetTime.update()
+      : (typeof globalScope.updateTime === 'function' ? globalScope.updateTime : null);
+    if (timeUpdate) timeUpdate();
   }
 
   // =============================================================================
@@ -460,25 +479,28 @@
 
     if (appWeatherToggle) {
       appWeatherToggle.addEventListener('change', (e) => {
-        if (typeof globalScope.setWeatherPreference === 'function') {
-          globalScope.setWeatherPreference(e.target.checked);
-        }
+        const fn = (globalScope.HomebaseWidgetWeather && typeof globalScope.HomebaseWidgetWeather.setWeatherPreference === 'function')
+          ? (v) => globalScope.HomebaseWidgetWeather.setWeatherPreference(v)
+          : (typeof globalScope.setWeatherPreference === 'function' ? globalScope.setWeatherPreference : null);
+        if (fn) fn(e.target.checked);
       });
     }
 
     if (appQuoteToggle) {
       appQuoteToggle.addEventListener('change', (e) => {
-        if (typeof globalScope.setQuotePreference === 'function') {
-          globalScope.setQuotePreference(e.target.checked);
-        }
+        const fn = (globalScope.HomebaseWidgetQuote && typeof globalScope.HomebaseWidgetQuote.setQuotePreference === 'function')
+          ? (v) => globalScope.HomebaseWidgetQuote.setQuotePreference(v)
+          : (typeof globalScope.setQuotePreference === 'function' ? globalScope.setQuotePreference : null);
+        if (fn) fn(e.target.checked);
       });
     }
 
     if (appNewsToggle) {
       appNewsToggle.addEventListener('change', (e) => {
-        if (typeof globalScope.setNewsPreference === 'function') {
-          globalScope.setNewsPreference(e.target.checked);
-        }
+        const fn = (globalScope.HomebaseWidgetNews && typeof globalScope.HomebaseWidgetNews.setNewsPreference === 'function')
+          ? (v) => globalScope.HomebaseWidgetNews.setNewsPreference(v)
+          : (typeof globalScope.setNewsPreference === 'function' ? globalScope.setNewsPreference : null);
+        if (fn) fn(e.target.checked);
       });
     }
 
@@ -529,18 +551,20 @@
     const appConfigureWeatherBtn = document.getElementById('app-configure-weather-btn');
     if (appConfigureWeatherBtn) {
       appConfigureWeatherBtn.addEventListener('click', () => {
-        if (typeof globalScope.openWeatherSettingsModal === 'function') {
-          globalScope.openWeatherSettingsModal(appConfigureWeatherBtn);
-        }
+        const fn = (globalScope.HomebaseWidgetWeather && typeof globalScope.HomebaseWidgetWeather.openWeatherSettingsModal === 'function')
+          ? (b) => globalScope.HomebaseWidgetWeather.openWeatherSettingsModal(b)
+          : (typeof globalScope.openWeatherSettingsModal === 'function' ? globalScope.openWeatherSettingsModal : null);
+        if (fn) fn(appConfigureWeatherBtn);
       });
     }
 
     const appConfigureQuoteBtn = document.getElementById('app-configure-quote-btn');
     if (appConfigureQuoteBtn) {
       appConfigureQuoteBtn.addEventListener('click', () => {
-        if (typeof globalScope.openQuoteSettingsModal === 'function') {
-          globalScope.openQuoteSettingsModal(appConfigureQuoteBtn);
-        }
+        const fn = (globalScope.HomebaseWidgetQuote && typeof globalScope.HomebaseWidgetQuote.openQuoteSettingsModal === 'function')
+          ? (b) => globalScope.HomebaseWidgetQuote.openQuoteSettingsModal(b)
+          : (typeof globalScope.openQuoteSettingsModal === 'function' ? globalScope.openQuoteSettingsModal : null);
+        if (fn) fn(appConfigureQuoteBtn);
       });
     }
 

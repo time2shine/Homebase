@@ -97,9 +97,11 @@
 
     // 3. Todo Widget Handler
     const todoHandler =
-      (typeof window !== 'undefined' && typeof window.handleTodoStorageChange === 'function')
-        ? window.handleTodoStorageChange
-        : (typeof handleTodoStorageChange === 'function' ? handleTodoStorageChange : null);
+      (typeof window !== 'undefined' && window.HomebaseWidgetTodo && typeof window.HomebaseWidgetTodo.handleStorageChange === 'function')
+        ? (changes, area) => window.HomebaseWidgetTodo.handleStorageChange(changes, area)
+        : ((typeof window !== 'undefined' && typeof window.handleTodoStorageChange === 'function')
+          ? window.handleTodoStorageChange
+          : (typeof handleTodoStorageChange === 'function' ? handleTodoStorageChange : null));
 
     if (typeof todoHandler === 'function') {
       try {

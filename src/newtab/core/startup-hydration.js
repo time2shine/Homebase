@@ -29,7 +29,12 @@
     recordIdleTaskPerf('startup:loadCachedWeather', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:loadCachedWeather start');
     try {
-      await loadCachedWeather();
+      const weatherLoader = (typeof HomebaseWidgetWeather !== 'undefined' && typeof HomebaseWidgetWeather.loadCachedWeather === 'function')
+        ? HomebaseWidgetWeather.loadCachedWeather
+        : (typeof loadCachedWeather === 'function' ? loadCachedWeather : null);
+      if (weatherLoader) {
+        await weatherLoader();
+      }
     } catch (err) {
       console.warn('Startup task failed:', 'startup:loadCachedWeather', err);
     } finally {
@@ -47,18 +52,14 @@
     recordIdleTaskPerf('startup:quoteIndex', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex start');
     try {
-      const readFn = typeof readCachedQuoteState === 'function'
-        ? readCachedQuoteState
-        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.readCachedQuoteState === 'function'
-          ? HomebaseWidgetQuote.readCachedQuoteState
-          : null);
+      const readFn = (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.readCachedQuoteState === 'function')
+        ? HomebaseWidgetQuote.readCachedQuoteState
+        : (typeof readCachedQuoteState === 'function' ? readCachedQuoteState : null);
       const cachedState = readFn ? readFn() : null;
 
-      const shouldLoadFn = typeof shouldLoadQuoteCatalog === 'function'
-        ? shouldLoadQuoteCatalog
-        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.shouldLoadQuoteCatalog === 'function'
-          ? HomebaseWidgetQuote.shouldLoadQuoteCatalog
-          : null);
+      const shouldLoadFn = (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.shouldLoadQuoteCatalog === 'function')
+        ? HomebaseWidgetQuote.shouldLoadQuoteCatalog
+        : (typeof shouldLoadQuoteCatalog === 'function' ? shouldLoadQuoteCatalog : null);
 
       if (shouldLoadFn && !shouldLoadFn({ state: cachedState })) {
         if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:quoteIndex skipped');
@@ -68,11 +69,9 @@
         return;
       }
 
-      const ensureIndexFn = typeof ensureQuoteIndexBuilt === 'function'
-        ? ensureQuoteIndexBuilt
-        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.ensureQuoteIndexBuilt === 'function'
-          ? HomebaseWidgetQuote.ensureQuoteIndexBuilt
-          : null);
+      const ensureIndexFn = (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.ensureQuoteIndexBuilt === 'function')
+        ? HomebaseWidgetQuote.ensureQuoteIndexBuilt
+        : (typeof ensureQuoteIndexBuilt === 'function' ? ensureQuoteIndexBuilt : null);
 
       if (ensureIndexFn) {
         await ensureIndexFn();
@@ -96,7 +95,9 @@
     recordIdleTaskPerf('startup:setupQuoteWidget', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupQuoteWidget start');
     try {
-      if (typeof HomebaseQuoteWidgetController !== 'undefined' && typeof HomebaseQuoteWidgetController.initialize === 'function') {
+      if (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.initialize === 'function') {
+        await HomebaseWidgetQuote.initialize();
+      } else if (typeof HomebaseQuoteWidgetController !== 'undefined' && typeof HomebaseQuoteWidgetController.initialize === 'function') {
         await HomebaseQuoteWidgetController.initialize();
       } else if (typeof setupQuoteWidget === 'function') {
         setupQuoteWidget();
@@ -118,7 +119,9 @@
     recordIdleTaskPerf('startup:setupNewsWidget', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupNewsWidget start');
     try {
-      if (typeof HomebaseNewsWidgetController !== 'undefined' && typeof HomebaseNewsWidgetController.initialize === 'function') {
+      if (typeof HomebaseWidgetNews !== 'undefined' && typeof HomebaseWidgetNews.initialize === 'function') {
+        await HomebaseWidgetNews.initialize();
+      } else if (typeof HomebaseNewsWidgetController !== 'undefined' && typeof HomebaseNewsWidgetController.initialize === 'function') {
         await HomebaseNewsWidgetController.initialize();
       } else if (typeof setupNewsWidget === 'function') {
         setupNewsWidget();
@@ -140,7 +143,9 @@
     recordIdleTaskPerf('startup:setupTodoWidget', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupTodoWidget start');
     try {
-      if (typeof HomebaseTodoWidgetController !== 'undefined' && typeof HomebaseTodoWidgetController.initialize === 'function') {
+      if (typeof HomebaseWidgetTodo !== 'undefined' && typeof HomebaseWidgetTodo.initialize === 'function') {
+        await HomebaseWidgetTodo.initialize();
+      } else if (typeof HomebaseTodoWidgetController !== 'undefined' && typeof HomebaseTodoWidgetController.initialize === 'function') {
         await HomebaseTodoWidgetController.initialize();
       } else if (typeof setupTodoWidget === 'function') {
         await setupTodoWidget();
@@ -189,7 +194,9 @@
     recordIdleTaskPerf('startup:setupWeather', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:setupWeather start');
     try {
-      if (typeof HomebaseWeatherWidgetController !== 'undefined' && typeof HomebaseWeatherWidgetController.initialize === 'function') {
+      if (typeof HomebaseWidgetWeather !== 'undefined' && typeof HomebaseWidgetWeather.initialize === 'function') {
+        await HomebaseWidgetWeather.initialize();
+      } else if (typeof HomebaseWeatherWidgetController !== 'undefined' && typeof HomebaseWeatherWidgetController.initialize === 'function') {
         await HomebaseWeatherWidgetController.initialize();
       } else if (typeof setupWeather === 'function') {
         await setupWeather();
@@ -237,32 +244,28 @@
     recordIdleTaskPerf('startup:fetchQuote', 'start');
     if (DEBUG_IDLE_STARTUP) console.log('[startup idle] startup:fetchQuote start');
     try {
-      const readFn = typeof readCachedQuoteState === 'function'
-        ? readCachedQuoteState
-        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.readCachedQuoteState === 'function'
-          ? HomebaseWidgetQuote.readCachedQuoteState
-          : null);
+      const readFn = (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.readCachedQuoteState === 'function')
+        ? HomebaseWidgetQuote.readCachedQuoteState
+        : (typeof readCachedQuoteState === 'function' ? readCachedQuoteState : null);
       const cachedState = readFn ? readFn() : null;
 
-      const shouldLoadFn = typeof shouldLoadQuoteCatalog === 'function'
-        ? shouldLoadQuoteCatalog
-        : (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.shouldLoadQuoteCatalog === 'function'
-          ? HomebaseWidgetQuote.shouldLoadQuoteCatalog
-          : null);
+      const shouldLoadFn = (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.shouldLoadQuoteCatalog === 'function')
+        ? HomebaseWidgetQuote.shouldLoadQuoteCatalog
+        : (typeof shouldLoadQuoteCatalog === 'function' ? shouldLoadQuoteCatalog : null);
 
       if (shouldLoadFn && !shouldLoadFn({ state: cachedState })) {
-        if (typeof renderCachedQuoteState === 'function') {
-          renderCachedQuoteState(cachedState);
-        } else if (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.renderCachedQuoteState === 'function') {
+        if (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.renderCachedQuoteState === 'function') {
           HomebaseWidgetQuote.renderCachedQuoteState(cachedState);
+        } else if (typeof renderCachedQuoteState === 'function') {
+          renderCachedQuoteState(cachedState);
         }
         return;
       }
 
-      if (typeof fetchQuote === 'function') {
-        fetchQuote();
-      } else if (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.fetchQuote === 'function') {
+      if (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.fetchQuote === 'function') {
         HomebaseWidgetQuote.fetchQuote();
+      } else if (typeof fetchQuote === 'function') {
+        fetchQuote();
       }
     } catch (err) {
       console.warn('Startup task failed:', 'startup:fetchQuote', err);

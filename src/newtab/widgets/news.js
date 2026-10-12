@@ -951,16 +951,6 @@
     }
   }
 
-  const HomebaseWidgetNews = {
-    initialize,
-    init: initialize,
-    destroy,
-    onShow,
-    onHide,
-    pause,
-    resume
-  };
-
   function setupNewsWidget() {
     return HomebaseWidgetNews.initialize();
   }
@@ -991,6 +981,24 @@
       updateWidgetSettingsUI();
     }
   }
+
+  const HomebaseWidgetNews = {
+    initialize,
+    init: initialize,
+    destroy,
+    onShow,
+    onHide,
+    pause,
+    resume,
+    fetchAndRenderNews,
+    setupNewsWidget,
+    setPreference: setNewsPreference,
+    setNewsPreference,
+    resolveNewsSourceId,
+    getNewsSourceById,
+    readFastNewsCache,
+    NEWS_SOURCES
+  };
 
   const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
   if (globalScope) {

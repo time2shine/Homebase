@@ -118,7 +118,9 @@ function logInitSettled(name, result) {
 
     setupContainerMode();
 
-    if (window.HomebaseTimeWidgetController && typeof window.HomebaseTimeWidgetController.initialize === 'function') {
+    if (window.HomebaseWidgetTime && typeof window.HomebaseWidgetTime.initialize === 'function') {
+      window.HomebaseWidgetTime.initialize();
+    } else if (window.HomebaseTimeWidgetController && typeof window.HomebaseTimeWidgetController.initialize === 'function') {
       window.HomebaseTimeWidgetController.initialize();
     } else if (typeof updateTime === 'function') {
       updateTime();

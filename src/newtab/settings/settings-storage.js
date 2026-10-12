@@ -255,8 +255,11 @@
       }
 
       settingsState.timeFormat = stored[APP_TIME_FORMAT_KEY] || '12-hour';
-      if (typeof applyTimeFormatPreference === 'function') {
-        applyTimeFormatPreference(settingsState.timeFormat);
+      const applyFmt = (typeof HomebaseWidgetTime !== 'undefined' && typeof HomebaseWidgetTime.applyTimeFormatPreference === 'function')
+        ? HomebaseWidgetTime.applyTimeFormatPreference
+        : (typeof applyTimeFormatPreference === 'function' ? applyTimeFormatPreference : null);
+      if (applyFmt) {
+        applyFmt(settingsState.timeFormat);
       }
 
       const storedShowSidebar = stored.hasOwnProperty(APP_SHOW_SIDEBAR_KEY) ? stored[APP_SHOW_SIDEBAR_KEY] !== false : true;
@@ -272,8 +275,11 @@
       settingsState.showNews = storedShowNews;
       settingsState.showTodo = storedShowTodo;
 
-      settingsState.newsSource = typeof resolveNewsSourceId === 'function'
-        ? resolveNewsSourceId(stored[APP_NEWS_SOURCE_KEY])
+      const resolveSource = (typeof HomebaseWidgetNews !== 'undefined' && typeof HomebaseWidgetNews.resolveNewsSourceId === 'function')
+        ? HomebaseWidgetNews.resolveNewsSourceId
+        : (typeof resolveNewsSourceId === 'function' ? resolveNewsSourceId : null);
+      settingsState.newsSource = resolveSource
+        ? resolveSource(stored[APP_NEWS_SOURCE_KEY])
         : (stored[APP_NEWS_SOURCE_KEY] || 'aljazeera');
 
       const storedWidgetOrder = stored[widgetOrderKey];
@@ -290,17 +296,32 @@
         setWidgetOrderPreference(normalizedWidgetOrder, { persist: shouldPersistWidgetOrder });
       }
 
-      if (typeof setWeatherPreference === 'function') {
-        setWeatherPreference(storedShowWeather, { persist: false, applyVisibility: false, updateUI: false });
+      const setWeather = (typeof HomebaseWidgetWeather !== 'undefined' && typeof HomebaseWidgetWeather.setWeatherPreference === 'function')
+        ? HomebaseWidgetWeather.setWeatherPreference
+        : (typeof setWeatherPreference === 'function' ? setWeatherPreference : null);
+      if (setWeather) {
+        setWeather(storedShowWeather, { persist: false, applyVisibility: false, updateUI: false });
       }
-      if (typeof setQuotePreference === 'function') {
-        setQuotePreference(storedShowQuote, { persist: false, applyVisibility: false, updateUI: false });
+
+      const setQuote = (typeof HomebaseWidgetQuote !== 'undefined' && typeof HomebaseWidgetQuote.setQuotePreference === 'function')
+        ? HomebaseWidgetQuote.setQuotePreference
+        : (typeof setQuotePreference === 'function' ? setQuotePreference : null);
+      if (setQuote) {
+        setQuote(storedShowQuote, { persist: false, applyVisibility: false, updateUI: false });
       }
-      if (typeof setNewsPreference === 'function') {
-        setNewsPreference(storedShowNews, { persist: !hasStoredNews, applyVisibility: false, updateUI: false });
+
+      const setNews = (typeof HomebaseWidgetNews !== 'undefined' && typeof HomebaseWidgetNews.setNewsPreference === 'function')
+        ? HomebaseWidgetNews.setNewsPreference
+        : (typeof setNewsPreference === 'function' ? setNewsPreference : null);
+      if (setNews) {
+        setNews(storedShowNews, { persist: !hasStoredNews, applyVisibility: false, updateUI: false });
       }
-      if (typeof setTodoPreference === 'function') {
-        setTodoPreference(storedShowTodo, { persist: false, applyVisibility: false, updateUI: false });
+
+      const setTodo = (typeof HomebaseWidgetTodo !== 'undefined' && typeof HomebaseWidgetTodo.setTodoPreference === 'function')
+        ? HomebaseWidgetTodo.setTodoPreference
+        : (typeof setTodoPreference === 'function' ? setTodoPreference : null);
+      if (setTodo) {
+        setTodo(storedShowTodo, { persist: false, applyVisibility: false, updateUI: false });
       }
       if (typeof applySidebarVisibility === 'function') {
         applySidebarVisibility(storedShowSidebar);

@@ -107,6 +107,7 @@ async function runChecks() {
   await verifyNoOldFlatNewtabReferences();
   await verifyMovedPathReferences();
   await verifyCrossScriptDeclarationCollisions(deferredLocalScripts);
+  await verifyCanonicalWidgetControllers();
 }
 
 async function verifyDeferredScriptsExist(deferredLocalScripts) {
@@ -254,6 +255,61 @@ async function verifyCrossScriptDeclarationCollisions(deferredLocalScripts) {
     duplicates.length === 0
       ? `${allDecls.size} unique top-level declarations verified across ${deferredLocalScripts.length} deferred scripts`
       : `collisions detected: ${formatted.join("; ")}`
+  );
+}
+
+async function verifyCanonicalWidgetControllers() {
+  const widgetConfigs = [
+    { file: "newtab/widgets/time.js", controller: "HomebaseWidgetTime", widgetId: "time" },
+    { file: "newtab/widgets/todo.js", controller: "HomebaseWidgetTodo", widgetId: "todo" },
+    { file: "newtab/widgets/quote.js", controller: "HomebaseWidgetQuote", widgetId: "quote" },
+    { file: "newtab/widgets/news.js", controller: "HomebaseWidgetNews", widgetId: "news" },
+    { file: "newtab/widgets/weather.js", controller: "HomebaseWidgetWeather", widgetId: "weather" }
+  ];
+
+  const issues = [];
+
+  for (const { file, controller, widgetId } of widgetConfigs) {
+    const fullPath = path.join(srcDir, file);
+    if (!await fileExists(fullPath)) {
+      issues.push(`${file} is missing`);
+      continue;
+    }
+    const text = await fs.readFile(fullPath, "utf8");
+
+    // 1. Strict IIFE wrapping
+    const trimmed = text.trim();
+    if ((!trimmed.includes("(function () {") && !trimmed.includes("(function() {")) || !trimmed.endsWith("})();")) {
+      issues.push(`${file}: must be wrapped in strict IIFE`);
+    }
+    if (!trimmed.includes("'use strict';") && !trimmed.includes('"use strict";')) {
+      issues.push(`${file}: must declare 'use strict'`);
+    }
+
+    // 2. Canonical controller exported
+    if (!text.includes(`globalScope.${controller} = ${controller}`) && !text.includes(`window.${controller} = ${controller}`)) {
+      issues.push(`${file}: missing ${controller} export on window/globalScope`);
+    }
+
+    // 3. Lifecycle registration intact
+    const regPattern = new RegExp(`registerWidget\\(['"]${widgetId}['"],\\s*${controller}\\)`);
+    if (!regPattern.test(text)) {
+      issues.push(`${file}: missing HomebaseWidgetLifecycle.registerWidget('${widgetId}', ${controller}) call`);
+    }
+
+    // 4. No leaked top-level declarations
+    const decls = parseTopLevelDeclarations(text, file);
+    if (decls.length > 0) {
+      issues.push(`${file}: leaked top-level declarations: ${decls.map((d) => d.name).join(", ")}`);
+    }
+  }
+
+  record(
+    issues.length === 0,
+    "canonical widget controllers and lifecycle registrations intact",
+    issues.length === 0
+      ? `5 canonical widget controllers verified (Time, Todo, Quote, News, Weather)`
+      : issues.join("; ")
   );
 }
 

@@ -707,21 +707,6 @@
     renderCachedQuoteState();
   }
 
-  const HomebaseWidgetQuote = {
-    initialize,
-    init: initialize,
-    destroy,
-    onShow,
-    onHide,
-    pause,
-    resume,
-    fetchQuote,
-    readCachedQuoteState,
-    renderCachedQuoteState,
-    shouldLoadQuoteCatalog,
-    ensureQuoteIndexBuilt
-  };
-
   function setupQuoteWidget() {
     return HomebaseWidgetQuote.initialize();
   }
@@ -753,6 +738,26 @@
     }
   }
 
+  const HomebaseWidgetQuote = {
+    initialize,
+    init: initialize,
+    destroy,
+    onShow,
+    onHide,
+    pause,
+    resume,
+    fetchQuote,
+    readCachedQuoteState,
+    renderCachedQuoteState,
+    shouldLoadQuoteCatalog,
+    ensureQuoteIndexBuilt,
+    setupQuoteWidget,
+    setPreference: setQuotePreference,
+    setQuotePreference,
+    openQuoteSettingsModal,
+    closeQuoteSettingsModal
+  };
+
   const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
   if (globalScope) {
     globalScope.HomebaseWidgetQuote = HomebaseWidgetQuote;
@@ -765,7 +770,6 @@
     globalScope.shouldLoadQuoteCatalog = shouldLoadQuoteCatalog;
     globalScope.ensureQuoteIndexBuilt = ensureQuoteIndexBuilt;
     globalScope.openQuoteSettingsModal = openQuoteSettingsModal;
-    globalScope.closeQuoteSettingsModal = closeQuoteSettingsModal;
   }
   if (typeof window !== 'undefined' && globalScope !== window) {
     window.HomebaseWidgetQuote = HomebaseWidgetQuote;
@@ -778,7 +782,6 @@
     window.shouldLoadQuoteCatalog = shouldLoadQuoteCatalog;
     window.ensureQuoteIndexBuilt = ensureQuoteIndexBuilt;
     window.openQuoteSettingsModal = openQuoteSettingsModal;
-    window.closeQuoteSettingsModal = closeQuoteSettingsModal;
   }
 
   if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.registerWidget === 'function') {

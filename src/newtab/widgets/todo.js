@@ -342,17 +342,6 @@
     renderTodoList();
   }
 
-  const HomebaseWidgetTodo = {
-    initialize,
-    init: initialize,
-    destroy,
-    onShow,
-    onHide,
-    pause,
-    resume,
-    normalizeTodoItems
-  };
-
   async function setupTodoWidget() {
     return HomebaseWidgetTodo.initialize();
   }
@@ -404,6 +393,26 @@
       renderTodoList();
     }
   }
+
+  const HomebaseWidgetTodo = {
+    initialize,
+    init: initialize,
+    destroy,
+    onShow,
+    onHide,
+    pause,
+    resume,
+    normalizeTodoItems,
+    setupTodoWidget,
+    setPreference: setTodoPreference,
+    setTodoPreference,
+    handleStorageChange: handleTodoStorageChange,
+    handleTodoStorageChange,
+    persistState: persistTodoState,
+    persistTodoState,
+    loadState: loadTodoState,
+    loadTodoState
+  };
 
   const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
   if (globalScope) {

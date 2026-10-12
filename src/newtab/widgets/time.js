@@ -139,7 +139,11 @@
     onShow,
     onHide,
     pause,
-    resume
+    resume,
+    update: updateTime,
+    updateTime,
+    applyTimeFormatPreference,
+    setTimeFormatPreference
   };
 
   const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);

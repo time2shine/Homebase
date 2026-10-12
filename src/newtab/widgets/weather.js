@@ -1380,6 +1380,10 @@ async function openWeatherSettingsModal(triggerSource) {
     await resume();
   }
 
+  async function setupWeather() {
+    return HomebaseWidgetWeather.initialize();
+  }
+
   const HomebaseWidgetWeather = {
     initialize,
     init: initialize,
@@ -1388,18 +1392,18 @@ async function openWeatherSettingsModal(triggerSource) {
     onHide,
     pause,
     resume,
+    refresh: resume,
     fetchWeather,
     updateWeatherUI,
     loadCachedWeather,
     getWeatherLocation: () => selectedLocation,
     openWeatherSettingsModal,
     closeWeatherSettingsModal,
+    searchForLocation,
+    setupWeather,
+    setPreference: setWeatherPreference,
     setWeatherPreference
   };
-
-  async function setupWeather() {
-    return HomebaseWidgetWeather.initialize();
-  }
 
   const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
   if (globalScope) {
@@ -1418,19 +1422,6 @@ async function openWeatherSettingsModal(triggerSource) {
     globalScope.getWeatherEmoji = getWeatherEmoji;
     globalScope.getWeatherDescription = getWeatherDescription;
     globalScope.formatWeatherUpdated = formatWeatherUpdated;
-    globalScope.getCurrentHourlyWeatherIndex = getCurrentHourlyWeatherIndex;
-    globalScope.getHourlyValueAtIndex = getHourlyValueAtIndex;
-    globalScope.normalizeWeatherDisplay = normalizeWeatherDisplay;
-    globalScope.normalizeWeatherTimestamp = normalizeWeatherTimestamp;
-    globalScope.isWeatherCacheStale = isWeatherCacheStale;
-    globalScope.getCachedWeatherTimestamp = getCachedWeatherTimestamp;
-    globalScope.hasUsableCachedWeather = hasUsableCachedWeather;
-    globalScope.getCachedWeatherDisplayOptions = getCachedWeatherDisplayOptions;
-    globalScope.markWeatherAsCachedOrStale = markWeatherAsCachedOrStale;
-    globalScope.showWeatherOfflineNoCache = showWeatherOfflineNoCache;
-    globalScope.showWeatherSetupUI = showWeatherSetupUI;
-    globalScope.hideWeatherSetupUI = hideWeatherSetupUI;
-    globalScope.showWeatherError = showWeatherError;
   }
   if (typeof window !== 'undefined' && globalScope !== window) {
     window.HomebaseWidgetWeather = HomebaseWidgetWeather;
@@ -1448,19 +1439,6 @@ async function openWeatherSettingsModal(triggerSource) {
     window.getWeatherEmoji = getWeatherEmoji;
     window.getWeatherDescription = getWeatherDescription;
     window.formatWeatherUpdated = formatWeatherUpdated;
-    window.getCurrentHourlyWeatherIndex = getCurrentHourlyWeatherIndex;
-    window.getHourlyValueAtIndex = getHourlyValueAtIndex;
-    window.normalizeWeatherDisplay = normalizeWeatherDisplay;
-    window.normalizeWeatherTimestamp = normalizeWeatherTimestamp;
-    window.isWeatherCacheStale = isWeatherCacheStale;
-    window.getCachedWeatherTimestamp = getCachedWeatherTimestamp;
-    window.hasUsableCachedWeather = hasUsableCachedWeather;
-    window.getCachedWeatherDisplayOptions = getCachedWeatherDisplayOptions;
-    window.markWeatherAsCachedOrStale = markWeatherAsCachedOrStale;
-    window.showWeatherOfflineNoCache = showWeatherOfflineNoCache;
-    window.showWeatherSetupUI = showWeatherSetupUI;
-    window.hideWeatherSetupUI = hideWeatherSetupUI;
-    window.showWeatherError = showWeatherError;
   }
 
   if (typeof HomebaseWidgetLifecycle !== 'undefined' && typeof HomebaseWidgetLifecycle.registerWidget === 'function') {

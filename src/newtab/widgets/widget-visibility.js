@@ -17,24 +17,30 @@ function applySidebarVisibility(showSidebar = true) {
     document.body.classList.toggle('sidebar-hidden', !appShowSidebarPreference);
   }
 
-  try {
-    if (window.localStorage) {
-      localStorage.setItem('fast-show-sidebar', appShowSidebarPreference ? '1' : '0');
-    }
-  } catch (e) {
-    // Ignore; instant mirror is best-effort only
-  }
-
-  if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
-    HomebaseStorage.set(APP_SHOW_SIDEBAR_KEY, appShowSidebarPreference).catch((err) => {
+  if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setSidebarVisibility) {
+    HomebaseWidgetStorage.setSidebarVisibility(appShowSidebarPreference).catch((err) => {
       console.warn('Failed to save sidebar visibility preference', err);
     });
-  } else if (browser && browser.storage && browser.storage.local) {
-    browser.storage.local
-      .set({ [APP_SHOW_SIDEBAR_KEY]: appShowSidebarPreference })
-      .catch((err) => {
+  } else {
+    try {
+      if (window.localStorage) {
+        localStorage.setItem('fast-show-sidebar', appShowSidebarPreference ? '1' : '0');
+      }
+    } catch (e) {
+      // Ignore; instant mirror is best-effort only
+    }
+
+    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+      HomebaseStorage.set(APP_SHOW_SIDEBAR_KEY, appShowSidebarPreference).catch((err) => {
         console.warn('Failed to save sidebar visibility preference', err);
       });
+    } else if (browser && browser.storage && browser.storage.local) {
+      browser.storage.local
+        .set({ [APP_SHOW_SIDEBAR_KEY]: appShowSidebarPreference })
+        .catch((err) => {
+          console.warn('Failed to save sidebar visibility preference', err);
+        });
+    }
   }
 
   updateSidebarCollapseState();
@@ -105,8 +111,6 @@ function setWidgetOrderPreference(order, options = {}) {
 
   widgetOrderPreference = normalized;
 
-  writeFastWidgetOrderMirror(normalized);
-
   if (shouldApply) {
     applyWidgetOrderToSidebar(normalized);
   }
@@ -116,17 +120,26 @@ function setWidgetOrderPreference(order, options = {}) {
   }
 
   if (shouldPersist) {
-    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
-      HomebaseStorage.set(WIDGET_ORDER_KEY, normalized).catch((err) => {
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setWidgetOrder) {
+      HomebaseWidgetStorage.setWidgetOrder(normalized).catch((err) => {
         console.warn('Failed to save widget order', err);
       });
-    } else if (browser && browser.storage && browser.storage.local) {
-      browser.storage.local
-        .set({ [WIDGET_ORDER_KEY]: normalized })
-        .catch((err) => {
+    } else {
+      writeFastWidgetOrderMirror(normalized);
+      if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+        HomebaseStorage.set(WIDGET_ORDER_KEY, normalized).catch((err) => {
           console.warn('Failed to save widget order', err);
         });
+      } else if (browser && browser.storage && browser.storage.local) {
+        browser.storage.local
+          .set({ [WIDGET_ORDER_KEY]: normalized })
+          .catch((err) => {
+            console.warn('Failed to save widget order', err);
+          });
+      }
     }
+  } else {
+    writeFastWidgetOrderMirror(normalized);
   }
 
   return normalized;
@@ -157,7 +170,11 @@ function setupWidgetOrderSortable() {
       return;
     }
 
-    if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+    if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setWidgetOrder) {
+      HomebaseWidgetStorage.setWidgetOrder(order).catch((err) => {
+        console.warn('Failed to save widget order', err);
+      });
+    } else if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
       HomebaseStorage.set(WIDGET_ORDER_KEY, order).catch((err) => {
         console.warn('Failed to save widget order', err);
       });

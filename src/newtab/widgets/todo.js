@@ -150,6 +150,12 @@ function updateTodoCache() {
 }
 
 function persistTodoState() {
+  if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.setTodoState) {
+    HomebaseWidgetStorage.setTodoState({ items: todoItems, hideDone: todoHideDone }).catch((err) => {
+      console.warn('Failed to save todo items', err);
+    });
+    return;
+  }
   if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.setMany) {
     HomebaseStorage.setMany({
       [TODO_ITEMS_KEY]: todoItems,
@@ -176,6 +182,17 @@ function commitTodoState(options = {}) {
 }
 
 async function loadTodoState() {
+  if (typeof HomebaseWidgetStorage !== 'undefined' && HomebaseWidgetStorage.getTodoState) {
+    try {
+      const stored = await HomebaseWidgetStorage.getTodoState();
+      todoItems = normalizeTodoItems(stored.items);
+      todoHideDone = stored.hideDone === true;
+    } catch (err) {
+      console.warn('Failed to load todo items', err);
+    }
+    commitTodoState({ persist: false });
+    return;
+  }
   if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.getMany) {
     try {
       const stored = await HomebaseStorage.getMany([TODO_ITEMS_KEY, TODO_HIDE_DONE_KEY]);

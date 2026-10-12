@@ -6,437 +6,404 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const widgetStorageScriptPath = path.join(rootDir, 'src/newtab/widgets/widget-storage.js');
+const widgetStorageScriptCode = fs.readFileSync(widgetStorageScriptPath, 'utf8');
 
-const utilsScriptPath = path.join(rootDir, 'src/newtab/core/utils.js');
-const validatorScriptPath = path.join(rootDir, 'src/newtab/core/schema-validator.js');
-const migrationsScriptPath = path.join(rootDir, 'src/newtab/core/schema-migrations.js');
-const diagnosticsScriptPath = path.join(rootDir, 'src/newtab/core/storage-diagnostics.js');
-const storageServiceScriptPath = path.join(rootDir, 'src/newtab/core/storage-service.js');
+function createWidgetStorageTestEnvironment(options = {}) {
+  const {
+    initialStorage = {},
+    initialLocalStorage = {},
+    withHomebaseStorage = true,
+    failStorage = false
+  } = options;
 
-const widgetVisibilityScriptPath = path.join(rootDir, 'src/newtab/widgets/widget-visibility.js');
-const timeScriptPath = path.join(rootDir, 'src/newtab/widgets/time.js');
-const todoScriptPath = path.join(rootDir, 'src/newtab/widgets/todo.js');
-const quoteScriptPath = path.join(rootDir, 'src/newtab/widgets/quote.js');
-const newsScriptPath = path.join(rootDir, 'src/newtab/widgets/news.js');
-const weatherScriptPath = path.join(rootDir, 'src/newtab/widgets/weather.js');
-
-const utilsScriptCode = fs.readFileSync(utilsScriptPath, 'utf8');
-const validatorScriptCode = fs.readFileSync(validatorScriptPath, 'utf8');
-const migrationsScriptCode = fs.readFileSync(migrationsScriptPath, 'utf8');
-const diagnosticsScriptCode = fs.readFileSync(diagnosticsScriptPath, 'utf8');
-const storageServiceScriptCode = fs.readFileSync(storageServiceScriptPath, 'utf8');
-
-const widgetVisibilityScriptCode = fs.readFileSync(widgetVisibilityScriptPath, 'utf8');
-const timeScriptCode = fs.readFileSync(timeScriptPath, 'utf8');
-const todoScriptCode = fs.readFileSync(todoScriptPath, 'utf8');
-const quoteScriptCode = fs.readFileSync(quoteScriptPath, 'utf8');
-const newsScriptCode = fs.readFileSync(newsScriptPath, 'utf8');
-const weatherScriptCode = fs.readFileSync(weatherScriptPath, 'utf8');
-
-/**
- * Creates an in-memory test environment supporting DOM mocks and storage mocking.
- */
-function createWidgetTestEnvironment(options = {}) {
-  const { initialStorage = {}, withHomebaseStorage = true } = options;
   const storageData = { ...initialStorage };
-  const localStorageData = {};
-  const storageCalls = { get: [], set: [], remove: [] };
+  const localStorageData = { ...initialLocalStorage };
 
-  const storageMock = {
-    get: async (keys) => {
-      storageCalls.get.push(keys);
-      if (keys === null || keys === undefined) return { ...storageData };
-      if (typeof keys === 'string') return { [keys]: storageData[keys] };
-      if (Array.isArray(keys)) {
-        const res = {};
-        for (const k of keys) {
-          if (storageData[k] !== undefined) res[k] = storageData[k];
-        }
-        return res;
-      }
-      return {};
-    },
-    set: async (items) => {
-      storageCalls.set.push(items);
-      Object.assign(storageData, items);
-    },
-    remove: async (keys) => {
-      storageCalls.remove.push(keys);
-      const toRemove = Array.isArray(keys) ? keys : [keys];
-      for (const k of toRemove) delete storageData[k];
-    }
+  const storageCalls = {
+    get: [],
+    set: [],
+    setMany: [],
+    remove: []
   };
 
-  const localStorageMock = {
-    getItem: (k) => (k in localStorageData ? localStorageData[k] : null),
-    setItem: (k, v) => { localStorageData[k] = String(v); },
-    removeItem: (k) => { delete localStorageData[k]; },
-    clear: () => {
-      for (const k of Object.keys(localStorageData)) delete localStorageData[k];
-    }
-  };
+  const browserStorageData = { ...initialStorage };
 
-  const docElement = {
-    classList: {
-      classes: new Set(),
-      toggle: function(cls, state) {
-        if (state === undefined) state = !this.classes.has(cls);
-        if (state) this.classes.add(cls); else this.classes.delete(cls);
-        return state;
-      },
-      contains: function(cls) { return this.classes.has(cls); }
-    }
-  };
-
-  const bodyElement = {
-    classList: {
-      classes: new Set(),
-      toggle: function(cls, state) {
-        if (state === undefined) state = !this.classes.has(cls);
-        if (state) this.classes.add(cls); else this.classes.delete(cls);
-        return state;
-      },
-      contains: function(cls) { return this.classes.has(cls); }
-    }
-  };
-
-  const elementsById = new Map();
-  const elementsByQuery = new Map();
-
-  function makeMockElement(tag = 'div') {
-    const el = {
-      tagName: tag.toUpperCase(),
-      classList: {
-        classes: new Set(),
-        add: function(...c) { c.forEach(x => this.classes.add(x)); },
-        remove: function(...c) { c.forEach(x => this.classes.delete(x)); },
-        toggle: function(cls, state) {
-          if (state === undefined) state = !this.classes.has(cls);
-          if (state) this.classes.add(cls); else this.classes.delete(cls);
-          return state;
+  const mockBrowser = {
+    storage: {
+      local: {
+        get: async (keys) => {
+          if (failStorage) throw new Error('Simulated browser.storage failure');
+          if (typeof keys === 'string') {
+            return { [keys]: browserStorageData[keys] };
+          }
+          if (Array.isArray(keys)) {
+            const res = {};
+            for (const k of keys) {
+              if (browserStorageData[k] !== undefined) res[k] = browserStorageData[k];
+            }
+            return res;
+          }
+          return { ...browserStorageData };
         },
-        contains: function(cls) { return this.classes.has(cls); }
-      },
-      textContent: '',
-      innerHTML: '',
-      value: '',
-      checked: false,
-      disabled: false,
-      style: {},
-      dataset: {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      querySelector: () => null,
-      querySelectorAll: () => [],
-      appendChild: () => {},
-      removeChild: () => {},
-      setAttribute: () => {},
-      getAttribute: () => null,
-      removeAttribute: () => {},
-      focus: () => {}
-    };
-    return el;
-  }
+        set: async (items) => {
+          if (failStorage) throw new Error('Simulated browser.storage set failure');
+          Object.assign(browserStorageData, items);
+        }
+      }
+    }
+  };
 
-  // Pre-populate key DOM elements
-  elementsById.set('current-time', makeMockElement('span'));
-  elementsById.set('current-date', makeMockElement('span'));
-  elementsById.set('todo-input', makeMockElement('input'));
-  elementsById.set('todo-list', makeMockElement('ul'));
+  const mockLocalStorage = {
+    getItem: (key) => (key in localStorageData ? localStorageData[key] : null),
+    setItem: (key, val) => {
+      localStorageData[key] = String(val);
+    },
+    removeItem: (key) => {
+      delete localStorageData[key];
+    }
+  };
+
+  const mockHomebaseStorage = withHomebaseStorage ? {
+    get: async (key, fallback = null) => {
+      if (failStorage) throw new Error('Simulated HomebaseStorage get failure');
+      storageCalls.get.push(key);
+      return key in storageData ? storageData[key] : fallback;
+    },
+    getMany: async (keys) => {
+      if (failStorage) throw new Error('Simulated HomebaseStorage getMany failure');
+      storageCalls.get.push(keys);
+      const res = {};
+      for (const k of keys) {
+        if (k in storageData) res[k] = storageData[k];
+      }
+      return res;
+    },
+    set: async (key, val) => {
+      if (failStorage) throw new Error('Simulated HomebaseStorage set failure');
+      storageCalls.set.push({ key, val });
+      storageData[key] = val;
+    },
+    setMany: async (items) => {
+      if (failStorage) throw new Error('Simulated HomebaseStorage setMany failure');
+      storageCalls.setMany.push(items);
+      Object.assign(storageData, items);
+    }
+  } : null;
 
   const sandbox = {
-    Object,
+    console,
+    Date,
+    JSON,
     Array,
-    Set,
-    Map,
+    Object,
     String,
     Number,
     Boolean,
-    Date,
-    Math,
-    JSON,
-    Promise,
-    RegExp,
-    console: {
-      log: () => {},
-      warn: () => {},
-      error: () => {}
-    },
-    setTimeout: globalThis.setTimeout,
-    clearTimeout: globalThis.clearTimeout,
-    localStorage: localStorageMock,
-    browser: {
-      storage: {
-        local: storageMock
-      }
-    },
-    document: {
-      documentElement: docElement,
-      body: bodyElement,
-      getElementById: (id) => elementsById.get(id) || null,
-      querySelector: (q) => elementsByQuery.get(q) || null,
-      querySelectorAll: () => [],
-      createElement: (tag) => makeMockElement(tag),
-      createDocumentFragment: () => ({ appendChild: () => {} })
-    },
-    navigator: {
-      geolocation: {
-        getCurrentPosition: (success) => {
-          success({ coords: { latitude: 40.7128, longitude: -74.006 } });
-        }
-      }
-    },
-    sidebar: null,
-    appShowSidebarPreference: true,
-    appShowWeatherPreference: true,
-    appShowQuotePreference: true,
-    appShowNewsPreference: true,
-    appShowTodoPreference: true,
-    APP_SHOW_SIDEBAR_KEY: 'appShowSidebar',
-    APP_SHOW_WEATHER_KEY: 'appShowWeather',
-    APP_SHOW_QUOTE_KEY: 'appShowQuote',
-    APP_SHOW_NEWS_KEY: 'appShowNews',
-    APP_SHOW_TODO_KEY: 'appShowTodo',
-    applyWidgetVisibility: () => {},
-    updateSidebarCollapseState: () => {},
-    updateWidgetSettingsUI: () => {},
-    revealWidget: () => {},
-    ensureSubSettingsInner: () => {},
-    initUnifiedSortable: () => ({ destroy: () => {} }),
-    renderTodoList: () => {},
-    renderCachedQuoteState: () => {},
-    renderQuoteToWidget: () => {},
-    closeModalWithAnimation: () => {},
-    openModalWithAnimation: () => {},
-    fetchQuote: () => {},
-    fetchAndRenderNews: () => {},
-    observeNewsWidgetVisibility: () => {},
-    ensureNewsSourceOptions: () => {},
-    closeNewsSettingsModal: () => {},
-    fetchWeather: async () => {},
-    showWeatherSetupUI: () => {},
-    hideWeatherSetupUI: () => {},
-    markWeatherAsCachedOrStale: () => {},
-    updateWeatherUI: () => {},
-    getCachedWeatherTimestamp: (d) => d?.weatherFetchedAt || null,
-    hasUsableCachedWeather: (d) => Boolean(d && typeof d === 'object'),
-    getCachedWeatherDisplayOptions: () => ({})
+    Set,
+    Map,
+    browser: mockBrowser,
+    localStorage: mockLocalStorage,
+    HomebaseStorage: mockHomebaseStorage
   };
-
   sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
   const context = vm.createContext(sandbox);
-
-  // Load stack
-  vm.runInContext(utilsScriptCode, context);
-  vm.runInContext(validatorScriptCode, context);
-  vm.runInContext(migrationsScriptCode, context);
-  vm.runInContext(diagnosticsScriptCode, context);
-
-  if (withHomebaseStorage) {
-    vm.runInContext(storageServiceScriptCode, context);
-  } else {
-    delete sandbox.HomebaseStorage;
-    delete sandbox.window.HomebaseStorage;
-  }
+  vm.runInContext(widgetStorageScriptCode, context);
 
   return {
-    context,
-    sandbox,
+    storageService: context.HomebaseWidgetStorage,
     storageData,
+    browserStorageData,
     localStorageData,
     storageCalls,
-    elementsById,
-    elementsByQuery
+    context
   };
 }
 
-test('widget-visibility: applySidebarVisibility persists via HomebaseStorage and syncs fast-show-sidebar mirror', () => {
-  const env = createWidgetTestEnvironment();
-  vm.runInContext(widgetVisibilityScriptCode, env.context);
+test('widget-storage: window.HomebaseWidgetStorage exists and exports complete API', () => {
+  const { storageService } = createWidgetStorageTestEnvironment();
+  assert.ok(storageService, 'HomebaseWidgetStorage should exist');
 
-  // Set sidebar to false
-  env.sandbox.applySidebarVisibility(false);
-  assert.equal(env.storageData['appShowSidebar'], false);
-  assert.equal(env.localStorageData['fast-show-sidebar'], '0');
+  // Verify all required methods
+  const methods = [
+    'getWidgetOrder',
+    'setWidgetOrder',
+    'getSidebarVisibility',
+    'setSidebarVisibility',
+    'getTimeFormat',
+    'setTimeFormat',
+    'getWeatherCache',
+    'setWeatherCache',
+    'getQuoteCache',
+    'setQuoteCache',
+    'getNewsCache',
+    'setNewsCache',
+    'getTodoState',
+    'setTodoState'
+  ];
 
-  // Set sidebar to true
-  env.sandbox.applySidebarVisibility(true);
-  assert.equal(env.storageData['appShowSidebar'], true);
-  assert.equal(env.localStorageData['fast-show-sidebar'], '1');
+  methods.forEach((m) => {
+    assert.strictEqual(typeof storageService[m], 'function', `Method ${m} should be a function`);
+  });
+
+  // Verify key constants
+  assert.strictEqual(storageService.WIDGET_ORDER_KEY, 'widgetOrder');
+  assert.strictEqual(storageService.FAST_WIDGET_ORDER_KEY, 'fast-widget-order');
+  assert.strictEqual(storageService.APP_SHOW_SIDEBAR_KEY, 'appShowSidebar');
+  assert.strictEqual(storageService.FAST_SHOW_SIDEBAR_KEY, 'fast-show-sidebar');
+  assert.strictEqual(storageService.APP_TIME_FORMAT_KEY, 'appTimeFormatPreference');
+  assert.strictEqual(storageService.FAST_TIME_FORMAT_KEY, 'fast-time-format');
+  assert.strictEqual(storageService.FAST_WEATHER_V2_KEY, 'fast-weather-v2');
+  assert.strictEqual(storageService.FAST_QUOTE_V2_KEY, 'fast-quote-v2');
+  assert.strictEqual(storageService.FAST_NEWS_V2_KEY, 'fast-news-v2');
+  assert.strictEqual(storageService.TODO_ITEMS_KEY, 'todoItems');
 });
 
-test('widget-visibility: setWidgetOrderPreference persists via HomebaseStorage and syncs fast-widget-order mirror', () => {
-  const env = createWidgetTestEnvironment();
-  vm.runInContext(widgetVisibilityScriptCode, env.context);
+test('widget-storage: getWidgetOrder and setWidgetOrder roundtrip with fast mirror and normalization', async () => {
+  const { storageService, storageData, localStorageData } = createWidgetStorageTestEnvironment();
 
-  const customOrder = ['todo', 'quote', 'weather', 'news'];
-  env.sandbox.setWidgetOrderPreference(customOrder);
+  // Default order when empty
+  const defaultOrder = await storageService.getWidgetOrder();
+  assert.deepStrictEqual([...defaultOrder], ['weather', 'quote', 'todo', 'news']);
 
-  assert.deepStrictEqual([...env.storageData['widgetOrder']], customOrder);
-  assert.equal(env.localStorageData['fast-widget-order'], JSON.stringify(customOrder));
+  // Set reordered widgets
+  const newOrder = ['todo', 'news', 'weather'];
+  const saved = await storageService.setWidgetOrder(newOrder);
+
+  // Normalization should append missing 'quote'
+  assert.deepStrictEqual([...saved], ['todo', 'news', 'weather', 'quote']);
+  assert.deepStrictEqual([...storageData.widgetOrder], ['todo', 'news', 'weather', 'quote']);
+
+  // Fast mirror written
+  assert.strictEqual(localStorageData['fast-widget-order'], JSON.stringify(['todo', 'news', 'weather', 'quote']));
+
+  // Reader retrieves normalized order
+  const readBack = await storageService.getWidgetOrder();
+  assert.deepStrictEqual([...readBack], ['todo', 'news', 'weather', 'quote']);
 });
 
-test('widget-visibility: fallback to browser.storage.local when HomebaseStorage is absent', () => {
-  const env = createWidgetTestEnvironment({ withHomebaseStorage: false });
-  vm.runInContext(widgetVisibilityScriptCode, env.context);
+test('widget-storage: getSidebarVisibility and setSidebarVisibility roundtrip with fast mirror', async () => {
+  const { storageService, storageData, localStorageData } = createWidgetStorageTestEnvironment();
 
-  env.sandbox.applySidebarVisibility(false);
-  assert.equal(env.storageData['appShowSidebar'], false);
-  assert.equal(env.localStorageData['fast-show-sidebar'], '0');
+  // Default is true
+  const initial = await storageService.getSidebarVisibility();
+  assert.strictEqual(initial, true);
 
-  const customOrder = ['news', 'todo', 'quote', 'weather'];
-  env.sandbox.setWidgetOrderPreference(customOrder);
-  assert.deepStrictEqual([...env.storageData['widgetOrder']], customOrder);
+  // Set false
+  await storageService.setSidebarVisibility(false);
+  assert.strictEqual(storageData.appShowSidebar, false);
+  assert.strictEqual(localStorageData['fast-show-sidebar'], '0');
+
+  const afterHidden = await storageService.getSidebarVisibility();
+  assert.strictEqual(afterHidden, false);
+
+  // Set true
+  await storageService.setSidebarVisibility(true);
+  assert.strictEqual(storageData.appShowSidebar, true);
+  assert.strictEqual(localStorageData['fast-show-sidebar'], '1');
 });
 
-test('time: setTimeFormatPreference persists via HomebaseStorage and syncs fast-time-format mirror', () => {
-  const env = createWidgetTestEnvironment();
-  vm.runInContext(timeScriptCode, env.context);
+test('widget-storage: getTimeFormat and setTimeFormat roundtrip with fast mirror', async () => {
+  const { storageService, storageData, localStorageData } = createWidgetStorageTestEnvironment();
 
-  env.sandbox.setTimeFormatPreference('24-hour');
-  assert.equal(env.storageData['appTimeFormatPreference'], '24-hour');
-  assert.equal(env.localStorageData['fast-time-format'], '24-hour');
+  // Default is '12-hour'
+  const initial = await storageService.getTimeFormat();
+  assert.strictEqual(initial, '12-hour');
 
-  env.sandbox.setTimeFormatPreference('12-hour');
-  assert.equal(env.storageData['appTimeFormatPreference'], '12-hour');
-  assert.equal(env.localStorageData['fast-time-format'], '12-hour');
+  // Change to 24-hour
+  await storageService.setTimeFormat('24-hour');
+  assert.strictEqual(storageData.appTimeFormatPreference, '24-hour');
+  assert.strictEqual(localStorageData['fast-time-format'], '24-hour');
+
+  const updated = await storageService.getTimeFormat();
+  assert.strictEqual(updated, '24-hour');
+
+  // Invalid format sanitizes to 12-hour
+  await storageService.setTimeFormat('invalid');
+  assert.strictEqual(storageData.appTimeFormatPreference, '12-hour');
+  assert.strictEqual(localStorageData['fast-time-format'], '12-hour');
 });
 
-test('time: fallback to browser.storage.local when HomebaseStorage is absent', () => {
-  const env = createWidgetTestEnvironment({ withHomebaseStorage: false });
-  vm.runInContext(timeScriptCode, env.context);
+test('widget-storage: getWeatherCache and setWeatherCache write batch and sync both fast mirrors', async () => {
+  const { storageService, storageData, localStorageData } = createWidgetStorageTestEnvironment();
 
-  env.sandbox.setTimeFormatPreference('24-hour');
-  assert.equal(env.storageData['appTimeFormatPreference'], '24-hour');
-  assert.equal(env.localStorageData['fast-time-format'], '24-hour');
+  const mockWeather = {
+    data: { current: { temp: 22 } },
+    cityName: 'Tokyo',
+    units: 'c',
+    fetchedAt: 1700000000000,
+    temp: '22°',
+    desc: 'Clear',
+    icon: '☀️'
+  };
+
+  await storageService.setWeatherCache(mockWeather);
+
+  // Check primary storage batch
+  assert.deepStrictEqual(storageData.cachedWeatherData, { current: { temp: 22 } });
+  assert.strictEqual(storageData.cachedCityName, 'Tokyo');
+  assert.strictEqual(storageData.cachedUnits, 'c');
+  assert.strictEqual(storageData.weatherFetchedAt, 1700000000000);
+
+  // Check both fast-weather-v2 and legacy fast-weather mirrors
+  assert.ok(localStorageData['fast-weather-v2']);
+  assert.ok(localStorageData['fast-weather']);
+
+  const v2 = JSON.parse(localStorageData['fast-weather-v2']);
+  assert.strictEqual(v2.cityName, 'Tokyo');
+  assert.strictEqual(v2.units, 'c');
+
+  const legacy = JSON.parse(localStorageData['fast-weather']);
+  assert.strictEqual(legacy.city, 'Tokyo');
+  assert.strictEqual(legacy.temp, '22°');
+
+  // Read back
+  const readBack = await storageService.getWeatherCache();
+  assert.deepStrictEqual(readBack.data, { current: { temp: 22 } });
+  assert.strictEqual(readBack.cityName, 'Tokyo');
+  assert.strictEqual(readBack.units, 'c');
 });
 
-test('todo: persistTodoState writes batch via HomebaseStorage.setMany', async () => {
-  const env = createWidgetTestEnvironment();
-  vm.runInContext(todoScriptCode, env.context);
+test('widget-storage: getQuoteCache and setQuoteCache roundtrip with fast-quote-v2 and fast-quote-state', async () => {
+  const { storageService, storageData, localStorageData } = createWidgetStorageTestEnvironment();
 
-  env.sandbox.setTodoPreference(true);
-  assert.equal(env.storageData['appShowTodo'], true);
-  assert.equal(env.localStorageData['fast-show-todo'], '1');
+  const quotePayload = {
+    index: 5,
+    tags: ['inspirational', 'coding'],
+    frequency: 'daily',
+    current: { id: 'q1', text: 'Hello World', author: 'Dev' },
+    next: { id: 'q2', text: 'Next Quote', author: 'Author' },
+    config: { customQuotesEnabled: true }
+  };
 
-  env.sandbox.setTodoPreference(false);
-  assert.equal(env.storageData['appShowTodo'], false);
-  assert.equal(env.localStorageData['fast-show-todo'], '0');
+  await storageService.setQuoteCache(quotePayload);
 
-  // Verify addTodoFromInput triggers persistTodoState -> HomebaseStorage.setMany
-  const input = env.elementsById.get('todo-input');
-  input.value = 'Test task';
-  env.sandbox.addTodoFromInput();
-  assert.equal(env.storageData['todoItems'].length, 1);
-  assert.equal(env.storageData['todoItems'][0].text, 'Test task');
+  // Storage data updated
+  assert.strictEqual(storageData.quoteLocalIndexV1, 5);
+  assert.deepStrictEqual(storageData.quoteTags, ['inspirational', 'coding']);
+  assert.strictEqual(storageData.quoteFrequency, 'daily');
 
-  // Verify loadTodoState reads via HomebaseStorage.getMany
-  await env.sandbox.loadTodoState();
-  assert.equal(env.storageData['todoItems'].length, 1);
+  // Both fast mirrors written
+  assert.ok(localStorageData['fast-quote-v2']);
+  assert.ok(localStorageData['fast-quote-state']);
+
+  const parsedMirror = JSON.parse(localStorageData['fast-quote-v2']);
+  assert.strictEqual(parsedMirror.current.text, 'Hello World');
+
+  // Read back
+  const read = await storageService.getQuoteCache();
+  assert.strictEqual(read.index, 5);
+  assert.deepStrictEqual(read.tags, ['inspirational', 'coding']);
+  assert.strictEqual(read.frequency, 'daily');
+  assert.strictEqual(read.current.text, 'Hello World');
 });
 
-test('todo: fallback to browser.storage.local when HomebaseStorage is absent', async () => {
-  const env = createWidgetTestEnvironment({ withHomebaseStorage: false });
-  vm.runInContext(todoScriptCode, env.context);
+test('widget-storage: getNewsCache and setNewsCache roundtrip with fast-news-v2 and fast-news', async () => {
+  const { storageService, storageData, localStorageData } = createWidgetStorageTestEnvironment();
 
-  env.sandbox.setTodoPreference(true);
-  assert.equal(env.storageData['appShowTodo'], true);
+  const newsPayload = {
+    source: 'bbc',
+    items: [
+      { title: 'Headline One', link: 'https://news.local/1' },
+      { title: 'Headline Two', link: 'https://news.local/2' }
+    ],
+    fetchedAt: 1700000500000
+  };
 
-  const input = env.elementsById.get('todo-input');
-  input.value = 'Fallback task';
-  env.sandbox.addTodoFromInput();
-  assert.equal(env.storageData['todoItems'].length, 1);
-  assert.equal(env.storageData['todoItems'][0].text, 'Fallback task');
+  await storageService.setNewsCache(newsPayload);
 
-  await env.sandbox.loadTodoState();
-  assert.equal(env.storageData['todoItems'].length, 1);
+  assert.strictEqual(storageData.appNewsSource, 'bbc');
+  assert.ok(localStorageData['fast-news-v2']);
+  assert.ok(localStorageData['fast-news']);
+
+  const read = await storageService.getNewsCache();
+  assert.strictEqual(read.source, 'bbc');
+  assert.strictEqual(read.items.length, 2);
+  assert.strictEqual(read.items[0].title, 'Headline One');
 });
 
-test('quote: ensureQuoteIndexBuilt and setQuotePreference persist via HomebaseStorage', async () => {
-  const env = createWidgetTestEnvironment();
-  vm.runInContext(quoteScriptCode, env.context);
+test('widget-storage: getTodoState and setTodoState roundtrip with fast-todo mirror', async () => {
+  const { storageService, storageData, localStorageData } = createWidgetStorageTestEnvironment();
 
-  env.sandbox.setQuotePreference(true);
-  assert.equal(env.storageData['appShowQuote'], true);
-  assert.equal(env.localStorageData['fast-show-quote'], '1');
+  const todoPayload = {
+    items: [
+      { id: '1', text: 'Buy groceries', completed: false },
+      { id: '2', text: 'Walk dog', completed: true }
+    ],
+    hideDone: true
+  };
 
-  env.sandbox.setQuotePreference(false);
-  assert.equal(env.storageData['appShowQuote'], false);
-  assert.equal(env.localStorageData['fast-show-quote'], '0');
+  await storageService.setTodoState(todoPayload);
+
+  assert.strictEqual(storageData.todoHideDone, true);
+  assert.strictEqual(storageData.todoItems.length, 2);
+  assert.ok(localStorageData['fast-todo']);
+
+  const parsedMirror = JSON.parse(localStorageData['fast-todo']);
+  assert.strictEqual(parsedMirror.hideDone, true);
+  assert.strictEqual(parsedMirror.count, 2);
+
+  const read = await storageService.getTodoState();
+  assert.strictEqual(read.hideDone, true);
+  assert.strictEqual(read.items.length, 2);
+  assert.strictEqual(read.items[0].text, 'Buy groceries');
 });
 
-test('quote: fallback to browser.storage.local when HomebaseStorage is absent', () => {
-  const env = createWidgetTestEnvironment({ withHomebaseStorage: false });
-  vm.runInContext(quoteScriptCode, env.context);
+test('widget-storage: falls back cleanly to browser.storage.local when HomebaseStorage is absent', async () => {
+  const { storageService, browserStorageData, localStorageData } = createWidgetStorageTestEnvironment({
+    withHomebaseStorage: false
+  });
 
-  env.sandbox.setQuotePreference(true);
-  assert.equal(env.storageData['appShowQuote'], true);
-  assert.equal(env.localStorageData['fast-show-quote'], '1');
+  // Test setWidgetOrder
+  await storageService.setWidgetOrder(['news', 'weather', 'quote', 'todo']);
+  assert.deepStrictEqual([...browserStorageData.widgetOrder], ['news', 'weather', 'quote', 'todo']);
+  assert.ok(localStorageData['fast-widget-order']);
 
-  env.sandbox.setQuotePreference(false);
-  assert.equal(env.storageData['appShowQuote'], false);
-  assert.equal(env.localStorageData['fast-show-quote'], '0');
+  // Test setSidebarVisibility
+  await storageService.setSidebarVisibility(false);
+  assert.strictEqual(browserStorageData.appShowSidebar, false);
+
+  // Test setTimeFormat
+  await storageService.setTimeFormat('24-hour');
+  assert.strictEqual(browserStorageData.appTimeFormatPreference, '24-hour');
+
+  // Test read back from browser.storage.local
+  const order = await storageService.getWidgetOrder();
+  assert.deepStrictEqual([...order], ['news', 'weather', 'quote', 'todo']);
 });
 
-test('news: setNewsPreference persists via HomebaseStorage and syncs fast-show-news mirror', () => {
-  const env = createWidgetTestEnvironment();
-  vm.runInContext(newsScriptCode, env.context);
+test('widget-storage: handles storage failures and malformed fast mirrors gracefully without throwing', async () => {
+  const { storageService } = createWidgetStorageTestEnvironment({
+    failStorage: true,
+    initialLocalStorage: {
+      'fast-widget-order': 'MALFORMED_JSON_STRING',
+      'fast-show-sidebar': 'invalid-bool',
+      'fast-weather-v2': 'NOT_A_JSON'
+    }
+  });
 
-  env.sandbox.setNewsPreference(true);
-  assert.equal(env.storageData['appShowNews'], true);
-  assert.equal(env.localStorageData['fast-show-news'], '1');
+  // None of these should throw
+  let order;
+  await assert.doesNotReject(async () => {
+    order = await storageService.getWidgetOrder();
+  });
+  assert.deepStrictEqual([...order], ['weather', 'quote', 'todo', 'news']);
 
-  env.sandbox.setNewsPreference(false);
-  assert.equal(env.storageData['appShowNews'], false);
-  assert.equal(env.localStorageData['fast-show-news'], '0');
-});
+  let visibility;
+  await assert.doesNotReject(async () => {
+    visibility = await storageService.getSidebarVisibility();
+  });
+  assert.strictEqual(visibility, true);
 
-test('news: fallback to browser.storage.local when HomebaseStorage is absent', () => {
-  const env = createWidgetTestEnvironment({ withHomebaseStorage: false });
-  vm.runInContext(newsScriptCode, env.context);
+  let weather;
+  await assert.doesNotReject(async () => {
+    weather = await storageService.getWeatherCache();
+  });
+  assert.strictEqual(weather.data, null);
 
-  env.sandbox.setNewsPreference(false);
-  assert.equal(env.storageData['appShowNews'], false);
-  assert.equal(env.localStorageData['fast-show-news'], '0');
-});
-
-test('weather: setWeatherPreference and cache operations persist via HomebaseStorage', async () => {
-  const env = createWidgetTestEnvironment();
-  vm.runInContext(weatherScriptCode, env.context);
-
-  env.sandbox.setWeatherPreference(true);
-  assert.equal(env.storageData['appShowWeather'], true);
-  assert.equal(env.localStorageData['fast-show-weather'], '1');
-
-  env.sandbox.setWeatherPreference(false);
-  assert.equal(env.storageData['appShowWeather'], false);
-  assert.equal(env.localStorageData['fast-show-weather'], '0');
-
-  // Verify weatherStorageSet and weatherStorageGet
-  await env.sandbox.weatherStorageSet({ weatherCustomLocation: 'London, UK' });
-  assert.equal(env.storageData['weatherCustomLocation'], 'London, UK');
-
-  const retrieved = await env.sandbox.weatherStorageGet(['weatherCustomLocation']);
-  assert.equal(retrieved.weatherCustomLocation, 'London, UK');
-
-  // Verify weatherStorageRemove
-  await env.sandbox.weatherStorageRemove(['weatherCustomLocation']);
-  assert.equal(env.storageData['weatherCustomLocation'], undefined);
-});
-
-test('weather: fallback to browser.storage.local when HomebaseStorage is absent', async () => {
-  const env = createWidgetTestEnvironment({ withHomebaseStorage: false });
-  vm.runInContext(weatherScriptCode, env.context);
-
-  env.sandbox.setWeatherPreference(true);
-  assert.equal(env.storageData['appShowWeather'], true);
-
-  await env.sandbox.weatherStorageSet({ weatherUnit: 'F' });
-  assert.equal(env.storageData['weatherUnit'], 'F');
-
-  const retrieved = await env.sandbox.weatherStorageGet(['weatherUnit']);
-  assert.equal(retrieved.weatherUnit, 'F');
-
-  await env.sandbox.weatherStorageRemove(['weatherUnit']);
-  assert.equal(env.storageData['weatherUnit'], undefined);
+  await assert.doesNotReject(async () => {
+    await storageService.setWidgetOrder(['weather']);
+  });
 });

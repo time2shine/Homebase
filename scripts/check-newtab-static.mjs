@@ -11,6 +11,7 @@ const newtabModulesDir = path.join(srcDir, "newtab");
 const keyExtractedModulePaths = [
   "newtab/core/perf-report.js",
   "newtab/core/startup-perf-runtime.js",
+  "newtab/core/runtime-guard.js",
   "newtab/core/idle-scheduler.js",
   "newtab/core/dialogs.js",
   "newtab/core/utils.js",
@@ -108,6 +109,7 @@ async function runChecks() {
   await verifyMovedPathReferences();
   await verifyCrossScriptDeclarationCollisions(deferredLocalScripts);
   await verifyCanonicalWidgetControllers();
+  await verifyRuntimeGuard();
 }
 
 async function verifyDeferredScriptsExist(deferredLocalScripts) {
@@ -310,6 +312,28 @@ async function verifyCanonicalWidgetControllers() {
     issues.length === 0
       ? `5 canonical widget controllers verified (Time, Todo, Quote, News, Weather)`
       : issues.join("; ")
+  );
+}
+
+async function verifyRuntimeGuard() {
+  const filePath = path.join(srcDir, "newtab/core/runtime-guard.js");
+  const exists = await fileExists(filePath);
+  if (!exists) {
+    record(false, "runtime-guard.js exists and exports HomebaseRuntimeGuard", "missing file");
+    return;
+  }
+  const text = await fs.readFile(filePath, "utf8");
+  const trimmed = text.trim();
+  const hasIife = (trimmed.includes("(function () {") || trimmed.includes("(function() {")) && trimmed.endsWith("})();");
+  const hasStrict = trimmed.includes("'use strict';") || trimmed.includes('"use strict";');
+  const hasExport = text.includes("HomebaseRuntimeGuard = HomebaseRuntimeGuard");
+  const decls = parseTopLevelDeclarations(text, "newtab/core/runtime-guard.js");
+  const ok = hasIife && hasStrict && hasExport && decls.length === 0;
+
+  record(
+    ok,
+    "HomebaseRuntimeGuard error boundary verified",
+    ok ? "IIFE encapsulated, zero leaked declarations, exported on window" : "verification failed"
   );
 }
 

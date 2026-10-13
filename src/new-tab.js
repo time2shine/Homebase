@@ -99,61 +99,86 @@ function logInitSettled(name, result) {
       DEBUG_STARTUP_PERF && typeof performance !== 'undefined' && typeof performance.now === 'function'
         ? performance.now()
         : 0;
+    const runGuard = (fn, label) => {
+      if (typeof HomebaseRuntimeGuard !== 'undefined' && typeof HomebaseRuntimeGuard.run === 'function') {
+        return HomebaseRuntimeGuard.run(fn, label);
+      }
+      try {
+        return fn();
+      } catch (err) {
+        console.warn(`[startup] Error in ${label}:`, err);
+      }
+    };
+    const runGuardAsync = async (fn, label) => {
+      if (typeof HomebaseRuntimeGuard !== 'undefined' && typeof HomebaseRuntimeGuard.runAsync === 'function') {
+        return HomebaseRuntimeGuard.runAsync(fn, label);
+      }
+      try {
+        return await fn();
+      } catch (err) {
+        console.warn(`[startup] Error in ${label}:`, err);
+      }
+    };
+
     if (window.HomebaseBookmarkLoader && typeof window.HomebaseBookmarkLoader.loadFolderMetadata === 'function') {
-      await window.HomebaseBookmarkLoader.loadFolderMetadata();
+      await runGuardAsync(() => window.HomebaseBookmarkLoader.loadFolderMetadata(), 'startup:loadFolderMetadata');
     }
     hbPerfTime('loadFolderMetadata', folderMetaStart);
 
-    document.querySelectorAll('.sub-settings-container').forEach((container) => {
-      ensureSubSettingsInner(container);
-    });
+    runGuard(() => {
+      document.querySelectorAll('.sub-settings-container').forEach((container) => {
+        ensureSubSettingsInner(container);
+      });
+    }, 'startup:ensureSubSettingsInner');
 
-    if (window.HomebaseSettingsPreferences && typeof window.HomebaseSettingsPreferences.sync === 'function') {
-      window.HomebaseSettingsPreferences.sync();
-    } else if (typeof syncAppSettingsForm === 'function') {
-      syncAppSettingsForm();
+    runGuard(() => {
+      if (window.HomebaseSettingsPreferences && typeof window.HomebaseSettingsPreferences.sync === 'function') {
+        window.HomebaseSettingsPreferences.sync();
+      } else if (typeof syncAppSettingsForm === 'function') {
+        syncAppSettingsForm();
+      }
+    }, 'startup:syncAppSettingsForm');
+
+    runGuard(() => setupCinemaModeListeners(), 'startup:setupCinemaModeListeners');
+
+    runGuard(() => setupContainerMode(), 'startup:setupContainerMode');
+
+    runGuard(() => {
+      if (window.HomebaseWidgetTime && typeof window.HomebaseWidgetTime.initialize === 'function') {
+        window.HomebaseWidgetTime.initialize();
+      } else if (window.HomebaseTimeWidgetController && typeof window.HomebaseTimeWidgetController.initialize === 'function') {
+        window.HomebaseTimeWidgetController.initialize();
+      } else if (typeof updateTime === 'function') {
+        updateTime();
+      }
+    }, 'startup:initializeTime');
+
+    runGuard(() => setupDockNavigation(), 'startup:setupDockNavigation');
+    runGuard(() => setupLazySettingsButton(), 'startup:setupLazySettingsButton');
+
+    runGuard(() => setupAnimationSettings(), 'startup:setupAnimationSettings');
+    runGuard(() => setupGlassSettings(), 'startup:setupGlassSettings');
+
+    runGuard(() => setupMaterialColorPicker(), 'startup:setupMaterialColorPicker');
+
+    runGuard(() => setupSearchEnginesModal(), 'startup:setupSearchEnginesModal');
+
+    if (!isPerformanceModeEnabled()) {
+      scheduleIdleTask(() => warmGalleryPosterHydration(), 'warmGalleryPosterHydration');
+    } else {
+      recordStartupPerfEventOnce('newtab:gallery-warmup-skipped-performance-mode');
     }
 
-    setupCinemaModeListeners();
+    runGuard(() => setupQuickActions(), 'startup:setupQuickActions');
 
-    setupContainerMode();
+    runGuard(() => setupFolderPickerModal(), 'startup:setupFolderPickerModal');
 
-    if (window.HomebaseWidgetTime && typeof window.HomebaseWidgetTime.initialize === 'function') {
-      window.HomebaseWidgetTime.initialize();
-    } else if (window.HomebaseTimeWidgetController && typeof window.HomebaseTimeWidgetController.initialize === 'function') {
-      window.HomebaseTimeWidgetController.initialize();
-    } else if (typeof updateTime === 'function') {
-      updateTime();
-    }
+    runGuard(() => setupHomebaseRootControls(), 'startup:setupHomebaseRootControls');
 
-  setupDockNavigation();
-  setupLazySettingsButton();
+    runGuard(() => setupHomebaseRootListeners(), 'startup:setupHomebaseRootListeners');
 
-  setupAnimationSettings();
-  setupGlassSettings();
-
-  setupMaterialColorPicker();
-
-  setupSearchEnginesModal();
-
-  if (!isPerformanceModeEnabled()) {
-    scheduleIdleTask(() => warmGalleryPosterHydration(), 'warmGalleryPosterHydration');
-  } else {
-    recordStartupPerfEventOnce('newtab:gallery-warmup-skipped-performance-mode');
-  }
-
-  
-
-  setupQuickActions();
-
-  setupFolderPickerModal();
-
-  setupHomebaseRootControls();
-
-  setupHomebaseRootListeners();
-
-  ensureFaviconObserver();
-  scheduleIdleTask(() => pruneFaviconMetaIfNeeded(), 'startup:pruneFaviconMeta');
+    runGuard(() => ensureFaviconObserver(), 'startup:ensureFaviconObserver');
+    scheduleIdleTask(() => pruneFaviconMetaIfNeeded(), 'startup:pruneFaviconMeta');
 
 
 
@@ -231,45 +256,52 @@ function logInitSettled(name, result) {
 
   // --- Context Menu Management ---
 
-  if (typeof window !== 'undefined' && window.HomebaseDialogController && typeof window.HomebaseDialogController.initialize === 'function') {
-    window.HomebaseDialogController.initialize();
-  }
-  if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.initialize === 'function') {
-    window.HomebaseContextMenuController.initialize({
-      getBookmarkTree: () => (window.HomebaseBookmarkTreeService && typeof window.HomebaseBookmarkTreeService.getBookmarkTree === 'function'
-        ? window.HomebaseBookmarkTreeService.getBookmarkTree()
-        : (typeof window !== 'undefined' ? window.bookmarkTree : null)),
-      findBookmarkNodeById: (root, id) => findBookmarkNodeById(root, id),
-      openFolderFromContext: (folderId) => openFolderFromContext(folderId),
-      openFolderAll: (folderId) => (window.openFolderAll ? window.openFolderAll(folderId) : undefined),
-      showGridItemRenameInput: (item, node) => showGridItemRenameInput(item, node),
-      showEditFolderModal: (folderNode) => showEditFolderModal(folderNode),
-      showEditBookmarkModal: (bookmarkId) => showEditBookmarkModal(bookmarkId),
-      deleteBookmarkOrFolder: (id, isFolder, sourceTile) => deleteBookmarkOrFolder(id, isFolder, sourceTile),
-      openMoveBookmarkModal: (id, isFolder) => openMoveBookmarkModal(id, isFolder),
-      openBookmarkInNewTab: (bookmarkId) => openBookmarkInNewTab(bookmarkId),
-      showAddBookmarkModal: () => showAddBookmarkModal(),
-      showAddFolderModal: () => showAddFolderModal(),
-      handlePasteBookmark: () => handlePasteBookmark(),
-      sortCurrentFolderByName: () => sortCurrentFolderByName(),
-      populateContainerMenu: (id, isFolder) => typeof populateContainerMenu === 'function' && populateContainerMenu(id, isFolder),
-      isContainerModeEnabled: () => Boolean(appContainerModePreference)
-    });
-  }
+  runGuard(() => {
+    if (typeof window !== 'undefined' && window.HomebaseDialogController && typeof window.HomebaseDialogController.initialize === 'function') {
+      window.HomebaseDialogController.initialize();
+    }
+  }, 'startup:setupDialogController');
 
+  runGuard(() => {
+    if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.initialize === 'function') {
+      window.HomebaseContextMenuController.initialize({
+        getBookmarkTree: () => (window.HomebaseBookmarkTreeService && typeof window.HomebaseBookmarkTreeService.getBookmarkTree === 'function'
+          ? window.HomebaseBookmarkTreeService.getBookmarkTree()
+          : (typeof window !== 'undefined' ? window.bookmarkTree : null)),
+        findBookmarkNodeById: (root, id) => findBookmarkNodeById(root, id),
+        openFolderFromContext: (folderId) => openFolderFromContext(folderId),
+        openFolderAll: (folderId) => (window.openFolderAll ? window.openFolderAll(folderId) : undefined),
+        showGridItemRenameInput: (item, node) => showGridItemRenameInput(item, node),
+        showEditFolderModal: (folderNode) => showEditFolderModal(folderNode),
+        showEditBookmarkModal: (bookmarkId) => showEditBookmarkModal(bookmarkId),
+        deleteBookmarkOrFolder: (id, isFolder, sourceTile) => deleteBookmarkOrFolder(id, isFolder, sourceTile),
+        openMoveBookmarkModal: (id, isFolder) => openMoveBookmarkModal(id, isFolder),
+        openBookmarkInNewTab: (bookmarkId) => openBookmarkInNewTab(bookmarkId),
+        showAddBookmarkModal: () => showAddBookmarkModal(),
+        showAddFolderModal: () => showAddFolderModal(),
+        handlePasteBookmark: () => handlePasteBookmark(),
+        sortCurrentFolderByName: () => sortCurrentFolderByName(),
+        populateContainerMenu: (id, isFolder) => typeof populateContainerMenu === 'function' && populateContainerMenu(id, isFolder),
+        isContainerModeEnabled: () => Boolean(appContainerModePreference)
+      });
+    }
+  }, 'startup:setupContextMenuController');
 
+  runGuard(() => {
+    if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.setupGridClickDelegation === 'function') {
+      window.HomebaseBookmarkGridController.setupGridClickDelegation();
+    } else if (typeof setupGridClickDelegation === 'function') {
+      setupGridClickDelegation();
+    }
+  }, 'startup:setupGridClickDelegation');
 
-  if (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.setupGridClickDelegation === 'function') {
-    window.HomebaseBookmarkGridController.setupGridClickDelegation();
-  } else if (typeof setupGridClickDelegation === 'function') {
-    setupGridClickDelegation();
-  }
+  runGuard(() => {
+    if (typeof window !== 'undefined' && window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.initialize === 'function') {
+      window.HomebaseBookmarkDragController.initialize();
+    }
+  }, 'startup:setupBookmarkDragController');
 
-  if (typeof window !== 'undefined' && window.HomebaseBookmarkDragController && typeof window.HomebaseBookmarkDragController.initialize === 'function') {
-    window.HomebaseBookmarkDragController.initialize();
-  }
-
-  setupPasteListener();
+  runGuard(() => setupPasteListener(), 'startup:setupPasteListener');
 }
 
 

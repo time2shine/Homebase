@@ -299,10 +299,14 @@
         console.warn('[startup guard] startup task label not in allowlist', label);
       }
       scheduleTask(async () => {
-        try {
-          await fn();
-        } catch (err) {
-          console.warn('Startup task failed:', label, err);
+        if (typeof HomebaseRuntimeGuard !== 'undefined' && typeof HomebaseRuntimeGuard.runAsync === 'function') {
+          await HomebaseRuntimeGuard.runAsync(fn, label);
+        } else {
+          try {
+            await fn();
+          } catch (err) {
+            console.warn('Startup task failed:', label, err);
+          }
         }
       }, label);
     };

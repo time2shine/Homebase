@@ -30,10 +30,14 @@
    */
   function safeInvoke(fn, callbackName, widgetId) {
     if (typeof fn === 'function') {
-      try {
-        fn();
-      } catch (err) {
-        console.warn(`[HomebaseWidgetLifecycle] Error in ${callbackName} on widget '${widgetId}':`, err);
+      if (typeof HomebaseRuntimeGuard !== 'undefined' && typeof HomebaseRuntimeGuard.run === 'function') {
+        HomebaseRuntimeGuard.run(fn, `widget:${widgetId}:${callbackName}`);
+      } else {
+        try {
+          fn();
+        } catch (err) {
+          console.warn(`[HomebaseWidgetLifecycle] Error in ${callbackName} on widget '${widgetId}':`, err);
+        }
       }
     }
   }
@@ -317,7 +321,7 @@
         continue;
       }
 
-      try {
+      const initTask = async () => {
         const { controller } = record;
         if (typeof controller.init === 'function') {
           await controller.init();
@@ -336,8 +340,16 @@
             safeInvoke(controller.resume, 'resume', record.id);
           }
         }
-      } catch (err) {
-        console.warn('[HomebaseWidgetLifecycle] Failed to initialize widget:', record.id, err);
+      };
+
+      if (typeof HomebaseRuntimeGuard !== 'undefined' && typeof HomebaseRuntimeGuard.runAsync === 'function') {
+        await HomebaseRuntimeGuard.runAsync(initTask, `widget:${record.id}:init`);
+      } else {
+        try {
+          await initTask();
+        } catch (err) {
+          console.warn('[HomebaseWidgetLifecycle] Failed to initialize widget:', record.id, err);
+        }
       }
     }
   }
@@ -359,10 +371,14 @@
           safeInvoke(record.controller?.onHide, 'onHide', record.id);
         }
         if (record.controller && typeof record.controller.destroy === 'function') {
-          try {
-            record.controller.destroy();
-          } catch (err) {
-            console.warn('[HomebaseWidgetLifecycle] Error destroying widget during destroyAll:', record.id, err);
+          if (typeof HomebaseRuntimeGuard !== 'undefined' && typeof HomebaseRuntimeGuard.run === 'function') {
+            HomebaseRuntimeGuard.run(() => record.controller.destroy(), `widget:${record.id}:destroy`);
+          } else {
+            try {
+              record.controller.destroy();
+            } catch (err) {
+              console.warn('[HomebaseWidgetLifecycle] Error destroying widget during destroyAll:', record.id, err);
+            }
           }
         }
       }

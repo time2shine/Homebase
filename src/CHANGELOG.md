@@ -2,6 +2,24 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v1.0.0 — 2026-10-13
+### Added
+- Production Runtime Diagnostics Dashboard (`src/newtab/core/runtime-diagnostics.js`) exposing real-time health score, widget status inspection, lifecycle monitoring, and structured telemetry export.
+- Advanced Performance Monitor (`HomebasePerformanceMonitor`) tracking high-resolution startup duration, idle hydration progress, per-widget initialization latency, render timing, and memory teardown events.
+- Centralized Runtime Error Boundary and Diagnostics Guard (`HomebaseRuntimeGuard`) providing non-critical failure isolation, structured error capture, and a 100-entry diagnostics ring buffer.
+- Canonical Widget Lifecycle Coordinator (`HomebaseWidgetLifecycle`) orchestrating registration, visibility transitions, document visibilitychange pausing, and safe teardown.
+- Centralized widget state persistence layer (`HomebaseWidgetStorage`) with synchronous fast-mirror caching for sub-50ms instant first paint.
+
+### Improved
+- Complete encapsulation of all 5 dashboard widgets (`Time`, `Todo`, `Quote`, `Weather`, `News`) into canonical controllers with idempotent lifecycle methods.
+- Reduced legacy global bridge surface across all widgets while maintaining full backward compatibility.
+- Streamlined startup orchestrator (`new-tab.js`) and hydration task registry (`startup-hydration.js`) with structured failure isolation and latency markers.
+- Expanded native automated test suite to 518 unit and integration tests with 100% pass rate.
+
+### Fixed
+- Fixed unmanaged interval leaks and ensured timer teardown on tab background and widget destruction.
+- Hardened weather and news widgets with abort controller signal cleanup preventing memory leaks and orphaned network requests.
+
 ## v0.18.0 — 2026-10-11
 ### Added
 - Dedicated cooperative Idle Task Scheduler subsystem (`src/newtab/core/idle-scheduler.js`) providing bounded 12ms slicing, unified scheduling diagnostics, and early boot registration.

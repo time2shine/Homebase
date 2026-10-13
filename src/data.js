@@ -147,48 +147,38 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '0.16.0',
-  date: '2026-10-07',
+  version: '1.0.0',
+  date: '2026-10-13',
   items: [
     {
       type: 'NEW',
-      title: 'Storage architecture & dispatcher',
-      desc: 'Modular storage facade and decoupled event dispatcher power responsive dashboard updates.'
+      title: 'Production diagnostics & health dashboard',
+      desc: 'Real-time runtime health evaluation, widget status inspection, and downloadable diagnostic telemetry.'
     },
     {
       type: 'NEW',
-      title: 'Storage diagnostics & health HUD',
-      desc: 'Interactive storage health panel in Settings with real-time integrity monitoring and diagnostic exports.'
+      title: 'Advanced performance monitoring',
+      desc: 'High-resolution startup, hydration, widget init latency, and render timing tracking.'
     },
     {
       type: 'NEW',
-      title: 'Transactional backup system',
-      desc: 'Settings import now includes atomic rollback safety, schema migrations, and custom wallpaper protection.'
+      title: 'Runtime resilience error boundaries',
+      desc: 'Isolated failure guards around non-critical widgets and startup tasks prevent dashboard crashes.'
     },
     {
       type: 'IMPROVED',
-      title: 'Bookmark subsystem modularization',
-      desc: 'Bookmark grid, root controllers, tree traversal, and folder picker operate through focused modular services.'
+      title: 'Canonical widget lifecycle architecture',
+      desc: 'Centralized widget lifecycle management with graceful background tab pausing and memory teardown.'
     },
     {
       type: 'IMPROVED',
-      title: 'Search & settings separation',
-      desc: 'Search, settings preferences, wallpaper lifecycle, and widgets separated into dedicated first-party controllers.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Startup & test infrastructure',
-      desc: 'Startup architecture streamlined and validated by an automated test suite with 367 passing tests.'
+      title: 'Sub-50ms instant first paint',
+      desc: 'Synchronous head theme preloading and cached fast-mirror state deliver instant perceived boot.'
     },
     {
       type: 'FIX',
-      title: 'Declaration safety & resilience',
-      desc: 'Static invariant checks prevent duplicate global declarations, and weather widget network handling is hardened.'
-    },
-    {
-      type: 'FIX',
-      title: 'Bookmark synchronization & UI',
-      desc: 'Resolved bookmark rename desynchronization between grid items and edit dialog state.'
+      title: 'Memory leak & timer safety',
+      desc: 'Unmanaged intervals eliminated and abort controllers cancel in-flight network requests on tab hide.'
     }
   ]
 };

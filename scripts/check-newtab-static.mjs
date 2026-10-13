@@ -12,6 +12,7 @@ const keyExtractedModulePaths = [
   "newtab/core/perf-report.js",
   "newtab/core/startup-perf-runtime.js",
   "newtab/core/runtime-guard.js",
+  "newtab/core/runtime-diagnostics.js",
   "newtab/core/idle-scheduler.js",
   "newtab/core/dialogs.js",
   "newtab/core/utils.js",
@@ -110,6 +111,7 @@ async function runChecks() {
   await verifyCrossScriptDeclarationCollisions(deferredLocalScripts);
   await verifyCanonicalWidgetControllers();
   await verifyRuntimeGuard();
+  await verifyRuntimeDiagnostics();
 }
 
 async function verifyDeferredScriptsExist(deferredLocalScripts) {
@@ -333,6 +335,29 @@ async function verifyRuntimeGuard() {
   record(
     ok,
     "HomebaseRuntimeGuard error boundary verified",
+    ok ? "IIFE encapsulated, zero leaked declarations, exported on window" : "verification failed"
+  );
+}
+
+async function verifyRuntimeDiagnostics() {
+  const filePath = path.join(srcDir, "newtab/core/runtime-diagnostics.js");
+  const exists = await fileExists(filePath);
+  if (!exists) {
+    record(false, "runtime-diagnostics.js exists and exports HomebaseRuntimeDiagnostics", "missing file");
+    return;
+  }
+  const text = await fs.readFile(filePath, "utf8");
+  const trimmed = text.trim();
+  const hasIife = (trimmed.includes("(function () {") || trimmed.includes("(function() {")) && trimmed.endsWith("})();");
+  const hasStrict = trimmed.includes("'use strict';") || trimmed.includes('"use strict";');
+  const hasDiagnosticsExport = text.includes("HomebaseRuntimeDiagnostics = HomebaseRuntimeDiagnostics");
+  const hasPerfMonitorExport = text.includes("HomebasePerformanceMonitor = HomebasePerformanceMonitor");
+  const decls = parseTopLevelDeclarations(text, "newtab/core/runtime-diagnostics.js");
+  const ok = hasIife && hasStrict && hasDiagnosticsExport && hasPerfMonitorExport && decls.length === 0;
+
+  record(
+    ok,
+    "HomebaseRuntimeDiagnostics and HomebasePerformanceMonitor verified",
     ok ? "IIFE encapsulated, zero leaked declarations, exported on window" : "verification failed"
   );
 }

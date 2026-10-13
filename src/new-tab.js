@@ -52,6 +52,9 @@ function logInitSettled(name, result) {
 // - ready flip must not wait for hydration
 // ===============================================
   async function initializePage() {
+    if (typeof HomebasePerformanceMonitor !== 'undefined' && typeof HomebasePerformanceMonitor.markStartupStart === 'function') {
+      HomebasePerformanceMonitor.markStartupStart();
+    }
     hbPerfMark('newtab:init-start');
     hbPerfMark('init-start');
     let STARTUP_PHASE = 'critical';
@@ -219,6 +222,9 @@ function logInitSettled(name, result) {
     }
     STARTUP_PHASE = 'ready';
     recordStartupPerfEvent('newtab:init-ready');
+    if (typeof HomebasePerformanceMonitor !== 'undefined' && typeof HomebasePerformanceMonitor.markStartupReady === 'function') {
+      HomebasePerformanceMonitor.markStartupReady();
+    }
     if (DEBUG_STARTUP_PERF && b.classList.contains('ready')) {
       hbPerfMark('ready-class');
       hbPerfMeasure('script-to-ready-class', 'script-start', 'ready-class');

@@ -132,6 +132,7 @@
       },
 
       removeAll() {
+        const count = listeners.length;
         listeners.forEach(({ target, eventType, handler, options }) => {
           try {
             target.removeEventListener(eventType, handler, options);
@@ -140,6 +141,9 @@
           }
         });
         listeners = [];
+        if (typeof HomebasePerformanceMonitor !== 'undefined' && typeof HomebasePerformanceMonitor.recordCleanup === 'function') {
+          HomebasePerformanceMonitor.recordCleanup('listener-registry', { action: 'removeAll', count });
+        }
       },
 
       get count() {
@@ -212,6 +216,9 @@
         } catch (err) {
           console.warn('[HomebaseWidgetLifecycle] Error destroying unregistered widget', widgetId, err);
         }
+      }
+      if (typeof HomebasePerformanceMonitor !== 'undefined' && typeof HomebasePerformanceMonitor.recordCleanup === 'function') {
+        HomebasePerformanceMonitor.recordCleanup(widgetId, { action: 'unregister' });
       }
     }
 
@@ -322,6 +329,10 @@
       }
 
       const initTask = async () => {
+        const perfMon = (typeof HomebasePerformanceMonitor !== 'undefined' && typeof HomebasePerformanceMonitor.now === 'function')
+          ? HomebasePerformanceMonitor
+          : null;
+        const start = perfMon ? perfMon.now() : (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
         const { controller } = record;
         if (typeof controller.init === 'function') {
           await controller.init();
@@ -329,6 +340,10 @@
           await controller.initialize();
         } else if (typeof controller === 'function') {
           await controller();
+        }
+        const elapsed = (perfMon ? perfMon.now() : (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now())) - start;
+        if (perfMon && typeof perfMon.recordWidgetInit === 'function') {
+          perfMon.recordWidgetInit(record.id, elapsed);
         }
         record.isInitialized = true;
         record.isDestroyed = false;
@@ -380,6 +395,9 @@
               console.warn('[HomebaseWidgetLifecycle] Error destroying widget during destroyAll:', record.id, err);
             }
           }
+        }
+        if (typeof HomebasePerformanceMonitor !== 'undefined' && typeof HomebasePerformanceMonitor.recordCleanup === 'function') {
+          HomebasePerformanceMonitor.recordCleanup(record.id, { action: 'destroy' });
         }
       }
       record.isDestroyed = true;

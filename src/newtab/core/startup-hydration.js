@@ -311,6 +311,10 @@
       }, label);
     };
 
+    if (typeof HomebasePerformanceMonitor !== 'undefined' && typeof HomebasePerformanceMonitor.markHydrationStart === 'function') {
+      HomebasePerformanceMonitor.markHydrationStart();
+    }
+
     scheduleLabeled(() => loadCachedWeatherSafe(), 'startup:loadCachedWeather');
     scheduleLabeled(() => buildQuoteIndexSafe(), 'startup:quoteIndex');
     scheduleLabeled(() => setupQuoteWidgetSafe(), 'startup:setupQuoteWidget');
@@ -319,7 +323,12 @@
     scheduleLabeled(() => setupSearchSafe(options), 'startup:setupSearch');
     scheduleLabeled(() => setupWeatherSafe(options), 'startup:setupWeather');
     scheduleLabeled(() => setupAppLauncherSafe(), 'startup:setupAppLauncher');
-    scheduleLabeled(() => fetchQuoteSafe(options), 'startup:fetchQuote');
+    scheduleLabeled(async () => {
+      await fetchQuoteSafe(options);
+      if (typeof HomebasePerformanceMonitor !== 'undefined' && typeof HomebasePerformanceMonitor.markHydrationComplete === 'function') {
+        HomebasePerformanceMonitor.markHydrationComplete();
+      }
+    }, 'startup:fetchQuote');
   };
 
   window.HomebaseStartupHydration = {

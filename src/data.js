@@ -147,38 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.0.0',
-  date: '2026-10-13',
+  version: '1.0.1',
+  date: '2026-10-14',
   items: [
     {
-      type: 'NEW',
-      title: 'Production diagnostics & health dashboard',
-      desc: 'Real-time runtime health evaluation, widget status inspection, and downloadable diagnostic telemetry.'
-    },
-    {
-      type: 'NEW',
-      title: 'Advanced performance monitoring',
-      desc: 'High-resolution startup, hydration, widget init latency, and render timing tracking.'
-    },
-    {
-      type: 'NEW',
-      title: 'Runtime resilience error boundaries',
-      desc: 'Isolated failure guards around non-critical widgets and startup tasks prevent dashboard crashes.'
-    },
-    {
       type: 'IMPROVED',
-      title: 'Canonical widget lifecycle architecture',
-      desc: 'Centralized widget lifecycle management with graceful background tab pausing and memory teardown.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Sub-50ms instant first paint',
-      desc: 'Synchronous head theme preloading and cached fast-mirror state deliver instant perceived boot.'
+      title: 'Improved Settings reliability',
+      desc: 'Settings modal now operates with strict transactional integrity so changes only commit when you explicitly click Save.'
     },
     {
       type: 'FIX',
-      title: 'Memory leak & timer safety',
-      desc: 'Unmanaged intervals eliminated and abort controllers cancel in-flight network requests on tab hide.'
+      title: 'Better Save/Cancel behavior',
+      desc: 'Canceling or closing the Settings panel instantly reverts all temporary visual previews without altering saved settings.'
+    },
+    {
+      type: 'FIX',
+      title: 'Settings preview bug fixes',
+      desc: 'Fixed premature storage persistence across widget toggles, Homebase tips, wallpaper quality, and layout order.'
     }
   ]
 };

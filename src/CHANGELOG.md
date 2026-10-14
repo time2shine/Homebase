@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v1.0.1 — 2026-10-14
+
+### Fixed
+- Fixed Settings modal transactional behavior.
+- Cancel and Close buttons now correctly discard unsaved changes.
+- Save button now commits settings changes only when explicitly clicked.
+- Fixed settings controls that previously persisted changes immediately.
+- Fixed reversible live preview handling for widgets, tips, wallpaper settings, and quality settings.
+
 ## v1.0.0 — 2026-10-13
 ### Added
 - Production Runtime Diagnostics Dashboard (`src/newtab/core/runtime-diagnostics.js`) exposing real-time health score, widget status inspection, lifecycle monitoring, and structured telemetry export.

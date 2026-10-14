@@ -468,3 +468,75 @@ test('settings-panel-controller: setupModalLifecycle attaches backdrop and ESC k
   env.doc.dispatchDocumentEvent({ type: 'keydown', key: 'Escape' });
   assert.equal(controller.isModalOpen(), false);
 });
+
+test('settings-panel-controller: setupModalLifecycle attaches close and cancel handlers using canonical production IDs', () => {
+  const env = createPanelControllerTestEnvironment();
+  const controller = env.sandbox.HomebaseSettingsPanelController;
+
+  const modal = env.registerElement('app-settings-modal', new MockElement('DIV'));
+  const closeBtn = env.registerElement('app-settings-close', new MockElement('BUTTON'));
+  const cancelBtn = env.registerElement('app-settings-cancel', new MockElement('BUTTON'));
+
+  controller.setupModalLifecycle();
+
+  // Test canonical close button (#app-settings-close)
+  controller.openAppSettingsModal('test-btn');
+  assert.equal(controller.isModalOpen(), true);
+  closeBtn.dispatchEvent({ type: 'click' });
+  assert.equal(controller.isModalOpen(), false, 'Clicking #app-settings-close must close modal');
+
+  // Test canonical cancel button (#app-settings-cancel)
+  controller.openAppSettingsModal('test-btn');
+  assert.equal(controller.isModalOpen(), true);
+  cancelBtn.dispatchEvent({ type: 'click' });
+  assert.equal(controller.isModalOpen(), false, 'Clicking #app-settings-cancel must close modal');
+});
+
+test('settings-panel-controller: Close button discards changes', () => {
+  const env = createPanelControllerTestEnvironment();
+  const controller = env.sandbox.HomebaseSettingsPanelController;
+
+  const modal = env.registerElement('app-settings-modal', new MockElement('DIV'));
+  const closeBtn = env.registerElement('app-settings-close', new MockElement('BUTTON'));
+
+  let discardCalled = false;
+  env.sandbox.HomebaseSettingsFormController = {
+    discardSettingsChanges: () => {
+      discardCalled = true;
+    },
+    snapshotInitialSettingsState: () => {}
+  };
+
+  controller.setupModalLifecycle();
+  controller.openAppSettingsModal('test-btn');
+  assert.equal(controller.isModalOpen(), true);
+
+  closeBtn.dispatchEvent({ type: 'click' });
+  assert.equal(controller.isModalOpen(), false, 'Modal must close on Close button click');
+  assert.equal(discardCalled, true, 'Close button must invoke discardSettingsChanges');
+});
+
+test('settings-panel-controller: Cancel button discards changes', () => {
+  const env = createPanelControllerTestEnvironment();
+  const controller = env.sandbox.HomebaseSettingsPanelController;
+
+  const modal = env.registerElement('app-settings-modal', new MockElement('DIV'));
+  const cancelBtn = env.registerElement('app-settings-cancel', new MockElement('BUTTON'));
+
+  let discardCalled = false;
+  env.sandbox.HomebaseSettingsFormController = {
+    discardSettingsChanges: () => {
+      discardCalled = true;
+    },
+    snapshotInitialSettingsState: () => {}
+  };
+
+  controller.setupModalLifecycle();
+  controller.openAppSettingsModal('test-btn');
+  assert.equal(controller.isModalOpen(), true);
+
+  cancelBtn.dispatchEvent({ type: 'click' });
+  assert.equal(controller.isModalOpen(), false, 'Modal must close on Cancel button click');
+  assert.equal(discardCalled, true, 'Cancel button must invoke discardSettingsChanges');
+});
+

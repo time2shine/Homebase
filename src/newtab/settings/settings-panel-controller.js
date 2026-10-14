@@ -165,22 +165,8 @@
       if (!order.length) return;
 
       if (typeof globalScope.setWidgetOrderPreference === 'function') {
-        globalScope.setWidgetOrderPreference(order, { persist: true });
+        globalScope.setWidgetOrderPreference(order, { persist: false });
         return;
-      }
-
-      try {
-        if (globalScope.localStorage) {
-          globalScope.localStorage.setItem('fast-widget-order', JSON.stringify(order));
-        }
-      } catch (e) {}
-
-      if (typeof globalScope.HomebaseStorage !== 'undefined' && globalScope.HomebaseStorage.set) {
-        globalScope.HomebaseStorage.set('widgetOrder', order).catch((err) => console.warn('Failed to save widget order', err));
-      } else if (typeof browser !== 'undefined' && browser.storage?.local) {
-        browser.storage.local
-          .set({ widgetOrder: order })
-          .catch((err) => console.warn('Failed to save widget order', err));
       }
     };
 
@@ -225,6 +211,10 @@
       globalScope.syncAppSettingsForm();
     }
 
+    if (globalScope.HomebaseSettingsFormController && typeof globalScope.HomebaseSettingsFormController.snapshotInitialSettingsState === 'function') {
+      globalScope.HomebaseSettingsFormController.snapshotInitialSettingsState();
+    }
+
     for (const hook of beforeOpenHooks) {
       try {
         hook();
@@ -258,6 +248,12 @@
     if (typeof document === 'undefined') return;
     const appSettingsModal = document.getElementById('app-settings-modal');
     if (!appSettingsModal) return;
+
+    if (options.discard || !options.saved) {
+      if (globalScope.HomebaseSettingsFormController && typeof globalScope.HomebaseSettingsFormController.discardSettingsChanges === 'function') {
+        globalScope.HomebaseSettingsFormController.discardSettingsChanges();
+      }
+    }
 
     const handleClosed = () => {
       if (typeof globalScope.syncAppSettingsForm === 'function') {
@@ -309,8 +305,8 @@
     if (typeof document === 'undefined') return;
     const appSettingsModal = document.getElementById('app-settings-modal');
     const appSettingsNav = document.getElementById('app-settings-nav');
-    const appSettingsCloseBtn = document.getElementById('app-settings-close-btn');
-    const appSettingsCancelBtn = document.getElementById('app-settings-cancel-btn');
+    const appSettingsCloseBtn = document.getElementById('app-settings-close') || document.getElementById('app-settings-close-btn');
+    const appSettingsCancelBtn = document.getElementById('app-settings-cancel') || document.getElementById('app-settings-cancel-btn');
 
     if (typeof options.onBeforeOpen === 'function') {
       addBeforeOpenHook(options.onBeforeOpen);
@@ -325,17 +321,17 @@
     setupWidgetOrderDrag();
 
     if (appSettingsCloseBtn) {
-      appSettingsCloseBtn.addEventListener('click', () => closeAppSettingsModal());
+      appSettingsCloseBtn.addEventListener('click', () => closeAppSettingsModal({ discard: true }));
     }
     if (appSettingsCancelBtn) {
-      appSettingsCancelBtn.addEventListener('click', () => closeAppSettingsModal());
+      appSettingsCancelBtn.addEventListener('click', () => closeAppSettingsModal({ discard: true }));
     }
 
     // Modal click delegation (backdrop click, privacy policy click, feedback action click)
     if (appSettingsModal) {
       appSettingsModal.addEventListener('click', (e) => {
         if (e.target === appSettingsModal) {
-          closeAppSettingsModal();
+          closeAppSettingsModal({ discard: true });
           return;
         }
 
@@ -380,7 +376,7 @@
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (isModalOpen()) {
-        closeAppSettingsModal();
+        closeAppSettingsModal({ discard: true });
       }
     });
   }

@@ -1904,12 +1904,8 @@ window.HomebaseGallery = (() => {
         if (appWallpaperQualitySelect) {
           appWallpaperQualitySelect.value = newQuality;
         }
-        await storageLocalSet({ [WALLPAPER_QUALITY_KEY]: newQuality });
         const updatedSelection = rebuildCurrentSelectionFromGallery();
         if (!updatedSelection) return;
-
-        // Persist updated selection so future loads use the new quality
-        await storageLocalSet({ [WALLPAPER_SELECTION_KEY]: updatedSelection });
 
         await applyWallpaperByType(updatedSelection, wallpaperTypePreference);
       });
@@ -1926,7 +1922,6 @@ window.HomebaseGallery = (() => {
         if (appWallpaperTypeSelect) {
           appWallpaperTypeSelect.value = newType;
         }
-        await storageLocalSet({ [WALLPAPER_TYPE_KEY]: newType });
 
         if (currentWallpaperSelection) {
           if (typeof applyWallpaperByType === 'function') {
@@ -1947,10 +1942,6 @@ window.HomebaseGallery = (() => {
         setContextDailyRotationPreference(isEnabled);
         if (appDailyToggle) {
           appDailyToggle.checked = isEnabled;
-        }
-        await storageLocalSet({ [DAILY_ROTATION_KEY]: isEnabled });
-        if (isEnabled) {
-          await ensureDailyWallpaper();
         }
       });
     }

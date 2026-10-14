@@ -900,7 +900,7 @@ function setWeatherPreference(show = true, options = {}) {
     document.documentElement.classList.toggle('weather-hidden', !shouldShow);
   }
 
-  if (typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.setFastMirror === 'function') {
+  if (options.persist !== false && typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.setFastMirror === 'function') {
     HomebaseWidgetStorage.setFastMirror('fast-show-weather', shouldShow ? '1' : '0');
   }
 

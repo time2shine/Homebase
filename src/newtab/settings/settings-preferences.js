@@ -161,8 +161,11 @@ function syncAppSettingsForm() {
     if (!elements.appTodoToggle.dataset.listenerAttached) {
       elements.appTodoToggle.dataset.listenerAttached = 'true';
       elements.appTodoToggle.addEventListener('change', (e) => {
-        if (typeof setTodoPreference === 'function') {
-          setTodoPreference(e.target.checked);
+        const fn = (typeof HomebaseWidgetTodo !== 'undefined' && typeof HomebaseWidgetTodo.setTodoPreference === 'function')
+          ? HomebaseWidgetTodo.setTodoPreference
+          : (typeof setTodoPreference === 'function' ? setTodoPreference : null);
+        if (fn) {
+          fn(e.target.checked, { persist: false });
         }
       });
     }

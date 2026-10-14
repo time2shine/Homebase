@@ -18,21 +18,30 @@
   let formListenersAttached = false;
   let tipsListenerAttached = false;
   let initialWallpaperStateSnapshot = null;
+  let initialSettingsSnapshot = null;
 
   // =============================================================================
-  // WALLPAPER STATE SNAPSHOT
+  // WALLPAPER & SETTINGS STATE SNAPSHOT & ROLLBACK
   // =============================================================================
 
   function snapshotInitialWallpaperState() {
     if (typeof document === 'undefined') return;
-    const appDailyToggle = document.getElementById('app-daily-rotation-toggle');
+    const appDailyToggle = document.getElementById('app-daily-toggle') || document.getElementById('app-daily-rotation-toggle');
+    const galleryDailyToggle = document.getElementById('gallery-daily-rotation-toggle');
     const appWallpaperTypeSelect = document.getElementById('app-wallpaper-type-select');
+    const wallpaperTypeToggle = document.getElementById('wallpaper-type-toggle') || document.getElementById('gallery-wallpaper-type-toggle');
     const appWallpaperQualitySelect = document.getElementById('app-wallpaper-quality-select');
+    const wallpaperQualityToggle = document.getElementById('gallery-wallpaper-quality-toggle') || document.getElementById('wallpaper-quality-toggle');
+
+    const dailyVal = appDailyToggle ? appDailyToggle.checked : (galleryDailyToggle ? galleryDailyToggle.checked : (globalScope.dailyRotationPreference !== false));
+    const typeVal = appWallpaperTypeSelect ? appWallpaperTypeSelect.value : (wallpaperTypeToggle ? (wallpaperTypeToggle.checked ? 'video' : 'static') : (globalScope.wallpaperTypePreference || 'video'));
+    const qualityVal = appWallpaperQualitySelect ? appWallpaperQualitySelect.value : (wallpaperQualityToggle ? (wallpaperQualityToggle.checked ? 'high' : 'low') : (globalScope.wallpaperQualityPreference || 'low'));
 
     initialWallpaperStateSnapshot = {
-      daily: appDailyToggle ? appDailyToggle.checked : globalScope.dailyRotationPreference,
-      type: appWallpaperTypeSelect ? appWallpaperTypeSelect.value : (globalScope.wallpaperTypePreference || 'video'),
-      quality: appWallpaperQualitySelect ? appWallpaperQualitySelect.value : (globalScope.wallpaperQualityPreference || 'low')
+      daily: dailyVal,
+      type: typeVal,
+      quality: qualityVal,
+      selection: globalScope.currentWallpaperSelection ? JSON.parse(JSON.stringify(globalScope.currentWallpaperSelection)) : null
     };
 
     if ('initialWallpaperState' in globalScope) {
@@ -42,6 +51,149 @@
 
   function getInitialWallpaperState() {
     return initialWallpaperStateSnapshot || globalScope.initialWallpaperState || {};
+  }
+
+  function snapshotInitialSettingsState() {
+    const fromStorage = (globalScope.HomebaseSettingsStorage && typeof globalScope.HomebaseSettingsStorage.getAll === 'function')
+      ? globalScope.HomebaseSettingsStorage.getAll()
+      : ((globalScope.HomebaseSettingsStorage && (globalScope.HomebaseSettingsStorage.state || globalScope.HomebaseSettingsStorage.defaults)) || {});
+    const fromForm = (typeof document !== 'undefined') ? (scrapeFormValues().updates || {}) : {};
+
+    let tipsEnabled = true;
+    if (typeof document !== 'undefined') {
+      const tipsToggle = document.getElementById('app-show-homebase-tips-toggle');
+      if (tipsToggle) {
+        tipsEnabled = tipsToggle.checked;
+      } else {
+        try {
+          if (globalScope.localStorage) {
+            tipsEnabled = globalScope.localStorage.getItem(HOMEBASE_TIPS_DISABLED_KEY) !== 'true';
+          }
+        } catch (_) {}
+      }
+    }
+
+    const currentOrder = (globalScope.HomebaseSettingsStorage && typeof globalScope.HomebaseSettingsStorage.get === 'function' && globalScope.HomebaseSettingsStorage.get('widgetOrder'))
+      || (Array.isArray(globalScope.widgetOrderPreference) ? globalScope.widgetOrderPreference.slice() : ['weather', 'quote', 'todo', 'news']);
+
+    initialSettingsSnapshot = Object.assign({}, fromStorage, fromForm, {
+      showHomebaseTips: tipsEnabled,
+      widgetOrder: currentOrder
+    });
+    snapshotInitialWallpaperState();
+    return initialSettingsSnapshot;
+  }
+
+  function getInitialSettingsState() {
+    return initialSettingsSnapshot;
+  }
+
+  function restoreFormControlsFromSnapshot(snapshot) {
+    if (!snapshot || typeof document === 'undefined') return;
+    const timeEl = document.getElementById('app-time-format') || document.getElementById('app-time-format-select');
+    if (timeEl && snapshot.timeFormat) timeEl.value = snapshot.timeFormat;
+
+    const sidebarToggle = document.getElementById('app-show-sidebar-toggle');
+    if (sidebarToggle && snapshot.showSidebar !== undefined) sidebarToggle.checked = !!snapshot.showSidebar;
+
+    const weatherToggle = document.getElementById('app-show-weather-toggle');
+    if (weatherToggle && snapshot.showWeather !== undefined) weatherToggle.checked = !!snapshot.showWeather;
+
+    const quoteToggle = document.getElementById('app-show-quote-toggle');
+    if (quoteToggle && snapshot.showQuote !== undefined) quoteToggle.checked = !!snapshot.showQuote;
+
+    const newsToggle = document.getElementById('app-show-news-toggle');
+    if (newsToggle && snapshot.showNews !== undefined) newsToggle.checked = !!snapshot.showNews;
+
+    const todoToggle = document.getElementById('app-show-todo-toggle');
+    if (todoToggle && snapshot.showTodo !== undefined) todoToggle.checked = !!snapshot.showTodo;
+
+    const tipsToggle = document.getElementById('app-show-homebase-tips-toggle');
+    if (tipsToggle && snapshot.showHomebaseTips !== undefined) tipsToggle.checked = !!snapshot.showHomebaseTips;
+
+    const dimSlider = document.getElementById('app-background-dim-slider') || document.getElementById('app-dim-slider');
+    const dimLabel = document.getElementById('app-background-dim-label') || document.getElementById('app-dim-value-label');
+    if (dimSlider && snapshot.backgroundDim !== undefined) {
+      dimSlider.value = String(snapshot.backgroundDim);
+      if (dimLabel) dimLabel.textContent = `${snapshot.backgroundDim}%`;
+    }
+
+    const maxTabsSelect = document.getElementById('app-max-tabs-select');
+    if (maxTabsSelect && snapshot.maxTabs !== undefined) maxTabsSelect.value = String(snapshot.maxTabs);
+
+    const autoCloseSelect = document.getElementById('app-autoclose-select');
+    if (autoCloseSelect && snapshot.autoClose !== undefined) autoCloseSelect.value = String(snapshot.autoClose);
+
+    const perfToggle = document.getElementById('app-performance-mode-toggle');
+    if (perfToggle && snapshot.performanceMode !== undefined) perfToggle.checked = !!snapshot.performanceMode;
+
+    const perfDebugToggle = document.getElementById('app-perf-debug-overlay-toggle');
+    if (perfDebugToggle && snapshot.debugPerfOverlay !== undefined) perfDebugToggle.checked = !!snapshot.debugPerfOverlay;
+
+    const wpQualitySelect = document.getElementById('app-wallpaper-quality-select');
+    if (wpQualitySelect && snapshot.wallpaperQuality) wpQualitySelect.value = snapshot.wallpaperQuality;
+    const wpQualityToggle = document.getElementById('gallery-wallpaper-quality-toggle') || document.getElementById('wallpaper-quality-toggle');
+    if (wpQualityToggle && snapshot.wallpaperQuality) wpQualityToggle.checked = snapshot.wallpaperQuality === 'high';
+
+    const wpTypeSelect = document.getElementById('app-wallpaper-type-select');
+    if (wpTypeSelect && snapshot.wallpaperType) wpTypeSelect.value = snapshot.wallpaperType;
+    const wpTypeToggle = document.getElementById('wallpaper-type-toggle') || document.getElementById('gallery-wallpaper-type-toggle');
+    if (wpTypeToggle && snapshot.wallpaperType) wpTypeToggle.checked = snapshot.wallpaperType === 'video';
+
+    const dailyToggle = document.getElementById('app-daily-toggle') || document.getElementById('app-daily-rotation-toggle');
+    if (dailyToggle && snapshot.dailyRotation !== undefined) dailyToggle.checked = !!snapshot.dailyRotation;
+    const galleryDailyToggle = document.getElementById('gallery-daily-rotation-toggle');
+    if (galleryDailyToggle && snapshot.dailyRotation !== undefined) galleryDailyToggle.checked = !!snapshot.dailyRotation;
+  }
+
+  function discardSettingsChanges() {
+    if (!initialSettingsSnapshot) return;
+
+    applyFormValuesLive({ updates: initialSettingsSnapshot });
+    restoreFormControlsFromSnapshot(initialSettingsSnapshot);
+
+    // Revert tips
+    if (initialSettingsSnapshot.showHomebaseTips !== undefined) {
+      setTipsEnabled(initialSettingsSnapshot.showHomebaseTips, { persist: false });
+      if (typeof globalScope.setHomebaseTipsPreviewOverride === 'function') {
+        globalScope.setHomebaseTipsPreviewOverride(null);
+      } else {
+        globalScope.homebaseTipsPreviewOverride = null;
+      }
+    }
+
+    // Revert wallpaper preview if initial wallpaper state exists
+    if (initialWallpaperStateSnapshot) {
+      globalScope.wallpaperQualityPreference = initialWallpaperStateSnapshot.quality;
+      globalScope.wallpaperTypePreference = initialWallpaperStateSnapshot.type;
+      globalScope.dailyRotationPreference = initialWallpaperStateSnapshot.daily;
+      if (typeof globalScope.applyWallpaperByType === 'function') {
+        const sel = initialWallpaperStateSnapshot.selection || globalScope.currentWallpaperSelection;
+        if (sel) {
+          globalScope.applyWallpaperByType(sel, initialWallpaperStateSnapshot.type);
+        }
+      }
+    }
+
+    // Revert widget order
+    if (initialSettingsSnapshot.widgetOrder && typeof globalScope.setWidgetOrderPreference === 'function') {
+      globalScope.setWidgetOrderPreference(initialSettingsSnapshot.widgetOrder, { persist: false });
+    }
+
+    if (initialSettingsSnapshot.timeFormat) {
+      const applyFmt = (globalScope.HomebaseWidgetTime && typeof globalScope.HomebaseWidgetTime.applyTimeFormatPreference === 'function')
+        ? (fmt, opt) => globalScope.HomebaseWidgetTime.applyTimeFormatPreference(fmt, opt)
+        : (typeof globalScope.applyTimeFormatPreference === 'function' ? (fmt, opt) => globalScope.applyTimeFormatPreference(fmt, opt) : null);
+      if (applyFmt) {
+        applyFmt(initialSettingsSnapshot.timeFormat, { persist: false });
+      }
+    }
+
+    if (typeof globalScope.syncAppSettingsForm === 'function') {
+      try {
+        globalScope.syncAppSettingsForm();
+      } catch (_) {}
+    }
   }
 
   // =============================================================================
@@ -64,19 +216,42 @@
     }
   }
 
-  function setTipsEnabled(enabled) {
-    try {
-      if (globalScope.localStorage) {
-        if (enabled) {
-          globalScope.localStorage.removeItem(HOMEBASE_TIPS_DISABLED_KEY);
+  function setTipsEnabled(enabled, options = {}) {
+    if (typeof globalScope.setHomebaseTipsPreviewOverride === 'function') {
+      globalScope.setHomebaseTipsPreviewOverride(enabled);
+    } else {
+      globalScope.homebaseTipsPreviewOverride = enabled;
+    }
+
+    if (options.persist !== false) {
+      try {
+        if (globalScope.localStorage) {
+          if (enabled) {
+            globalScope.localStorage.removeItem(HOMEBASE_TIPS_DISABLED_KEY);
+          } else {
+            globalScope.localStorage.setItem(HOMEBASE_TIPS_DISABLED_KEY, 'true');
+          }
+        }
+      } catch (_) {}
+    }
+
+    const tipCard = (typeof document !== 'undefined') ? document.getElementById('tip-card') : null;
+    if (tipCard) {
+      if (!enabled) {
+        if (typeof globalScope.clearHomebaseTipsCard === 'function') {
+          globalScope.clearHomebaseTipsCard(tipCard);
         } else {
-          globalScope.localStorage.setItem(HOMEBASE_TIPS_DISABLED_KEY, 'true');
+          tipCard.classList.remove('is-visible');
+          tipCard.setAttribute('hidden', '');
+        }
+      } else {
+        if (typeof globalScope.renderTipOfDay === 'function') {
+          globalScope.renderTipOfDay();
+        } else {
+          tipCard.removeAttribute('hidden');
+          tipCard.classList.add('is-visible');
         }
       }
-    } catch (_) {}
-
-    if (typeof globalScope.renderTipOfDay === 'function') {
-      globalScope.renderTipOfDay();
     }
   }
 
@@ -87,7 +262,8 @@
 
     tipsListenerAttached = true;
     appHomebaseTipsToggle.addEventListener('change', (e) => {
-      setTipsEnabled(e.target.checked);
+      const checked = (e && e.target) ? e.target.checked : appHomebaseTipsToggle.checked;
+      setTipsEnabled(checked, { persist: false });
     });
   }
 
@@ -98,11 +274,11 @@
   function scrapeFormValues() {
     if (typeof document === 'undefined') return { updates: {}, legacyBatch: {} };
 
-    const appTimeFormatSelect = document.getElementById('app-time-format-select');
+    const appTimeFormatSelect = document.getElementById('app-time-format') || document.getElementById('app-time-format-select');
     const appSidebarToggle = document.getElementById('app-show-sidebar-toggle');
     const appMaxTabsSelect = document.getElementById('app-max-tabs-select');
     const appAutoCloseSelect = document.getElementById('app-autoclose-select');
-    const appDimSlider = document.getElementById('app-background-dim-slider');
+    const appDimSlider = document.getElementById('app-background-dim-slider') || document.getElementById('app-dim-slider');
     const appSearchOpenNewTabToggle = document.getElementById('app-search-open-new-tab-toggle');
     const appSearchRememberEngineToggle = document.getElementById('app-search-remember-engine-toggle');
     const appSearchDefaultEngineSelect = document.getElementById('app-search-default-engine-select');
@@ -112,12 +288,14 @@
     const appWeatherToggle = document.getElementById('app-show-weather-toggle');
     const appQuoteToggle = document.getElementById('app-show-quote-toggle');
     const appNewsToggle = document.getElementById('app-show-news-toggle');
-    const appDailyToggle = document.getElementById('app-daily-rotation-toggle');
+    const appTodoToggle = document.getElementById('app-show-todo-toggle');
+    const appHomebaseTipsToggle = document.getElementById('app-show-homebase-tips-toggle');
+    const appDailyToggle = document.getElementById('app-daily-rotation-toggle') || document.getElementById('app-daily-toggle');
     const galleryDailyToggle = document.getElementById('gallery-daily-rotation-toggle');
     const appWallpaperTypeSelect = document.getElementById('app-wallpaper-type-select');
-    const wallpaperTypeToggle = document.getElementById('wallpaper-type-toggle');
+    const wallpaperTypeToggle = document.getElementById('wallpaper-type-toggle') || document.getElementById('gallery-wallpaper-type-toggle');
     const appWallpaperQualitySelect = document.getElementById('app-wallpaper-quality-select');
-    const wallpaperQualityToggle = document.getElementById('wallpaper-quality-toggle');
+    const wallpaperQualityToggle = document.getElementById('wallpaper-quality-toggle') || document.getElementById('gallery-wallpaper-quality-toggle');
 
     const nextFormat = appTimeFormatSelect && appTimeFormatSelect.value === '12-hour' ? '12-hour' : '24-hour';
     const nextSidebarVisible = appSidebarToggle ? appSidebarToggle.checked : true;
@@ -130,6 +308,19 @@
     const nextShowWeather = appWeatherToggle ? appWeatherToggle.checked : true;
     const nextShowQuote = appQuoteToggle ? appQuoteToggle.checked : true;
     const nextShowNews = appNewsToggle ? appNewsToggle.checked : false;
+    const nextShowTodo = appTodoToggle ? appTodoToggle.checked : true;
+    let nextShowTips = true;
+    if (appHomebaseTipsToggle) {
+      nextShowTips = appHomebaseTipsToggle.checked;
+    } else if (typeof globalScope.homebaseTipsPreviewOverride === 'boolean') {
+      nextShowTips = globalScope.homebaseTipsPreviewOverride;
+    } else {
+      try {
+        if (globalScope.localStorage) {
+          nextShowTips = globalScope.localStorage.getItem(HOMEBASE_TIPS_DISABLED_KEY) !== 'true';
+        }
+      } catch (_) {}
+    }
     const nextContainerMode = document.getElementById('app-container-mode-toggle')?.checked ?? true;
     const radioKeepBehavior = document.querySelector('input[name="container-behavior"][value="keep"]');
     const nextContainerNewTab = radioKeepBehavior ? radioKeepBehavior.checked : globalScope.appContainerNewTabPreference;
@@ -181,6 +372,8 @@
       showWeather: nextShowWeather,
       showQuote: nextShowQuote,
       showNews: nextShowNews,
+      showTodo: nextShowTodo,
+      showHomebaseTips: nextShowTips,
       containerMode: nextContainerMode,
       containerNewTab: nextContainerNewTab,
       dailyRotation: nextDailyRotation,
@@ -202,7 +395,15 @@
       searchDefaultEngine: nextDefaultEngine,
       searchMath: nextMath,
       searchShowHistory: nextSearchHistory,
-      searchSuggestions: nextSearchSuggestions
+      searchSuggestions: nextSearchSuggestions,
+      widgetOrder: (() => {
+        const sub = document.getElementById('widget-sub-settings');
+        const rows = sub ? Array.from(sub.querySelectorAll('.widget-setting-row')).map((r) => r.dataset.widgetId).filter(Boolean) : [];
+        if (rows.length > 0) return rows;
+        if (Array.isArray(globalScope.widgetOrderPreference)) return globalScope.widgetOrderPreference.slice();
+        if (typeof widgetOrderPreference !== 'undefined' && Array.isArray(widgetOrderPreference)) return widgetOrderPreference.slice();
+        return ['weather', 'quote', 'todo', 'news'];
+      })()
     };
 
     let updatedWallpaperSelection = typeof globalScope.rebuildCurrentSelectionFromGallery === 'function' ? globalScope.rebuildCurrentSelectionFromGallery() : null;
@@ -236,34 +437,43 @@
     const u = values.updates;
 
     const applyTimeFormat = (globalScope.HomebaseWidgetTime && typeof globalScope.HomebaseWidgetTime.applyTimeFormatPreference === 'function')
-      ? (fmt) => globalScope.HomebaseWidgetTime.applyTimeFormatPreference(fmt)
-      : (typeof globalScope.applyTimeFormatPreference === 'function' ? globalScope.applyTimeFormatPreference : null);
-    if (applyTimeFormat) applyTimeFormat(u.timeFormat);
+      ? (fmt, opt) => globalScope.HomebaseWidgetTime.applyTimeFormatPreference(fmt, opt)
+      : (typeof globalScope.applyTimeFormatPreference === 'function' ? (fmt, opt) => globalScope.applyTimeFormatPreference(fmt, opt) : null);
+    if (applyTimeFormat) applyTimeFormat(u.timeFormat, { persist: false });
 
     const setWeather = (globalScope.HomebaseWidgetWeather && typeof globalScope.HomebaseWidgetWeather.setWeatherPreference === 'function')
       ? (val, opt) => globalScope.HomebaseWidgetWeather.setWeatherPreference(val, opt)
       : (typeof globalScope.setWeatherPreference === 'function' ? globalScope.setWeatherPreference : null);
-    if (setWeather) setWeather(u.showWeather, { applyVisibility: false, updateUI: false });
+    if (setWeather) setWeather(u.showWeather, { applyVisibility: false, updateUI: false, persist: false });
 
     const setQuote = (globalScope.HomebaseWidgetQuote && typeof globalScope.HomebaseWidgetQuote.setQuotePreference === 'function')
       ? (val, opt) => globalScope.HomebaseWidgetQuote.setQuotePreference(val, opt)
       : (typeof globalScope.setQuotePreference === 'function' ? globalScope.setQuotePreference : null);
-    if (setQuote) setQuote(u.showQuote, { applyVisibility: false, updateUI: false });
+    if (setQuote) setQuote(u.showQuote, { applyVisibility: false, updateUI: false, persist: false });
 
     const setNews = (globalScope.HomebaseWidgetNews && typeof globalScope.HomebaseWidgetNews.setNewsPreference === 'function')
       ? (val, opt) => globalScope.HomebaseWidgetNews.setNewsPreference(val, opt)
       : (typeof globalScope.setNewsPreference === 'function' ? globalScope.setNewsPreference : null);
-    if (setNews) setNews(u.showNews, { applyVisibility: false, updateUI: false });
+    if (setNews) setNews(u.showNews, { applyVisibility: false, updateUI: false, persist: false });
 
-    if (typeof globalScope.applySidebarVisibility === 'function') globalScope.applySidebarVisibility(u.showSidebar);
+    const setTodo = (globalScope.HomebaseWidgetTodo && typeof globalScope.HomebaseWidgetTodo.setTodoPreference === 'function')
+      ? (val, opt) => globalScope.HomebaseWidgetTodo.setTodoPreference(val, opt)
+      : (typeof globalScope.setTodoPreference === 'function' ? globalScope.setTodoPreference : null);
+    if (setTodo && u.showTodo !== undefined) setTodo(u.showTodo, { applyVisibility: false, updateUI: false, persist: false });
+
+    if (u.showHomebaseTips !== undefined) {
+      setTipsEnabled(u.showHomebaseTips, { persist: false });
+    }
+
+    if (typeof globalScope.applySidebarVisibility === 'function') globalScope.applySidebarVisibility(u.showSidebar, { persist: false });
     if (typeof globalScope.applyWidgetVisibility === 'function') globalScope.applyWidgetVisibility();
 
     globalScope.appMaxTabsPreference = u.maxTabs;
     globalScope.appAutoClosePreference = u.autoClose;
 
     if (typeof globalScope.applyBackgroundDim === 'function') globalScope.applyBackgroundDim(u.backgroundDim);
-    const appDimSlider = document.getElementById('app-background-dim-slider');
-    const appDimLabel = document.getElementById('app-background-dim-label');
+    const appDimSlider = document.getElementById('app-background-dim-slider') || document.getElementById('app-dim-slider');
+    const appDimLabel = document.getElementById('app-background-dim-label') || document.getElementById('app-dim-value-label');
     if (appDimSlider && appDimSlider.value !== String(u.backgroundDim)) {
       appDimSlider.value = u.backgroundDim;
     }
@@ -286,12 +496,12 @@
     globalScope.wallpaperTypePreference = u.wallpaperType;
     globalScope.wallpaperQualityPreference = u.wallpaperQuality;
 
-    const appDailyToggle = document.getElementById('app-daily-rotation-toggle');
+    const appDailyToggle = document.getElementById('app-daily-rotation-toggle') || document.getElementById('app-daily-toggle');
     const galleryDailyToggle = document.getElementById('gallery-daily-rotation-toggle');
     const appWallpaperTypeSelect = document.getElementById('app-wallpaper-type-select');
-    const wallpaperTypeToggle = document.getElementById('wallpaper-type-toggle');
+    const wallpaperTypeToggle = document.getElementById('wallpaper-type-toggle') || document.getElementById('gallery-wallpaper-type-toggle');
     const appWallpaperQualitySelect = document.getElementById('app-wallpaper-quality-select');
-    const wallpaperQualityToggle = document.getElementById('wallpaper-quality-toggle');
+    const wallpaperQualityToggle = document.getElementById('wallpaper-quality-toggle') || document.getElementById('gallery-wallpaper-quality-toggle');
 
     if (appDailyToggle) appDailyToggle.checked = u.dailyRotation;
     if (galleryDailyToggle) galleryDailyToggle.checked = u.dailyRotation;
@@ -299,6 +509,13 @@
     if (wallpaperTypeToggle) wallpaperTypeToggle.checked = u.wallpaperType === 'video';
     if (appWallpaperQualitySelect) appWallpaperQualitySelect.value = u.wallpaperQuality;
     if (wallpaperQualityToggle) wallpaperQualityToggle.checked = u.wallpaperQuality === 'high';
+
+    if (u.wallpaperType && typeof globalScope.applyWallpaperByType === 'function') {
+      const sel = globalScope.currentWallpaperSelection || (typeof globalScope.rebuildCurrentSelectionFromGallery === 'function' ? globalScope.rebuildCurrentSelectionFromGallery() : null);
+      if (sel) {
+        globalScope.applyWallpaperByType(sel, u.wallpaperType);
+      }
+    }
 
     globalScope.appBookmarkOpenNewTabPreference = u.bookmarkOpenNewTab;
     if (typeof globalScope.applyBookmarkTextBg === 'function') globalScope.applyBookmarkTextBg(u.bookmarkTextBg);
@@ -374,6 +591,29 @@
           globalScope.updateSearchUI(values.nextDefaultEngine);
         }
       }
+
+      // 5. Tips preference persistence
+      if (values.updates && values.updates.showHomebaseTips !== undefined) {
+        try {
+          if (globalScope.localStorage) {
+            if (values.updates.showHomebaseTips) {
+              globalScope.localStorage.removeItem(HOMEBASE_TIPS_DISABLED_KEY);
+            } else {
+              globalScope.localStorage.setItem(HOMEBASE_TIPS_DISABLED_KEY, 'true');
+            }
+          }
+        } catch (_) {}
+        if (typeof globalScope.setHomebaseTipsPreviewOverride === 'function') {
+          globalScope.setHomebaseTipsPreviewOverride(null);
+        } else {
+          globalScope.homebaseTipsPreviewOverride = null;
+        }
+      }
+
+      // 6. Widget order persistence
+      if (values.updates && values.updates.widgetOrder && typeof globalScope.setWidgetOrderPreference === 'function') {
+        globalScope.setWidgetOrderPreference(values.updates.widgetOrder, { persist: true });
+      }
     } catch (err) {
       console.warn('Failed to save app settings', err);
     }
@@ -399,10 +639,17 @@
       globalScope.manageHomebaseTabs();
     }
 
+    initialSettingsSnapshot = Object.assign({}, values.updates);
+    if (initialWallpaperStateSnapshot && values.updates) {
+      initialWallpaperStateSnapshot.daily = values.updates.dailyRotation;
+      initialWallpaperStateSnapshot.type = values.updates.wallpaperType;
+      initialWallpaperStateSnapshot.quality = values.updates.wallpaperQuality;
+    }
+
     if (globalScope.HomebaseSettingsPanelController && typeof globalScope.HomebaseSettingsPanelController.closeAppSettingsModal === 'function') {
-      globalScope.HomebaseSettingsPanelController.closeAppSettingsModal();
+      globalScope.HomebaseSettingsPanelController.closeAppSettingsModal({ saved: true });
     } else if (typeof globalScope.closeAppSettingsModal === 'function') {
-      globalScope.closeAppSettingsModal();
+      globalScope.closeAppSettingsModal({ saved: true });
     }
   }
 
@@ -414,7 +661,7 @@
     if (typeof document === 'undefined') return {};
     const defaults = (globalScope.HomebaseSettingsStorage && globalScope.HomebaseSettingsStorage.defaults) || {};
 
-    const appTimeFormatSelect = document.getElementById('app-time-format-select');
+    const appTimeFormatSelect = document.getElementById('app-time-format') || document.getElementById('app-time-format-select');
     const appSidebarToggle = document.getElementById('app-show-sidebar-toggle');
     const appMaxTabsSelect = document.getElementById('app-max-tabs-select');
     const appAutoCloseSelect = document.getElementById('app-autoclose-select');
@@ -437,6 +684,10 @@
     if (appWeatherToggle && defaults.showWeather !== undefined) appWeatherToggle.checked = defaults.showWeather;
     if (appQuoteToggle && defaults.showQuote !== undefined) appQuoteToggle.checked = defaults.showQuote;
     if (appNewsToggle && defaults.showNews !== undefined) appNewsToggle.checked = defaults.showNews;
+    const appTodoToggle = document.getElementById('app-show-todo-toggle');
+    if (appTodoToggle && defaults.showTodo !== undefined) appTodoToggle.checked = defaults.showTodo;
+    const appTipsToggle = document.getElementById('app-show-homebase-tips-toggle');
+    if (appTipsToggle) appTipsToggle.checked = true;
 
     return defaults;
   }
@@ -454,9 +705,32 @@
     const appWeatherToggle = document.getElementById('app-show-weather-toggle');
     const appQuoteToggle = document.getElementById('app-show-quote-toggle');
     const appNewsToggle = document.getElementById('app-show-news-toggle');
-    const appDimSlider = document.getElementById('app-background-dim-slider');
-    const appDimLabel = document.getElementById('app-background-dim-label');
-    const appSettingsSaveBtn = document.getElementById('app-settings-save-btn');
+    const appTodoToggle = document.getElementById('app-show-todo-toggle');
+    const appDimSlider = document.getElementById('app-background-dim-slider') || document.getElementById('app-dim-slider');
+    const appDimLabel = document.getElementById('app-background-dim-label') || document.getElementById('app-dim-value-label');
+    const appSettingsSaveBtn = document.getElementById('app-settings-save') || document.getElementById('app-settings-save-btn');
+    const appTimeFormatSelect = document.getElementById('app-time-format') || document.getElementById('app-time-format-select');
+    const appWallpaperQualitySelect = document.getElementById('app-wallpaper-quality-select');
+    const wallpaperQualityToggle = document.getElementById('wallpaper-quality-toggle') || document.getElementById('gallery-wallpaper-quality-toggle');
+    const appWallpaperTypeSelect = document.getElementById('app-wallpaper-type-select');
+    const wallpaperTypeToggle = document.getElementById('wallpaper-type-toggle') || document.getElementById('gallery-wallpaper-type-toggle');
+    const appDailyToggle = document.getElementById('app-daily-rotation-toggle') || document.getElementById('app-daily-toggle');
+    const galleryDailyToggle = document.getElementById('gallery-daily-rotation-toggle');
+
+    setupTipsToggle();
+
+    if (appTimeFormatSelect) {
+      appTimeFormatSelect.addEventListener('change', (e) => {
+        const raw = (e && e.target && e.target.value) || (appTimeFormatSelect && appTimeFormatSelect.value);
+        const val = raw === '12-hour' ? '12-hour' : '24-hour';
+        const applyFmt = (globalScope.HomebaseWidgetTime && typeof globalScope.HomebaseWidgetTime.applyTimeFormatPreference === 'function')
+          ? (fmt, opt) => globalScope.HomebaseWidgetTime.applyTimeFormatPreference(fmt, opt)
+          : (typeof globalScope.applyTimeFormatPreference === 'function' ? (fmt, opt) => globalScope.applyTimeFormatPreference(fmt, opt) : null);
+        if (applyFmt) {
+          applyFmt(val, { persist: false });
+        }
+      });
+    }
 
     if (appSearchRememberEngineToggle) {
       appSearchRememberEngineToggle.addEventListener('change', () => {
@@ -469,7 +743,7 @@
     if (appSidebarToggle) {
       appSidebarToggle.addEventListener('change', (e) => {
         if (typeof globalScope.applySidebarVisibility === 'function') {
-          globalScope.applySidebarVisibility(e.target.checked);
+          globalScope.applySidebarVisibility(e.target.checked, { persist: false });
         }
         if (typeof globalScope.applyWidgetVisibility === 'function') {
           globalScope.applyWidgetVisibility();
@@ -480,27 +754,100 @@
     if (appWeatherToggle) {
       appWeatherToggle.addEventListener('change', (e) => {
         const fn = (globalScope.HomebaseWidgetWeather && typeof globalScope.HomebaseWidgetWeather.setWeatherPreference === 'function')
-          ? (v) => globalScope.HomebaseWidgetWeather.setWeatherPreference(v)
+          ? (v, opt) => globalScope.HomebaseWidgetWeather.setWeatherPreference(v, opt)
           : (typeof globalScope.setWeatherPreference === 'function' ? globalScope.setWeatherPreference : null);
-        if (fn) fn(e.target.checked);
+        if (fn) fn(e.target.checked, { persist: false });
       });
     }
 
     if (appQuoteToggle) {
       appQuoteToggle.addEventListener('change', (e) => {
         const fn = (globalScope.HomebaseWidgetQuote && typeof globalScope.HomebaseWidgetQuote.setQuotePreference === 'function')
-          ? (v) => globalScope.HomebaseWidgetQuote.setQuotePreference(v)
+          ? (v, opt) => globalScope.HomebaseWidgetQuote.setQuotePreference(v, opt)
           : (typeof globalScope.setQuotePreference === 'function' ? globalScope.setQuotePreference : null);
-        if (fn) fn(e.target.checked);
+        if (fn) fn(e.target.checked, { persist: false });
       });
     }
 
     if (appNewsToggle) {
       appNewsToggle.addEventListener('change', (e) => {
         const fn = (globalScope.HomebaseWidgetNews && typeof globalScope.HomebaseWidgetNews.setNewsPreference === 'function')
-          ? (v) => globalScope.HomebaseWidgetNews.setNewsPreference(v)
+          ? (v, opt) => globalScope.HomebaseWidgetNews.setNewsPreference(v, opt)
           : (typeof globalScope.setNewsPreference === 'function' ? globalScope.setNewsPreference : null);
-        if (fn) fn(e.target.checked);
+        if (fn) fn(e.target.checked, { persist: false });
+      });
+    }
+
+    if (appTodoToggle) {
+      appTodoToggle.addEventListener('change', (e) => {
+        const fn = (globalScope.HomebaseWidgetTodo && typeof globalScope.HomebaseWidgetTodo.setTodoPreference === 'function')
+          ? (v, opt) => globalScope.HomebaseWidgetTodo.setTodoPreference(v, opt)
+          : (typeof globalScope.setTodoPreference === 'function' ? globalScope.setTodoPreference : null);
+        if (fn) fn(e.target.checked, { persist: false });
+      });
+    }
+
+    if (appWallpaperQualitySelect) {
+      appWallpaperQualitySelect.addEventListener('change', async (e) => {
+        const newQuality = e.target.value === 'high' ? 'high' : 'low';
+        globalScope.wallpaperQualityPreference = newQuality;
+        if (wallpaperQualityToggle) wallpaperQualityToggle.checked = newQuality === 'high';
+        const updatedSelection = typeof globalScope.rebuildCurrentSelectionFromGallery === 'function' ? globalScope.rebuildCurrentSelectionFromGallery() : globalScope.currentWallpaperSelection;
+        if (updatedSelection && typeof globalScope.applyWallpaperByType === 'function') {
+          await globalScope.applyWallpaperByType(updatedSelection, globalScope.wallpaperTypePreference || 'video');
+        }
+      });
+    }
+
+    if (wallpaperQualityToggle) {
+      wallpaperQualityToggle.addEventListener('change', async (e) => {
+        const newQuality = e.target.checked ? 'high' : 'low';
+        globalScope.wallpaperQualityPreference = newQuality;
+        if (appWallpaperQualitySelect) appWallpaperQualitySelect.value = newQuality;
+        const updatedSelection = typeof globalScope.rebuildCurrentSelectionFromGallery === 'function' ? globalScope.rebuildCurrentSelectionFromGallery() : globalScope.currentWallpaperSelection;
+        if (updatedSelection && typeof globalScope.applyWallpaperByType === 'function') {
+          await globalScope.applyWallpaperByType(updatedSelection, globalScope.wallpaperTypePreference || 'video');
+        }
+      });
+    }
+
+    if (appWallpaperTypeSelect) {
+      appWallpaperTypeSelect.addEventListener('change', async (e) => {
+        const newType = e.target.value === 'static' ? 'static' : 'video';
+        globalScope.wallpaperTypePreference = newType;
+        if (wallpaperTypeToggle) wallpaperTypeToggle.checked = newType === 'video';
+        const sel = globalScope.currentWallpaperSelection || (typeof globalScope.rebuildCurrentSelectionFromGallery === 'function' ? globalScope.rebuildCurrentSelectionFromGallery() : null);
+        if (sel && typeof globalScope.applyWallpaperByType === 'function') {
+          await globalScope.applyWallpaperByType(sel, newType);
+        }
+      });
+    }
+
+    if (wallpaperTypeToggle) {
+      wallpaperTypeToggle.addEventListener('change', async (e) => {
+        const newType = e.target.checked ? 'video' : 'static';
+        globalScope.wallpaperTypePreference = newType;
+        if (appWallpaperTypeSelect) appWallpaperTypeSelect.value = newType;
+        const sel = globalScope.currentWallpaperSelection || (typeof globalScope.rebuildCurrentSelectionFromGallery === 'function' ? globalScope.rebuildCurrentSelectionFromGallery() : null);
+        if (sel && typeof globalScope.applyWallpaperByType === 'function') {
+          await globalScope.applyWallpaperByType(sel, newType);
+        }
+      });
+    }
+
+    if (appDailyToggle) {
+      appDailyToggle.addEventListener('change', (e) => {
+        const isEnabled = e.target.checked;
+        globalScope.dailyRotationPreference = isEnabled;
+        if (galleryDailyToggle) galleryDailyToggle.checked = isEnabled;
+      });
+    }
+
+    if (galleryDailyToggle) {
+      galleryDailyToggle.addEventListener('change', (e) => {
+        const isEnabled = e.target.checked;
+        globalScope.dailyRotationPreference = isEnabled;
+        if (appDailyToggle) appDailyToggle.checked = isEnabled;
       });
     }
 
@@ -515,7 +862,7 @@
         }
       });
 
-      appDimSlider.addEventListener('change', async (e) => {
+      appDimSlider.addEventListener('change', (e) => {
         const val = parseInt(e.target.value, 10);
         if (typeof globalScope.applyBackgroundDim === 'function') {
           globalScope.applyBackgroundDim(val);
@@ -525,24 +872,6 @@
         }
         if (appDimSlider.value !== String(val)) {
           appDimSlider.value = val;
-        }
-
-        try {
-          if (globalScope.localStorage) {
-            globalScope.localStorage.setItem('fast-bg-dim', String(val));
-          }
-        } catch (_) {}
-
-        try {
-          if (globalScope.HomebaseSettingsStorage && typeof globalScope.HomebaseSettingsStorage.save === 'function') {
-            await globalScope.HomebaseSettingsStorage.save({ backgroundDim: val });
-          } else if (typeof globalScope.HomebaseStorage !== 'undefined' && globalScope.HomebaseStorage.set) {
-            await globalScope.HomebaseStorage.set('appBackgroundDim', val);
-          } else if (typeof browser !== 'undefined' && browser.storage?.local) {
-            await browser.storage.local.set({ appBackgroundDim: val });
-          }
-        } catch (err) {
-          console.warn('Failed to save background dim preference', err);
         }
       });
     }
@@ -714,7 +1043,11 @@
     syncTipsToggle,
     resetFormToDefaults,
     snapshotInitialWallpaperState,
-    getInitialWallpaperState
+    getInitialWallpaperState,
+    snapshotInitialSettingsState,
+    getInitialSettingsState,
+    restoreFormControlsFromSnapshot,
+    discardSettingsChanges
   };
 
   globalScope.HomebaseSettingsFormController = HomebaseSettingsFormController;

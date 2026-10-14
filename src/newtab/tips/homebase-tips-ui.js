@@ -43,6 +43,7 @@ let homebaseOnboardingHiddenForSession = false;
 let homebaseOnboardingCompletedThisSession = false;
 let homebaseTipCurrentIndex = null;
 let homebaseTipsRenderToken = 0;
+let homebaseTipsPreviewOverride = null;
 
 function getHomebaseLocalStorageItem(key) {
 
@@ -317,7 +318,12 @@ function renderTipOfDay() {
     return;
   }
 
-  if (getHomebaseLocalStorageItem(HOMEBASE_TIPS_DISABLED_KEY) === 'true') {
+  const overrideActive = typeof homebaseTipsPreviewOverride === 'boolean';
+  const tipsDisabled = overrideActive
+    ? !homebaseTipsPreviewOverride
+    : (getHomebaseLocalStorageItem(HOMEBASE_TIPS_DISABLED_KEY) === 'true');
+
+  if (tipsDisabled) {
     clearHomebaseTipsCard(tipCard);
     return;
   }
@@ -337,4 +343,10 @@ function renderTipOfDay() {
 
   renderHomebaseDailyTipCard(tipCard, initialIndex);
 
+}
+
+if (typeof window !== 'undefined') {
+  window.setHomebaseTipsPreviewOverride = (val) => {
+    homebaseTipsPreviewOverride = val;
+  };
 }

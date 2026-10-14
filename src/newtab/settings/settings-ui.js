@@ -39,6 +39,9 @@ window.SettingsUI = (() => {
                   if (window.HomebaseSettingsFormController) {
                     window.HomebaseSettingsFormController.syncTipsToggle();
                     window.HomebaseSettingsFormController.snapshotInitialWallpaperState();
+                    if (typeof window.HomebaseSettingsFormController.snapshotInitialSettingsState === 'function') {
+                      window.HomebaseSettingsFormController.snapshotInitialSettingsState();
+                    }
                   }
                 },
                 onAfterClose: () => {
@@ -122,6 +125,9 @@ window.SettingsUI = (() => {
           if (window.HomebaseSettingsFormController) {
             window.HomebaseSettingsFormController.syncTipsToggle();
             window.HomebaseSettingsFormController.snapshotInitialWallpaperState();
+            if (typeof window.HomebaseSettingsFormController.snapshotInitialSettingsState === 'function') {
+              window.HomebaseSettingsFormController.snapshotInitialSettingsState();
+            }
           }
         },
         onAfterClose: () => {
@@ -143,6 +149,9 @@ window.SettingsUI = (() => {
           if (window.HomebaseSettingsFormController) {
             window.HomebaseSettingsFormController.syncTipsToggle();
             window.HomebaseSettingsFormController.snapshotInitialWallpaperState();
+            if (typeof window.HomebaseSettingsFormController.snapshotInitialSettingsState === 'function') {
+              window.HomebaseSettingsFormController.snapshotInitialSettingsState();
+            }
           }
         }
       });

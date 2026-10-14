@@ -725,7 +725,7 @@
       document.documentElement.classList.toggle('quote-hidden', !shouldShow);
     }
 
-    if (typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.setFastMirror === 'function') {
+    if (options.persist !== false && typeof HomebaseWidgetStorage !== 'undefined' && typeof HomebaseWidgetStorage.setFastMirror === 'function') {
       HomebaseWidgetStorage.setFastMirror('fast-show-quote', shouldShow ? '1' : '0');
     }
 

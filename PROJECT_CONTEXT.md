@@ -1,9 +1,9 @@
 # Homebase — Project Context & Repository Knowledge Base
 
-**Project:** Homebase (Dual-Browser Manifest V3 Dashboard Extension)  
+**Project:** Homebase (Multi-browser Manifest V3 Dashboard Extension)  
 **Source Version:** `1.0.2` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
 **GitHub Release / Tag:** `v1.0.2` (commit `20fa9cd`, October 16, 2026)  
-**Recorded Firefox Store Version:** See [Section 2.1](#21-published-store-releases)  
+**Recorded Store Status (All Browsers):** See [Section 2.1](#21-published-store-releases)  
 **Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
 **Repository:** [https://github.com/time2shine/Homebase](https://github.com/time2shine/Homebase)  
 
@@ -35,21 +35,40 @@ The build system (`scripts/build.mjs`) builds all targets simultaneously into `d
 
 ### 2.1 Published Store Releases
 
-- **Official Firefox Listing**: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
-- **Last User-Reported Firefox Store Version**: `0.18.0`
+Centralized tracking for all browser extension stores. To prevent duplicate or divergent records across documentation, all store publication statuses are maintained exclusively here.
+
+#### Mozilla Firefox (Firefox Add-ons / AMO)
+- **Official Listing**: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
+- **Version History**: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
+- **Last User-Reported Store Version**: `0.18.0`
 - **Reported On**: 2026-10-16
 - **Verification Status**: User-reported, not independently verified.
 
+#### Google Chrome (Chrome Web Store)
+- **Official Listing URL**: [Chrome Web Store — Homebase](https://chromewebstore.google.com/detail/ejfdeilhncacmmbdfmgpolpoldpllbmc) *(URL supplied by user)*
+- **Latest Observed Listing Status**: Taken down.
+- **Evidence**: User-provided dashboard screenshot, recorded 2026-10-17.
+- **Submission Status**: Updated `v1.0.2` package prepared (`dist/homebase-chrome-1.0.2.zip`); resubmission and approval are not yet confirmed.
+- **Version Distinction Note**: Do not treat the prepared package version as the published store version.
+
+#### Microsoft Edge (Microsoft Edge Add-ons)
+- **Status**: Version `1.0.2`: In review.
+- **Evidence**: User-provided Partner Center screenshot, recorded 2026-10-17.
+- **Product ID**: `9de86c5a-b20f-4d2f-a019-77c7ed6d4e25`
+- **Public Listing URL**: Not yet available. Partner Center dashboard states it will be available once published.
+- **Reminder**: Record the official public URL here after publication. Do not construct or guess a store URL.
+
 #### Store Version Verification Rule
-When the latest published Firefox version is needed, check the official listing and, if necessary, its [version history](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/). Record the version and verification date after checking. If access fails, retain the last known value and mark it unverified/stale.
+When the latest published version for any store is needed, check the official listing (and version history where available). Record the verified version, verification date, and evidence source. If access fails or status cannot be verified directly, retain the last known value and mark it unverified/stale.
 
 #### Distinct Version States
-Always keep these three states strictly distinct:
+Always keep these four states strictly distinct:
 1. **Source / Package Version**: Declared in `package.json` and `manifests/*`.
 2. **GitHub Release / Tag Version**: Created in git and published on GitHub Releases (`vX.Y.Z`).
-3. **Published Firefox Store Version**: Live version approved and published on Firefox Add-ons (AMO).
+3. **Submitted Version**: Package uploaded to store developer consoles for review.
+4. **Publicly Published Store Version**: Live version approved and publicly available for install on the official store listing.
 
-*Note: A GitHub release, git tag, or local build does not prove a store release is published.*
+*Note: A GitHub release, git tag, local build, or pending store submission does not prove a store release is publicly published.*
 
 ---
 

@@ -25,19 +25,20 @@ Every release must produce complete documentation under `docs/releases/vX.Y.Z/`:
 
 ---
 
-## Published Store Listings
+## Published Store Listings & Centralized Store Tracking
 
-- **Official Firefox Add-ons (AMO) Listing**: [Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
-- **Firefox Add-ons Version History**: [Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
-- **Recorded Store Status**: Centralized in [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md#21-published-store-releases) to avoid version duplication across documentation.
+Homebase targets Firefox Add-ons (AMO), Chrome Web Store, and Microsoft Edge Add-ons. To prevent duplicate or divergent records across documentation, all active store publication statuses, listing URLs, product IDs, and verification records are centralized in:
+
+👉 **[`PROJECT_CONTEXT.md` Section 2.1 — Published Store Releases](../../PROJECT_CONTEXT.md#21-published-store-releases)**
 
 ### Store Version Verification Rule
-When the latest published Firefox version is needed, check the official listing and, if necessary, its version history. Record the version and verification date after checking in [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md#21-published-store-releases). If access fails, retain the last known value and mark it unverified/stale.
+When the latest published version for any store is needed, check the official listing (and version history where available). Record the verified version, verification date, and evidence source in [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md#21-published-store-releases). If access fails or status cannot be verified directly, retain the last known value and mark it unverified/stale.
 
 ### Distinct Version States
-Always keep these three states strictly distinct:
+Always keep these four states strictly distinct:
 1. **Source / Package Version**: Declared in `package.json` and `manifests/*`.
 2. **GitHub Release / Tag Version**: Created in git and published on GitHub Releases (`vX.Y.Z`).
-3. **Published Firefox Store Version**: Live version approved and published on Firefox Add-ons (AMO).
+3. **Submitted Version**: Package uploaded to store developer consoles for review.
+4. **Publicly Published Store Version**: Live version approved and publicly available for install on the official store listing.
 
-*Note: A GitHub release or local build does not prove a store release is published.*
+*Note: A GitHub release, git tag, local build, or pending store submission does not prove a store release is publicly published.*

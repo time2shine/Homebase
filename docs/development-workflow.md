@@ -106,6 +106,15 @@ Workflows are proportional to the risk and scope of each task. Do not apply heav
    - Protected source files (`src/preload.js`, `src/instant_load.js`) require explicit authorization to modify; authorization is not limited to release tasks.
    - Manifest version changes follow the release workflow.
    - Existing build scripts may regenerate `dist/` during authorized development and verification tasks. Never manually edit or stage generated `dist/` files.
+7. **Store Version Verification & Distinct Version States**:
+   - Official Firefox listing: [Firefox Add-ons (AMO)](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/) and [Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/).
+   - When the latest published Firefox version is needed, check the official listing and its version history. Record the version and verification date in [`PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md#21-published-store-releases). If access fails, retain the last known value and mark it unverified/stale.
+   - Do not duplicate store versions across multiple documents; track the active value centrally in [`PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md#21-published-store-releases).
+   - Maintain strict distinction between:
+     - **Source/package version** (`package.json`, manifests)
+     - **GitHub release/tag version** (git tags, GitHub releases)
+     - **Published Firefox store version** (live on AMO)
+   - A GitHub release or local build does not prove a store release is published.
 
 ---
 

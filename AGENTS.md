@@ -138,6 +138,15 @@ npm.cmd run zip:firefox      # Generate Firefox ZIP archive
 - Update release metadata simultaneously in `package.json`, `manifests/manifest.chrome.json`, `manifests/manifest.firefox.json`, and `src/CHANGELOG.md`.
 - Never commit or stage generated ZIP archives.
 - Ensure dual browser packages pass structural validation with root-level `manifest.json`.
+- **Published Store Verification**:
+  - Official Firefox Listing: [Firefox Add-ons (AMO)](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/) | [Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/).
+  - When the latest published Firefox version is needed, check the official listing and its version history. Record the version and verification date in [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md#21-published-store-releases). If access fails, retain the last known value and mark it unverified/stale.
+  - Do not duplicate store versions across multiple documents; centralize tracking in [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md#21-published-store-releases).
+- **Distinct Version States**: Always keep these three states strictly distinct:
+  1. *Source/package version*: Declared in `package.json` and manifests.
+  2. *GitHub release/tag version*: Tagged in git and released on GitHub (`vX.Y.Z`).
+  3. *Published Firefox store version*: Approved and live on Firefox Add-ons (AMO).
+  *(A GitHub release or local build does not prove a store release is published.)*
 
 ---
 

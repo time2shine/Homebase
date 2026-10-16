@@ -1,8 +1,9 @@
 # Homebase — Project Context & Repository Knowledge Base
 
 **Project:** Homebase (Dual-Browser Manifest V3 Dashboard Extension)  
-**Source Version:** `1.0.2` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`; prepared October 16, 2026)  
-**Confirmed Store Release:** `v1.0.1` locally tagged; `v1.0.2` prepared locally pending user approval  
+**Source Version:** `1.0.2` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
+**GitHub Release / Tag:** `v1.0.2` (commit `20fa9cd`, October 16, 2026)  
+**Recorded Firefox Store Version:** See [Section 2.1](#21-published-store-releases)  
 **Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
 **Repository:** [https://github.com/time2shine/Homebase](https://github.com/time2shine/Homebase)  
 
@@ -30,6 +31,24 @@ Homebase is engineered as a universal browser extension supporting both Chromium
 | **Mozilla Firefox** | [`manifests/manifest.firefox.json`](manifests/manifest.firefox.json) | Firefox Add-ons (AMO) | Manifest V3, Gecko ID (`rokonmagura@gmail.com`), `strict_min_version: 142.0`, `contextualIdentities` permission for container tabs. |
 
 The build system (`scripts/build.mjs`) builds both targets simultaneously into `dist/chrome/` and `dist/firefox/` by combining `src/` assets with target-specific manifests.
+
+### 2.1 Published Store Releases
+
+- **Official Firefox Listing**: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
+- **Last User-Reported Firefox Store Version**: `0.18.0`
+- **Reported On**: 2026-10-16
+- **Verification Status**: User-reported, not independently verified.
+
+#### Store Version Verification Rule
+When the latest published Firefox version is needed, check the official listing and, if necessary, its [version history](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/). Record the version and verification date after checking. If access fails, retain the last known value and mark it unverified/stale.
+
+#### Distinct Version States
+Always keep these three states strictly distinct:
+1. **Source / Package Version**: Declared in `package.json` and `manifests/*`.
+2. **GitHub Release / Tag Version**: Created in git and published on GitHub Releases (`vX.Y.Z`).
+3. **Published Firefox Store Version**: Live version approved and published on Firefox Add-ons (AMO).
+
+*Note: A GitHub release, git tag, or local build does not prove a store release is published.*
 
 ---
 
@@ -132,33 +151,21 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Branch & Head Commit**: Branch `main`, latest commit `9c8d0a4` (`docs: establish proportional development workflow and session handoff`, 2026-10-16).
-- **Current Objective**: Publication of Homebase v1.0.2 GitHub release.
-- **Release Target**: `v1.0.2` (Patch release incorporating inline-rename layout shift fix, Transparent/Custom Background settings redesign, nested controls, opacity hint correction, and schema validator fallback default fix).
-- **User-Approved Decisions**:
-  - Focused CSS fix for inline-rename layout shift without arbitrary `translateY` offsets.
-  - Mutually exclusive Transparent Background (default) and Custom Background settings with slider preservation.
-  - Aligned schema default and fallback in `schema-validator.js` (`default: false`, `fallback: false`) with `defaultSettingsState`.
-  - Incremented version metadata to `1.0.2` across `package.json`, manifests, `src/CHANGELOG.md`, `src/data.js`, and created `docs/release/v1.0.2-release-notes.md`.
-  - Authorized commit, push, tagging `v1.0.2`, and GitHub release publication.
-- **Working Tree Review & Verification Status**:
-  - **Inline-Rename Layout Fix** ([`src/new-tab.css`](src/new-tab.css)):
-    - *Status*: User confirmed the layout shift fix works in local testing.
-    - *Coverage & Limits*: Cross-browser coverage (Gecko vs Chromium) and additional edge cases (multiline titles, extreme zoom levels) are not established by that confirmation alone.
-  - **Bookmark Background Settings & Grouping** ([`src/new-tab.html`](src/new-tab.html), [`src/newtab/settings/settings-preferences.js`](src/newtab/settings/settings-preferences.js), [`src/newtab/settings/settings-form-controller.js`](src/newtab/settings/settings-form-controller.js), [`src/newtab/core/schema-validator.js`](src/newtab/core/schema-validator.js)):
-    - *Status*: Visual grouping implemented (nested `sub-settings-container` directly beneath Custom toggle with subtle left border, modest indentation, and zero empty space when collapsed). Investigated and resolved why Custom Background restored ON after deleting `appBookmarkTextBg`: `schema-validator.js` previously returned `true` as its schema default/fallback on missing keys during `HomebaseStorage.getMany()`, overriding `defaultSettingsState`. Corrected schema definition default and fallback to `false` and rebuilt dual distribution packages.
-    - *Limits*: Installed Chrome and Firefox manual checks for the corrected Transparent default, Save/reload, and Cancel/Close remain unconfirmed.
-  - **Associated Bookmark & Context Menu Changes** ([`src/newtab/bookmarks/bookmark-grid-controller.js`](src/newtab/bookmarks/bookmark-grid-controller.js), [`src/newtab/core/context-menu-controller.js`](src/newtab/core/context-menu-controller.js), [`src/assets/js/bookmark-editor.js`](src/assets/js/bookmark-editor.js), [`src/newtab/bookmarks/bookmark-editor-adapter.js`](src/newtab/bookmarks/bookmark-editor-adapter.js), [`src/new-tab.js`](src/new-tab.js), [`tests/unit/context-menu-controller.test.mjs`](tests/unit/context-menu-controller.test.mjs), [`tests/unit/bookmark-grid-rename-edit.test.mjs`](tests/unit/bookmark-grid-rename-edit.test.mjs)):
-    - *Status*: Working tree modifications preserved intact; automated test suite passes cleanly.
+- **Branch & Head Commit**: Branch `main`, latest commit `20fa9cd` (`release: prepare Homebase v1.0.2`, 2026-10-16). Tag `v1.0.2` pushed; GitHub release published with dual browser packages (`dist/homebase-chrome-1.0.2.zip`, `dist/homebase-firefox-1.0.2.zip`).
+- **Current Objective**: Documentation of official Firefox Add-ons (AMO) store listing and establishment of store release verification governance.
+- **Published Store Release Status**:
+  - Official Firefox Listing: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
+  - Version History: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
+  - Recorded Store Status: Tracked exclusively in [Section 2.1](#21-published-store-releases).
+- **Documentation Updates (Working Tree — Awaiting Review)**:
+  - `PROJECT_CONTEXT.md`: Added Section 2.1 ("Published Store Releases") with listing URL, user-reported version, reported date, unverified status, store version verification rule, and distinct version states definition.
+  - `docs/releases/README.md`: Added "Published Store Listings" with AMO listing and version history links, cross-referencing `PROJECT_CONTEXT.md` without duplicating version numbers.
+  - `docs/development-workflow.md`: Added item 7 under Section 4 ("Verification Standards") establishing the store version verification procedure and distinct version states invariant.
+  - `AGENTS.md`: Added store verification and distinct version states rules under Section 7 ("Release Governance").
 - **Evidence Attribution & Automated Verification**:
-  - Dual Packaging: `npm.cmd run zip:chrome` and `npm.cmd run zip:firefox` generated `dist/homebase-chrome-1.0.2.zip` and `dist/homebase-firefox-1.0.2.zip` (verified 2026-10-16 15:19:42).
-  - 4-Stage Test Suite: `npm.cmd test` passed as recorded in the preparation report:
-    - Stage 1 Syntax: 140 JavaScript files checked, 0 errors.
-    - Stage 2 Invariants: 75 scripts, 626 declarations checked, 0 collisions.
-    - Stage 3 Unit Tests: 561 tests passed across 51 test suites, 0 failures.
-    - Stage 4 Browser Smoke: Headless Edge passed DOM surfaces, core controllers, and perf marks with 0 errors.
-  - Verification Boundaries: Automated checks passed as recorded; installed Chrome/Firefox manual checks remain unconfirmed.
-  - Protected Files Guard: `src/preload.js` and `src/instant_load.js` unmodified; manifest version changes authorized for release; generated ZIPs and `dist/` uncommitted and unstaged.
-- **Known Blockers**: None blocking release publication.
-- **Next Task**: GitHub release publication and publication verification.
+  - v1.0.2 Dual Packaging & Release: GitHub release `v1.0.2` published with both assets (`dist/homebase-chrome-1.0.2.zip`, `dist/homebase-firefox-1.0.2.zip`).
+  - Automated Verification: 4-stage test pipeline passed during v1.0.2 release preparation (140 files syntax check, 75 scripts invariant check, 561 unit tests, Edge headless browser smoke); not rerun on commit `20fa9cd`.
+  - Verification Boundaries: Automated checks passed during release preparation as recorded; installed Chrome/Firefox manual checks for v1.0.2 runtime remain unconfirmed; store version status remains user-reported as documented in [Section 2.1](#21-published-store-releases).
+- **Working Tree Changes**: Clean (documentation update committed and pushed to origin/main).
+- **Next Task**: Normal ad-hoc development or maintenance.
 - **Last Updated Date**: October 16, 2026

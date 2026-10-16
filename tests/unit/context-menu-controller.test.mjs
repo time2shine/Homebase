@@ -31,6 +31,14 @@ function createContextMenuTestEnvironment(options = {}) {
       }
     },
     getElementById: (id) => elementsById[id] || null,
+    querySelector: (selector) => {
+      if (elementsById[selector]) return elementsById[selector];
+      const match = selector.match(/\[data-bookmark-id="([^"]+)"\]/);
+      if (match && elementsById[`item-${match[1]}`]) {
+        return elementsById[`item-${match[1]}`];
+      }
+      return null;
+    },
     querySelectorAll: (selector) => {
       if (selector === '.context-menu:not(.hidden)') {
         return Object.values(elementsById).filter(el =>
@@ -78,13 +86,39 @@ function createContextMenuTestEnvironment(options = {}) {
     return menuEl;
   }
 
+  function createMockGridItem(id, title = 'Item', isFolder = false) {
+    const classSet = new Set(['bookmark-item']);
+    const spanEl = {
+      tagName: 'SPAN',
+      textContent: title,
+      style: { display: '-webkit-box' }
+    };
+    const itemEl = {
+      tagName: 'DIV',
+      dataset: { bookmarkId: id, isFolder: isFolder ? 'true' : 'false' },
+      classList: {
+        contains: (c) => classSet.has(c),
+        add: (c) => classSet.add(c),
+        remove: (c) => classSet.delete(c)
+      },
+      style: {},
+      querySelector: (sel) => sel === 'span' ? spanEl : null,
+      appendChild: () => {},
+      closest: (sel) => sel === '.bookmark-item' ? itemEl : null
+    };
+
+    elementsById[`item-${id}`] = itemEl;
+    return itemEl;
+  }
+
   return {
     context,
     sandbox,
     elementsById,
     windowListeners,
     bodyChildren,
-    createMockMenu
+    createMockMenu,
+    createMockGridItem
   };
 }
 
@@ -285,3 +319,174 @@ test('Context Menu Controller - onContextChanged callback fires on show', () => 
   assert.equal(contextUpdate.itemId, 'bm-555');
   assert.equal(contextUpdate.isFolder, false);
 });
+
+test('Context Menu Controller - Rename bookmark works and passes gridItem and node', async () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-icon-menu');
+  const mockItem = env.createMockGridItem('bm-101', 'GitHub', false);
+
+  const mockBookmark = { id: 'bm-101', title: 'GitHub', url: 'https://github.com' };
+  const mockTree = [{ id: 'root', children: [mockBookmark] }];
+
+  let renameInvoked = null;
+  ctrl.initialize({
+    getBookmarkTree: () => mockTree,
+    findBookmarkNodeById: (root, id) => (id === 'bm-101' ? mockBookmark : null),
+    showGridItemRenameInput: (item, node) => {
+      renameInvoked = { item, node };
+    }
+  });
+
+  ctrl.show(menu, 100, 100, { itemId: 'bm-101', isFolder: false, sourceTile: mockItem });
+  await ctrl.handleAction('rename');
+
+  assert.ok(renameInvoked, 'showGridItemRenameInput was called');
+  assert.equal(renameInvoked.item, mockItem);
+  assert.equal(renameInvoked.node.title, 'GitHub');
+});
+
+test('Context Menu Controller - Rename folder works and passes gridItem and folder node', async () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-grid-folder-menu');
+  const mockFolderItem = env.createMockGridItem('f-201', 'Dev Tools', true);
+
+  const mockFolderNode = { id: 'f-201', title: 'Dev Tools', children: [] };
+  const mockTree = [{ id: 'root', children: [mockFolderNode] }];
+
+  let renameInvoked = null;
+  ctrl.initialize({
+    getBookmarkTree: () => mockTree,
+    findBookmarkNodeById: (root, id) => (id === 'f-201' ? mockFolderNode : null),
+    showGridItemRenameInput: (item, node) => {
+      renameInvoked = { item, node };
+    }
+  });
+
+  ctrl.show(menu, 100, 100, { itemId: 'f-201', isFolder: true, sourceTile: mockFolderItem });
+  await ctrl.handleAction('rename');
+
+  assert.ok(renameInvoked, 'showGridItemRenameInput was called for folder');
+  assert.equal(renameInvoked.item, mockFolderItem);
+  assert.equal(renameInvoked.node.title, 'Dev Tools');
+  assert.equal(renameInvoked.node.id, 'f-201');
+});
+
+test('Context Menu Controller - Rename folder works when getBookmarkTree returns a Promise', async () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-grid-folder-menu');
+  const mockFolderItem = env.createMockGridItem('f-301', 'Async Folder', true);
+
+  const mockFolderNode = { id: 'f-301', title: 'Async Folder', children: [] };
+  const mockTree = [{ id: 'root', children: [mockFolderNode] }];
+
+  let renameInvoked = null;
+  ctrl.initialize({
+    getBookmarkTree: async () => mockTree,
+    findBookmarkNodeById: (root, id) => (id === 'f-301' ? mockFolderNode : null),
+    showGridItemRenameInput: (item, node) => {
+      renameInvoked = { item, node };
+    }
+  });
+
+  ctrl.show(menu, 100, 100, { itemId: 'f-301', isFolder: true, sourceTile: mockFolderItem });
+  await ctrl.handleAction('rename');
+
+  assert.ok(renameInvoked, 'showGridItemRenameInput called when tree is returned asynchronously');
+  assert.equal(renameInvoked.node.title, 'Async Folder');
+});
+
+test('Context Menu Controller - Edit bookmark works and calls showEditBookmarkModal', async () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-icon-menu');
+  const mockItem = env.createMockGridItem('bm-401', 'Reddit', false);
+
+  let editBookmarkCalled = null;
+  ctrl.initialize({
+    showEditBookmarkModal: (id) => {
+      editBookmarkCalled = id;
+    }
+  });
+
+  ctrl.show(menu, 100, 100, { itemId: 'bm-401', isFolder: false, sourceTile: mockItem });
+  await ctrl.handleAction('edit');
+
+  assert.equal(editBookmarkCalled, 'bm-401');
+});
+
+test('Context Menu Controller - Edit folder works and calls showEditFolderModal with resolved node', async () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-grid-folder-menu');
+  const mockFolderItem = env.createMockGridItem('f-501', 'Work Projects', true);
+
+  const mockFolderNode = { id: 'f-501', title: 'Work Projects', children: [] };
+  const mockTree = [{ id: 'root', children: [mockFolderNode] }];
+
+  let editFolderCalled = null;
+  ctrl.initialize({
+    getBookmarkTree: () => mockTree,
+    findBookmarkNodeById: (root, id) => (id === 'f-501' ? mockFolderNode : null),
+    showEditFolderModal: (folderNode) => {
+      editFolderCalled = folderNode;
+    }
+  });
+
+  ctrl.show(menu, 100, 100, { itemId: 'f-501', isFolder: true, sourceTile: mockFolderItem });
+  await ctrl.handleAction('edit');
+
+  assert.ok(editFolderCalled, 'showEditFolderModal was called');
+  assert.equal(editFolderCalled.id, 'f-501');
+  assert.equal(editFolderCalled.title, 'Work Projects');
+});
+
+test('Context Menu Controller - Edit folder works when getBookmarkTree returns a Promise', async () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-grid-folder-menu');
+  const mockFolderItem = env.createMockGridItem('f-601', 'Async Edit Folder', true);
+
+  const mockFolderNode = { id: 'f-601', title: 'Async Edit Folder', children: [] };
+  const mockTree = [{ id: 'root', children: [mockFolderNode] }];
+
+  let editFolderCalled = null;
+  ctrl.initialize({
+    getBookmarkTree: async () => mockTree,
+    findBookmarkNodeById: (root, id) => (id === 'f-601' ? mockFolderNode : null),
+    showEditFolderModal: (folderNode) => {
+      editFolderCalled = folderNode;
+    }
+  });
+
+  ctrl.show(menu, 100, 100, { itemId: 'f-601', isFolder: true, sourceTile: mockFolderItem });
+  await ctrl.handleAction('edit');
+
+  assert.ok(editFolderCalled, 'showEditFolderModal called when tree is returned asynchronously');
+  assert.equal(editFolderCalled.title, 'Async Edit Folder');
+});
+
+test('Context Menu Controller - Edit folder falls back to folderId when node is not in tree', async () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-grid-folder-menu');
+
+  let editFolderCalled = null;
+  ctrl.initialize({
+    getBookmarkTree: () => [{ id: 'root', children: [] }],
+    findBookmarkNodeById: () => null,
+    showEditFolderModal: (target) => {
+      editFolderCalled = target;
+    }
+  });
+
+  ctrl.show(menu, 100, 100, { itemId: 'f-999', isFolder: true });
+  await ctrl.handleAction('edit');
+
+  assert.ok(editFolderCalled, 'showEditFolderModal called with fallback');
+  const id = typeof editFolderCalled === 'object' ? editFolderCalled.id : editFolderCalled;
+  assert.equal(id, 'f-999');
+});
+

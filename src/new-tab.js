@@ -271,9 +271,15 @@ function logInitSettled(name, result) {
   runGuard(() => {
     if (typeof window !== 'undefined' && window.HomebaseContextMenuController && typeof window.HomebaseContextMenuController.initialize === 'function') {
       window.HomebaseContextMenuController.initialize({
-        getBookmarkTree: () => (window.HomebaseBookmarkTreeService && typeof window.HomebaseBookmarkTreeService.getBookmarkTree === 'function'
-          ? window.HomebaseBookmarkTreeService.getBookmarkTree()
+        getBookmarkTree: () => (window.HomebaseBookmarkTreeService && typeof window.HomebaseBookmarkTreeService.getTree === 'function'
+          ? window.HomebaseBookmarkTreeService.getTree()
           : (typeof window !== 'undefined' ? window.bookmarkTree : null)),
+        getBookmarkTreeState: () => (window.HomebaseBookmarkTreeService && typeof window.HomebaseBookmarkTreeService.getTree === 'function'
+          ? window.HomebaseBookmarkTreeService.getTree()
+          : (typeof window !== 'undefined' ? window.bookmarkTree : null)),
+        getCurrentGridFolderNode: () => (window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.getCurrentGridFolderNode === 'function'
+          ? window.HomebaseBookmarkGridController.getCurrentGridFolderNode()
+          : (typeof window !== 'undefined' ? window.currentGridFolderNode : null)),
         findBookmarkNodeById: (root, id) => findBookmarkNodeById(root, id),
         openFolderFromContext: (folderId) => openFolderFromContext(folderId),
         openFolderAll: (folderId) => (window.openFolderAll ? window.openFolderAll(folderId) : undefined),

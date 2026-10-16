@@ -459,6 +459,30 @@ test('settings-preferences: loadAppSettingsFromStorage falls back to browser.sto
   assert.equal(env.sandbox.appGridAnimationPreference, 'fade');
 });
 
+test('settings-preferences: loadAppSettingsFromStorage defaults bookmarkTextBg to false when key is missing', async () => {
+  const env = createSettingsTestEnvironment({
+    initialStorage: {}
+  });
+  vm.runInContext(settingsPreferencesScriptCode, env.context);
+
+  await env.sandbox.loadAppSettingsFromStorage();
+
+  assert.equal(env.sandbox.appBookmarkTextBgPreference, false);
+});
+
+test('settings-preferences: loadAppSettingsFromStorage preserves explicitly saved bookmarkTextBg true', async () => {
+  const env = createSettingsTestEnvironment({
+    initialStorage: {
+      appBookmarkTextBg: true
+    }
+  });
+  vm.runInContext(settingsPreferencesScriptCode, env.context);
+
+  await env.sandbox.loadAppSettingsFromStorage();
+
+  assert.equal(env.sandbox.appBookmarkTextBgPreference, true);
+});
+
 test('settings-preferences: performance mode toggle persists via HomebaseStorage.set and syncs fast mirror', async () => {
   const env = createSettingsTestEnvironment();
   vm.runInContext(settingsPreferencesScriptCode, env.context);

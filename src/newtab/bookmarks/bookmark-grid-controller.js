@@ -1421,6 +1421,14 @@
             updateVirtualGrid();
           }
 
+          // 6. Update folder tab row if matching tab is displayed
+          if (typeof document !== 'undefined') {
+            const matchingTab = document.querySelector(`.bookmark-folder-tab[data-folder-id="${bookmarkNode.id}"]`);
+            if (matchingTab) {
+              matchingTab.textContent = newName;
+            }
+          }
+
           cleanup();
         } catch (err) {
           console.error('Error updating bookmark:', err);

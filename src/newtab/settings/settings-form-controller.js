@@ -130,6 +130,29 @@
     const perfDebugToggle = document.getElementById('app-perf-debug-overlay-toggle');
     if (perfDebugToggle && snapshot.debugPerfOverlay !== undefined) perfDebugToggle.checked = !!snapshot.debugPerfOverlay;
 
+    const customBgToggle = document.getElementById('app-bookmark-custom-bg-toggle') || document.getElementById('app-bookmark-text-bg-toggle');
+    const transparentBgToggle = document.getElementById('app-bookmark-transparent-bg-toggle');
+    const customBgSubSettings = document.getElementById('app-bookmark-custom-bg-sub-settings');
+    const textBgRow = document.getElementById('app-bookmark-text-bg-color-row');
+    const textBgOpacityRow = document.getElementById('app-bookmark-text-bg-opacity-row');
+    const textBgBlurRow = document.getElementById('app-bookmark-text-blur-row');
+    if (snapshot.bookmarkTextBg !== undefined) {
+      const isCustom = !!snapshot.bookmarkTextBg;
+      if (customBgToggle) customBgToggle.checked = isCustom;
+      if (transparentBgToggle) transparentBgToggle.checked = !isCustom;
+      if (customBgSubSettings) {
+        if (typeof globalScope.setSubSettingsExpanded === 'function') {
+          globalScope.setSubSettingsExpanded(customBgSubSettings, isCustom);
+        } else {
+          customBgSubSettings.classList.toggle('expanded', isCustom);
+        }
+        customBgSubSettings.classList.toggle('hidden', !isCustom);
+      }
+      if (textBgRow) textBgRow.classList.toggle('hidden', !isCustom);
+      if (textBgOpacityRow) textBgOpacityRow.classList.toggle('hidden', !isCustom);
+      if (textBgBlurRow) textBgBlurRow.classList.toggle('hidden', !isCustom);
+    }
+
     const wpQualitySelect = document.getElementById('app-wallpaper-quality-select');
     if (wpQualitySelect && snapshot.wallpaperQuality) wpQualitySelect.value = snapshot.wallpaperQuality;
     const wpQualityToggle = document.getElementById('gallery-wallpaper-quality-toggle') || document.getElementById('wallpaper-quality-toggle');
@@ -304,7 +327,11 @@
     const nextBackgroundDim = appDimSlider ? parseInt(appDimSlider.value, 10) || 0 : 0;
     const nextSearchOpenNewTab = appSearchOpenNewTabToggle ? appSearchOpenNewTabToggle.checked : false;
     const nextBookmarkNewTab = document.getElementById('app-bookmark-open-new-tab-toggle')?.checked || false;
-    const nextBookmarkTextBg = document.getElementById('app-bookmark-text-bg-toggle')?.checked || false;
+    const nextBookmarkTextBg = document.getElementById('app-bookmark-custom-bg-toggle')
+      ? document.getElementById('app-bookmark-custom-bg-toggle').checked
+      : (document.getElementById('app-bookmark-transparent-bg-toggle')
+        ? !document.getElementById('app-bookmark-transparent-bg-toggle').checked
+        : (document.getElementById('app-bookmark-text-bg-toggle')?.checked || false));
     const nextShowWeather = appWeatherToggle ? appWeatherToggle.checked : true;
     const nextShowQuote = appQuoteToggle ? appQuoteToggle.checked : true;
     const nextShowNews = appNewsToggle ? appNewsToggle.checked : false;
@@ -966,19 +993,54 @@
     }
 
     // Bookmark styling toggles & sliders
-    const textBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
+    const transparentBgToggle = document.getElementById('app-bookmark-transparent-bg-toggle');
+    const customBgToggle = document.getElementById('app-bookmark-custom-bg-toggle') || document.getElementById('app-bookmark-text-bg-toggle');
+    const customBgSubSettings = document.getElementById('app-bookmark-custom-bg-sub-settings');
     const textBgRow = document.getElementById('app-bookmark-text-bg-color-row');
     const textBgOpacityRow = document.getElementById('app-bookmark-text-bg-opacity-row');
     const textBgOpacitySlider = document.getElementById('app-bookmark-text-opacity-slider');
     const textBgBlurRow = document.getElementById('app-bookmark-text-blur-row');
     const textBgBlurSlider = document.getElementById('app-bookmark-text-blur-slider');
 
-    if (textBgToggle) {
-      textBgToggle.addEventListener('change', () => {
-        const isHidden = !textBgToggle.checked;
-        if (textBgRow) textBgRow.classList.toggle('hidden', isHidden);
-        if (textBgOpacityRow) textBgOpacityRow.classList.toggle('hidden', isHidden);
-        if (textBgBlurRow) textBgBlurRow.classList.toggle('hidden', isHidden);
+    const updateBookmarkBgModeUI = (isCustom) => {
+      if (transparentBgToggle) transparentBgToggle.checked = !isCustom;
+      if (customBgToggle) customBgToggle.checked = isCustom;
+      if (customBgSubSettings) {
+        if (typeof globalScope.setSubSettingsExpanded === 'function') {
+          globalScope.setSubSettingsExpanded(customBgSubSettings, isCustom);
+        } else {
+          customBgSubSettings.classList.toggle('expanded', isCustom);
+        }
+        customBgSubSettings.classList.toggle('hidden', !isCustom);
+      }
+      if (textBgRow) textBgRow.classList.toggle('hidden', !isCustom);
+      if (textBgOpacityRow) textBgOpacityRow.classList.toggle('hidden', !isCustom);
+      if (textBgBlurRow) textBgBlurRow.classList.toggle('hidden', !isCustom);
+
+      if (typeof globalScope.applyBookmarkTextBg === 'function') {
+        globalScope.applyBookmarkTextBg(isCustom);
+      }
+      if (isCustom) {
+        if (typeof globalScope.applyBookmarkTextBgOpacity === 'function' && textBgOpacitySlider) {
+          globalScope.applyBookmarkTextBgOpacity(parseFloat(textBgOpacitySlider.value));
+        }
+        if (typeof globalScope.applyBookmarkTextBgBlur === 'function' && textBgBlurSlider) {
+          globalScope.applyBookmarkTextBgBlur(parseInt(textBgBlurSlider.value, 10));
+        }
+      }
+    };
+
+    if (transparentBgToggle) {
+      transparentBgToggle.addEventListener('change', () => {
+        const isTransparent = transparentBgToggle.checked;
+        updateBookmarkBgModeUI(!isTransparent);
+      });
+    }
+
+    if (customBgToggle) {
+      customBgToggle.addEventListener('change', () => {
+        const isCustom = customBgToggle.checked;
+        updateBookmarkBgModeUI(isCustom);
       });
     }
 

@@ -158,6 +158,65 @@
     }
   }
 
+  async function resolveBookmarkNode(itemId, tileEl) {
+    if (!itemId) return null;
+
+    // 1. Try finding in current grid folder children (fastest, direct match)
+    const currentFolder = (typeof _deps.getCurrentGridFolderNode === 'function' ? _deps.getCurrentGridFolderNode() : null) ||
+      (typeof window !== 'undefined' && window.HomebaseBookmarkGridController && typeof window.HomebaseBookmarkGridController.getCurrentGridFolderNode === 'function'
+        ? window.HomebaseBookmarkGridController.getCurrentGridFolderNode()
+        : (typeof currentGridFolderNode !== 'undefined' ? currentGridFolderNode : (typeof window !== 'undefined' ? window.currentGridFolderNode : null)));
+
+    if (currentFolder && Array.isArray(currentFolder.children)) {
+      const match = currentFolder.children.find(child => child && String(child.id) === String(itemId));
+      if (match) return match;
+    }
+
+    // 2. Try finding in bookmark tree via findBookmarkNodeById
+    const findFn = _deps.findBookmarkNodeById ||
+      (typeof findBookmarkNodeById === 'function' ? findBookmarkNodeById : (typeof window !== 'undefined' ? window.findBookmarkNodeById : null));
+
+    if (findFn) {
+      // 2a. Check synchronous tree sources first
+      let syncTree = (_deps.getBookmarkTreeState && typeof _deps.getBookmarkTreeState === 'function' ? _deps.getBookmarkTreeState() : null) ||
+        (typeof window !== 'undefined' && window.HomebaseBookmarkTreeService && typeof window.HomebaseBookmarkTreeService.getTree === 'function'
+          ? window.HomebaseBookmarkTreeService.getTree()
+          : (typeof bookmarkTree !== 'undefined' ? bookmarkTree : (typeof window !== 'undefined' ? window.bookmarkTree : null)));
+
+      if (Array.isArray(syncTree) && syncTree[0]) {
+        const found = findFn(syncTree[0], itemId);
+        if (found) return found;
+      }
+
+      // 2b. Check _deps.getBookmarkTree (may return array or Promise)
+      if (typeof _deps.getBookmarkTree === 'function') {
+        let treeResult = _deps.getBookmarkTree();
+        if (treeResult && typeof treeResult.then === 'function') {
+          treeResult = await treeResult;
+        }
+        if (Array.isArray(treeResult) && treeResult[0]) {
+          const found = findFn(treeResult[0], itemId);
+          if (found) return found;
+        }
+      }
+    }
+
+    // 3. Fallback: If gridItem DOM element exists, construct minimal node from DOM metadata
+    const el = tileEl || (typeof document !== 'undefined' ? document.querySelector(`.bookmark-item[data-bookmark-id="${itemId}"]`) : null);
+    if (el) {
+      const isFolder = el.dataset && el.dataset.isFolder === 'true';
+      const span = el.querySelector('span');
+      const title = span ? span.textContent.trim() : '';
+      return {
+        id: String(itemId),
+        title,
+        ...(isFolder ? { children: [] } : {})
+      };
+    }
+
+    return null;
+  }
+
   function setupDefaultActionHandlers() {
     _defaultActionHandlers = {
       'open': ({ itemId }) => {
@@ -176,25 +235,21 @@
           return openFolderAll(itemId);
         }
       },
-      'rename': ({ itemId }) => {
+      'rename': async ({ itemId, sourceTile }) => {
         if (typeof document === 'undefined') return;
-        const gridItem = document.querySelector(`.bookmark-item[data-bookmark-id="${itemId}"]`);
-        const tree = _deps.getBookmarkTree ? _deps.getBookmarkTree() : (typeof bookmarkTree !== 'undefined' ? bookmarkTree : null);
-        const findFn = _deps.findBookmarkNodeById || (typeof findBookmarkNodeById === 'function' ? findBookmarkNodeById : null);
-        const node = (tree && tree[0] && findFn) ? findFn(tree[0], itemId) : null;
+        const gridItem = sourceTile || document.querySelector(`.bookmark-item[data-bookmark-id="${itemId}"]`);
+        const node = await resolveBookmarkNode(itemId, gridItem);
         const renameFn = _deps.showGridItemRenameInput || (typeof showGridItemRenameInput === 'function' ? showGridItemRenameInput : null);
         if (gridItem && node && renameFn) {
           renameFn(gridItem, node);
         }
       },
-      'edit': ({ itemId, isFolder }) => {
+      'edit': async ({ itemId, isFolder, sourceTile }) => {
         if (isFolder) {
-          const tree = _deps.getBookmarkTree ? _deps.getBookmarkTree() : (typeof bookmarkTree !== 'undefined' ? bookmarkTree : null);
-          const findFn = _deps.findBookmarkNodeById || (typeof findBookmarkNodeById === 'function' ? findBookmarkNodeById : null);
-          const folderNode = (tree && tree[0] && findFn) ? findFn(tree[0], itemId) : null;
+          const folderNode = await resolveBookmarkNode(itemId, sourceTile);
           const editFolderFn = _deps.showEditFolderModal || (typeof showEditFolderModal === 'function' ? showEditFolderModal : null);
-          if (folderNode && editFolderFn) {
-            editFolderFn(folderNode);
+          if (editFolderFn) {
+            editFolderFn(folderNode || itemId);
           }
         } else {
           const editBookmarkFn = _deps.showEditBookmarkModal || (typeof showEditBookmarkModal === 'function' ? showEditBookmarkModal : null);
@@ -427,7 +482,8 @@
     attachEventListeners,
     getContextData: () => ({ ..._contextData }),
     setContextData: (data) => { Object.assign(_contextData, data); },
-    getActiveMenu: () => _activeMenu
+    getActiveMenu: () => _activeMenu,
+    resolveBookmarkNode
   };
 
   if (typeof window !== 'undefined') {

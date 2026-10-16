@@ -1718,6 +1718,13 @@
         }
       }
 
+      if (typeof document !== 'undefined') {
+        const tabBtn = document.querySelector(`.bookmark-folder-tab[data-folder-id="${editFolderTargetId}"]`);
+        if (tabBtn) {
+          tabBtn.textContent = newName;
+        }
+      }
+
       hideEditFolderModal();
     } catch (err) {
       console.error('Save failed', err);
@@ -2165,10 +2172,14 @@
     setContext(options.context);
     setupEditFolderModal();
 
-    let folderNode = options.folderNode || null;
-    if (!folderNode && options.folderId) {
+    let folderNode = (options.folderNode && typeof options.folderNode === 'object') ? options.folderNode : null;
+    const folderId = options.folderId || (typeof options.folderNode === 'string' ? options.folderNode : (folderNode ? folderNode.id : null));
+    if (!folderNode && folderId) {
       const root = getBookmarkTreeRoot();
-      folderNode = root ? findBookmarkNodeById(root, options.folderId) : null;
+      folderNode = root ? findBookmarkNodeById(root, folderId) : null;
+    }
+    if (!folderNode && folderId) {
+      folderNode = { id: String(folderId), title: '' };
     }
 
     showEditFolderModal(folderNode);

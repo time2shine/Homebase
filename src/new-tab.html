@@ -1795,19 +1795,19 @@
 
 
 
-            <div class="app-setting-row">
+            <div class="app-setting-row" id="app-bookmark-transparent-bg-row">
 
               <div class="app-setting-label">
 
-                <div class="title">Show text background</div>
+                <div class="title">Transparent Background</div>
 
-                <div class="hint">Add a background to labels for better readability.</div>
+                <div class="hint">Show bookmark icons and titles directly over the wallpaper.</div>
 
               </div>
 
               <label class="app-switch">
 
-                <input type="checkbox" id="app-bookmark-text-bg-toggle">
+                <input type="checkbox" id="app-bookmark-transparent-bg-toggle">
 
                 <span class="app-switch-track"></span>
 
@@ -1815,55 +1815,83 @@
 
             </div>
 
-            <div class="app-setting-row" id="app-bookmark-text-bg-color-row">
+            <div class="app-setting-row" id="app-bookmark-custom-bg-row">
 
               <div class="app-setting-label">
 
-                <div class="title">Text background color</div>
+                <div class="title">Custom Background</div>
 
-                <div class="hint">Choose the color for the text label background.</div>
+                <div class="hint">Customize bookmark background opacity, blur, and color.</div>
 
               </div>
 
-              <button id="app-bookmark-text-bg-color-trigger" class="color-picker-trigger"></button>
+              <label class="app-switch">
+
+                <input type="checkbox" id="app-bookmark-custom-bg-toggle">
+
+                <span class="app-switch-track"></span>
+
+              </label>
 
             </div>
 
-            <div class="app-setting-row" id="app-bookmark-text-bg-opacity-row">
+            <div id="app-bookmark-custom-bg-sub-settings" class="sub-settings-container hidden">
 
-              <div class="app-setting-label">
+              <div class="sub-settings-inner">
 
-                <div class="title">Background Opacity</div>
+                <div class="app-setting-row" id="app-bookmark-text-bg-color-row">
 
-                <div class="hint">Adjust transparency (0% to 100%).</div>
+                  <div class="app-setting-label">
 
-              </div>
+                    <div class="title">Text background color</div>
 
-              <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="hint">Choose the color for the text label background.</div>
 
-                <input type="range" id="app-bookmark-text-opacity-slider" min="0.1" max="1" step="0.05" style="width: 100px;">
+                  </div>
 
-                <span id="app-bookmark-text-opacity-value" style="font-size: 0.9em; font-weight: 600; width: 35px;">65%</span>
+                  <button id="app-bookmark-text-bg-color-trigger" class="color-picker-trigger"></button>
 
-              </div>
+                </div>
 
-            </div>
+                <div class="app-setting-row" id="app-bookmark-text-bg-opacity-row">
 
-            <div class="app-setting-row" id="app-bookmark-text-blur-row">
+                  <div class="app-setting-label">
 
-              <div class="app-setting-label">
+                    <div class="title">Background Opacity</div>
 
-                <div class="title">Background Blur</div>
+                    <div class="hint">Adjust background opacity (10% to 100%).</div>
 
-                <div class="hint">Adjust the frosted glass effect.</div>
+                  </div>
 
-              </div>
+                  <div style="display: flex; align-items: center; gap: 10px;">
 
-              <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="range" id="app-bookmark-text-opacity-slider" min="0.1" max="1" step="0.05" style="width: 100px;">
 
-                <input type="range" id="app-bookmark-text-blur-slider" min="0" max="20" step="1" style="width: 100px;">
+                    <span id="app-bookmark-text-opacity-value" style="font-size: 0.9em; font-weight: 600; width: 35px;">65%</span>
 
-                <span id="app-bookmark-text-blur-value" style="font-size: 0.9em; font-weight: 600; width: 35px;">4px</span>
+                  </div>
+
+                </div>
+
+                <div class="app-setting-row" id="app-bookmark-text-blur-row">
+
+                  <div class="app-setting-label">
+
+                    <div class="title">Background Blur</div>
+
+                    <div class="hint">Adjust the frosted glass effect.</div>
+
+                  </div>
+
+                  <div style="display: flex; align-items: center; gap: 10px;">
+
+                    <input type="range" id="app-bookmark-text-blur-slider" min="0" max="20" step="1" style="width: 100px;">
+
+                    <span id="app-bookmark-text-blur-value" style="font-size: 0.9em; font-weight: 600; width: 35px;">4px</span>
+
+                  </div>
+
+                </div>
 
               </div>
 

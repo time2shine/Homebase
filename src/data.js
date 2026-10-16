@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.0.1',
-  date: '2026-10-14',
+  version: '1.0.2',
+  date: '2026-10-16',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Improved Settings reliability',
-      desc: 'Settings modal now operates with strict transactional integrity so changes only commit when you explicitly click Save.'
+      title: 'Bookmark background settings',
+      desc: 'Transparent and Custom backgrounds are now mutually exclusive toggles with visually grouped controls.'
     },
     {
       type: 'FIX',
-      title: 'Better Save/Cancel behavior',
-      desc: 'Canceling or closing the Settings panel instantly reverts all temporary visual previews without altering saved settings.'
+      title: 'Transparent mode default',
+      desc: 'Resolved schema validation fallback ensuring unconfigured profiles default to Transparent background.'
     },
     {
       type: 'FIX',
-      title: 'Settings preview bug fixes',
-      desc: 'Fixed premature storage persistence across widget toggles, Homebase tips, wallpaper quality, and layout order.'
+      title: 'Bookmark inline-rename layout',
+      desc: 'Fixed layout shifting when renaming bookmark tiles on the dashboard grid.'
     }
   ]
 };

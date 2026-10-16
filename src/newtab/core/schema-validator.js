@@ -435,9 +435,9 @@ const SCHEMA_DEFINITIONS = {
     sanitize: (val, fallback = true) => (typeof val === 'boolean' ? val : (fallback ? false : undefined))
   },
   appBookmarkTextBg: {
-    default: true,
+    default: false,
     validate: (val) => typeof val === 'boolean',
-    sanitize: (val, fallback = true) => (typeof val === 'boolean' ? val : (fallback ? true : undefined))
+    sanitize: (val, fallback = true) => (typeof val === 'boolean' ? val : (fallback ? false : undefined))
   },
   appBookmarkTextBgColor: {
     default: '#2CA5FF',

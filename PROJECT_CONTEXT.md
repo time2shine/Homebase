@@ -1,8 +1,8 @@
 # Homebase — Project Context & Repository Knowledge Base
 
 **Project:** Homebase (Dual-Browser Manifest V3 Dashboard Extension)  
-**Source Version:** `1.0.1` (`package.json`, manifests; commit `1ce8034`, October 14, 2026)  
-**Confirmed Store Release:** Unknown / unconfirmed from local repository evidence alone (`v1.0.1` git tag exists locally)  
+**Source Version:** `1.0.2` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`; prepared October 16, 2026)  
+**Confirmed Store Release:** `v1.0.1` locally tagged; `v1.0.2` prepared locally pending user approval  
 **Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
 **Repository:** [https://github.com/time2shine/Homebase](https://github.com/time2shine/Homebase)  
 
@@ -132,30 +132,33 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Branch & Head Commit**: Branch `main`, latest commit `1ce8034` (`release: prepare Homebase v1.0.1`, 2026-10-14).
-- **Current Objective**: Review and manually verify bookmark background settings in live browser, followed by staging and commit after authorization.
-- **Workflow Documentation Review Status**:
-  - Review is complete ([`docs/development-workflow.md`](docs/development-workflow.md), [`AGENTS.md`](AGENTS.md), [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md), [`docs/README.md`](docs/README.md)).
-  - Proportional 3-tier task sizing, protected-file rules, and AI handoff standards established.
-  - Authorized for commit as documentation-only milestone.
+- **Branch & Head Commit**: Branch `main`, latest commit `9c8d0a4` (`docs: establish proportional development workflow and session handoff`, 2026-10-16).
+- **Current Objective**: Publication of Homebase v1.0.2 GitHub release.
+- **Release Target**: `v1.0.2` (Patch release incorporating inline-rename layout shift fix, Transparent/Custom Background settings redesign, nested controls, opacity hint correction, and schema validator fallback default fix).
 - **User-Approved Decisions**:
   - Focused CSS fix for inline-rename layout shift without arbitrary `translateY` offsets.
   - Mutually exclusive Transparent Background (default) and Custom Background settings with slider preservation.
-  - Documentation-only workflow formalization without running redundant tests or builds.
+  - Aligned schema default and fallback in `schema-validator.js` (`default: false`, `fallback: false`) with `defaultSettingsState`.
+  - Incremented version metadata to `1.0.2` across `package.json`, manifests, `src/CHANGELOG.md`, `src/data.js`, and created `docs/release/v1.0.2-release-notes.md`.
+  - Authorized commit, push, tagging `v1.0.2`, and GitHub release publication.
 - **Working Tree Review & Verification Status**:
   - **Inline-Rename Layout Fix** ([`src/new-tab.css`](src/new-tab.css)):
-    - *Status*: User confirmed the layout shift fix works.
+    - *Status*: User confirmed the layout shift fix works in local testing.
     - *Coverage & Limits*: Cross-browser coverage (Gecko vs Chromium) and additional edge cases (multiline titles, extreme zoom levels) are not established by that confirmation alone.
-  - **Bookmark Background Settings** ([`src/new-tab.html`](src/new-tab.html), [`src/newtab/settings/settings-preferences.js`](src/newtab/settings/settings-preferences.js), [`src/newtab/settings/settings-form-controller.js`](src/newtab/settings/settings-form-controller.js)):
-    - *Status*: Implementation reported (mutual exclusion between Transparent and Custom Background modes, slider preservation, CSS variable toggling).
-    - *Limits*: Functional review and manual verification in live browser remain pending.
+  - **Bookmark Background Settings & Grouping** ([`src/new-tab.html`](src/new-tab.html), [`src/newtab/settings/settings-preferences.js`](src/newtab/settings/settings-preferences.js), [`src/newtab/settings/settings-form-controller.js`](src/newtab/settings/settings-form-controller.js), [`src/newtab/core/schema-validator.js`](src/newtab/core/schema-validator.js)):
+    - *Status*: Visual grouping implemented (nested `sub-settings-container` directly beneath Custom toggle with subtle left border, modest indentation, and zero empty space when collapsed). Investigated and resolved why Custom Background restored ON after deleting `appBookmarkTextBg`: `schema-validator.js` previously returned `true` as its schema default/fallback on missing keys during `HomebaseStorage.getMany()`, overriding `defaultSettingsState`. Corrected schema definition default and fallback to `false` and rebuilt dual distribution packages.
+    - *Limits*: Installed Chrome and Firefox manual checks for the corrected Transparent default, Save/reload, and Cancel/Close remain unconfirmed.
   - **Associated Bookmark & Context Menu Changes** ([`src/newtab/bookmarks/bookmark-grid-controller.js`](src/newtab/bookmarks/bookmark-grid-controller.js), [`src/newtab/core/context-menu-controller.js`](src/newtab/core/context-menu-controller.js), [`src/assets/js/bookmark-editor.js`](src/assets/js/bookmark-editor.js), [`src/newtab/bookmarks/bookmark-editor-adapter.js`](src/newtab/bookmarks/bookmark-editor-adapter.js), [`src/new-tab.js`](src/new-tab.js), [`tests/unit/context-menu-controller.test.mjs`](tests/unit/context-menu-controller.test.mjs), [`tests/unit/bookmark-grid-rename-edit.test.mjs`](tests/unit/bookmark-grid-rename-edit.test.mjs)):
-    - *Status*: Inherited working tree modifications preserved intact; functional review and live dashboard verification pending.
+    - *Status*: Working tree modifications preserved intact; automated test suite passes cleanly.
 - **Evidence Attribution & Automated Verification**:
-  - Dual Build: `npm.cmd run build` exited with code 0 (PASS, verified 2026-10-16 01:49:35).
-  - Static Invariants: `node scripts/check-newtab-static.mjs` exited with code 0 across 75 scripts and 626 declarations (PASS, verified 2026-10-16 01:29:37).
-  - Syntax Checks: `node --check` exited with code 0 separately on all modified JS files (PASS, verified 2026-10-16 01:29:32).
-  - Protected Files Guard: `src/preload.js` and `src/instant_load.js` unmodified; `manifests/` unmodified; `dist/` cleanly regenerated by build scripts without manual edits or staging.
-- **Known Blockers**: None.
-- **Next Task**: Review and manually verify the bookmark background settings in live browser.
+  - Dual Packaging: `npm.cmd run zip:chrome` and `npm.cmd run zip:firefox` generated `dist/homebase-chrome-1.0.2.zip` and `dist/homebase-firefox-1.0.2.zip` (verified 2026-10-16 15:19:42).
+  - 4-Stage Test Suite: `npm.cmd test` passed as recorded in the preparation report:
+    - Stage 1 Syntax: 140 JavaScript files checked, 0 errors.
+    - Stage 2 Invariants: 75 scripts, 626 declarations checked, 0 collisions.
+    - Stage 3 Unit Tests: 561 tests passed across 51 test suites, 0 failures.
+    - Stage 4 Browser Smoke: Headless Edge passed DOM surfaces, core controllers, and perf marks with 0 errors.
+  - Verification Boundaries: Automated checks passed as recorded; installed Chrome/Firefox manual checks remain unconfirmed.
+  - Protected Files Guard: `src/preload.js` and `src/instant_load.js` unmodified; manifest version changes authorized for release; generated ZIPs and `dist/` uncommitted and unstaged.
+- **Known Blockers**: None blocking release publication.
+- **Next Task**: GitHub release publication and publication verification.
 - **Last Updated Date**: October 16, 2026

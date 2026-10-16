@@ -251,22 +251,36 @@ function syncAppSettingsForm() {
     bookmarkNewTabToggle.checked = settingsState.bookmarkOpenNewTab;
   }
 
-  const bookmarkTextBgToggle = document.getElementById('app-bookmark-text-bg-toggle');
+  const transparentBgToggle = document.getElementById('app-bookmark-transparent-bg-toggle');
+  const customBgToggle = document.getElementById('app-bookmark-custom-bg-toggle') || document.getElementById('app-bookmark-text-bg-toggle');
+  const customBgSubSettings = document.getElementById('app-bookmark-custom-bg-sub-settings');
   const bookmarkTextBgColorRow = document.getElementById('app-bookmark-text-bg-color-row');
   const bookmarkTextBgOpacityRow = document.getElementById('app-bookmark-text-bg-opacity-row');
-  const bookmarkTextBgBlurRow = document.getElementById('app-bookmark-text-blur-row');
+  const bookmarkTextBlurRow = document.getElementById('app-bookmark-text-blur-row');
 
-  if (bookmarkTextBgToggle) {
-    bookmarkTextBgToggle.checked = settingsState.bookmarkTextBg;
-    if (bookmarkTextBgColorRow) {
-      bookmarkTextBgColorRow.classList.toggle('hidden', !settingsState.bookmarkTextBg);
+  const isCustom = Boolean(settingsState.bookmarkTextBg);
+  if (transparentBgToggle) {
+    transparentBgToggle.checked = !isCustom;
+  }
+  if (customBgToggle) {
+    customBgToggle.checked = isCustom;
+  }
+  if (customBgSubSettings) {
+    if (typeof setSubSettingsExpanded === 'function') {
+      setSubSettingsExpanded(customBgSubSettings, isCustom);
+    } else {
+      customBgSubSettings.classList.toggle('expanded', isCustom);
     }
-    if (bookmarkTextBgOpacityRow) {
-      bookmarkTextBgOpacityRow.classList.toggle('hidden', !settingsState.bookmarkTextBg);
-    }
-    if (bookmarkTextBgBlurRow) {
-      bookmarkTextBgBlurRow.classList.toggle('hidden', !settingsState.bookmarkTextBg);
-    }
+    customBgSubSettings.classList.toggle('hidden', !isCustom);
+  }
+  if (bookmarkTextBgColorRow) {
+    bookmarkTextBgColorRow.classList.toggle('hidden', !isCustom);
+  }
+  if (bookmarkTextBgOpacityRow) {
+    bookmarkTextBgOpacityRow.classList.toggle('hidden', !isCustom);
+  }
+  if (bookmarkTextBlurRow) {
+    bookmarkTextBlurRow.classList.toggle('hidden', !isCustom);
   }
 
   const textBgColorTrigger = document.getElementById('app-bookmark-text-bg-color-trigger');

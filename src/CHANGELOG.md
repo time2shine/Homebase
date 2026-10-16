@@ -2,6 +2,18 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v1.0.2 — 2026-10-16
+
+### Improved
+- **Bookmark Background Settings**: Split bookmark background mode into mutually exclusive **Transparent** and **Custom Background** toggles.
+- **Nested Control Grouping**: Custom Background controls (color picker, opacity, and blur sliders) are now grouped in a dedicated, nested sub-settings panel that only displays when Custom Background is active.
+- **Background Opacity Hint**: Corrected the opacity description label to accurately specify the slider range (10% to 100%).
+
+### Fixed
+- **Bookmark Tile Rename Layout Shift**: Fixed layout shifting and vertical displacement when renaming bookmark tiles on the grid by preserving flex container dimensions and setting clean input bounds.
+- **Transparent Mode Schema Default**: Corrected `appBookmarkTextBg` schema validation definition and fallback from `true` to `false`, ensuring unconfigured profiles cleanly default to Transparent mode instead of opening Custom mode on reload.
+- **Folder Edit Routing**: Enhanced bookmark context-menu folder resolution to properly support string IDs and node objects without errors.
+
 ## v1.0.1 — 2026-10-14
 
 ### Fixed

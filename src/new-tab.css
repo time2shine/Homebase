@@ -1202,14 +1202,19 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: none;
   text-shadow: none;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  width: auto;
+  max-width: 96%;
+  min-height: 0;
 }
 
 /* === ADD THIS NEW RULE === */
 /* When renaming, let the item grow to fit the text box */
+/* When renaming, elevate z-index without shifting flex alignment or tile dimensions */
 .bookmark-item.is-renaming {
-  height: auto; /* Override the fixed 110px height */
-  min-height: 110px; /* Ensure it doesn't shrink */
-  justify-content: flex-start; /* Align icon to the top */
+  z-index: 5;
 }
 
 /* Glow around the item while it's a drop target */
@@ -1415,10 +1420,8 @@ body.bookmark-text-bg-enabled .grid-item-rename-input {
   
   width: 100%; 
   box-sizing: border-box; 
-  padding: 2px;
-  
-  /* === MODIFIED === */
-  /* min-height: 2.4em;  <-- REMOVED THIS LINE */
+  padding: 0 2px 4px 2px;
+  min-height: 2.6em;
   height: auto;      
   line-height: 1.3;
   
@@ -4828,6 +4831,12 @@ body.performance-mode .bookmark-item span {
   max-width: 90% !important;
   margin-left: auto !important;
   margin-right: auto !important;
+}
+
+body.performance-mode .grid-item-rename-input {
+  padding: 2px 6px;
+  border-radius: 6px;
+  max-width: 90%;
 }
 
 /* 2. Performance Mode (Setting is ON): Use User's Custom Color */

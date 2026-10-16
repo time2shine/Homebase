@@ -222,8 +222,11 @@ function showAddFolderModal() {
   return callBookmarkEditorMethod('openAddFolder');
 }
 
-function showEditFolderModal(folderNode) {
-  return callBookmarkEditorMethod('openEditFolder', { folderNode });
+function showEditFolderModal(folderNodeOrId) {
+  const isNode = folderNodeOrId && typeof folderNodeOrId === 'object' && folderNodeOrId.id;
+  const folderNode = isNode ? folderNodeOrId : null;
+  const folderId = isNode ? folderNodeOrId.id : (folderNodeOrId ? String(folderNodeOrId) : null);
+  return callBookmarkEditorMethod('openEditFolder', { folderNode, folderId });
 }
 
 function openMoveBookmarkModal(itemId, isFolder) {

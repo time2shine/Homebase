@@ -7,7 +7,9 @@
     "build": "node scripts/build.mjs",
     "build:chrome": "node scripts/build.mjs chrome",
     "build:firefox": "node scripts/build.mjs firefox",
+    "build:edge": "node scripts/build.mjs edge",
     "zip:chrome": "node scripts/build.mjs zip chrome",
-    "zip:firefox": "node scripts/build.mjs zip firefox"
+    "zip:firefox": "node scripts/build.mjs zip firefox",
+    "zip:edge": "node scripts/build.mjs zip edge"
   }
 }

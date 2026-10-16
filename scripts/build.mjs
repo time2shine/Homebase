@@ -7,7 +7,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const srcDir = path.join(rootDir, "src");
 const manifestsDir = path.join(rootDir, "manifests");
 const distDir = path.join(rootDir, "dist");
-const targets = new Set(["chrome", "firefox"]);
+const targets = new Set(["chrome", "firefox", "edge"]);
 const crcTable = createCrcTable();
 
 const args = process.argv.slice(2);
@@ -22,6 +22,7 @@ try {
   } else {
     await buildTarget("chrome");
     await buildTarget("firefox");
+    await buildTarget("edge");
   }
 } catch (error) {
   console.error(error.message);
@@ -30,7 +31,7 @@ try {
 
 function requireTarget(target) {
   if (!targets.has(target)) {
-    throw new Error("Usage: node scripts/build.mjs [chrome|firefox|zip chrome|zip firefox]");
+    throw new Error("Usage: node scripts/build.mjs [chrome|firefox|edge|zip chrome|zip firefox|zip edge]");
   }
 
   return target;
@@ -48,6 +49,8 @@ async function buildTarget(target) {
 
   if (target === "chrome") {
     await validateChromeManifest(manifestOutput);
+  } else if (target === "edge") {
+    await validateEdgeManifest(manifestOutput);
   }
 
   console.log(`Built ${target} -> ${path.relative(rootDir, targetDir)}`);
@@ -62,6 +65,22 @@ async function validateChromeManifest(manifestPath) {
 
   if (manifest.permissions?.includes("contextualIdentities")) {
     throw new Error("Chrome manifest must not contain contextualIdentities.");
+  }
+}
+
+async function validateEdgeManifest(manifestPath) {
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+
+  if (manifest.update_url) {
+    throw new Error("Edge manifest must not contain update_url.");
+  }
+
+  if (manifest.browser_specific_settings?.gecko) {
+    throw new Error("Edge manifest must not contain gecko browser_specific_settings.");
+  }
+
+  if (manifest.permissions?.includes("contextualIdentities")) {
+    throw new Error("Edge manifest must not contain contextualIdentities.");
   }
 }
 

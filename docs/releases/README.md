@@ -18,7 +18,7 @@ This directory contains formal release preparation reports, release notes, packa
 Every release must produce complete documentation under `docs/releases/vX.Y.Z/`:
 1. Version audit & preparation report
 2. Release notes (GitHub Release format)
-3. Asset preparation checklist (Chrome & Firefox ZIP packages, manifest version check)
+3. Asset preparation checklist (Chrome, Firefox & Edge ZIP packages, manifest version check)
 4. Git tag confirmation (annotated tag `vX.Y.Z`)
 5. Git push & remote tag verification
 6. GitHub release publication confirmation

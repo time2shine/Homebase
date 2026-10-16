@@ -21,16 +21,17 @@ Core value propositions:
 
 ---
 
-## 2. Platform Architecture & Dual-Browser Target
+## 2. Platform Architecture & Multi-Browser Targets
 
-Homebase is engineered as a universal browser extension supporting both Chromium and Gecko engines from a unified codebase:
+Homebase is engineered as a universal browser extension supporting Chromium (Chrome, Edge, Brave) and Gecko engines from a unified codebase:
 
 | Platform | Manifest Target | Target Stores | Key Characteristics |
 |---|---|---|---|
-| **Google Chrome / Chromium** | [`manifests/manifest.chrome.json`](manifests/manifest.chrome.json) | Chrome Web Store, Edge Addons | Manifest V3, `chrome_url_overrides.newtab`, standard extension permissions. |
+| **Google Chrome / Chromium** | [`manifests/manifest.chrome.json`](manifests/manifest.chrome.json) | Chrome Web Store | Manifest V3, `chrome_url_overrides.newtab`, standard extension permissions. |
 | **Mozilla Firefox** | [`manifests/manifest.firefox.json`](manifests/manifest.firefox.json) | Firefox Add-ons (AMO) | Manifest V3, Gecko ID (`rokonmagura@gmail.com`), `strict_min_version: 142.0`, `contextualIdentities` permission for container tabs. |
+| **Microsoft Edge** | [`manifests/manifest.edge.json`](manifests/manifest.edge.json) | Microsoft Edge Add-ons | Manifest V3, `chrome_url_overrides.newtab`, dedicated build target without Google/ChromeOS dependencies. |
 
-The build system (`scripts/build.mjs`) builds both targets simultaneously into `dist/chrome/` and `dist/firefox/` by combining `src/` assets with target-specific manifests.
+The build system (`scripts/build.mjs`) builds all targets simultaneously into `dist/chrome/`, `dist/firefox/`, and `dist/edge/` by combining `src/` assets with target-specific manifests.
 
 ### 2.1 Published Store Releases
 
@@ -58,6 +59,7 @@ Always keep these three states strictly distinct:
 Homebase/
 ├── manifests/                        # Browser-specific manifest sources
 │   ├── manifest.chrome.json          # Chrome Web Store MV3 manifest
+│   ├── manifest.edge.json            # Microsoft Edge Add-ons MV3 manifest
 │   └── manifest.firefox.json         # Firefox AMO MV3 manifest
 ├── src/                              # Main application source code
 │   ├── new-tab.html                  # Main entry point & deferred script definitions
@@ -151,22 +153,24 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Branch & Head Commit**: Branch `main`, latest commit `a27f448` (`docs: record Firefox listing and store version tracking`, 2026-10-16). Tag `v1.0.2` pushed; GitHub release published with dual browser packages (`dist/homebase-chrome-1.0.2.zip`, `dist/homebase-firefox-1.0.2.zip`).
-- **Current Objective**: Record user manual verification of Homebase v1.0.2 (Transparent Background default, Save/reload persistence, Cancel/Close restoration).
+- **Branch & Head Commit**: Branch `main`, latest commit `3a74929` (`docs: record user manual verification of v1.0.2 background settings`, 2026-10-16). Tag `v1.0.2` pushed; GitHub release published with dual browser packages (`dist/homebase-chrome-1.0.2.zip`, `dist/homebase-firefox-1.0.2.zip`).
+- **Current Objective**: Implement dedicated Microsoft Edge build target (`manifests/manifest.edge.json`, `dist/edge/`, `dist/homebase-edge-1.0.2.zip`, `build:edge`, `zip:edge`).
 - **Published Store Release Status**:
   - Official Firefox Listing: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
   - Version History: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
   - Recorded Store Status: Tracked exclusively in [Section 2.1](#21-published-store-releases).
-- **Manual Verification Status (Reported 2026-10-16)**:
-  - **Bookmark Background Settings & Grouping**:
-    - *Confirmed PASS*: User tested and confirmed Transparent Background default, Save/reload persistence, and Cancel/Close restoration.
-    - *Attribution & Limits*: Tested and reported by the user on October 16, 2026. The user did not specify which browser(s) were tested; verification across both Chrome and Firefox engines remains unconfirmed.
-  - **Inline-Rename Layout Fix**:
-    - User previously confirmed the inline-rename layout shift fix works in local testing. Edge cases (multiline titles, extreme zoom levels) and cross-browser coverage remain unconfirmed.
+- **Multi-Target Architecture & Build Additions**:
+  - Added dedicated Microsoft Edge manifest (`manifests/manifest.edge.json`) derived from Chromium MV3 manifest without `update_url` or Firefox-specific properties.
+  - Updated `scripts/build.mjs` and `package.json` to support `build:edge` (`dist/edge/`) and `zip:edge` (`dist/homebase-edge-1.0.2.zip`) alongside `chrome` and `firefox`.
+  - Feature Preservation: All current features, including the search-engine picker, are preserved in every distribution target.
+  - Deferred Search Item: Separate distribution targets are available. Future Chrome-only search behavior still requires target-specific configuration; shared source changes currently affect all targets.
+  - User Manual Verification: Confirmed PASS for Transparent Background default, Save/reload persistence, and Cancel/Close restoration (reported by user on 2026-10-16; recorded in [`docs/release/v1.0.2-release-notes.md`](docs/release/v1.0.2-release-notes.md)).
+  - Store URLs: Preserved without changes pending verified Microsoft Edge Add-ons store listing URL.
 - **Evidence Attribution & Automated Verification**:
-  - v1.0.2 Dual Packaging & Release: GitHub release `v1.0.2` published with both assets (`dist/homebase-chrome-1.0.2.zip`, `dist/homebase-firefox-1.0.2.zip`).
+  - Build Validation: `npm.cmd run build` generated `dist/chrome/`, `dist/firefox/`, and `dist/edge/` cleanly.
+  - ZIP Packaging: `npm.cmd run zip:edge`, `zip:chrome`, and `zip:firefox` generated valid ZIP archives containing root-level `manifest.json`.
+  - Feature Check: Verified `dist/edge/new-tab.html` retains all search engine picker DOM elements and script bindings.
   - Automated Verification: 4-stage test pipeline passed during v1.0.2 release preparation (140 files syntax check, 75 scripts invariant check, 561 unit tests, Edge headless browser smoke).
-  - Verification Boundaries: Automated checks passed during release preparation as recorded; manual testing of background settings was confirmed PASS by user testing (browser unspecified; dual Chrome/Firefox coverage not claimed); store version status remains user-reported as documented in [Section 2.1](#21-published-store-releases).
-- **Working Tree Changes**: Clean (manual verification documentation committed and pushed to origin/main).
+- **Working Tree Changes**: Clean (dedicated Edge build target committed and pushed to origin/main).
 - **Next Task**: Normal ad-hoc development or maintenance.
 - **Last Updated Date**: October 16, 2026

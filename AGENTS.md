@@ -112,7 +112,7 @@ Verification is proportional to task scope and risk, as specified in [`docs/deve
 - **Syntax Checks**: Run `node --check` separately for each modified JavaScript file.
 - **Static Invariant Checks**: Run `node scripts/check-newtab-static.mjs` whenever deferred scripts, script loading order, or top-level declarations are touched.
 - **Unit & Smoke Tests**: Run focused tests for affected subsystems, or `npm.cmd test` for the full 4-stage pipeline during Tier C changes, release prep, or when requested. Report test outcomes accurately using `PASS`, `FAIL`, `SKIP`, or `NOT RUN`.
-- **Build Checks**: Run `npm.cmd run build` to verify dual-browser packaging (`dist/chrome/` and `dist/firefox/`).
+- **Build Checks**: Run `npm.cmd run build` to verify multi-browser packaging (`dist/chrome/`, `dist/firefox/`, and `dist/edge/`).
 - **Protected Files Guard**: Ensure protected source files (`src/preload.js`, `src/instant_load.js`) contain no unauthorized changes (modification requires explicit authorization, not limited to release tasks). Manifest version changes follow the release workflow. Existing build scripts may regenerate `dist/` during authorized development and verification tasks; never manually edit or stage generated `dist/` files.
 
 ---
@@ -123,11 +123,13 @@ Always use Windows-compatible commands (`npm.cmd` preferred):
 
 ```powershell
 npm.cmd test                 # Run 4-stage automated test suite
-npm.cmd run build            # Build Chrome and Firefox outputs
+npm.cmd run build            # Build Chrome, Firefox, and Edge outputs
 npm.cmd run build:chrome     # Build Chrome distribution only
 npm.cmd run build:firefox    # Build Firefox distribution only
+npm.cmd run build:edge       # Build Edge distribution only
 npm.cmd run zip:chrome       # Generate Chrome ZIP archive
 npm.cmd run zip:firefox      # Generate Firefox ZIP archive
+npm.cmd run zip:edge         # Generate Edge ZIP archive
 ```
 
 ---
@@ -135,9 +137,9 @@ npm.cmd run zip:firefox      # Generate Firefox ZIP archive
 ## 7. Release Governance
 
 - Follow the Release Manager process only for version publications.
-- Update release metadata simultaneously in `package.json`, `manifests/manifest.chrome.json`, `manifests/manifest.firefox.json`, and `src/CHANGELOG.md`.
+- Update release metadata simultaneously in `package.json`, `manifests/manifest.chrome.json`, `manifests/manifest.firefox.json`, `manifests/manifest.edge.json`, and `src/CHANGELOG.md`.
 - Never commit or stage generated ZIP archives.
-- Ensure dual browser packages pass structural validation with root-level `manifest.json`.
+- Ensure all browser packages pass structural validation with root-level `manifest.json`.
 - **Published Store Verification**:
   - Official Firefox Listing: [Firefox Add-ons (AMO)](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/) | [Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/).
   - When the latest published Firefox version is needed, check the official listing and its version history. Record the version and verification date in [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md#21-published-store-releases). If access fails, retain the last known value and mark it unverified/stale.

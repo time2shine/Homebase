@@ -151,21 +151,22 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Branch & Head Commit**: Branch `main`, latest commit `20fa9cd` (`release: prepare Homebase v1.0.2`, 2026-10-16). Tag `v1.0.2` pushed; GitHub release published with dual browser packages (`dist/homebase-chrome-1.0.2.zip`, `dist/homebase-firefox-1.0.2.zip`).
-- **Current Objective**: Documentation of official Firefox Add-ons (AMO) store listing and establishment of store release verification governance.
+- **Branch & Head Commit**: Branch `main`, latest commit `a27f448` (`docs: record Firefox listing and store version tracking`, 2026-10-16). Tag `v1.0.2` pushed; GitHub release published with dual browser packages (`dist/homebase-chrome-1.0.2.zip`, `dist/homebase-firefox-1.0.2.zip`).
+- **Current Objective**: Record user manual verification of Homebase v1.0.2 (Transparent Background default, Save/reload persistence, Cancel/Close restoration).
 - **Published Store Release Status**:
   - Official Firefox Listing: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
   - Version History: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
   - Recorded Store Status: Tracked exclusively in [Section 2.1](#21-published-store-releases).
-- **Documentation Updates (Working Tree — Awaiting Review)**:
-  - `PROJECT_CONTEXT.md`: Added Section 2.1 ("Published Store Releases") with listing URL, user-reported version, reported date, unverified status, store version verification rule, and distinct version states definition.
-  - `docs/releases/README.md`: Added "Published Store Listings" with AMO listing and version history links, cross-referencing `PROJECT_CONTEXT.md` without duplicating version numbers.
-  - `docs/development-workflow.md`: Added item 7 under Section 4 ("Verification Standards") establishing the store version verification procedure and distinct version states invariant.
-  - `AGENTS.md`: Added store verification and distinct version states rules under Section 7 ("Release Governance").
+- **Manual Verification Status (Reported 2026-10-16)**:
+  - **Bookmark Background Settings & Grouping**:
+    - *Confirmed PASS*: User tested and confirmed Transparent Background default, Save/reload persistence, and Cancel/Close restoration.
+    - *Attribution & Limits*: Tested and reported by the user on October 16, 2026. The user did not specify which browser(s) were tested; verification across both Chrome and Firefox engines remains unconfirmed.
+  - **Inline-Rename Layout Fix**:
+    - User previously confirmed the inline-rename layout shift fix works in local testing. Edge cases (multiline titles, extreme zoom levels) and cross-browser coverage remain unconfirmed.
 - **Evidence Attribution & Automated Verification**:
   - v1.0.2 Dual Packaging & Release: GitHub release `v1.0.2` published with both assets (`dist/homebase-chrome-1.0.2.zip`, `dist/homebase-firefox-1.0.2.zip`).
-  - Automated Verification: 4-stage test pipeline passed during v1.0.2 release preparation (140 files syntax check, 75 scripts invariant check, 561 unit tests, Edge headless browser smoke); not rerun on commit `20fa9cd`.
-  - Verification Boundaries: Automated checks passed during release preparation as recorded; installed Chrome/Firefox manual checks for v1.0.2 runtime remain unconfirmed; store version status remains user-reported as documented in [Section 2.1](#21-published-store-releases).
-- **Working Tree Changes**: Clean (documentation update committed and pushed to origin/main).
+  - Automated Verification: 4-stage test pipeline passed during v1.0.2 release preparation (140 files syntax check, 75 scripts invariant check, 561 unit tests, Edge headless browser smoke).
+  - Verification Boundaries: Automated checks passed during release preparation as recorded; manual testing of background settings was confirmed PASS by user testing (browser unspecified; dual Chrome/Firefox coverage not claimed); store version status remains user-reported as documented in [Section 2.1](#21-published-store-releases).
+- **Working Tree Changes**: Clean (manual verification documentation committed and pushed to origin/main).
 - **Next Task**: Normal ad-hoc development or maintenance.
 - **Last Updated Date**: October 16, 2026

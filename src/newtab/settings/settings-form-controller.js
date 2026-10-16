@@ -381,11 +381,21 @@
       const toggle = document.getElementById('app-singleton-mode-toggle');
       return toggle ? toggle.checked : false;
     })();
-    const nextRememberEngine = appSearchRememberEngineToggle ? appSearchRememberEngineToggle.checked : true;
-    const nextDefaultEngine = appSearchDefaultEngineSelect && appSearchDefaultEngineSelect.value ? appSearchDefaultEngineSelect.value : globalScope.appSearchDefaultEnginePreference;
+    const isDefaultSearch = (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) ||
+      (typeof globalScope.isBrowserDefaultSearch === 'function' && globalScope.isBrowserDefaultSearch()) ||
+      Boolean(globalScope.HomebaseBuildConfig && globalScope.HomebaseBuildConfig.browserDefaultSearch);
+
+    const nextRememberEngine = isDefaultSearch
+      ? (globalScope.appSearchRememberEnginePreference !== undefined ? globalScope.appSearchRememberEnginePreference : true)
+      : (appSearchRememberEngineToggle ? appSearchRememberEngineToggle.checked : true);
+    const nextDefaultEngine = isDefaultSearch
+      ? (globalScope.appSearchDefaultEnginePreference || 'google')
+      : (appSearchDefaultEngineSelect && appSearchDefaultEngineSelect.value ? appSearchDefaultEngineSelect.value : globalScope.appSearchDefaultEnginePreference);
     const nextMath = appSearchMathToggle ? appSearchMathToggle.checked : true;
     const nextSearchHistory = appSearchHistoryToggle ? appSearchHistoryToggle.checked : false;
-    const nextSearchSuggestions = appSearchSuggestionsToggle ? appSearchSuggestionsToggle.checked : true;
+    const nextSearchSuggestions = isDefaultSearch
+      ? (globalScope.appSearchSuggestionsPreference !== undefined ? globalScope.appSearchSuggestionsPreference : true)
+      : (appSearchSuggestionsToggle ? appSearchSuggestionsToggle.checked : true);
 
     const updates = {
       timeFormat: nextFormat,

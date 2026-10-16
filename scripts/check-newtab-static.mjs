@@ -9,6 +9,7 @@ const newTabRuntimePath = path.join(srcDir, "new-tab.js");
 const newtabModulesDir = path.join(srcDir, "newtab");
 
 const keyExtractedModulePaths = [
+  "newtab/core/build-config.js",
   "newtab/core/perf-report.js",
   "newtab/core/startup-perf-runtime.js",
   "newtab/core/runtime-guard.js",

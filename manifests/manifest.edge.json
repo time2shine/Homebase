@@ -28,7 +28,6 @@
 
   "permissions": [
     "tabs",
-    "cookies",
     "storage",
     "history",
     "bookmarks",

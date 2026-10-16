@@ -342,6 +342,14 @@ async function setSearchPreferences(prefs) {
  * @returns {Object|null}
  */
 function getFastSearchPayload(engine) {
+  if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) {
+    return {
+      placeholder: 'Search the web',
+      selectorData: null,
+      engineId: null
+    };
+  }
+
   if (!engine) return null;
 
   let placeholder = `Search with ${engine.name || ''}`;

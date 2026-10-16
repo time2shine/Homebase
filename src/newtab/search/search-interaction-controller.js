@@ -793,11 +793,76 @@
     }
   }
 
-  function executeSearch(query, engine, newTab) {
+  function handleSearchApiFailure(err) {
+    const message = 'Search failed: Browser search service is unavailable.';
+    if (typeof showCustomAlert === 'function') {
+      showCustomAlert(message);
+    } else if (typeof window !== 'undefined' && typeof window.showCustomAlert === 'function') {
+      window.showCustomAlert(message);
+    } else if (typeof alert === 'function') {
+      alert(message);
+    }
+  }
+
+  async function executeSearch(query, engineOrNewTab, maybeNewTab) {
     const originalQuery = (query || '').trim();
     if (!originalQuery) return;
 
+    let engine = null;
+    let newTab = undefined;
+    if (typeof engineOrNewTab === 'boolean') {
+      newTab = engineOrNewTab;
+    } else if (engineOrNewTab && typeof engineOrNewTab === 'object') {
+      engine = engineOrNewTab;
+      newTab = maybeNewTab;
+    } else {
+      newTab = maybeNewTab;
+    }
+
     let effectiveQuery = originalQuery;
+
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) {
+      if (checkIsLikelyUrl(effectiveQuery)) {
+        let url = effectiveQuery;
+        const hasProtocol = /^[a-z][a-z0-9+.-]+:/i.test(effectiveQuery) && !effectiveQuery.startsWith('localhost:');
+        if (!hasProtocol) {
+          const isLocal = effectiveQuery.startsWith('localhost') ||
+            /^(\d{1,3}\.){3}\d{1,3}/.test(effectiveQuery) ||
+            effectiveQuery.indexOf('.') === -1;
+          url = isLocal ? `http://${url}` : `https://${url}`;
+        }
+        openSearchUrl(url, newTab);
+        return;
+      }
+
+      const shouldOpenNewTab = (typeof newTab === 'boolean') ? newTab : getSearchOpenNewTabPreference();
+      const disposition = shouldOpenNewTab ? 'NEW_TAB' : 'CURRENT_TAB';
+
+      callClearSearchUI({ abortSuggestions: true, bumpToken: true });
+      callHideSearchResultsPanel();
+
+      const chromeApi = typeof chrome !== 'undefined' ? chrome : (typeof browser !== 'undefined' ? browser : null);
+      const searchApi = chromeApi && chromeApi.search;
+
+      if (!searchApi || typeof searchApi.query !== 'function') {
+        handleSearchApiFailure(new Error('Browser search API is not available.'));
+        return;
+      }
+
+      try {
+        const queryPromise = searchApi.query({ text: effectiveQuery, disposition });
+        if (queryPromise && typeof queryPromise.then === 'function') {
+          await queryPromise;
+        }
+        if (chromeApi.runtime && chromeApi.runtime.lastError) {
+          throw new Error(chromeApi.runtime.lastError.message || 'chrome.search.query failed');
+        }
+      } catch (err) {
+        console.error('chrome.search.query failed:', err);
+        handleSearchApiFailure(err);
+      }
+      return;
+    }
 
     const bangMatch = originalQuery.match(/^!(\S+)\s+(.*)/);
     if (bangMatch) {
@@ -940,12 +1005,14 @@
     }
 
     if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && inSearchWidget) {
+      if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) return;
       if (typeof e.preventDefault === 'function') e.preventDefault();
       callCycleSearchEngine(e.key === 'ArrowDown' ? 'down' : 'up');
       return;
     }
 
     if (e.altKey && e.key === 'Home' && inSearchWidget) {
+      if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) return;
       if (typeof e.preventDefault === 'function') e.preventDefault();
       const defaultId = (typeof appSearchDefaultEnginePreference !== 'undefined' ? appSearchDefaultEnginePreference : 'google') || 'google';
       callUpdateSearchUI(defaultId);
@@ -1187,36 +1254,39 @@
     const queryLower = query.toLowerCase();
 
     // 1. Icon update logic
-    const bangMatch = query.match(/^!(\S+)/);
+    const isBrowserDefault = typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch();
+    const bangMatch = !isBrowserDefault ? query.match(/^!(\S+)/) : null;
     let targetEngineId = null;
     const engines = getSearchEngines();
     const curEngine = getCurrentSearchEngine();
 
-    if (bangMatch) {
-      const rawBang = bangMatch[1].toLowerCase();
-      const map = getBangMap();
-      const mappedId = map[rawBang] || rawBang;
-      const engine = engines.find(e => e.id === mappedId);
-      if (engine) {
-        targetEngineId = engine.id;
+    if (!isBrowserDefault) {
+      if (bangMatch) {
+        const rawBang = bangMatch[1].toLowerCase();
+        const map = getBangMap();
+        const mappedId = map[rawBang] || rawBang;
+        const engine = engines.find(e => e.id === mappedId);
+        if (engine) {
+          targetEngineId = engine.id;
+        }
       }
-    }
 
-    if (targetEngineId) {
-      if (curEngine.id !== targetEngineId) {
-        callUpdateSearchUI(targetEngineId, { updateActive: false });
-      }
-    } else {
-      if (!queryLower.startsWith('!') || queryLower.trim().length === 0) {
-        const defaultId = (typeof appSearchDefaultEnginePreference !== 'undefined' ? appSearchDefaultEnginePreference : 'google') || 'google';
-        const targetId = getActiveSearchEngineId() || curEngine.id || defaultId;
-        if (curEngine.id !== targetId) {
-          callUpdateSearchUI(targetId);
+      if (targetEngineId) {
+        if (curEngine.id !== targetEngineId) {
+          callUpdateSearchUI(targetEngineId, { updateActive: false });
+        }
+      } else {
+        if (!queryLower.startsWith('!') || queryLower.trim().length === 0) {
+          const defaultId = (typeof appSearchDefaultEnginePreference !== 'undefined' ? appSearchDefaultEnginePreference : 'google') || 'google';
+          const targetId = getActiveSearchEngineId() || curEngine.id || defaultId;
+          if (curEngine.id !== targetId) {
+            callUpdateSearchUI(targetId);
+          }
         }
       }
     }
 
-    const isBangSearch = queryLower.startsWith('!') && !queryLower.includes(' ');
+    const isBangSearch = !isBrowserDefault && queryLower.startsWith('!') && !queryLower.includes(' ');
     const currentToken = ++latestSearchToken;
 
     // 2. Empty query handling
@@ -1329,11 +1399,11 @@
       }
     }
 
-    if (!getSearchSuggestionsPreference()) {
+    if (isBrowserDefault || !getSearchSuggestionsPreference()) {
       clearExternalSuggestionResults();
     }
 
-    const suggestionsPromise = getSearchSuggestionsPreference()
+    const suggestionsPromise = (!isBrowserDefault && getSearchSuggestionsPreference())
       ? fetchSuggestions(query.trim(), getCurrentSearchEngine())
       : Promise.resolve([]);
 
@@ -1341,8 +1411,8 @@
 
     if (isStaleSearch(currentToken, queryLower)) return;
 
-    const suggestionResults = getSearchSuggestionsPreference() ? fetchedSuggestionResults : [];
-    if (!getSearchSuggestionsPreference()) {
+    const suggestionResults = (!isBrowserDefault && getSearchSuggestionsPreference()) ? fetchedSuggestionResults : [];
+    if (isBrowserDefault || !getSearchSuggestionsPreference()) {
       clearExternalSuggestionResults();
     }
 

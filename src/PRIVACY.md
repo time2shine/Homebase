@@ -59,10 +59,10 @@ from Open-Meteo endpoints.
 This may send the location you search (city name) and/or coordinates (latitude/longitude)
 to Open-Meteo.
 
-### Search suggestions
-If search suggestions are enabled, Homebase requests suggestions from your selected provider
-(Google, Bing, DuckDuckGo, Yahoo, Yandex, or Amazon) as you type.
-This may send the text you type into the search box to the selected provider.
+### Search
+In Chrome, web search queries route directly through your browser's default search provider via chrome.search.query(), and remote search autocomplete requests are disabled.
+
+In Firefox and Edge, if search suggestions are enabled, Homebase requests suggestions from your selected search provider (Google, Bing, DuckDuckGo, Yahoo, Yandex, or Amazon) as you type. This may send the text you type into the search box to that provider.
 
 ## What servers may receive
 Like any web request, the servers you contact may receive standard network information,

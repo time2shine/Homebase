@@ -154,6 +154,8 @@
   }
 
   async function fetchSuggestions(query, engine, options = {}) {
+    if (typeof globalScope.isBrowserDefaultSearch === 'function' && globalScope.isBrowserDefaultSearch()) return [];
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) return [];
     if (!getSuggestionsPreference()) return [];
     if (!query || typeof query !== 'string') return [];
     if (!engine || !engine.suggestionUrl) return [];
@@ -220,6 +222,8 @@
   }
 
   function getBangSuggestions(query, engines = []) {
+    if (typeof globalScope.isBrowserDefaultSearch === 'function' && globalScope.isBrowserDefaultSearch()) return [];
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) return [];
     if (!query || typeof query !== 'string' || !query.startsWith('!')) {
       return [];
     }

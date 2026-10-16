@@ -1,4 +1,5 @@
 function setupSearchEnginesModal() {
+  if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) return;
 
   const modal = document.getElementById('search-engines-modal');
 

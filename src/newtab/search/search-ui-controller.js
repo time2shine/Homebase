@@ -193,7 +193,46 @@
     list.style.transform = `translateX(-${offset}px)`;
   }
 
+  function applyBrowserDefaultSearchUI() {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      searchInput.placeholder = 'Search the web';
+      searchInput.setAttribute('aria-label', 'Search the web');
+    }
+
+    const container = document.getElementById('search-engine-selector');
+    if (container) {
+      container.replaceChildren();
+      container.style.display = 'none';
+    }
+
+    const divider = document.querySelector('.search-input-divider');
+    if (divider) {
+      divider.style.display = 'none';
+    }
+
+    const searchContainer = document.querySelector('.search-container');
+    if (searchContainer) {
+      searchContainer.classList.add('browser-default-search');
+      searchContainer.classList.remove('non-default-engine');
+    }
+
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.classList.add('browser-default-search');
+    }
+
+    if (typeof writeFastSearchCache === 'function') {
+      writeFastSearchCache(null);
+    } else if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.writeFastSearchCache) {
+      HomebaseSearchStorage.writeFastSearchCache(null);
+    }
+  }
+
   function renderSearchEngineSelector(options = {}) {
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) {
+      applyBrowserDefaultSearchUI();
+      return;
+    }
     const container = document.getElementById('search-engine-selector');
     if (!container) return;
 
@@ -285,6 +324,10 @@
   }
 
   function populateSearchOptions(options = {}) {
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) {
+      applyBrowserDefaultSearchUI();
+      return;
+    }
     const searchSelect = document.getElementById('search-select');
     if (!searchSelect) return;
     searchSelect.innerHTML = '';
@@ -310,6 +353,10 @@
   }
 
   function updateSearchUI(engineId, options = {}) {
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) {
+      applyBrowserDefaultSearchUI();
+      return;
+    }
     const engines = getSearchEngines();
     let engine = engines.find((e) => e.id === engineId);
     if (!engine) {
@@ -388,6 +435,7 @@
   }
 
   function preconnectToSearchEngine(url) {
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) return;
     if (!url) return;
     let origin;
     try {
@@ -505,6 +553,7 @@
   }
 
   function cycleSearchEngine(direction) {
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) return;
     const engines = getSearchEngines();
     const activeEngines = engines.filter((eng) => eng.enabled);
     if (activeEngines.length < 2) return;
@@ -678,6 +727,9 @@
   }
 
   async function initialize(options = {}) {
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) {
+      applyBrowserDefaultSearchUI();
+    }
     await loadSearchEnginePreferences();
 
     const searchSelect = document.getElementById('search-select');
@@ -914,6 +966,7 @@
     applySearchEngineConfig,
     getSafeEnabledSearchEngineId,
     loadSearchEnginePreferences,
+    applyBrowserDefaultSearchUI,
 
     // State getters/setters
     getCurrentSearchEngine: getCurrentEngine,
@@ -929,6 +982,7 @@
 
   if (typeof window !== 'undefined') {
     window.HomebaseSearchUiController = controller;
+    window.HomebaseSearchUIController = controller;
     window.HomebaseSearchEngineController = controller;
     window.handleSearchStorageChange = handleSearchStorageChange;
     window.updateSearchUI = updateSearchUI;
@@ -938,5 +992,6 @@
     window.applySearchEngineConfig = applySearchEngineConfig;
     window.getSafeEnabledSearchEngineId = getSafeEnabledSearchEngineId;
     window.setupSearch = setupSearch;
+    window.applyBrowserDefaultSearchUI = applyBrowserDefaultSearchUI;
   }
 })();

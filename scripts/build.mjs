@@ -46,6 +46,8 @@ async function buildTarget(target) {
   await fs.mkdir(targetDir, { recursive: true });
   await fs.cp(srcDir, targetDir, { recursive: true });
   await fs.copyFile(manifestSource, manifestOutput);
+  await generateBuildConfig(targetDir, target);
+  await customizeTargetHtml(targetDir, target);
 
   if (target === "chrome") {
     await validateChromeManifest(manifestOutput);
@@ -54,6 +56,69 @@ async function buildTarget(target) {
   }
 
   console.log(`Built ${target} -> ${path.relative(rootDir, targetDir)}`);
+}
+
+async function generateBuildConfig(targetDir, target) {
+  const isChrome = target === "chrome";
+  const config = {
+    target,
+    browserDefaultSearch: isChrome
+  };
+  const content = `// Build Target Configuration (Generated for ${target})
+// Module: src/newtab/core/build-config.js
+
+(function () {
+  'use strict';
+
+  const globalScope = typeof window !== 'undefined'
+    ? window
+    : (typeof globalThis !== 'undefined' ? globalThis : this);
+
+  globalScope.HomebaseBuildConfig = Object.freeze(${JSON.stringify(config, null, 2)});
+
+  globalScope.isBrowserDefaultSearch = function () {
+    return ${isChrome};
+  };
+
+  globalScope.getBuildTarget = function () {
+    return '${target}';
+  };
+})();
+`;
+  const configPath = path.join(targetDir, "newtab", "core", "build-config.js");
+  await fs.writeFile(configPath, content, "utf8");
+}
+
+async function customizeTargetHtml(targetDir, target) {
+  if (target !== "chrome") {
+    return;
+  }
+
+  const htmlPath = path.join(targetDir, "new-tab.html");
+  let html = await fs.readFile(htmlPath, "utf8");
+
+  const bodyNeedle = '<body class="preload bookmarks-booting">';
+  const containerNeedle = '<div class="search-container">';
+  const inputNeedle = '<input type="text" id="search-input" placeholder="Search" autofocus autocomplete="off">';
+
+  if (!html.includes(bodyNeedle) || !html.includes(containerNeedle) || !html.includes(inputNeedle)) {
+    throw new Error("Failed to customize Chrome new-tab.html: target markers not found.");
+  }
+
+  html = html.replace(
+    bodyNeedle,
+    '<body class="preload bookmarks-booting browser-default-search">'
+  );
+  html = html.replace(
+    containerNeedle,
+    '<div class="search-container browser-default-search">'
+  );
+  html = html.replace(
+    inputNeedle,
+    '<input type="text" id="search-input" placeholder="Search the web" aria-label="Search the web" autofocus autocomplete="off">'
+  );
+
+  await fs.writeFile(htmlPath, html, "utf8");
 }
 
 async function validateChromeManifest(manifestPath) {
@@ -65,6 +130,14 @@ async function validateChromeManifest(manifestPath) {
 
   if (manifest.permissions?.includes("contextualIdentities")) {
     throw new Error("Chrome manifest must not contain contextualIdentities.");
+  }
+
+  if (!manifest.permissions?.includes("search")) {
+    throw new Error("Chrome manifest must contain search permission.");
+  }
+
+  if (manifest.permissions?.includes("cookies")) {
+    throw new Error("Chrome manifest must not contain cookies permission.");
   }
 }
 
@@ -81,6 +154,10 @@ async function validateEdgeManifest(manifestPath) {
 
   if (manifest.permissions?.includes("contextualIdentities")) {
     throw new Error("Edge manifest must not contain contextualIdentities.");
+  }
+
+  if (manifest.permissions?.includes("cookies")) {
+    throw new Error("Edge manifest must not contain cookies permission.");
   }
 }
 

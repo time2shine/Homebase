@@ -359,6 +359,7 @@
   }
 
   function renderBangResults(container, bangSuggestions = []) {
+    if (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) return;
     if (!container || typeof document === 'undefined') return;
     const fragment = document.createDocumentFragment();
     const header = createSectionHeader('Bang Shortcuts');

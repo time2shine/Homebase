@@ -479,6 +479,24 @@ body.sidebar-collapsed .collapsed-clock-slot {
   background-color: rgba(14, 165, 233, 0.04);
 }
 
+/* Browser-Default Search Distribution Rules (Chrome build) */
+body.browser-default-search #search-engine-selector,
+body.browser-default-search .search-input-divider,
+.search-container.browser-default-search #search-engine-selector,
+.search-container.browser-default-search .search-input-divider,
+body.browser-default-search #app-search-suggestions-row,
+body.browser-default-search #app-search-remember-engine-row,
+body.browser-default-search #app-search-default-engine-container,
+body.browser-default-search #app-search-manage-engines-row,
+body.browser-default-search #search-engines-modal {
+  display: none !important;
+}
+
+body.browser-default-search #search-input,
+.search-container.browser-default-search #search-input {
+  border-radius: 12px;
+}
+
 /* ======================================= */
 /* --- INLINE EXPANDING SEARCH SELECTOR --- */
 /* ======================================= */

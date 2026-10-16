@@ -1,8 +1,9 @@
 # Homebase — Project Context & Repository Knowledge Base
 
 **Project:** Homebase (Dual-Browser Manifest V3 Dashboard Extension)  
-**Current Stable Release:** `v0.17.0` (October 9, 2026)  
-**Active Development Cycle:** Cycle #13 (Monolith Deconstruction & Core Startup Architecture)  
+**Source Version:** `1.0.1` (`package.json`, manifests; commit `1ce8034`, October 14, 2026)  
+**Confirmed Store Release:** Unknown / unconfirmed from local repository evidence alone (`v1.0.1` git tag exists locally)  
+**Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
 **Repository:** [https://github.com/time2shine/Homebase](https://github.com/time2shine/Homebase)  
 
 ---
@@ -25,8 +26,8 @@ Homebase is engineered as a universal browser extension supporting both Chromium
 
 | Platform | Manifest Target | Target Stores | Key Characteristics |
 |---|---|---|---|
-| **Google Chrome / Chromium** | [`manifests/manifest.chrome.json`](file:///c:/Users/Administrator/Desktop/Homebase/manifests/manifest.chrome.json) | Chrome Web Store, Edge Addons | Manifest V3, `chrome_url_overrides.newtab`, standard extension permissions. |
-| **Mozilla Firefox** | [`manifests/manifest.firefox.json`](file:///c:/Users/Administrator/Desktop/Homebase/manifests/manifest.firefox.json) | Firefox Add-ons (AMO) | Manifest V3, Gecko ID (`rokonmagura@gmail.com`), `strict_min_version: 142.0`, `contextualIdentities` permission for container tabs. |
+| **Google Chrome / Chromium** | [`manifests/manifest.chrome.json`](manifests/manifest.chrome.json) | Chrome Web Store, Edge Addons | Manifest V3, `chrome_url_overrides.newtab`, standard extension permissions. |
+| **Mozilla Firefox** | [`manifests/manifest.firefox.json`](manifests/manifest.firefox.json) | Firefox Add-ons (AMO) | Manifest V3, Gecko ID (`rokonmagura@gmail.com`), `strict_min_version: 142.0`, `contextualIdentities` permission for container tabs. |
 
 The build system (`scripts/build.mjs`) builds both targets simultaneously into `dist/chrome/` and `dist/firefox/` by combining `src/` assets with target-specific manifests.
 
@@ -123,7 +124,38 @@ Homebase enforces a **single canonical owner** rule for every subsystem:
 
 ## 6. Collaboration Standards & AI Workflow
 
-All engineering activities follow the strict 7-step lifecycle:
-$$\text{Audit} \longrightarrow \text{Plan} \longrightarrow \text{Wait for Approval} \longrightarrow \text{Implement} \longrightarrow \text{Verify} \longrightarrow \text{Commit} \longrightarrow \text{Push}$$
+All engineering activity follows the tiered workflow model documented in [`docs/development-workflow.md`](docs/development-workflow.md) and governance rules in [`AGENTS.md`](AGENTS.md).
 
-Protected files (`src/preload.js`, `src/instant_load.js`, `manifests/*`, `dist/*`) remain untouched unless authorized. All changes must be verified against the 4-stage test pipeline before committing.
+Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, Tier C: High-Risk/Architectural). Protected source files (`src/preload.js`, `src/instant_load.js`) require explicit authorization to modify; manifest version changes follow the release workflow; and existing build scripts may regenerate `dist/` during authorized development and verification tasks, but generated `dist/` files must never be manually edited or staged. No commit or push is ever performed without explicit user authorization.
+
+---
+
+## 7. Current Handoff
+
+- **Branch & Head Commit**: Branch `main`, latest commit `1ce8034` (`release: prepare Homebase v1.0.1`, 2026-10-14).
+- **Current Objective**: Review and manually verify bookmark background settings in live browser, followed by staging and commit after authorization.
+- **Workflow Documentation Review Status**:
+  - Review is complete ([`docs/development-workflow.md`](docs/development-workflow.md), [`AGENTS.md`](AGENTS.md), [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md), [`docs/README.md`](docs/README.md)).
+  - Proportional 3-tier task sizing, protected-file rules, and AI handoff standards established.
+  - Authorized for commit as documentation-only milestone.
+- **User-Approved Decisions**:
+  - Focused CSS fix for inline-rename layout shift without arbitrary `translateY` offsets.
+  - Mutually exclusive Transparent Background (default) and Custom Background settings with slider preservation.
+  - Documentation-only workflow formalization without running redundant tests or builds.
+- **Working Tree Review & Verification Status**:
+  - **Inline-Rename Layout Fix** ([`src/new-tab.css`](src/new-tab.css)):
+    - *Status*: User confirmed the layout shift fix works.
+    - *Coverage & Limits*: Cross-browser coverage (Gecko vs Chromium) and additional edge cases (multiline titles, extreme zoom levels) are not established by that confirmation alone.
+  - **Bookmark Background Settings** ([`src/new-tab.html`](src/new-tab.html), [`src/newtab/settings/settings-preferences.js`](src/newtab/settings/settings-preferences.js), [`src/newtab/settings/settings-form-controller.js`](src/newtab/settings/settings-form-controller.js)):
+    - *Status*: Implementation reported (mutual exclusion between Transparent and Custom Background modes, slider preservation, CSS variable toggling).
+    - *Limits*: Functional review and manual verification in live browser remain pending.
+  - **Associated Bookmark & Context Menu Changes** ([`src/newtab/bookmarks/bookmark-grid-controller.js`](src/newtab/bookmarks/bookmark-grid-controller.js), [`src/newtab/core/context-menu-controller.js`](src/newtab/core/context-menu-controller.js), [`src/assets/js/bookmark-editor.js`](src/assets/js/bookmark-editor.js), [`src/newtab/bookmarks/bookmark-editor-adapter.js`](src/newtab/bookmarks/bookmark-editor-adapter.js), [`src/new-tab.js`](src/new-tab.js), [`tests/unit/context-menu-controller.test.mjs`](tests/unit/context-menu-controller.test.mjs), [`tests/unit/bookmark-grid-rename-edit.test.mjs`](tests/unit/bookmark-grid-rename-edit.test.mjs)):
+    - *Status*: Inherited working tree modifications preserved intact; functional review and live dashboard verification pending.
+- **Evidence Attribution & Automated Verification**:
+  - Dual Build: `npm.cmd run build` exited with code 0 (PASS, verified 2026-10-16 01:49:35).
+  - Static Invariants: `node scripts/check-newtab-static.mjs` exited with code 0 across 75 scripts and 626 declarations (PASS, verified 2026-10-16 01:29:37).
+  - Syntax Checks: `node --check` exited with code 0 separately on all modified JS files (PASS, verified 2026-10-16 01:29:32).
+  - Protected Files Guard: `src/preload.js` and `src/instant_load.js` unmodified; `manifests/` unmodified; `dist/` cleanly regenerated by build scripts without manual edits or staging.
+- **Known Blockers**: None.
+- **Next Task**: Review and manually verify the bookmark background settings in live browser.
+- **Last Updated Date**: October 16, 2026

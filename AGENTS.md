@@ -18,19 +18,22 @@ Primary development goals:
 
 ---
 
-## 2. Mandatory Collaboration Workflow
+## 2. Collaboration Workflow & Tiered Task Sizing
 
-Every code and architectural change in this repository must strictly follow the 7-step development lifecycle:
+All engineering activity follows the working agreements detailed in [`docs/development-workflow.md`](docs/development-workflow.md).
 
-```text
-1. Audit → 2. Plan → 3. Wait for Approval → 4. Implement → 5. Verify → 6. Commit → 7. Push
-```
+Work is scoped into three tiers:
+- **Tier A (Small Visual Fix)**: Relevant inspection → minimal patch → focused visual verification → diff review → authorized commit. No separate audit/plan docs by default. No new automated tests by default; add one only when it addresses a concrete regression risk.
+- **Tier B (Feature / Behaviour Change)**: Brief acceptance criteria → dependency inspection → implementation → focused verification → review package → authorized commit.
+- **Tier C (High-Risk & Structural Changes)**: Dedicated written audit and plan (`docs/`) → user approval → small implementation steps → failure/recovery verification → review → authorized commit.
 
-Rules:
-- **Never skip phases**: Do not implement without an approved plan; do not commit without explicit approval; do not push without commit review.
-- **Audit first**: Perform a read-only audit of relevant code before drafting a plan or modifying files.
-- **Document each phase**: Each development cycle phase produces a dedicated plan document (`docs/<N>-cycleX-phaseY-plan.md`) and implementation report (`docs/<N+1>-cycleX-phaseY-implementation-report.md`).
-- **Wait for user approval**: Pause and present reports at commit and push boundaries.
+Core Workflow Rules:
+- **Authorization Boundary**: Antigravity never runs `git commit` or `git push` without explicit user authorization.
+- **Autonomous Task Execution**: Within an authorized task, proportional automated checks (syntax checks, static checks, unit tests, local builds) may be run directly by the agent without pausing for permission at every command.
+- **Audit First**: Perform a read-only audit of relevant active code before modifying files.
+- **Preserve Unrelated Edits**: Never restore whole files or discard unowned changes to simplify a patch.
+- **No Speculative Refactoring**: Identify the concrete issue and demonstrable benefit before restructuring code.
+- **Independent Action Boundaries**: Testing, building, committing, pushing, and publishing releases are separate actions. Follow the scope explicitly requested by the user.
 
 ---
 
@@ -68,12 +71,10 @@ Each functional subsystem must have **one canonical owner**. Avoid splitting own
 
 ## 4. Repository Rules & File Boundaries
 
-### 4.1 Protected Files
-The following files are **strictly protected** and must never be modified unless explicitly instructed by the repository owner:
-- `src/preload.js`
-- `src/instant_load.js`
-- `manifests/*` (except during authorized release version bumps)
-- `dist/*` (generated build artifacts; never manually edit or stage)
+### 4.1 Protected Files & Boundaries
+- **Protected source files** (`src/preload.js`, `src/instant_load.js`): Require explicit authorization to modify; authorization is not limited to release tasks.
+- **Manifests** (`manifests/*`): Version and configuration changes follow the release workflow.
+- **Generated build outputs** (`dist/*`): Existing build scripts may regenerate `dist/` during authorized development and verification tasks. Never manually edit or stage generated `dist/` files.
 
 ### 4.2 Source Layout
 ```text
@@ -107,22 +108,12 @@ src/
 
 ## 5. Verification Toolchain
 
-Before every commit, run the mandatory verification suite:
-
-```powershell
-node --check <changed-js-files>
-node scripts/check-newtab-static.mjs
-npm.cmd test
-npm.cmd run build
-git diff src/preload.js src/instant_load.js manifests/ dist/
-```
-
-Expected verification standards:
-- **`node --check`**: Clean syntax on all modified JavaScript files.
-- **`check-newtab-static.mjs`**: All 63 deferred scripts verified, zero top-level declaration collisions, script order intact.
-- **`npm.cmd test`**: 100% passing across all 367 unit tests on `node:test` + headless browser smoke test.
-- **`npm.cmd run build`**: Clean dual builds in `dist/chrome/` and `dist/firefox/`.
-- **Protected files diff**: Empty output.
+Verification is proportional to task scope and risk, as specified in [`docs/development-workflow.md`](docs/development-workflow.md):
+- **Syntax Checks**: Run `node --check` separately for each modified JavaScript file.
+- **Static Invariant Checks**: Run `node scripts/check-newtab-static.mjs` whenever deferred scripts, script loading order, or top-level declarations are touched.
+- **Unit & Smoke Tests**: Run focused tests for affected subsystems, or `npm.cmd test` for the full 4-stage pipeline during Tier C changes, release prep, or when requested. Report test outcomes accurately using `PASS`, `FAIL`, `SKIP`, or `NOT RUN`.
+- **Build Checks**: Run `npm.cmd run build` to verify dual-browser packaging (`dist/chrome/` and `dist/firefox/`).
+- **Protected Files Guard**: Ensure protected source files (`src/preload.js`, `src/instant_load.js`) contain no unauthorized changes (modification requires explicit authorization, not limited to release tasks). Manifest version changes follow the release workflow. Existing build scripts may regenerate `dist/` during authorized development and verification tasks; never manually edit or stage generated `dist/` files.
 
 ---
 
@@ -150,84 +141,73 @@ npm.cmd run zip:firefox      # Generate Firefox ZIP archive
 
 ---
 
-## 8. AI Handoff Completion Protocol
+## 8. AI Handoff Protocol
 
 ### Purpose
-Make every successful Antigravity task easy to review by ChatGPT. After completing work, always provide a clean copy-ready summary at the end of the response.
+Make every Antigravity task easy to review by ChatGPT. After completing work or stopping on a blocker/partial state, always provide a clean copy-ready summary at the end of the response.
 
 ### Protocol Requirements
-After every successfully completed implementation, refactor, release, or documentation task that changes repository state:
-- Do not only provide terminal commands and execution logs.
-- Always include a final section named:
+Every completed, blocked, or partially completed task that changes repository state must include a final section:
 
 # ChatGPT Review Package
 
-This section must be easy to copy and paste into ChatGPT.
-
-Use this exact format:
+Use this structured format:
 
 ```markdown
 # ChatGPT Review Package
 
-## Task Completed
-[One or two sentence summary of what was done]
+## Task Completed & Acceptance Criteria
+- Objective: [1-2 sentence summary of task]
+- Status: [COMPLETE / PARTIAL / BLOCKED]
+- Criteria Met: [List of satisfied criteria]
+- Criteria Pending / Blocked: [List of unfulfilled criteria or blockers, if any]
 
 ## Files Changed
-- File:
-- Change:
-- Purpose:
+- File: [path]
+  - Change: [What was changed]
+  - Purpose: [Why it was changed]
 
-## Architecture Impact
-- Ownership changes:
-- New modules/components:
-- Removed responsibilities:
-- Potential risks:
+## Diff Summary
+[Paste actual diff if short (< 50 lines), or provide git diff command to view]
 
 ## Verification
-- Syntax checks:
-- Tests:
-- Build:
-- Static checks:
+- Syntax Checks (`node --check`): [PASS / FAIL / SKIP / NOT RUN]
+- Static Invariant Checks: [PASS / FAIL / SKIP / NOT RUN]
+- Unit Tests: [PASS (X/Y) / FAIL / SKIP / NOT RUN]
+- Build (`npm.cmd run build`): [PASS / FAIL / SKIP / NOT RUN]
+- Visual / Manual Checks: [Observed results or EXPLICITLY UNVERIFIED]
+
+## Unverified Behaviour & Known Risks
+- Unverified: [What was not directly tested]
+- Risks: [Potential edge cases or browser quirks]
 
 ## Git Status
-- Branch:
-- Commit status:
-- Commit hash (if created):
-- Commit message (if created):
-- Push status:
+- Branch: [branch]
+- Latest Commit: [short hash and message]
+- Pending Working Tree Changes: [List of modified and untracked files]
+- Commit / Push: [None — awaiting authorization]
 
-## Current State
-[Current repository state after completion]
-
-## Review Notes
-[Important context, tradeoffs, risks, or decisions for review]
-
-## Next Decision Needed
-[What requires review, approval, or next action]
+## Next Recommended Action
+[What ChatGPT or the User should review, approve, or do next]
 ```
 
 ### Rules
-- Only create this section after successful completion.
-- Keep it concise.
-- Do not include every terminal command unless debugging is required.
-- Do not repeat large documentation contents.
-- Preserve important technical details.
-- This section exists specifically for handing work from Antigravity to ChatGPT for architecture review.
+- Create this section upon task completion, blockage, or partial completion.
+- Keep it concise and preserve critical technical details.
+- Clearly distinguish observed outcomes from assumptions.
+- Update the "Current Handoff" in `PROJECT_CONTEXT.md` whenever a task completes or direction changes.
 
 ---
 
-## 9. Context Loading Rule
+## 9. New-Session Reading Order
 
-Before starting any repository modification task:
-1. Read AGENTS.md
-2. Read PROJECT_CONTEXT.md
-3. Read ARCHITECTURE.md when architecture changes are involved
-4. Read the active cycle README under docs/cycles/
+When starting a new session or repository modification task, read files in this strict sequence:
+1. [`AGENTS.md`](AGENTS.md) — Core principles, repository rules, and verification standards.
+2. [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — System mission, architecture, and current handoff state.
+3. [`docs/development-workflow.md`](docs/development-workflow.md) — Roles, tiered task sizing, execution rules, and review protocols.
+4. **Documentation relevant to the current task only** (e.g., active cycle plan or subsystem ADR).
 
-For simple read-only analysis, file inspection, or review tasks, this step is optional.
-
-Purpose:
-Ensure every AI implementation starts with current repository context.
+Do not require every new session to read all historical documents.
 
 
 

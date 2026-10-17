@@ -9,10 +9,18 @@ window.HOMEBASE_TIPS = [
     ]
   },
   {
+    "id": "browser-default-search",
+    "title": "Web search uses your default provider",
+    "body": "Web searches automatically use your browser’s default search engine, keeping your search preferences consistent.",
+    "tags": ["search", "productivity"],
+    "requiresDefaultSearch": true
+  },
+  {
     "id": "bang-search",
     "title": "Use ! shortcuts to search instantly",
     "body": "Type `!<shortcut> <query>` to switch engines on the fly. Examples: `!g cats` (Google), `!yt lo-fi` (YouTube), `!ddg privacy` (DuckDuckGo), `!w relativity` (Wikipedia), `!gh react` (GitHub), `!so fetch api` (StackOverflow), `!r linux` (Reddit), `!amz headphones` (Amazon), `!maps coffee` (Maps).",
-    "tags": ["search", "productivity"]
+    "tags": ["search", "productivity"],
+    "requiresMultiEngine": true
   },
   {
     "id": "save-current-page",
@@ -54,7 +62,8 @@ window.HOMEBASE_TIPS = [
     "settingIds": [
       "app-search-remember-engine-toggle",
       "app-search-default-engine-select"
-    ]
+    ],
+    "requiresMultiEngine": true
   },
   {
     "id": "homebase-folder-auto",
@@ -259,7 +268,8 @@ window.HOMEBASE_TIPS = [
     ],
     "settingIds": [
       "app-container-mode-toggle"
-    ]
+    ],
+    "requiresContainers": true
   },
   {
     "id": "widgets-reorder",
@@ -283,7 +293,8 @@ window.HOMEBASE_TIPS = [
     "id": "search-engines-tidy",
     "title": "Keep your search engines tidy",
     "body": "Enable only the engines you actually use. Go to Settings → Search panel → Configure and toggle engines on/off.",
-    "tags": ["search", "productivity"]
+    "tags": ["search", "productivity"],
+    "requiresMultiEngine": true
   },
   {
     "id": "bookmarks-root-folder",

@@ -540,6 +540,28 @@
   }
 
   function shouldIncludeTip(tip) {
+    const isDefaultSearch = (typeof isBrowserDefaultSearch === 'function' && isBrowserDefaultSearch()) ||
+      (typeof globalScope.isBrowserDefaultSearch === 'function' && globalScope.isBrowserDefaultSearch());
+
+    if (isDefaultSearch) {
+      if (tip.requiresMultiEngine || tip.id === 'bang-search' || tip.id === 'search-engines-tidy' || tip.id === 'remember-search-engine') {
+        return false;
+      }
+    } else {
+      if (tip.requiresDefaultSearch || tip.id === 'browser-default-search') {
+        return false;
+      }
+    }
+
+    if (tip.requiresContainers || tip.id === 'containers') {
+      const b = (typeof browser !== 'undefined' && browser) ||
+                (typeof globalScope.browser !== 'undefined' && globalScope.browser) ||
+                (typeof globalScope.chrome !== 'undefined' && globalScope.chrome);
+      if (!b || !b.contextualIdentities) {
+        return false;
+      }
+    }
+
     const keysResult = evaluateTipSettingKeys(tip.settingKeys);
     const idsResult = evaluateTipSettingIds(tip.settingIds);
 
@@ -575,7 +597,10 @@
         title: title || 'Untitled tip',
         body,
         settingKeys: Array.isArray(tip.settingKeys) ? tip.settingKeys : [],
-        settingIds: Array.isArray(tip.settingIds) ? tip.settingIds : []
+        settingIds: Array.isArray(tip.settingIds) ? tip.settingIds : [],
+        requiresMultiEngine: Boolean(tip.requiresMultiEngine),
+        requiresDefaultSearch: Boolean(tip.requiresDefaultSearch),
+        requiresContainers: Boolean(tip.requiresContainers)
       });
     });
 

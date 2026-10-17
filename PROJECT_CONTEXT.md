@@ -48,8 +48,8 @@ Centralized tracking for all browser extension stores. To prevent duplicate or d
 - **Official Listing URL**: [Chrome Web Store — Homebase](https://chromewebstore.google.com/detail/ejfdeilhncacmmbdfmgpolpoldpllbmc) *(URL supplied by user)*
 - **Latest Observed Listing Status**: Taken down.
 - **Evidence**: User-provided dashboard screenshot, recorded 2026-10-17.
-- **Submission Status**: Updated `v1.0.2` package prepared (`dist/homebase-chrome-1.0.2.zip`); resubmission and approval are not yet confirmed.
-- **Version Distinction Note**: Do not treat the prepared package version as the published store version.
+- **Submission Status**: User-reported `v1.0.2` package uploaded to Chrome Developer Dashboard; in review by Google (recorded 2026-10-17).
+- **Version Distinction Note**: Do not treat the submitted package version as the published store version.
 
 #### Microsoft Edge (Microsoft Edge Add-ons)
 - **Status**: Version `1.0.2`: In review.
@@ -172,38 +172,29 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Branch & Head Commit**: Branch `main`, latest commit `d66fdbc` (`build: add dedicated Microsoft Edge distribution target`, 2026-10-16). Tag `v1.0.2` pushed; GitHub release published with dual browser packages (`dist/homebase-chrome-1.0.2.zip`, `dist/homebase-firefox-1.0.2.zip`).
-- **Current Objective**: Implement Chrome-build-only browser-default search (`chrome.search.query()`) to resolve Chrome Web Store rejection "Red Argon" while preserving multi-engine search, provider preferences, and remote suggestions on Edge and Firefox. (Investigated "love -> http://love/" incident: user confirmed root cause was no default search engine selected in the test browser; direct `chrome.search.query()` call reproduced the same navigation independently of Homebase. Reverted speculative URL-routing patches.)
+- **Branch & Head Commit**: Branch `main`, latest commit `5b31630` (`docs: record Chrome and Edge store tracking`, 2026-10-17).
+- **Current Objective**: Match Homebase displayed tips to target build capabilities across Chrome, Edge, and Firefox.
 - **Published Store Release Status**:
   - Official Firefox Listing: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
   - Version History: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
   - Recorded Store Status: Tracked exclusively in [Section 2.1](#21-published-store-releases).
-- **Distribution Target Isolation & Capabilities**:
-  - **Compile-Time Target Isolation**: Build pipeline (`scripts/build.mjs`) generates target-specific `dist/<target>/newtab/core/build-config.js` defining `HomebaseBuildConfig` and `isBrowserDefaultSearch()`. No runtime user-agent sniffing.
-  - **Chrome Target (`dist/chrome/`)**:
-    - Manifest permissions: added `"search"`, removed `"cookies"` (confirmed unused in Chrome).
-    - Host permissions: removed 7 search-suggestion-only autocomplete endpoints (`duckduckgo.com/ac/*`, `suggest.yandex.com/*`, `ff.search.yahoo.com/*`, `completion.amazon.com/*`, `api.bing.com/osjson.aspx*`, `suggestqueries.google.com/*`, `en.wikipedia.org/*`). Retained hosts required for weather, news, Google/t2 favicons, and wallpapers.
-    - Web Search Routing: General web queries route exclusively via `chrome.search.query({ text, disposition })`. Preserves current-tab and new-tab dispositions based on user preference and keyboard modifiers.
-    - Direct URLs: Direct URLs and localhost navigation bypass `chrome.search.query` and open directly.
-    - Error Handling: Missing `chrome.search` or API promise rejection shows user alert (`showCustomAlert`) and never falls back to hardcoded search URLs.
-    - UI Neutralization & Layout Shift Prevention: Initial markup in Chrome build (`dist/chrome/new-tab.html`) receives `browser-default-search` class on `<body>` and `.search-container`, plus `placeholder="Search the web"` and `aria-label="Search the web"` from build time. Scoped CSS (`.browser-default-search #search-engine-selector`, `.browser-default-search .search-input-divider`) hides the 63px picker/divider footprint and sets `border-radius: 12px` on `#search-input` from first paint, eliminating startup layout shift before deferred idle hydration runs. Engine cycling shortcuts (`Alt+Arrow`, `Alt+Home`) are deactivated.
-    - Suggestions & Bangs: Remote autocomplete fetches return `[]` immediately without network requests; bang suggestions disabled. Local bookmark/history suggestions and calculator expression evaluation remain fully functional.
-    - Legacy Preferences: Previously saved provider choices are ignored for routing without being deleted or overwritten when saving settings.
-  - **Edge Target (`dist/edge/`)**:
-    - Manifest permissions: removed unused `"cookies"` permission. Retained all 17 host permissions.
-    - Search Behavior: Retains existing multi-engine picker, provider preferences, engine cycling, bang shortcuts, and remote search suggestions.
-  - **Firefox Target (`dist/firefox/`)**:
-    - Manifest and source completely unchanged; retains multi-engine picker, Firefox containers, and all existing features.
+- **Capability-Aware Tips Alignment**:
+  - **Daily Tips & Onboarding Card (`src/newtab/tips/homebase-tips-ui.js`)**:
+    - Chrome Default-Search: Omits bang searches, search engine cycling (`Alt+Arrow Down`), and remote search suggestion settings. Added helpful tip explaining that web searches follow the browser's default search provider automatically.
+    - Firefox Containers: Guidance on opening bookmarks in Firefox Containers appears only when `browser.contextualIdentities` is available.
+    - Edge & Firefox: Multi-engine search guidance (bangs, engine switching, suggestion toggles) preserved.
+    - Saved Index & Cycling: `normalizeHomebaseTipIndex` safely wraps modulo eligible list length when list size changes between builds; Next Tip advances, dismiss and disabled flags respected.
+  - **Settings Pro Tips (`src/tips.js` & `src/newtab/settings/settings-content-sections.js`)**:
+    - Added `requiresMultiEngine`, `requiresDefaultSearch`, and `requiresContainers` capability metadata.
+    - `shouldIncludeTip()` filters out bangs/tidy/remember tips in default search, includes default search provider tip, and gates container guidance behind `browser.contextualIdentities`.
 - **Evidence Attribution & Automated Verification**:
-  - Prepared Chrome Submission Package: `dist/homebase-chrome-1.0.2.zip` (size: 3,447,335 bytes, SHA-256: `6d484c1ac5c2b0c064efbe0ca15990782930e89fc4d610673fb8178b9785e589`).
-  - Chrome Web Store Status: Submission and Google review approval are NOT yet confirmed (package prepared for developer upload).
-  - Build Validation: Verified multi-target packaging (`dist/chrome/`, `dist/firefox/`, `dist/edge/`). Edge cookies permission removed; existing Edge ZIP preserved without alteration.
-  - Unit Tests: Dedicated test suite `tests/unit/chrome-default-search.test.mjs` (13 tests passing covering Chrome routing, CURRENT_TAB/NEW_TAB dispositions, direct URLs, API failures, legacy preference preservation, suggestions disabling, and Edge/Firefox behavior preservation).
+  - Chrome Web Store Status: User-reported `v1.0.2` submission uploaded and in review by Google.
+  - Microsoft Edge Add-ons Status: Version `1.0.2` in review by Microsoft Partner Center.
+  - Unit Tests: Focused test suite `tests/unit/homebase-tips-capabilities.test.mjs` (8/8 PASS) and `tests/unit/settings-content-sections.test.mjs` (7/7 PASS).
   - Test Pipeline: Automated checks PASS:
-    - Syntax Check: `node --check` (PASS).
-    - Static Invariants: 76 deferred scripts checked, 0 collisions (PASS).
-    - Focused Unit Tests: `tests/unit/chrome-default-search.test.mjs` (13/13 PASS), `tests/unit/search-ui-controller.test.mjs` (8/8 PASS).
-  - Manual / Installed Browser Checks: User-reported verification on 2026-10-17 confirmed PASS for live installed Chrome build (web search via chrome.search.query(), direct URL navigation, layout stability from first paint with zero snap, neutral placeholder, and hidden engine picker/settings). Live Edge installed check remains unverified pending separate user testing.
-- **Working Tree Changes**: Ready for commit upon user authorization.
-- **Next Task**: Await user upload of `dist/homebase-chrome-1.0.2.zip` to the Chrome Developer Dashboard and subsequent Google review outcome.
+    - Syntax Check: `node --check` (PASS on all modified files).
+    - Static Invariants: 76 deferred scripts checked, 0 collisions, 630 declarations (PASS).
+  - Manual Verification: User-reported manual testing of regenerated unpacked Chrome, Edge, and Firefox builds passed.
+- **Working Tree Changes**: Clean (committed and pushed).
+- **Next Task**: Await Google review outcome for Chrome Web Store `v1.0.2` and Microsoft Partner Center review for Edge `v1.0.2`.
 - **Last Updated Date**: October 17, 2026

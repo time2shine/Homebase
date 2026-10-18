@@ -1018,3 +1018,34 @@ body:not(.performance-mode) .gs-card {
   background-color: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
 }
+
+.gs-perf-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin: -4px 0 10px 0;
+  background: rgba(44, 165, 255, 0.08);
+  border-left: 3px solid #2ca5ff;
+  border-radius: 8px;
+  font-size: 0.82em;
+  color: #334155;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.gs-perf-notice.hidden {
+  display: none !important;
+}
+
+.gs-perf-action-btn {
+  flex-shrink: 0;
+  font-size: 0.85em;
+  padding: 5px 10px;
+}
+
+.gs-switch input:disabled + .gs-slider {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

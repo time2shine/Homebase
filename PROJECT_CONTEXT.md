@@ -160,6 +160,10 @@ Homebase enforces a **single canonical owner** rule for every subsystem:
 - Scripts evaluate sequentially in document order within a shared global execution context.
 - Top-level variables must be unique across all scripts to prevent `SyntaxError` declaration collisions.
 
+### 5.3 Performance Mode & Resource Profiles
+- Performance Mode reduces system resource consumption by pausing live video playback, reducing glass/bookmark blur and entrance animations, and disabling Cinema Mode, while preserving all saved user appearance preferences.
+- Architectural analysis, user-reported testing observations (October 18, 2026), automated setup status, and the standardized live-browser benchmarking procedure are documented in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md).
+
 ---
 
 ## 6. Collaboration Standards & AI Workflow
@@ -172,29 +176,27 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Branch & Head Commit**: Branch `main`, latest commit `5b31630` (`docs: record Chrome and Edge store tracking`, 2026-10-17).
-- **Current Objective**: Match Homebase displayed tips to target build capabilities across Chrome, Edge, and Firefox.
+- **Branch & Head Commit**: Branch `main`, latest commit `48cd0b6` (`fix: harden tips cycling against runtime length drift`, 2026-10-17).
+- **Current Objective**: Performance Mode lifecycle fixes, persistence hardening, Wallpaper Type UI integration, bookmark appearance transparency preservation, modal animation hardening, Settings explanation, and impact documentation.
 - **Published Store Release Status**:
   - Official Firefox Listing: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
   - Version History: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
   - Recorded Store Status: Tracked exclusively in [Section 2.1](#21-published-store-releases).
-- **Capability-Aware Tips Alignment**:
-  - **Daily Tips & Onboarding Card (`src/newtab/tips/homebase-tips-ui.js`)**:
-    - Chrome Default-Search: Omits bang searches, search engine cycling (`Alt+Arrow Down`), and remote search suggestion settings. Added helpful tip explaining that web searches follow the browser's default search provider automatically.
-    - Firefox Containers: Guidance on opening bookmarks in Firefox Containers appears only when `browser.contextualIdentities` is available.
-    - Edge & Firefox: Multi-engine search guidance (bangs, engine switching, suggestion toggles) preserved.
-    - Saved Index & Cycling: `normalizeHomebaseTipIndex` safely wraps modulo eligible list length when list size changes between builds; Next Tip advances, dismiss and disabled flags respected.
-  - **Settings Pro Tips (`src/tips.js` & `src/newtab/settings/settings-content-sections.js`)**:
-    - Added `requiresMultiEngine`, `requiresDefaultSearch`, and `requiresContainers` capability metadata.
-    - `shouldIncludeTip()` filters out bangs/tidy/remember tips in default search, includes default search provider tip, and gates container guidance behind `browser.contextualIdentities`.
-- **Evidence Attribution & Automated Verification**:
-  - Chrome Web Store Status: User-reported `v1.0.2` submission uploaded and in review by Google.
-  - Microsoft Edge Add-ons Status: Version `1.0.2` in review by Microsoft Partner Center.
-  - Unit Tests: Focused test suite `tests/unit/homebase-tips-capabilities.test.mjs` (8/8 PASS) and `tests/unit/settings-content-sections.test.mjs` (7/7 PASS).
-  - Test Pipeline: Automated checks PASS:
-    - Syntax Check: `node --check` (PASS on all modified files).
-    - Static Invariants: 76 deferred scripts checked, 0 collisions, 630 declarations (PASS).
-  - Manual Verification: User-reported manual testing of regenerated unpacked Chrome, Edge, and Firefox builds passed.
-- **Working Tree Changes**: Clean (committed and pushed).
-- **Next Task**: Await Google review outcome for Chrome Web Store `v1.0.2` and Microsoft Partner Center review for Edge `v1.0.2`.
-- **Last Updated Date**: October 17, 2026
+- **Performance Mode Implementation & Hardening**:
+  - Video Playback Lifecycle: Toggling ON stops playback and background timers; toggling OFF cleanly restores video wallpaper when saved preference is video; static wallpapers remain static.
+  - Persistence & Discard Order: Serialized writes through `_perfWriteQueue` and `_perfWriteTicket` prevent out-of-order writes from overwriting restored state on Cancel/Close; dual-syncs both fast localStorage mirror keys (`fast-performance-mode` and `fast-perf-mode`).
+  - Wallpaper Type UI Alignment: Inline explanation and accessible "Turn off Performance Mode" action button added to Settings and Wallpaper Gallery; switching from Static to Live Video disabled while ON, but existing Live Video selections preserved and can switch to Static.
+  - Bookmark Styling Preservation: Cascade overrides refined so Transparent Background and Custom Background color/opacity preferences are preserved in both modes; blur disabled in Performance Mode without forcing gray backgrounds.
+  - Modal Animation Hardening: Opening animation listener filters bubbled child animation events (`e.target !== dialog`), prevents marking closing/hidden dialogs as settled, cleans up listeners on close and before reopen, excludes closing overlays in performance controller, and scopes `.modal-settled:not(.closing)` so closing shrink animations always run.
+  - Settings Explanation: Updated description beneath Performance Mode to accurately explain effects on live wallpapers, background blur, animations, and Cinema Mode while confirming saved appearance preferences are preserved (`aria-describedby="app-performance-mode-hint"`).
+- **UI Layout Fixes (October 18, 2026)**:
+  - Performance Mode Switch Sizing: Added `flex: 0 0 46px; flex-shrink: 0;` to `.app-switch` and `flex-shrink: 0;` to all `.app-setting-row` controls (`.app-switch`, selects, buttons), preventing switch compression while allowing the multi-line description to wrap naturally with preserved 18px gap.
+  - Settings Footer & Height Constraints: Fixed dialog overflow clipping Save and Cancel buttons by enforcing `min-height: min(520px, calc(100vh - 40px)); max-height: calc(100vh - 40px);`, zeroing `.gallery-header h3` margin, applying `grid-template-rows: minmax(0, 1fr); overflow: hidden;` to `.app-settings-body`, making `.app-settings-nav` scrollable with `overflow-y: auto; min-height: 0;`, and setting `flex-shrink: 0; padding-bottom: 2px;` on `.app-settings-footer`.
+  - Perf Debug Overlay Dock Clearance: Replaced continuous JS position polling (`updatePerfOverlayDockOffset`) with declarative CSS variables (`--dock-width: 40px; --dock-gap: 12px;`) on `:root`, positioning `#perf-debug-overlay` via `right: calc(var(--hb-perf-dock-width) + var(--hb-perf-dock-gap))` (collapsing cleanly to `right: 12px` on `body.dock-collapsed`) to guarantee full visibility and clickability of dock icons. Removed conflicting inline declarations from `ensurePerfOverlayElement()` so the stylesheet is the single source of truth without `!important`.
+  - Verification Status: User confirmed manual PASS for the three UI layout fixes (switch dimensions, settings footer visibility/scrolling, and overlay dock clearance), reported October 18, 2026.
+- **Performance Mode Impact & Measurement Records**:
+  - User-Reported Testing (October 18, 2026): Informal user-reported observations in a live setup recorded Performance Mode OFF idle CPU generally around 1–4% and Performance Mode ON idle CPU generally around 0.02–1.3%. User repeated the comparison with similar results; findings suggest reduced idle CPU in the tested setup. Exact browser/version, sample timing, and complete repeated-run data were not supplied and are not invented. No claims made of precise percentage savings, faster startup, or GPU/battery improvements.
+  - Automated Measurement Status: Documented in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md) ("The attempted automated setup did not reliably load and measure the installed extension; no automated performance results were obtained.").
+  - Standardized Manual Protocol: Documented 8-run alternating manual measurement protocol in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md).
+- **Working Tree Changes**: Reviewed changes staged and committed upon user authorization.
+- **Last Updated Date**: October 18, 2026

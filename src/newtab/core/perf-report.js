@@ -1030,12 +1030,6 @@ function ensurePerfOverlayElement() {
 
   el.style.cssText = `
     position: fixed;
-    left: auto;
-    --hb-perf-overlay-edge-offset: 16px;
-    --hb-right-dock-width: 0px;
-    --hb-perf-overlay-dock-gap: 16px;
-    --hb-perf-overlay-right-offset: var(--hb-perf-overlay-edge-offset);
-    right: var(--hb-perf-overlay-right-offset, 16px);
     bottom: 12px;
     box-sizing: border-box;
     background: rgba(0,0,0,0.78);
@@ -1049,7 +1043,6 @@ function ensurePerfOverlayElement() {
     z-index: 9999;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     width: max-content;
-    max-width: min(520px, calc(100vw - var(--hb-perf-overlay-right-offset, 16px) - 16px));
     max-height: calc(100vh - 24px);
     overflow-y: auto;
     overflow-x: hidden;
@@ -1171,37 +1164,8 @@ function ensurePerfOverlayElement() {
 }
 
 function updatePerfOverlayDockOffset(el) {
-  if (!el || !el.style) return;
-
-  let dockWidth = 0;
-
-  try {
-    const dockEl = dock || document.querySelector('.dock');
-
-    if (dockEl) {
-      const style = window.getComputedStyle ? window.getComputedStyle(dockEl) : null;
-      const rect = dockEl.getBoundingClientRect();
-      const isVisible =
-        dockEl.offsetParent !== null &&
-        rect &&
-        rect.width > 0 &&
-        rect.height > 0 &&
-        (!style || (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'));
-
-      if (isVisible) {
-        dockWidth = Math.round(rect.width);
-      }
-    }
-  } catch (e) {
-    dockWidth = 0;
-  }
-
-  const gap = dockWidth > 0 ? 16 : 0;
-  const rightOffset = dockWidth > 0 ? dockWidth + gap : 16;
-
-  el.style.setProperty('--hb-right-dock-width', `${dockWidth}px`);
-  el.style.setProperty('--hb-perf-overlay-dock-gap', `${gap}px`);
-  el.style.setProperty('--hb-perf-overlay-right-offset', `${rightOffset}px`);
+  // Dock clearance is handled declaratively via CSS variables (--dock-width, --dock-gap)
+  // to avoid continuous JavaScript position polling.
 }
 
 let cachedMigrationCount = null;
@@ -1284,7 +1248,6 @@ function updatePerfOverlay(forceCacheRefresh = false) {
   if (!perfState.overlayEnabled) return;
 
   const el = ensurePerfOverlayElement();
-  updatePerfOverlayDockOffset(el);
 
   const now = Date.now();
 

@@ -17,6 +17,10 @@
   const APP_GRID_ANIMATION_ENABLED_KEY = 'appGridAnimationEnabled';
   const APP_BACKGROUND_DIM_KEY = 'appBackgroundDimPref';
 
+  const globalScope = typeof window !== 'undefined'
+    ? window
+    : (typeof globalThis !== 'undefined' ? globalThis : this);
+
   let _performanceMode = readFastPerformanceModePreference();
   let _glassStyle = 'original';
   let _gridAnimation = 'default';
@@ -24,9 +28,57 @@
   let _gridAnimationEnabled = false;
   let _backgroundDim = 0;
   let _initialized = false;
+  let _perfWriteQueue = Promise.resolve();
+  let _perfWriteTicket = 0;
 
   function getStorage() {
-    return (typeof window !== 'undefined' && window.HomebaseStorage) ? window.HomebaseStorage : null;
+    return (typeof window !== 'undefined' && window.HomebaseStorage)
+      ? window.HomebaseStorage
+      : ((typeof globalScope !== 'undefined' && globalScope.HomebaseStorage) ? globalScope.HomebaseStorage : null);
+  }
+
+  function persistPerformanceMode(enabled) {
+    const nextVal = enabled === true;
+    const ticket = ++_perfWriteTicket;
+
+    const task = async () => {
+      if (ticket < _perfWriteTicket) {
+        return { success: true, value: nextVal, superseded: true };
+      }
+
+      let storageRestored = true;
+      let storageError = null;
+
+      try {
+        const storage = getStorage();
+        if (storage && typeof storage.set === 'function') {
+          const res = await storage.set(APP_PERFORMANCE_MODE_KEY, nextVal);
+          if (res && res.success === false) {
+            storageRestored = false;
+            storageError = new Error(res.detail || res.error || 'Failed to persist appPerformanceMode');
+          }
+        } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+          await browser.storage.local.set({ [APP_PERFORMANCE_MODE_KEY]: nextVal });
+        } else if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          await chrome.storage.local.set({ [APP_PERFORMANCE_MODE_KEY]: nextVal });
+        }
+      } catch (err) {
+        storageRestored = false;
+        storageError = err;
+      }
+
+      if (ticket === _perfWriteTicket) {
+        syncFastPerformanceModeMirror(nextVal);
+      }
+
+      if (!storageRestored) {
+        return { success: false, error: storageError };
+      }
+      return { success: true, value: nextVal };
+    };
+
+    _perfWriteQueue = _perfWriteQueue.catch(() => {}).then(task);
+    return _perfWriteQueue;
   }
 
   function readFastPerformanceModePreference() {
@@ -41,7 +93,9 @@
   function syncFastPerformanceModeMirror(enabled) {
     try {
       if (typeof window === 'undefined' || !window.localStorage) return;
-      window.localStorage.setItem(FAST_PERFORMANCE_MODE_KEY, enabled === true ? '1' : '0');
+      const strVal = enabled === true ? '1' : '0';
+      window.localStorage.setItem(FAST_PERFORMANCE_MODE_KEY, strVal);
+      window.localStorage.setItem('fast-perf-mode', strVal);
     } catch (e) {}
   }
 
@@ -116,6 +170,26 @@
     syncFastPerformanceModeMirror(isOn);
 
     if (typeof document !== 'undefined') {
+      if (document.querySelectorAll) {
+        // Ensure already-open, non-closing dialogs stay settled and do not replay entrance animations
+        const openModals = document.querySelectorAll(
+          '.modal-overlay:not(.hidden):not(.closing), .popover-overlay:not(.hidden):not(.closing)'
+        );
+        openModals.forEach((m) => {
+          if (m && m.classList && !m.classList.contains('closing') && !m.classList.contains('hidden')) {
+            m.classList.add('modal-settled');
+          }
+        });
+
+        // Ensure closing overlays are never marked or retained as settled
+        const closingModals = document.querySelectorAll('.modal-overlay.closing, .popover-overlay.closing');
+        closingModals.forEach((m) => {
+          if (m && m.classList) {
+            m.classList.remove('modal-settled');
+          }
+        });
+      }
+
       if (document.body) {
         document.body.classList.toggle('performance-mode', isOn);
       }
@@ -141,6 +215,9 @@
     if (typeof window !== 'undefined') {
       window.appPerformanceModePreference = isOn;
     }
+
+    syncWallpaperTypeControls(isOn, options.wallpaperType);
+    setupWallpaperPerfActionListeners();
 
     if (isOn) {
       disableGridAnimationRuntime();
@@ -202,6 +279,42 @@
     } else if (typeof window !== 'undefined' && typeof window.resetCinemaMode === 'function') {
       if (typeof window.setupCinemaModeListeners === 'function') window.setupCinemaModeListeners();
       window.resetCinemaMode();
+    }
+
+    if (typeof options.onWallpaperRestore === 'function') {
+      options.onWallpaperRestore();
+    } else {
+      const wpType = options.wallpaperType ||
+        (typeof wallpaperTypePreference !== 'undefined'
+          ? wallpaperTypePreference
+          : (typeof window !== 'undefined'
+            ? (window.wallpaperTypePreference ||
+               (window.HomebaseWallpaperController && typeof window.HomebaseWallpaperController.getWallpaperTypePreferenceState === 'function'
+                 ? window.HomebaseWallpaperController.getWallpaperTypePreferenceState()
+                 : null))
+            : null));
+
+      if (wpType === 'video') {
+        const selection = options.wallpaperSelection ||
+          (typeof currentWallpaperSelection !== 'undefined'
+            ? currentWallpaperSelection
+            : (typeof window !== 'undefined'
+              ? (window.currentWallpaperSelection ||
+                 (window.HomebaseWallpaperController && typeof window.HomebaseWallpaperController.getCurrentWallpaperSelection === 'function'
+                   ? window.HomebaseWallpaperController.getCurrentWallpaperSelection()
+                   : null))
+              : null));
+
+        if (selection) {
+          if (typeof applyWallpaperByType === 'function') {
+            applyWallpaperByType(selection, 'video');
+          } else if (typeof window !== 'undefined' && typeof window.applyWallpaperByType === 'function') {
+            window.applyWallpaperByType(selection, 'video');
+          } else if (typeof window !== 'undefined' && window.HomebaseWallpaperController && typeof window.HomebaseWallpaperController.applyWallpaperByType === 'function') {
+            window.HomebaseWallpaperController.applyWallpaperByType(selection, 'video');
+          }
+        }
+      }
     }
 
     return { performanceMode: false };
@@ -297,6 +410,114 @@
     }
   }
 
+  function syncWallpaperTypeControls(perfMode, explicitType) {
+    if (typeof document === 'undefined') return;
+
+    const isOn = perfMode !== undefined
+      ? !!perfMode
+      : isPerformanceModeEnabled();
+
+    const select = document.getElementById('app-wallpaper-type-select');
+    const toggle = document.getElementById('wallpaper-type-toggle') || document.getElementById('gallery-wallpaper-type-toggle');
+    const noticeSettings = document.getElementById('app-wallpaper-type-perf-notice');
+    const noticeGallery = document.getElementById('gallery-wallpaper-type-perf-notice');
+
+    let currentType = explicitType;
+    if (!currentType) {
+      if (select && select.value) {
+        currentType = select.value;
+      } else if (toggle) {
+        currentType = toggle.checked ? 'video' : 'static';
+      } else if (typeof wallpaperTypePreference !== 'undefined') {
+        currentType = wallpaperTypePreference;
+      } else if (typeof window !== 'undefined' && window.wallpaperTypePreference) {
+        currentType = window.wallpaperTypePreference;
+      } else {
+        currentType = 'video';
+      }
+    }
+
+    // 1. Inline explanation & action button visibility
+    if (noticeSettings) {
+      noticeSettings.classList.toggle('hidden', !isOn);
+    }
+    if (noticeGallery) {
+      noticeGallery.classList.toggle('hidden', !isOn);
+    }
+
+    // 2. Settings Dropdown
+    if (select) {
+      const videoOption = select.querySelector('option[value="video"]');
+      if (videoOption) {
+        // While Performance Mode is ON:
+        // Keep Live Video visible, but prevent switching from Static to Live Video.
+        // If Live Video was already selected, preserve that preference and allow switching to Static.
+        videoOption.disabled = isOn && currentType === 'static';
+      }
+    }
+
+    // 3. Gallery Binary Switch
+    if (toggle) {
+      // If Wallpaper Type is a binary switch, disable switching to video while it is set to Static;
+      // allow switching an existing Video preference to Static.
+      const isStatic = !toggle.checked || currentType === 'static';
+      toggle.disabled = isOn && isStatic;
+      if (toggle.disabled) {
+        toggle.setAttribute('aria-disabled', 'true');
+      } else {
+        toggle.removeAttribute('aria-disabled');
+      }
+    }
+  }
+
+  function handleTurnOffPerformanceMode() {
+    const perfToggle = typeof document !== 'undefined'
+      ? document.getElementById('app-performance-mode-toggle')
+      : null;
+
+    if (perfToggle) {
+      if (perfToggle.checked) {
+        perfToggle.checked = false;
+        const changeEvt = typeof Event !== 'undefined'
+          ? new Event('change', { bubbles: true })
+          : { type: 'change', bubbles: true };
+        perfToggle.dispatchEvent(changeEvt);
+        return;
+      }
+    }
+
+    applyPerformanceMode(false);
+    persistPerformanceMode(false);
+  }
+
+  function setupWallpaperPerfActionListeners() {
+    if (typeof document === 'undefined') return;
+
+    const attach = (btnId) => {
+      const btn = document.getElementById(btnId);
+      if (btn && !btn.dataset.perfListenerAttached) {
+        btn.dataset.perfListenerAttached = 'true';
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          handleTurnOffPerformanceMode();
+        });
+      }
+    };
+
+    attach('app-wallpaper-turn-off-perf-btn');
+    attach('gallery-wallpaper-turn-off-perf-btn');
+  }
+
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest && e.target.closest('#app-wallpaper-turn-off-perf-btn, #gallery-wallpaper-turn-off-perf-btn');
+      if (btn) {
+        e.preventDefault();
+        handleTurnOffPerformanceMode();
+      }
+    });
+  }
+
   async function initialize(options = {}) {
     _performanceMode = readFastPerformanceModePreference();
     if (options.initialPerformanceMode !== undefined) {
@@ -319,6 +540,9 @@
     if (options.visualEffects) {
       applyVisualEffects(options.visualEffects);
     }
+
+    syncWallpaperTypeControls(_performanceMode, options.wallpaperType);
+    setupWallpaperPerfActionListeners();
 
     _initialized = true;
     return {
@@ -346,6 +570,11 @@
     disableGridAnimationRuntime,
     disableGlassRuntime,
     enableGlassRuntimeFromPreference,
+    persistPerformanceMode,
+    syncWallpaperTypeControls,
+    syncWallpaperTypePerformanceState: syncWallpaperTypeControls,
+    handleTurnOffPerformanceMode,
+    getPerformanceModeWriteQueue: () => _perfWriteQueue,
     getPerformanceMode: isPerformanceModeEnabled,
     getState: () => ({
       performanceMode: _performanceMode,
@@ -365,10 +594,21 @@
     }
     window.applyPerformanceModeState = applyPerformanceMode;
     window.applyPerformanceMode = applyPerformanceMode;
+    window.persistPerformanceMode = persistPerformanceMode;
     window.readFastPerformanceModePreference = readFastPerformanceModePreference;
     window.syncFastPerformanceModeMirror = syncFastPerformanceModeMirror;
     window.disableGridAnimationRuntime = disableGridAnimationRuntime;
     window.disableGlassRuntime = disableGlassRuntime;
     window.enableGlassRuntimeFromPreference = enableGlassRuntimeFromPreference;
+    window.syncWallpaperTypeControls = syncWallpaperTypeControls;
+    window.syncWallpaperTypePerformanceState = syncWallpaperTypeControls;
+    window.handleTurnOffPerformanceMode = handleTurnOffPerformanceMode;
+  }
+
+  if (typeof globalScope !== 'undefined') {
+    globalScope.HomebasePerformanceController = HomebasePerformanceController;
+    globalScope.syncWallpaperTypeControls = syncWallpaperTypeControls;
+    globalScope.syncWallpaperTypePerformanceState = syncWallpaperTypeControls;
+    globalScope.handleTurnOffPerformanceMode = handleTurnOffPerformanceMode;
   }
 })();

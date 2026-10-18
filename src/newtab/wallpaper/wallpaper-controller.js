@@ -1179,7 +1179,7 @@ function applyWallpaperByType(selection, type = 'video') {
     lastAppliedWallpaper = {
       id: selection.id || null,
       poster,
-      video,
+      video: '',
       type: finalType
     };
     updateSettingsPreview(selection, finalType);
@@ -1267,6 +1267,9 @@ function applyWallpaperByType(selection, type = 'video') {
 function clearBackgroundVideos() {
   backgroundVideoSourceLoadGeneration += 1;
   backgroundVideoCrossfadeSetupKey = '';
+  if (lastAppliedWallpaper) {
+    lastAppliedWallpaper.video = '';
+  }
 
   const videos = Array.from(document.querySelectorAll('.background-video'));
 
@@ -1680,6 +1683,13 @@ async function loadWallpaperTypePreference() {
     select.value = wallpaperTypePreference;
   }
 
+  const syncFn = (typeof HomebasePerformanceController !== 'undefined' && typeof HomebasePerformanceController.syncWallpaperTypeControls === 'function')
+    ? HomebasePerformanceController.syncWallpaperTypeControls
+    : (typeof syncWallpaperTypeControls === 'function' ? syncWallpaperTypeControls : null);
+  if (syncFn) {
+    syncFn(undefined, wallpaperTypePreference);
+  }
+
   return wallpaperTypePreference;
 }
 
@@ -1704,6 +1714,13 @@ async function setWallpaperTypePreference(type) {
   const next = type === 'static' ? 'static' : 'video';
   wallpaperTypePreference = next;
   await setWallpaperTypePreferenceStorage(next);
+
+  const syncFn = (typeof HomebasePerformanceController !== 'undefined' && typeof HomebasePerformanceController.syncWallpaperTypeControls === 'function')
+    ? HomebasePerformanceController.syncWallpaperTypeControls
+    : (typeof syncWallpaperTypeControls === 'function' ? syncWallpaperTypeControls : null);
+  if (syncFn) {
+    syncFn(undefined, next);
+  }
 
   // Re-apply current wallpaper with the new mode if available
   try {

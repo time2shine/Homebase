@@ -142,6 +142,8 @@ body.ready .dock {
 }
 
 :root {
+  --dock-width: 40px;
+  --dock-gap: 12px;
   --glass-blur: 12px;
   --glass-bg: rgba(255, 255, 255, 0.14);
   --overlay-blur: 6px;
@@ -183,7 +185,8 @@ body.ready .dock {
 
 /* --- 1. Right Dock --- */
 .dock {
-  flex: 0 0 40px;
+  flex: 0 0 var(--dock-width, 40px);
+  width: var(--dock-width, 40px);
   height: 100vh;
   padding: 64px 6px 10px;
   display: flex;
@@ -198,6 +201,11 @@ body.ready .dock {
   border-top: 0 !important;
   border-bottom: 0 !important;
   border-radius: 0 !important;
+}
+
+body.dock-collapsed {
+  --dock-width: 0px;
+  --dock-gap: 0px;
 }
 
 body.dock-collapsed .dock {
@@ -4254,6 +4262,23 @@ input:checked + .slider:before {
   animation: pickerOut 0.2s ease-in forwards;
 }
 
+/* 4. Settled State (Open & Stationary):
+   Once opened, prevent entrance animation replay when Performance Mode or themes change */
+.modal-overlay.modal-settled:not(.closing),
+.popover-overlay.modal-settled:not(.closing) {
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+.modal-overlay.modal-settled:not(.closing) .dialog-content,
+.modal-overlay.modal-settled:not(.closing) .gallery-dialog,
+.modal-overlay.modal-settled:not(.closing) .app-settings-dialog,
+.popover-overlay.modal-settled:not(.closing) .popover-dialog {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: scale(1) !important;
+}
+
 /* DELETE DIALOG - Cancel button */
 #confirm-delete-cancel-btn {
   background-color: rgba(0, 0, 0, 0.04);   /* light gray chip */
@@ -4834,40 +4859,9 @@ body.performance-mode .mw-card {
   border: 1px solid #555 !important;
 }
 
-/* 1. Default Performance Mode (Setting is OFF): Subtle Gray Background */
-body.performance-mode .bookmark-item span {
-  /* 40% opacity black creates a "Little Bit Gray" look */
-  background-color: rgba(0, 0, 0, 0.4) !important; 
-  color: white !important;
-  
-  /* Sizing fixes */
-  height: auto !important;
-  min-height: 0 !important;
-  padding: 2px 6px !important;
-  border-radius: 6px !important;
-  width: auto !important;
-  max-width: 90% !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
-}
-
-body.performance-mode .grid-item-rename-input {
-  padding: 2px 6px;
-  border-radius: 6px;
-  max-width: 90%;
-}
-
-/* 2. Performance Mode (Setting is ON): Use User's Custom Color */
-body.performance-mode.bookmark-text-bg-enabled .bookmark-item span {
-  /* Use the custom color variable, solid/opaque */
-  background-color: rgba(var(--bookmark-text-bg-rgb, 44, 165, 255), 0.85) !important;
-  
-  /* Use correct text color (black or white) based on contrast */
-  color: var(--bookmark-text-color, white) !important;
-  
-  /* Add border for definition */
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-}
+/* Performance Mode respects Transparent Background and Custom Background settings:
+   Backdrop blur is disabled by line 4770 without adding an unrequested gray background
+   or overriding user-selected custom background color, opacity, or text color. */
 
 /* Hide Animation settings in Performance Mode */
 body.performance-mode #app-grid-animation-row,
@@ -6566,4 +6560,20 @@ input:checked + .slider:before {
   .homebase-tips-card {
     transition: none;
   }
+}
+
+/* --- Perf Debug Overlay Dock Clearance --- */
+#perf-debug-overlay {
+  left: auto;
+  --hb-perf-dock-width: var(--dock-width, 40px);
+  --hb-perf-dock-gap: var(--dock-gap, 12px);
+  right: calc(var(--hb-perf-dock-width) + var(--hb-perf-dock-gap));
+  max-width: min(520px, calc(100vw - var(--hb-perf-dock-width) - var(--hb-perf-dock-gap) - 16px));
+}
+
+body.dock-collapsed #perf-debug-overlay {
+  --hb-perf-dock-width: 0px;
+  --hb-perf-dock-gap: 0px;
+  right: 12px;
+  max-width: min(520px, calc(100vw - 24px));
 }

@@ -369,6 +369,13 @@ window.HomebaseGallery = (() => {
       appWallpaperTypeSelect.value = wallpaperTypePreference;
     }
 
+    const syncFn = (typeof HomebasePerformanceController !== 'undefined' && typeof HomebasePerformanceController.syncWallpaperTypeControls === 'function')
+      ? HomebasePerformanceController.syncWallpaperTypeControls
+      : (typeof syncWallpaperTypeControls === 'function' ? syncWallpaperTypeControls : null);
+    if (syncFn) {
+      syncFn(undefined, wallpaperTypePreference);
+    }
+
     setContextWallpaperTypePreference(wallpaperTypePreference);
     return wallpaperTypePreference;
   }
@@ -392,6 +399,13 @@ window.HomebaseGallery = (() => {
     const next = type === 'static' ? 'static' : 'video';
     wallpaperTypePreference = next;
     setContextWallpaperTypePreference(next);
+
+    const syncFn = (typeof HomebasePerformanceController !== 'undefined' && typeof HomebasePerformanceController.syncWallpaperTypeControls === 'function')
+      ? HomebasePerformanceController.syncWallpaperTypeControls
+      : (typeof syncWallpaperTypeControls === 'function' ? syncWallpaperTypeControls : null);
+    if (syncFn) {
+      syncFn(undefined, next);
+    }
 
     const fn = getContextCallback('setWallpaperTypePreference');
     if (fn) {
@@ -1915,12 +1929,33 @@ window.HomebaseGallery = (() => {
     if (wallpaperTypeToggle && !wallpaperTypeToggle.dataset.typeListenerAttached) {
       wallpaperTypeToggle.dataset.typeListenerAttached = 'true';
       wallpaperTypeToggle.addEventListener('change', async (e) => {
+        const isPerf = (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled())
+          || (typeof HomebasePerformanceController !== 'undefined' && HomebasePerformanceController.isPerformanceModeEnabled && HomebasePerformanceController.isPerformanceModeEnabled());
+
+        if (isPerf && e.target.checked) {
+          e.target.checked = false;
+          const syncFn = (typeof HomebasePerformanceController !== 'undefined' && typeof HomebasePerformanceController.syncWallpaperTypeControls === 'function')
+            ? HomebasePerformanceController.syncWallpaperTypeControls
+            : (typeof syncWallpaperTypeControls === 'function' ? syncWallpaperTypeControls : null);
+          if (syncFn) {
+            syncFn(isPerf, 'static');
+          }
+          return;
+        }
+
         const newType = e.target.checked ? 'video' : 'static';
 
         wallpaperTypePreference = newType;
         setContextWallpaperTypePreference(newType);
         if (appWallpaperTypeSelect) {
           appWallpaperTypeSelect.value = newType;
+        }
+
+        const syncFn = (typeof HomebasePerformanceController !== 'undefined' && typeof HomebasePerformanceController.syncWallpaperTypeControls === 'function')
+          ? HomebasePerformanceController.syncWallpaperTypeControls
+          : (typeof syncWallpaperTypeControls === 'function' ? syncWallpaperTypeControls : null);
+        if (syncFn) {
+          syncFn(isPerf, newType);
         }
 
         if (currentWallpaperSelection) {

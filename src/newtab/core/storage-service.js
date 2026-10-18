@@ -26,7 +26,7 @@
     widgetOrder: 'fast-widget-order',
     appTimeFormatPreference: 'fast-time-format',
     appBookmarkTextBg: 'fast-bookmark-bg',
-    appPerformanceMode: 'fast-perf-mode',
+    appPerformanceMode: 'fast-performance-mode',
     appShowSidebar: 'fast-show-sidebar',
     appShowWeather: 'fast-show-weather',
     appShowQuote: 'fast-show-quote',
@@ -87,8 +87,11 @@
     try {
       if (value === undefined || value === null) {
         window.localStorage.removeItem(mirrorKey);
+        if (key === 'appPerformanceMode') window.localStorage.removeItem('fast-perf-mode');
       } else if (typeof value === 'boolean') {
-        window.localStorage.setItem(mirrorKey, value ? '1' : '0');
+        const strVal = value ? '1' : '0';
+        window.localStorage.setItem(mirrorKey, strVal);
+        if (key === 'appPerformanceMode') window.localStorage.setItem('fast-perf-mode', strVal);
       } else if (typeof value === 'object') {
         window.localStorage.setItem(mirrorKey, JSON.stringify(value));
       } else {
@@ -111,6 +114,7 @@
 
     try {
       window.localStorage.removeItem(mirrorKey);
+      if (key === 'appPerformanceMode') window.localStorage.removeItem('fast-perf-mode');
     } catch (_) {
       // Fail-safe
     }

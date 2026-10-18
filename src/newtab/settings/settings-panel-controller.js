@@ -245,13 +245,39 @@
   }
 
   function closeAppSettingsModal(options = {}) {
-    if (typeof document === 'undefined') return;
+    if (typeof document === 'undefined') return Promise.resolve({ success: false, reason: 'NO_DOCUMENT' });
     const appSettingsModal = document.getElementById('app-settings-modal');
-    if (!appSettingsModal) return;
+    if (!appSettingsModal) return Promise.resolve({ success: false, reason: 'NO_MODAL' });
 
+    let discardPromise = Promise.resolve({ success: true });
     if (options.discard || !options.saved) {
       if (globalScope.HomebaseSettingsFormController && typeof globalScope.HomebaseSettingsFormController.discardSettingsChanges === 'function') {
-        globalScope.HomebaseSettingsFormController.discardSettingsChanges();
+        try {
+          discardPromise = Promise.resolve(globalScope.HomebaseSettingsFormController.discardSettingsChanges())
+            .then((result) => {
+              if (result && result.success === false) {
+                console.warn('HomebaseSettingsPanelController: Settings discard encountered persistence error:', result.error);
+              }
+              return result || { success: true };
+            })
+            .catch((err) => {
+              console.error('HomebaseSettingsPanelController: Unexpected error during settings discard:', err);
+              if (typeof globalScope.showCustomAlert === 'function') {
+                globalScope.showCustomAlert('Unable to revert settings changes.');
+              } else if (globalScope.HomebaseDialogController && typeof globalScope.HomebaseDialogController.showAlertDialog === 'function') {
+                globalScope.HomebaseDialogController.showAlertDialog('Unable to revert settings changes.', 'Settings Error');
+              }
+              return { success: false, error: err };
+            });
+        } catch (err) {
+          console.error('HomebaseSettingsPanelController: Unexpected error initiating settings discard:', err);
+          if (typeof globalScope.showCustomAlert === 'function') {
+            globalScope.showCustomAlert('Unable to revert settings changes.');
+          } else if (globalScope.HomebaseDialogController && typeof globalScope.HomebaseDialogController.showAlertDialog === 'function') {
+            globalScope.HomebaseDialogController.showAlertDialog('Unable to revert settings changes.', 'Settings Error');
+          }
+          discardPromise = Promise.resolve({ success: false, error: err });
+        }
       }
     }
 
@@ -283,6 +309,8 @@
       appSettingsModal.classList.add('hidden');
       handleClosed();
     }
+
+    return discardPromise;
   }
 
   function addBeforeOpenHook(fn) {
@@ -321,17 +349,27 @@
     setupWidgetOrderDrag();
 
     if (appSettingsCloseBtn) {
-      appSettingsCloseBtn.addEventListener('click', () => closeAppSettingsModal({ discard: true }));
+      appSettingsCloseBtn.addEventListener('click', () => {
+        closeAppSettingsModal({ discard: true }).catch((err) => {
+          console.error('Close button action failed:', err);
+        });
+      });
     }
     if (appSettingsCancelBtn) {
-      appSettingsCancelBtn.addEventListener('click', () => closeAppSettingsModal({ discard: true }));
+      appSettingsCancelBtn.addEventListener('click', () => {
+        closeAppSettingsModal({ discard: true }).catch((err) => {
+          console.error('Cancel button action failed:', err);
+        });
+      });
     }
 
     // Modal click delegation (backdrop click, privacy policy click, feedback action click)
     if (appSettingsModal) {
       appSettingsModal.addEventListener('click', (e) => {
         if (e.target === appSettingsModal) {
-          closeAppSettingsModal({ discard: true });
+          closeAppSettingsModal({ discard: true }).catch((err) => {
+            console.error('Backdrop close action failed:', err);
+          });
           return;
         }
 
@@ -376,7 +414,9 @@
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (isModalOpen()) {
-        closeAppSettingsModal({ discard: true });
+        closeAppSettingsModal({ discard: true }).catch((err) => {
+          console.error('ESC close action failed:', err);
+        });
       }
     });
   }

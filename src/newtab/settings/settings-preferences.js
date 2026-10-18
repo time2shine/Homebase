@@ -220,9 +220,9 @@ function syncAppSettingsForm() {
   const dailyRotVal = typeof dailyRotationPreference !== 'undefined'
     ? dailyRotationPreference !== false
     : true;
-  const wpTypeVal = typeof wallpaperTypePreference !== 'undefined'
+  const wpTypeVal = (typeof wallpaperTypePreference !== 'undefined' && wallpaperTypePreference)
     ? wallpaperTypePreference
-    : 'video';
+    : (globalScope.wallpaperTypePreference || (elements.appWallpaperTypeSelect && elements.appWallpaperTypeSelect.value) || 'video');
   const wpQualityVal = typeof wallpaperQualityPreference !== 'undefined'
     ? wallpaperQualityPreference
     : 'low';
@@ -344,7 +344,7 @@ function syncAppSettingsForm() {
     perfToggle.checked = settingsState.performanceMode;
     if (!perfToggle.dataset.listenerAttached) {
       perfToggle.dataset.listenerAttached = 'true';
-      perfToggle.addEventListener('change', async () => {
+      perfToggle.addEventListener('change', () => {
         const nextValue = perfToggle.checked;
         settingsState.performanceMode = nextValue;
         if (typeof syncFastPerformanceModeMirror === 'function') {
@@ -353,15 +353,46 @@ function syncAppSettingsForm() {
         if (typeof applyPerformanceModeState === 'function') {
           applyPerformanceModeState(nextValue);
         }
-        try {
-          if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
-            await HomebaseStorage.set(APP_PERFORMANCE_MODE_KEY, nextValue);
-          } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
-            await browser.storage.local.set({ [APP_PERFORMANCE_MODE_KEY]: nextValue });
-          }
-        } catch (err) {
-          console.warn('Failed to persist performance mode toggle', err);
+        const currentWp = (typeof wallpaperTypePreference !== 'undefined' && wallpaperTypePreference)
+          ? wallpaperTypePreference
+          : (globalScope.wallpaperTypePreference || (document.getElementById('app-wallpaper-type-select') && document.getElementById('app-wallpaper-type-select').value) || 'video');
+        const syncWpControls = (globalScope.HomebasePerformanceController && typeof globalScope.HomebasePerformanceController.syncWallpaperTypeControls === 'function')
+          ? globalScope.HomebasePerformanceController.syncWallpaperTypeControls
+          : (typeof globalScope.syncWallpaperTypeControls === 'function' ? globalScope.syncWallpaperTypeControls : null);
+        if (syncWpControls) {
+          syncWpControls(nextValue, currentWp);
         }
+        const persistFn = (globalScope.HomebasePerformanceController && typeof globalScope.HomebasePerformanceController.persistPerformanceMode === 'function')
+          ? globalScope.HomebasePerformanceController.persistPerformanceMode
+          : (typeof globalScope.persistPerformanceMode === 'function'
+            ? globalScope.persistPerformanceMode
+            : (typeof window !== 'undefined' && window.HomebasePerformanceController && typeof window.HomebasePerformanceController.persistPerformanceMode === 'function'
+              ? window.HomebasePerformanceController.persistPerformanceMode
+              : null));
+
+        let writePromise;
+        if (persistFn) {
+          writePromise = persistFn(nextValue);
+        } else {
+          writePromise = (async () => {
+            try {
+              if (typeof HomebaseStorage !== 'undefined' && HomebaseStorage.set) {
+                return await HomebaseStorage.set(APP_PERFORMANCE_MODE_KEY, nextValue);
+              } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+                return await browser.storage.local.set({ [APP_PERFORMANCE_MODE_KEY]: nextValue });
+              }
+            } catch (err) {
+              console.warn('Failed to persist performance mode toggle', err);
+              throw err;
+            }
+          })();
+        }
+        if (typeof globalScope !== 'undefined') {
+          globalScope.__activePerfToggleWritePromise = writePromise;
+        } else if (typeof window !== 'undefined') {
+          window.__activePerfToggleWritePromise = writePromise;
+        }
+        return writePromise.catch(() => {});
       });
     }
   }
@@ -416,6 +447,13 @@ function syncAppSettingsForm() {
   const singletonToggle = document.getElementById('app-singleton-mode-toggle');
   if (singletonToggle) {
     singletonToggle.checked = settingsState.singletonMode;
+  }
+
+  const syncWpControls = (globalScope.HomebasePerformanceController && typeof globalScope.HomebasePerformanceController.syncWallpaperTypeControls === 'function')
+    ? globalScope.HomebasePerformanceController.syncWallpaperTypeControls
+    : (typeof globalScope.syncWallpaperTypeControls === 'function' ? globalScope.syncWallpaperTypeControls : null);
+  if (syncWpControls) {
+    syncWpControls(settingsState.performanceMode, wpTypeVal);
   }
 }
 

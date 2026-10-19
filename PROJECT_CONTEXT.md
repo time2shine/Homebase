@@ -2,7 +2,7 @@
 
 **Project:** Homebase (Multi-browser Manifest V3 Dashboard Extension)  
 **Source Version:** `1.0.3` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
-**GitHub Release / Tag:** `v1.0.2` (commit `20fa9cd`, October 16, 2026)  
+**GitHub Release / Tag:** `v1.0.3` (commit `1d140f1`, October 20, 2026)  
 **Recorded Store Status (All Browsers):** See [Section 2.1](#21-published-store-releases)  
 **Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
 **Repository:** [https://github.com/time2shine/Homebase](https://github.com/time2shine/Homebase)  
@@ -40,21 +40,23 @@ Centralized tracking for all browser extension stores. To prevent duplicate or d
 #### Mozilla Firefox (Firefox Add-ons / AMO)
 - **Official Listing**: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
 - **Version History**: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
-- **Last User-Reported Store Version**: `0.18.0`
-- **Reported On**: 2026-10-16
-- **Verification Status**: User-reported, not independently verified.
+- **Status**: Live / Publicly Available.
+- **Published Store Version**: `1.0.3`
+- **Updated / Verified Date**: October 20, 2026
+- **Evidence & Verification**: User reported Mozilla accepted v1.0.3 on October 20, 2026. Independently verified publicly available on October 20, 2026 via official Mozilla Add-ons API v5 (`https://addons.mozilla.org/api/v5/addons/addon/homebase-new-tab-dashboard/`), which lists current version `1.0.3` (`status: public`, reviewed `2026-10-19T18:37:12Z`), and verified direct public download of the signed XPI package (`https://addons.mozilla.org/firefox/downloads/file/5140626/homebase_new_tab_dashboard-1.0.3.xpi` returning HTTP `200 OK`). (Direct HTML fetches to the web listing page return a Cloudflare client challenge to non-browsers, but the official AMO REST API and public XPI package confirm active public availability).
 
 #### Google Chrome (Chrome Web Store)
 - **Official Listing URL**: [Chrome Web Store — Homebase](https://chromewebstore.google.com/detail/homebase/ejfdeilhncacmmbdfmgpolpoldpllbmc)
-- **Status**: Live / Published.
+- **Status**: Live published version is `1.0.2`; Version `1.0.3` is under review.
 - **Published Store Version**: `1.0.2`
-- **Updated Date**: October 18, 2026
-- **Evidence & Verification**: User confirmed listing is live on October 18, 2026. Independently verified from public Chrome Web Store listing metadata (Version `1.0.2`, Updated `October 18, 2026`) via public store fetch on October 18, 2026.
-- **Version Distinction Note**: The live published store package `1.0.2` reflects the release package submitted on October 17, 2026; do not infer that it includes post-release repository changes (such as Performance Mode lifecycle hardening, persistence fixes, Settings layout adjustments, or overlay CSS positioning committed in `6de011d`).
+- **Submission Status**: Version `1.0.3`: Under review (user-reported October 20, 2026).
+- **Updated Date**: October 18, 2026 (Live listing updated); October 20, 2026 (v1.0.3 under-review report recorded).
+- **Evidence & Verification**: User confirmed live listing on October 18, 2026 (verified from public Chrome Web Store listing metadata: Version `1.0.2`, Updated `October 18, 2026`). User reported v1.0.3 submitted and under review on October 20, 2026.
+- **Version Distinction Note**: The live published store package `1.0.2` reflects the release package submitted on October 17, 2026; submitted version `1.0.3` is currently under review by the Chrome Web Store team.
 
 #### Microsoft Edge (Microsoft Edge Add-ons)
-- **Status**: Version `1.0.2`: In review.
-- **Evidence**: User-provided Partner Center screenshot, recorded 2026-10-17.
+- **Status**: Version `1.0.2`: In review (re-confirmed by user on October 20, 2026).
+- **Evidence**: User-provided Partner Center confirmation, recorded 2026-10-17 and re-confirmed still under review on October 20, 2026.
 - **Product ID**: `9de86c5a-b20f-4d2f-a019-77c7ed6d4e25`
 - **Public Listing URL**: Not yet available. Partner Center dashboard states it will be available once published.
 - **Reminder**: Record the official public URL here after publication. Do not construct or guess a store URL.
@@ -177,18 +179,14 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Branch & Head Commit**: Branch `main`, latest commit `6a95142` (`fix(wallpaper): stabilize playback across tab visibility changes`, 2026-10-20).
-- **Current Objective**: Release finalization and publication for Homebase v1.0.3.
-- **Published Store Release Status**:
-  - Official Chrome Listing: [Chrome Web Store — Homebase](https://chromewebstore.google.com/detail/homebase/ejfdeilhncacmmbdfmgpolpoldpllbmc) (Live, verified version `1.0.2` on October 18, 2026)
-  - Official Firefox Listing: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
-  - Version History: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
-  - Recorded Store Status: Tracked exclusively in [Section 2.1](#21-published-store-releases).
+- **Release Baseline**: Branch `main`, commit `1d140f1` (`release: prepare Homebase v1.0.3`, tag `v1.0.3`, October 20, 2026).
+- **Current Objective**: Track browser store review and publication progress for Homebase v1.0.3.
+- **Published Store Release Status**: All browser store publication statuses, review states, reporting dates, and verification records are centralized exclusively in [Section 2.1 — Published Store Releases](#21-published-store-releases).
 - **Release Preparation (v1.0.3 — October 20, 2026)**:
   - Scope: Wallpaper tab visibility lifecycle, interrupted crossfade recovery, Performance Mode appearance preservation, transactional settings persistence, settings layout & dialog scrolling fixes, and browser-specific tips filtering.
   - Packaged Archives: `dist/homebase-chrome-1.0.3.zip`, `dist/homebase-firefox-1.0.3.zip`, `dist/homebase-edge-1.0.3.zip`.
   - Manual Verification State: User confirmed manual checks passed in Chrome, Edge, and Firefox on October 20, 2026 (exact browser versions, benchmark measurements, or comprehensive matrix details were not specified and are not invented).
-  - Store Status Distinction: Store publication status remains strictly separate from release preparation. Chrome Web Store is published at `1.0.2`, Edge Add-ons is in review at `1.0.2`, and Firefox Add-ons (AMO) is published at its recorded store version. Preparation of v1.0.3 packages does not alter store submission states.
+  - Store Status Distinction: Store publication status remains strictly separate from release preparation; see [Section 2.1](#21-published-store-releases) for canonical store publication and review statuses. Preparation and packaging of v1.0.3 packages does not alter store submission states.
 - **Wallpaper Playback Visibility Lifecycle (October 19, 2026)**:
   - Video Playback on Hidden Tabs: Pauses active videos immediately when `document.hidden` becomes true. Prevents calling `.play()` or crossfading when videos finish loading in a background tab.
   - Tab Return Playback Resumption: Extracted `resumeWallpaperPlaybackIfEligible()` in canonical `HomebaseWallpaperController`. Resumes live video only when eligible; keeps static wallpapers static; respects Performance Mode and Battery Saver restrictions; resets crossfade cleanly if video ended while hidden.

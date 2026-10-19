@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.0.2',
-  date: '2026-10-16',
+  version: '1.0.3',
+  date: '2026-10-20',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Bookmark background settings',
-      desc: 'Transparent and Custom backgrounds are now mutually exclusive toggles with visually grouped controls.'
+      title: 'Wallpaper visibility & tab lifecycle',
+      desc: 'Live wallpapers pause automatically on background tabs, preloading is optimized, and interrupted crossfades recover cleanly on tab return.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Performance Mode & appearance preferences',
+      desc: 'Preserves saved Transparent and Custom bookmark styles across modes with transactional Save and Cancel settings persistence.'
     },
     {
       type: 'FIX',
-      title: 'Transparent mode default',
-      desc: 'Resolved schema validation fallback ensuring unconfigured profiles default to Transparent background.'
-    },
-    {
-      type: 'FIX',
-      title: 'Bookmark inline-rename layout',
-      desc: 'Fixed layout shifting when renaming bookmark tiles on the dashboard grid.'
+      title: 'Settings layout & browser tips',
+      desc: 'Constrained Settings dialog scrolling, stabilized toggle switches, and aligned tips to browser capabilities.'
     }
   ]
 };

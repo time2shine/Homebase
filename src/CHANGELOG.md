@@ -2,6 +2,24 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v1.0.3 — 2026-10-20
+
+### Improved
+- **Wallpaper Tab Visibility Lifecycle**: Live video wallpapers now automatically pause playback when the document becomes hidden, conserving system resources. On returning to visibility, eligible live wallpapers resume cleanly while static wallpapers remain static and Performance Mode or battery saver restrictions are respected.
+- **Interrupted Crossfade Recovery**: Tracked pending video transitions with transition ownership verification (`activeCrossfadeTransition`) and idempotent completion. If the document is hidden while a crossfade timer or frame callback is pending, returning to the tab safely resolves the interrupted transition to the target video without dual-active state, timer leaks, or listener accumulation.
+- **Background Video Preloading**: Shifted background-tab video loading from browser-suspended animation frames to timer-based preloading, allowing video metadata to load while hidden without starting playback.
+- **Browser-Specific Tips**: Filtered dashboard tips dynamically by target platform (`HomebaseTipsCapabilities`), ensuring Chrome, Edge, and Firefox users only receive guidance relevant to their browser's capabilities and shortcuts.
+- **Performance Mode & Appearance Preservation**: Refined appearance overrides so Transparent Background and Custom Background color/opacity preferences are preserved across mode toggles. Blur effects are cleanly disabled during Performance Mode without forcing gray backgrounds.
+- **Wallpaper Type Guidance**: Added accessible inline notice and "Turn off Performance Mode" action button in both Settings and Wallpaper Gallery, preventing accidental switching from Static to Live Video while Performance Mode is enabled while preserving existing selections.
+
+### Fixed
+- **Settings Persistence Serialization**: Serialized settings storage writes to prevent rapid toggling or out-of-order storage updates from overwriting restored state on Cancel or Close. Dual-synchronized fast localStorage mirror keys (`fast-performance-mode` and `fast-perf-mode`).
+- **Settings Layout & Switch Sizing**: Fixed toggle switch compression by enforcing non-shrinking flex bounds (`flex: 0 0 46px`) across settings controls, allowing multiline descriptions to wrap cleanly.
+- **Settings Dialog Height & Navigation Scrolling**: Enforced dialog height constraints (`min-height: min(520px, calc(100vh - 40px)); max-height: calc(100vh - 40px)`), scrollable navigation with `min-height: 0; overflow-y: auto;`, and a fixed footer ensuring Save and Cancel buttons remain visible.
+- **Settings Modal Animation Hardening**: Filtered bubbled child animation events, cleaned up entrance listeners on close and before reopen, and scoped `.modal-settled:not(.closing)` so closing shrink animations always run without replaying entrance animations on mode toggle.
+- **Perf Debug Overlay Layout Precedence**: Controlled overlay horizontal positioning and dock clearance via declarative CSS custom properties (`--dock-width`, `--dock-gap`), collapsing cleanly on collapsed docks without conflicting inline styles or `!important`.
+- **Search Auto-Focus on Tab Return**: Decoupled tab-return search focus from wallpaper eligibility guards, ensuring the search bar autofocuses on visible transitions unless a modal dialog is open.
+
 ## v1.0.2 — 2026-10-16
 
 ### Improved

@@ -1,7 +1,7 @@
 # Homebase — Project Context & Repository Knowledge Base
 
 **Project:** Homebase (Multi-browser Manifest V3 Dashboard Extension)  
-**Source Version:** `1.0.2` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
+**Source Version:** `1.0.3` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
 **GitHub Release / Tag:** `v1.0.2` (commit `20fa9cd`, October 16, 2026)  
 **Recorded Store Status (All Browsers):** See [Section 2.1](#21-published-store-releases)  
 **Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
@@ -177,13 +177,18 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Branch & Head Commit**: Branch `main`, latest commit `6de011d` (`fix: stabilize performance mode and settings layout`, 2026-10-18).
-- **Current Objective**: Wallpaper playback lifecycle hardening across hidden/visible tab transitions, preventing background-tab video playback, and preserving search focus and appearance modes.
+- **Branch & Head Commit**: Branch `main`, latest commit `6a95142` (`fix(wallpaper): stabilize playback across tab visibility changes`, 2026-10-20).
+- **Current Objective**: Release finalization and publication for Homebase v1.0.3.
 - **Published Store Release Status**:
   - Official Chrome Listing: [Chrome Web Store — Homebase](https://chromewebstore.google.com/detail/homebase/ejfdeilhncacmmbdfmgpolpoldpllbmc) (Live, verified version `1.0.2` on October 18, 2026)
   - Official Firefox Listing: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
   - Version History: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
   - Recorded Store Status: Tracked exclusively in [Section 2.1](#21-published-store-releases).
+- **Release Preparation (v1.0.3 — October 20, 2026)**:
+  - Scope: Wallpaper tab visibility lifecycle, interrupted crossfade recovery, Performance Mode appearance preservation, transactional settings persistence, settings layout & dialog scrolling fixes, and browser-specific tips filtering.
+  - Packaged Archives: `dist/homebase-chrome-1.0.3.zip`, `dist/homebase-firefox-1.0.3.zip`, `dist/homebase-edge-1.0.3.zip`.
+  - Manual Verification State: User confirmed manual checks passed in Chrome, Edge, and Firefox on October 20, 2026 (exact browser versions, benchmark measurements, or comprehensive matrix details were not specified and are not invented).
+  - Store Status Distinction: Store publication status remains strictly separate from release preparation. Chrome Web Store is published at `1.0.2`, Edge Add-ons is in review at `1.0.2`, and Firefox Add-ons (AMO) is published at its recorded store version. Preparation of v1.0.3 packages does not alter store submission states.
 - **Wallpaper Playback Visibility Lifecycle (October 19, 2026)**:
   - Video Playback on Hidden Tabs: Pauses active videos immediately when `document.hidden` becomes true. Prevents calling `.play()` or crossfading when videos finish loading in a background tab.
   - Tab Return Playback Resumption: Extracted `resumeWallpaperPlaybackIfEligible()` in canonical `HomebaseWallpaperController`. Resumes live video only when eligible; keeps static wallpapers static; respects Performance Mode and Battery Saver restrictions; resets crossfade cleanly if video ended while hidden.
@@ -210,4 +215,4 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
   - Automated Measurement Status: Documented in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md) ("The attempted automated setup did not reliably load and measure the installed extension; no automated performance results were obtained.").
   - Standardized Manual Protocol: Documented 8-run alternating manual measurement protocol in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md).
 - **Working Tree Changes**: Reviewed changes staged and committed upon user authorization.
-- **Last Updated Date**: October 19, 2026
+- **Last Updated Date**: October 20, 2026

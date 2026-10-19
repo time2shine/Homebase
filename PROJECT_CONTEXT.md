@@ -45,11 +45,12 @@ Centralized tracking for all browser extension stores. To prevent duplicate or d
 - **Verification Status**: User-reported, not independently verified.
 
 #### Google Chrome (Chrome Web Store)
-- **Official Listing URL**: [Chrome Web Store — Homebase](https://chromewebstore.google.com/detail/ejfdeilhncacmmbdfmgpolpoldpllbmc) *(URL supplied by user)*
-- **Latest Observed Listing Status**: Taken down.
-- **Evidence**: User-provided dashboard screenshot, recorded 2026-10-17.
-- **Submission Status**: User-reported `v1.0.2` package uploaded to Chrome Developer Dashboard; in review by Google (recorded 2026-10-17).
-- **Version Distinction Note**: Do not treat the submitted package version as the published store version.
+- **Official Listing URL**: [Chrome Web Store — Homebase](https://chromewebstore.google.com/detail/homebase/ejfdeilhncacmmbdfmgpolpoldpllbmc)
+- **Status**: Live / Published.
+- **Published Store Version**: `1.0.2`
+- **Updated Date**: October 18, 2026
+- **Evidence & Verification**: User confirmed listing is live on October 18, 2026. Independently verified from public Chrome Web Store listing metadata (Version `1.0.2`, Updated `October 18, 2026`) via public store fetch on October 18, 2026.
+- **Version Distinction Note**: The live published store package `1.0.2` reflects the release package submitted on October 17, 2026; do not infer that it includes post-release repository changes (such as Performance Mode lifecycle hardening, persistence fixes, Settings layout adjustments, or overlay CSS positioning committed in `6de011d`).
 
 #### Microsoft Edge (Microsoft Edge Add-ons)
 - **Status**: Version `1.0.2`: In review.
@@ -176,12 +177,22 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Branch & Head Commit**: Branch `main`, latest commit `48cd0b6` (`fix: harden tips cycling against runtime length drift`, 2026-10-17).
-- **Current Objective**: Performance Mode lifecycle fixes, persistence hardening, Wallpaper Type UI integration, bookmark appearance transparency preservation, modal animation hardening, Settings explanation, and impact documentation.
+- **Branch & Head Commit**: Branch `main`, latest commit `6de011d` (`fix: stabilize performance mode and settings layout`, 2026-10-18).
+- **Current Objective**: Wallpaper playback lifecycle hardening across hidden/visible tab transitions, preventing background-tab video playback, and preserving search focus and appearance modes.
 - **Published Store Release Status**:
+  - Official Chrome Listing: [Chrome Web Store — Homebase](https://chromewebstore.google.com/detail/homebase/ejfdeilhncacmmbdfmgpolpoldpllbmc) (Live, verified version `1.0.2` on October 18, 2026)
   - Official Firefox Listing: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
   - Version History: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
   - Recorded Store Status: Tracked exclusively in [Section 2.1](#21-published-store-releases).
+- **Wallpaper Playback Visibility Lifecycle (October 19, 2026)**:
+  - Video Playback on Hidden Tabs: Pauses active videos immediately when `document.hidden` becomes true. Prevents calling `.play()` or crossfading when videos finish loading in a background tab.
+  - Tab Return Playback Resumption: Extracted `resumeWallpaperPlaybackIfEligible()` in canonical `HomebaseWallpaperController`. Resumes live video only when eligible; keeps static wallpapers static; respects Performance Mode and Battery Saver restrictions; resets crossfade cleanly if video ended while hidden.
+  - Stale Asynchronous Callback Guards: Video source loading sequence numbers, generation counters, and selection/mode guards prevent stale async callbacks from restarting a previous wallpaper or playing after switching to Performance Mode or static wallpapers.
+  - Background Tab Source Preloading: Background tab video loading uses `setTimeout` instead of browser-suspended `requestAnimationFrame`, allowing videos to preload metadata while tab is hidden without playing.
+  - Search Input Focus Preservation: Search-focus logic on tab return is decoupled from wallpaper playback guards, ensuring search auto-focus runs reliably on visible transitions (unless a modal is open).
+  - Interrupted Crossfade Repair: Tracks pending transitions via `activeCrossfadeTransition`. If the tab is hidden while crossfade completion timer or next-video frame callback is pending, `resumeWallpaperPlaybackIfEligible()` resolves or safely resets the transition, removes stale active states, resumes the target video, and continues subsequent playback loops without timer or listener leaks.
+  - Regression Test Coverage: Added 15 unit tests in `tests/unit/wallpaper-visibility-lifecycle.test.mjs` verifying static wallpaper, live video resume, loading while hidden, Performance Mode guard, Battery Saver guard, stale mode changes, stale selection changes, repeated rapid hide/show cycles, search-focus preservation, ended-video recovery, stale video-frame callbacks across hide/show cycles, interrupted crossfade completion/frame callbacks across multiple subsequent loops using controlled virtual timers, and transition ownership validation ensuring delayed callbacks from an interrupted transition cannot mutate subsequent transition timers or state.
+  - Verification Status: User confirmed manual checks looked good on October 19, 2026 (specific browser/version not specified; manual testing across all three target browsers is not claimed). Automated unit tests provide isolated regression verification under controlled timers, but do not replace or fully replicate diverse real-world browser rendering engines or OS power management.
 - **Performance Mode Implementation & Hardening**:
   - Video Playback Lifecycle: Toggling ON stops playback and background timers; toggling OFF cleanly restores video wallpaper when saved preference is video; static wallpapers remain static.
   - Persistence & Discard Order: Serialized writes through `_perfWriteQueue` and `_perfWriteTicket` prevent out-of-order writes from overwriting restored state on Cancel/Close; dual-syncs both fast localStorage mirror keys (`fast-performance-mode` and `fast-perf-mode`).
@@ -199,4 +210,4 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
   - Automated Measurement Status: Documented in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md) ("The attempted automated setup did not reliably load and measure the installed extension; no automated performance results were obtained.").
   - Standardized Manual Protocol: Documented 8-run alternating manual measurement protocol in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md).
 - **Working Tree Changes**: Reviewed changes staged and committed upon user authorization.
-- **Last Updated Date**: October 18, 2026
+- **Last Updated Date**: October 19, 2026

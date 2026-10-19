@@ -30,6 +30,7 @@ let wallpaperVideoStartSequence = 0;
 let backgroundVideoCrossfadeSetupKey = '';
 let videoPlaybackController = null;
 let backgroundCrossfadeTimeout = null;
+let activeCrossfadeTransition = null;
 
 let galleryHydrationWarmPromise = null;
 
@@ -374,6 +375,7 @@ function cleanupBackgroundPlayback() {
     clearTimeout(backgroundCrossfadeTimeout);
     backgroundCrossfadeTimeout = null;
   }
+  activeCrossfadeTransition = null;
 
   // 2. Pause videos to stop CPU usage
   const videos = document.querySelectorAll('.background-video');
@@ -833,7 +835,9 @@ async function setBackgroundVideoSources(videoUrl, posterUrl = '') {
             }
           };
 
-          if (typeof requestAnimationFrame === 'function') {
+          if (typeof document !== 'undefined' && document.hidden) {
+            setTimeout(loadVideo, 0);
+          } else if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(() => {
               requestAnimationFrame(loadVideo);
             });
@@ -883,8 +887,17 @@ function startBackgroundVideosAfterSourceLoad(sourceLoadPromise, startSequence, 
       if (crossfadeKey === backgroundVideoCrossfadeSetupKey) {
         const activeVideo = document.querySelector('.background-video.is-active');
         if (activeVideo && activeVideo.paused) {
+          if (typeof document !== 'undefined' && document.hidden) {
+            activeVideo.dataset.wasPlaying = 'true';
+            return;
+          }
           activeVideo.play().catch(() => {});
         }
+        return;
+      }
+
+      if (typeof document !== 'undefined' && document.hidden) {
+        startBackgroundVideos();
         return;
       }
 
@@ -944,6 +957,9 @@ function setupBackgroundVideoCrossfade() {
     cleanupBackgroundPlayback();
     return false;
   }
+  if (typeof document !== 'undefined' && document.hidden) {
+    return false;
+  }
   const videos = Array.from(document.querySelectorAll('.background-video'));
   if (videos.length < 2) return false;
 
@@ -967,7 +983,9 @@ function setupBackgroundVideoCrossfade() {
   let firstActiveMarked = false;
 
   const playAndFadeIn = async (videoEl, enableTransition, onReady) => {
+    if (signal.aborted) return;
     if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
     try {
       if (enableTransition) {
         videoEl.classList.add('with-transition');
@@ -978,7 +996,28 @@ function setupBackgroundVideoCrossfade() {
 
       await videoEl.play();
 
+      if (signal.aborted || (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled())) {
+        try { videoEl.pause(); } catch (e) {}
+        return;
+      }
+
+      if (typeof document !== 'undefined' && document.hidden) {
+        try { videoEl.pause(); } catch (e) {}
+        return;
+      }
+
       const showVideo = () => {
+        if (signal.aborted) return;
+        if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+        if (typeof document !== 'undefined' && document.hidden) {
+          try { videoEl.pause(); } catch (e) {}
+          return;
+        }
+
+        const current = currentWallpaperSelection || null;
+        const currentType = (lastAppliedWallpaper && lastAppliedWallpaper.type) || wallpaperTypePreference;
+        if (currentType === 'static' || !current || !current.videoUrl) return;
+
         videoEl.classList.add('is-active');
         if (!firstActiveMarked) {
           firstActiveMarked = true;
@@ -991,15 +1030,25 @@ function setupBackgroundVideoCrossfade() {
 
       if ('requestVideoFrameCallback' in videoEl) {
         videoEl.requestVideoFrameCallback(() => {
+          if (signal.aborted) return;
+          if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
           requestAnimationFrame(() => {
+            if (signal.aborted) return;
+            if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
             showVideo();
           });
         });
       } else {
         const checkFrame = () => {
+          if (signal.aborted) return;
+          if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
           if (videoEl.currentTime > 0) {
             videoEl.removeEventListener('timeupdate', checkFrame);
-            requestAnimationFrame(() => showVideo());
+            requestAnimationFrame(() => {
+              if (signal.aborted) return;
+              if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+              showVideo();
+            });
           }
         };
         if (videoEl.currentTime > 0) {
@@ -1014,6 +1063,7 @@ function setupBackgroundVideoCrossfade() {
   };
 
   const startCycle = (current, next) => {
+    if (signal.aborted) return;
     if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
     let fading = false;
 
@@ -1025,7 +1075,9 @@ function setupBackgroundVideoCrossfade() {
     };
 
     const doFade = async () => {
+      if (signal.aborted) return;
       if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
       if (fading) return;
       fading = true;
       primeNext();
@@ -1046,21 +1098,59 @@ function setupBackgroundVideoCrossfade() {
         }
       }
 
+      let finished = false;
+      const transition = {
+        from: current,
+        to: next,
+        finish: null
+      };
+
+      const finishCrossfade = () => {
+        if (finished) return;
+        if (signal.aborted) return;
+        if (activeCrossfadeTransition !== transition) return;
+        finished = true;
+
+        if (backgroundCrossfadeTimeout) {
+          clearTimeout(backgroundCrossfadeTimeout);
+          backgroundCrossfadeTimeout = null;
+        }
+        activeCrossfadeTransition = null;
+        if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+
+        current.classList.remove('is-active');
+        current.classList.remove('with-transition');
+        try { current.pause(); } catch (e) {}
+        try { current.currentTime = 0; } catch (e) {}
+
+        next.classList.add('is-active');
+        next.classList.remove('with-transition');
+        next.classList.add('on-top');
+        current.classList.remove('on-top');
+
+        startCycle(next, current);
+      };
+
+      transition.finish = finishCrossfade;
+      activeCrossfadeTransition = transition;
+
+      let onReadyHandled = false;
       playAndFadeIn(next, shouldAnimate, () => {
+        if (onReadyHandled) return;
+        onReadyHandled = true;
+        if (signal.aborted) return;
+        if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+        if (activeCrossfadeTransition !== transition) return;
+
         const holdTime = shouldAnimate ? fadeMs + 50 : 50;
         if (backgroundCrossfadeTimeout) clearTimeout(backgroundCrossfadeTimeout);
-        backgroundCrossfadeTimeout = setTimeout(() => {
-          backgroundCrossfadeTimeout = null;
-          current.classList.remove('is-active');
-          current.classList.remove('with-transition');
-          current.pause();
-          current.currentTime = 0;
-          startCycle(next, current);
-        }, holdTime);
+        backgroundCrossfadeTimeout = setTimeout(finishCrossfade, holdTime);
       });
     };
 
     const onTimeUpdate = () => {
+      if (signal.aborted) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
       const duration = current.duration || safeDurationMs / 1000;
       const startFadeAt = Math.max(1, duration - fadeSec - bufferSec);
       if (current.currentTime >= startFadeAt) {
@@ -1072,6 +1162,8 @@ function setupBackgroundVideoCrossfade() {
     current.addEventListener('timeupdate', onTimeUpdate, { signal });
 
     current.addEventListener('ended', () => {
+      if (signal.aborted) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
       current.removeEventListener('timeupdate', onTimeUpdate);
       doFade();
     }, { once: true, signal });
@@ -1084,6 +1176,8 @@ function setupBackgroundVideoCrossfade() {
     playAndFadeIn(first, false, () => startCycle(first, second));
   } else {
     first.addEventListener('loadedmetadata', () => {
+      if (signal.aborted) return;
+      if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
       playAndFadeIn(first, false, () => startCycle(first, second));
     }, { once: true, signal });
   }
@@ -1232,7 +1326,9 @@ function applyWallpaperByType(selection, type = 'video') {
     };
 
     if (finalType === 'video') {
-      if (typeof runAfterNextPaint === 'function') {
+      if (typeof document !== 'undefined' && document.hidden) {
+        setTimeout(applyWallpaperFlow, 0);
+      } else if (typeof runAfterNextPaint === 'function') {
         runAfterNextPaint(applyWallpaperFlow);
       } else {
         requestAnimationFrame(() => requestAnimationFrame(applyWallpaperFlow));
@@ -1323,6 +1419,121 @@ function updateSettingsPreview(selection, type = 'video') {
   }
 }
 
+async function resumeWallpaperPlaybackIfEligible() {
+  if (typeof document === 'undefined' || document.hidden) return false;
+
+  const isPerfMode = typeof isPerformanceModeEnabled === 'function'
+    ? isPerformanceModeEnabled()
+    : (typeof window !== 'undefined' && typeof window.isPerformanceModeEnabled === 'function'
+        ? window.isPerformanceModeEnabled()
+        : false);
+
+  if (isPerfMode) {
+    cleanupBackgroundPlayback();
+    return false;
+  }
+
+  const current = currentWallpaperSelection || null;
+  const currentType = (lastAppliedWallpaper && lastAppliedWallpaper.type) || wallpaperTypePreference;
+  if (currentType === 'static' || !current || !current.videoUrl) {
+    return false;
+  }
+
+  const batteryPref = typeof appBatteryOptimizationPreference !== 'undefined'
+    ? appBatteryOptimizationPreference
+    : (typeof window !== 'undefined' && window.appBatteryOptimizationPreference);
+  if (batteryPref) {
+    const isDischarging = await checkBatteryStatus();
+    if (isDischarging) {
+      cleanupBackgroundPlayback();
+      return false;
+    }
+    if (typeof document !== 'undefined' && document.hidden) return false;
+    const isPerfAfterBattery = typeof isPerformanceModeEnabled === 'function'
+      ? isPerformanceModeEnabled()
+      : (typeof window !== 'undefined' && typeof window.isPerformanceModeEnabled === 'function'
+          ? window.isPerformanceModeEnabled()
+          : false);
+    if (isPerfAfterBattery) {
+      cleanupBackgroundPlayback();
+      return false;
+    }
+    if (!currentWallpaperSelection || (currentWallpaperSelection.id || null) !== (current.id || null)) {
+      return false;
+    }
+  }
+
+  const selectionId = current.id || null;
+  const poster = current.posterUrl || '';
+  const video = current.videoUrl || '';
+  const crossfadeKey = `${selectionId || ''}|${video}|${poster}`;
+
+  if (
+    !lastAppliedWallpaper ||
+    lastAppliedWallpaper.id !== selectionId ||
+    lastAppliedWallpaper.poster !== poster ||
+    lastAppliedWallpaper.video !== video ||
+    lastAppliedWallpaper.type !== 'video'
+  ) {
+    return false;
+  }
+
+  if (backgroundVideoCrossfadeSetupKey === crossfadeKey) {
+    if (activeCrossfadeTransition && typeof activeCrossfadeTransition.finish === 'function') {
+      const transition = activeCrossfadeTransition;
+      transition.finish();
+      const activeVideo = document.querySelector('.background-video.is-active') || transition.to;
+      if (activeVideo) {
+        delete activeVideo.dataset.wasPlaying;
+        if (activeVideo.paused) {
+          activeVideo.play().catch(() => {});
+        }
+      }
+      return true;
+    }
+
+    const activeVideos = Array.from(document.querySelectorAll('.background-video.is-active'));
+    if (activeVideos.length > 1) {
+      const onTopVideo = activeVideos.find((v) => v.classList.contains('on-top')) || activeVideos[activeVideos.length - 1];
+      activeVideos.forEach((v) => {
+        if (v !== onTopVideo) {
+          v.classList.remove('is-active');
+          v.classList.remove('with-transition');
+          try { v.pause(); } catch (e) {}
+          try { v.currentTime = 0; } catch (e) {}
+        }
+      });
+    }
+
+    const activeVideo = document.querySelector('.background-video.is-active');
+    if (activeVideo) {
+      delete activeVideo.dataset.wasPlaying;
+      if (activeVideo.paused) {
+        if (activeVideo.ended || (activeVideo.duration && activeVideo.currentTime >= activeVideo.duration)) {
+          cleanupBackgroundPlayback();
+          startBackgroundVideos();
+          if (setupBackgroundVideoCrossfade()) {
+            backgroundVideoCrossfadeSetupKey = crossfadeKey;
+            return true;
+          }
+        }
+        activeVideo.play().catch(() => {});
+      }
+      return true;
+    }
+  }
+
+  startBackgroundVideos();
+  if (setupBackgroundVideoCrossfade()) {
+    if (typeof recordStartupPerfEvent === 'function') {
+      recordStartupPerfEvent('newtab:crossfade-setup');
+    }
+    backgroundVideoCrossfadeSetupKey = crossfadeKey;
+    return true;
+  }
+  return false;
+}
+
 function handleWallpaperVisibilityChange() {
   if (typeof document === 'undefined') return;
 
@@ -1336,18 +1547,7 @@ function handleWallpaperVisibilityChange() {
       }
     });
   } else {
-    const isPerfMode = typeof isPerformanceModeEnabled === 'function'
-      ? isPerformanceModeEnabled()
-      : (typeof window !== 'undefined' && typeof window.isPerformanceModeEnabled === 'function'
-          ? window.isPerformanceModeEnabled()
-          : false);
-
-    if (isPerfMode) return;
-
-    const activeVideo = document.querySelector('.background-video.is-active') || videos[0];
-    if (activeVideo) {
-      activeVideo.play().catch(() => {});
-    }
+    resumeWallpaperPlaybackIfEligible().catch(() => {});
 
     if (!document.body.classList.contains('modal-open')) {
       const searchInput = document.getElementById('search-input');
@@ -1928,6 +2128,7 @@ if (typeof window !== 'undefined') {
   window.clearBackgroundVideos = clearBackgroundVideos;
   window.startBackgroundVideos = startBackgroundVideos;
   window.updateSettingsPreview = updateSettingsPreview;
+  window.resumeWallpaperPlaybackIfEligible = resumeWallpaperPlaybackIfEligible;
   window.handleWallpaperVisibilityChange = handleWallpaperVisibilityChange;
   window.setupWallpaperVisibilityListener = setupWallpaperVisibilityListener;
 
@@ -2000,6 +2201,7 @@ window.HomebaseWallpaperController = {
   clearBackgroundVideos,
   startBackgroundVideos,
   updateSettingsPreview,
+  resumeWallpaperPlaybackIfEligible,
   handleVisibilityChange: handleWallpaperVisibilityChange,
   setupVisibilityListener: setupWallpaperVisibilityListener,
 
@@ -2038,6 +2240,7 @@ window.HomebaseWallpaperController = {
   setDailyRotationPreference: (val) => { dailyRotationPreference = val !== false; },
   getInitialWallpaperState: () => initialWallpaperState,
   setInitialWallpaperState: (val) => { initialWallpaperState = val || {}; },
+  getActiveCrossfadeTransition: () => activeCrossfadeTransition,
   getLastAppliedWallpaper: () => lastAppliedWallpaper
 };
 

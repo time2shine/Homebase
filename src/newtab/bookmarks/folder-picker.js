@@ -183,6 +183,8 @@ function handleFolderPickerKeydown(e) {
 
   if (e.key === 'Escape') {
     e.preventDefault();
+    e.stopPropagation();
+    e._homebaseHandled = true;
     closeFolderPicker();
     return;
   }

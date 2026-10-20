@@ -19,6 +19,9 @@ function setupAnimationSettings() {
       if (appGridAnimationPreference !== selectedKey) {
         applyGridAnimation(appGridAnimationPreference);
       }
+      if (openBtn && typeof openBtn.focus === 'function') {
+        openBtn.focus();
+      }
     });
   };
 
@@ -97,7 +100,11 @@ function setupAnimationSettings() {
         if (node) renderBookmarkGrid(node);
       }
       
-      closeModalWithAnimation('animation-settings-modal', '.dialog-content');
+      closeModalWithAnimation('animation-settings-modal', '.dialog-content', () => {
+        if (openBtn && typeof openBtn.focus === 'function') {
+          openBtn.focus();
+        }
+      });
     });
   }
 
@@ -107,7 +114,18 @@ function setupAnimationSettings() {
     loadGridAnimationPref(); 
     closeModal();
   });
-  if (modal) modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
+  if (modal) {
+    modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        e._homebaseHandled = true;
+        loadGridAnimationPref();
+        closeModal();
+      }
+    });
+  }
 }
 
 
@@ -128,6 +146,9 @@ function setupGlassSettings() {
       // Revert if cancelled/closed without saving
       if (appGlassStylePreference !== selectedId) {
         applyGlassStyle(appGlassStylePreference);
+      }
+      if (openBtn && typeof openBtn.focus === 'function') {
+        openBtn.focus();
       }
     });
   };
@@ -185,7 +206,11 @@ function setupGlassSettings() {
       } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
         await browser.storage.local.set({ [APP_GLASS_STYLE_KEY]: selectedId });
       }
-      closeModalWithAnimation('glass-settings-modal', '.dialog-content');
+      closeModalWithAnimation('glass-settings-modal', '.dialog-content', () => {
+        if (openBtn && typeof openBtn.focus === 'function') {
+          openBtn.focus();
+        }
+      });
     });
   }
 
@@ -195,5 +220,16 @@ function setupGlassSettings() {
     loadGlassStylePref();
     closeModal();
   });
-  if (modal) modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
+  if (modal) {
+    modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        e._homebaseHandled = true;
+        loadGlassStylePref();
+        closeModal();
+      }
+    });
+  }
 }

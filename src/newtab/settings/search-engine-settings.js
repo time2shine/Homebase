@@ -19,7 +19,11 @@ function setupSearchEnginesModal() {
 
   const closeModal = () => {
 
-    closeModalWithAnimation('search-engines-modal', '.dialog-content');
+    closeModalWithAnimation('search-engines-modal', '.dialog-content', () => {
+      if (openBtn && typeof openBtn.focus === 'function') {
+        openBtn.focus();
+      }
+    });
 
   };
 
@@ -340,6 +344,15 @@ function setupSearchEnginesModal() {
 
     if (e.target === modal) closeModal();
 
+  });
+
+  modal.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      e._homebaseHandled = true;
+      closeModal();
+    }
   });
 
 }

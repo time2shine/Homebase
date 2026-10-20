@@ -58,6 +58,10 @@
   border-radius: 20px;
 }
 
+.app-settings-dialog:focus {
+  outline: none;
+}
+
 .app-settings-dialog .gallery-header h3 {
   margin: 0;
 }

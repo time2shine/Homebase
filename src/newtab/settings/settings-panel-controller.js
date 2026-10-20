@@ -22,6 +22,8 @@
   const beforeOpenHooks = [];
   const afterCloseHooks = [];
   let modalListenersAttached = false;
+  let settingsOpenerElement = null;
+  let openSequenceToken = 0;
 
   // =============================================================================
   // SECTION SWITCHING & TAB ROUTING
@@ -43,6 +45,20 @@
     const footer = document.querySelector('.app-settings-footer');
     if (footer) {
       footer.classList.toggle('hidden', PANELS_WITHOUT_ACTIONS.has(section));
+    }
+
+    const activeNav = document.querySelector(`.app-settings-nav-item[data-section="${section}"]`);
+    const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+    const isFocusLost = !activeEl ||
+      activeEl === (typeof document !== 'undefined' ? document.body : null) ||
+      (typeof activeEl.closest === 'function' && (
+        activeEl.closest('.app-settings-section:not(.active)') ||
+        activeEl.closest('.app-settings-footer.hidden') ||
+        activeEl.closest('.hidden')
+      ));
+
+    if (isFocusLost && activeNav && typeof activeNav.focus === 'function') {
+      activeNav.focus();
     }
 
     const Content = globalScope.HomebaseSettingsContentSections;
@@ -196,6 +212,178 @@
   // MODAL OPEN / CLOSE LIFECYCLE & FOCUS MANAGEMENT
   // =============================================================================
 
+  const FOCUSABLE_SELECTOR = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled]):not([type="hidden"])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+    '[contenteditable="true"]'
+  ].join(', ');
+
+  function isElementVisible(el) {
+    if (!el) return false;
+    if (el.hidden) return false;
+    if (typeof el.getAttribute === 'function' && el.getAttribute('aria-hidden') === 'true') return false;
+    if (typeof el.closest === 'function') {
+      if (el.closest('.hidden')) return false;
+      if (el.closest('.app-settings-section:not(.active)')) return false;
+      if (el.closest('.app-settings-footer.hidden')) return false;
+      if (el.closest('[inert]')) return false;
+    }
+    if (el.style) {
+      if (el.style.display === 'none' || el.style.visibility === 'hidden') return false;
+    }
+    if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+      try {
+        const style = window.getComputedStyle(el);
+        if (style && (style.display === 'none' || style.visibility === 'hidden')) {
+          return false;
+        }
+      } catch (err) {
+        // ignore computed style lookup failure
+      }
+    }
+    if (typeof el.offsetParent !== 'undefined' && el.offsetParent === null) {
+      const isFixed = el.style && el.style.position === 'fixed';
+      if (!isFixed && el !== (typeof document !== 'undefined' ? document.activeElement : null)) {
+        const bodyHasLayout = typeof document !== 'undefined' && document.body && typeof document.body.offsetParent !== 'undefined';
+        if (bodyHasLayout && document.body.offsetParent !== null) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function isElementFocusable(el) {
+    if (!el || typeof el.focus !== 'function') return false;
+    if (el.disabled || (typeof el.getAttribute === 'function' && el.getAttribute('aria-disabled') === 'true')) return false;
+    if (el.tabIndex < 0 || (typeof el.getAttribute === 'function' && el.getAttribute('tabindex') === '-1')) return false;
+    if (typeof el.hasAttribute === 'function' && el.hasAttribute('inert')) return false;
+    return isElementVisible(el);
+  }
+
+  function getSettingsFocusableElements(dialogEl) {
+    if (!dialogEl || typeof dialogEl.querySelectorAll !== 'function') return [];
+    const candidates = Array.from(dialogEl.querySelectorAll(FOCUSABLE_SELECTOR));
+    return candidates.filter((el) => isElementFocusable(el));
+  }
+
+  function resolveOpenerElement(triggerSource) {
+    if (typeof document === 'undefined') return null;
+    if (triggerSource) {
+      if (typeof triggerSource === 'string') {
+        const byId = document.getElementById(triggerSource);
+        if (byId) return byId;
+      } else if (typeof Element !== 'undefined' && triggerSource instanceof Element) {
+        return triggerSource;
+      } else if (typeof triggerSource === 'object' && typeof triggerSource.focus === 'function') {
+        return triggerSource;
+      }
+    }
+    if (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement) {
+      return document.activeElement;
+    }
+    return document.getElementById('main-settings-btn');
+  }
+
+  function isOpenerEligible(el) {
+    if (!el || typeof el.focus !== 'function') return false;
+    if (typeof el.isConnected === 'boolean' && !el.isConnected) return false;
+    if (typeof document !== 'undefined' && document.body && typeof document.body.contains === 'function' && !document.body.contains(el)) return false;
+    if (el.disabled || (typeof el.getAttribute === 'function' && el.getAttribute('aria-disabled') === 'true')) return false;
+    return isElementVisible(el);
+  }
+
+  function hasActiveNestedDialog() {
+    if (typeof document === 'undefined') return false;
+    const activeModals = typeof document.querySelectorAll === 'function' ? document.querySelectorAll('.modal-overlay:not(.hidden)') : [];
+    for (const modal of activeModals) {
+      if (modal.id !== 'app-settings-modal') {
+        return true;
+      }
+    }
+    if (document.activeElement && typeof document.activeElement.closest === 'function') {
+      const activeModalParent = document.activeElement.closest('.modal-overlay:not(.hidden)');
+      if (activeModalParent && activeModalParent.id !== 'app-settings-modal') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function isNestedDialogActiveOrClosing() {
+    if (typeof document === 'undefined') return false;
+    const modals = typeof document.querySelectorAll === 'function' ? document.querySelectorAll('.modal-overlay') : [];
+    for (const modal of modals) {
+      if (modal.id === 'app-settings-modal') continue;
+      if (modal.classList && (!modal.classList.contains('hidden') || modal.classList.contains('closing'))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function focusSettingsInitialControl(seq) {
+    if (typeof document === 'undefined') return;
+    if (seq !== openSequenceToken || !isModalOpen()) return;
+
+    const dialog = document.getElementById('app-settings-dialog');
+    if (!dialog) return;
+
+    const activeNav = typeof dialog.querySelector === 'function'
+      ? (dialog.querySelector('.app-settings-nav-item.is-active') || dialog.querySelector('.app-settings-nav-item'))
+      : null;
+    const closeBtn = document.getElementById('app-settings-close') || document.getElementById('app-settings-close-btn');
+
+    const target = (activeNav && isElementFocusable(activeNav))
+      ? activeNav
+      : ((closeBtn && isElementFocusable(closeBtn)) ? closeBtn : dialog);
+
+    if (target && typeof target.focus === 'function') {
+      target.focus();
+    }
+  }
+
+  function scheduleInitialFocus(seq) {
+    focusSettingsInitialControl(seq);
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => focusSettingsInitialControl(seq));
+    }
+    if (typeof setTimeout === 'function') {
+      setTimeout(() => focusSettingsInitialControl(seq), 50);
+    }
+  }
+
+  function restoreOpenerFocus(seq) {
+    if (typeof document === 'undefined') return;
+    if (isModalOpen() || seq !== openSequenceToken) return;
+    if (hasActiveNestedDialog()) return;
+
+    const opener = settingsOpenerElement;
+    settingsOpenerElement = null;
+
+    if (isOpenerEligible(opener)) {
+      try {
+        opener.focus();
+        return;
+      } catch (err) {
+        // fallback
+      }
+    }
+
+    const fallbackBtn = document.getElementById('main-settings-btn');
+    if (isOpenerEligible(fallbackBtn)) {
+      try {
+        fallbackBtn.focus();
+      } catch (err) {
+        // fallback
+      }
+    }
+  }
+
   function isModalOpen() {
     if (typeof document === 'undefined') return false;
     const appSettingsModal = document.getElementById('app-settings-modal');
@@ -206,6 +394,10 @@
     if (typeof document === 'undefined') return;
     const appSettingsModal = document.getElementById('app-settings-modal');
     if (!appSettingsModal) return;
+
+    settingsOpenerElement = resolveOpenerElement(triggerSource);
+    openSequenceToken += 1;
+    const currentOpenSeq = openSequenceToken;
 
     if (typeof globalScope.syncAppSettingsForm === 'function') {
       globalScope.syncAppSettingsForm();
@@ -242,12 +434,16 @@
     } else {
       appSettingsModal.classList.remove('hidden');
     }
+
+    scheduleInitialFocus(currentOpenSeq);
   }
 
   function closeAppSettingsModal(options = {}) {
     if (typeof document === 'undefined') return Promise.resolve({ success: false, reason: 'NO_DOCUMENT' });
     const appSettingsModal = document.getElementById('app-settings-modal');
     if (!appSettingsModal) return Promise.resolve({ success: false, reason: 'NO_MODAL' });
+
+    const closeSeq = openSequenceToken;
 
     let discardPromise = Promise.resolve({ success: true });
     if (options.discard || !options.saved) {
@@ -301,6 +497,8 @@
           console.warn('options.onAfterClose error', err);
         }
       }
+
+      restoreOpenerFocus(closeSeq);
     };
 
     if (typeof globalScope.closeModalWithAnimation === 'function') {
@@ -328,6 +526,66 @@
   // =============================================================================
   // MODAL LISTENERS (BACKDROP, ESC KEY, NAVIGATION, CLOSE BUTTONS)
   // =============================================================================
+
+  function handleSettingsEscape(e) {
+    if (!e || e.key !== 'Escape') return;
+    if (e.defaultPrevented || e._homebaseHandled) return;
+    if (!isModalOpen()) return;
+    if (isNestedDialogActiveOrClosing() || hasActiveNestedDialog()) return;
+    if (e.target && typeof e.target.closest === 'function') {
+      const modalAncestor = e.target.closest('.modal-overlay');
+      if (modalAncestor && modalAncestor.id !== 'app-settings-modal') {
+        return;
+      }
+    }
+
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    closeAppSettingsModal({ discard: true }).catch((err) => {
+      console.error('ESC close action failed:', err);
+    });
+  }
+
+  function handleSettingsKeydown(e) {
+    if (!e) return;
+    if (e.key === 'Escape') {
+      handleSettingsEscape(e);
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      if (!isModalOpen()) return;
+      if (e.defaultPrevented || e._homebaseHandled) return;
+      if (isNestedDialogActiveOrClosing() || hasActiveNestedDialog()) return;
+
+      const dialog = document.getElementById('app-settings-dialog');
+      if (!dialog) return;
+
+      const focusables = getSettingsFocusableElements(dialog);
+      if (focusables.length === 0) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof dialog.focus === 'function') {
+          dialog.focus();
+        }
+        return;
+      }
+
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const currentActive = document.activeElement;
+
+      if (e.shiftKey) {
+        if (currentActive === first || !dialog.contains(currentActive) || currentActive === dialog) {
+          if (typeof e.preventDefault === 'function') e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (currentActive === last || !dialog.contains(currentActive) || currentActive === dialog) {
+          if (typeof e.preventDefault === 'function') e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
 
   function setupModalLifecycle(options = {}) {
     if (typeof document === 'undefined') return;
@@ -410,15 +668,8 @@
       });
     }
 
-    // ESC key dismissal
-    document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      if (isModalOpen()) {
-        closeAppSettingsModal({ discard: true }).catch((err) => {
-          console.error('ESC close action failed:', err);
-        });
-      }
-    });
+    // Keyboard accessibility: ESC key dismissal and TAB focus containment
+    document.addEventListener('keydown', handleSettingsKeydown);
   }
 
   // =============================================================================
@@ -436,7 +687,16 @@
     ensureSettingsSectionOrder,
     setupWidgetOrderSortable,
     setupWidgetOrderDrag,
-    PANELS_WITHOUT_ACTIONS
+    PANELS_WITHOUT_ACTIONS,
+    getSettingsFocusableElements,
+    isElementFocusable,
+    resolveOpenerElement,
+    hasActiveNestedDialog,
+    isNestedDialogActiveOrClosing,
+    handleSettingsKeydown,
+    handleSettingsEscape,
+    restoreOpenerFocus,
+    scheduleInitialFocus
   };
 
   globalScope.HomebaseSettingsPanelController = HomebaseSettingsPanelController;

@@ -174,6 +174,60 @@ function normalizeMyWallpapersItems(items) {
 }
 
 /**
+ * Deep equality check for values (primitives, arrays, plain objects).
+ * Evaluates semantic equivalence independent of object property insertion order.
+ *
+ * @param {*} a
+ * @param {*} b
+ * @param {Set<object>} [visited]
+ * @returns {boolean}
+ */
+function areValuesEquivalent(a, b, visited) {
+  if (typeof areValuesIdentical === 'function') {
+    return areValuesIdentical(a, b, visited);
+  }
+  if (typeof window !== 'undefined' && typeof window.areValuesIdentical === 'function') {
+    return window.areValuesIdentical(a, b, visited);
+  }
+  if (a === b) return true;
+  if (typeof a === 'number' && typeof b === 'number' && Number.isNaN(a) && Number.isNaN(b)) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+
+  const aIsArr = Array.isArray(a);
+  const bIsArr = Array.isArray(b);
+  if (aIsArr !== bIsArr) return false;
+
+  if (!visited) visited = new Set();
+  if (visited.has(a) || visited.has(b)) return false;
+  visited.add(a);
+  visited.add(b);
+
+  try {
+    if (aIsArr) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (!areValuesEquivalent(a[i], b[i], visited)) return false;
+      }
+      return true;
+    }
+
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+
+    for (let i = 0; i < keysA.length; i++) {
+      const key = keysA[i];
+      if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+      if (!areValuesEquivalent(a[key], b[key], visited)) return false;
+    }
+    return true;
+  } finally {
+    visited.delete(a);
+    visited.delete(b);
+  }
+}
+
+/**
  * Computes minimal mutation delta between candidate updates and current storage snapshot.
  *
  * @param {Object} currentSnapshot
@@ -184,31 +238,13 @@ function computeStorageDelta(currentSnapshot, candidateUpdates) {
   const delta = {};
   if (!candidateUpdates || typeof candidateUpdates !== 'object') return delta;
 
-  const areIdentical = (typeof areValuesIdentical === 'function')
-    ? areValuesIdentical
-    : (typeof window !== 'undefined' && typeof window.areValuesIdentical === 'function'
-        ? window.areValuesIdentical
-        : null);
-
   for (const [key, val] of Object.entries(candidateUpdates)) {
     if (!Object.prototype.hasOwnProperty.call(currentSnapshot, key)) {
       delta[key] = val;
     } else {
       const currentVal = currentSnapshot[key];
-      if (areIdentical) {
-        if (!areIdentical(currentVal, val)) {
-          delta[key] = val;
-        }
-      } else {
-        if (currentVal !== val) {
-          if (typeof val === 'object' && val !== null) {
-            if (JSON.stringify(currentVal) !== JSON.stringify(val)) {
-              delta[key] = val;
-            }
-          } else {
-            delta[key] = val;
-          }
-        }
+      if (!areValuesEquivalent(currentVal, val)) {
+        delta[key] = val;
       }
     }
   }
@@ -506,8 +542,15 @@ async function importHomebaseState(file) {
   try {
     if (typeof window !== 'undefined' && window.HomebaseStorage?.setMany) {
       const writeResult = await window.HomebaseStorage.setMany(deltaUpdates);
-      if (!writeResult || !writeResult.success) {
-        throw new Error(writeResult?.detail || writeResult?.error || 'Storage write failed.');
+      if (
+        !writeResult ||
+        !writeResult.success ||
+        (Array.isArray(writeResult.rejectedKeys) && writeResult.rejectedKeys.length > 0)
+      ) {
+        const rejectedDetail = (Array.isArray(writeResult?.rejectedKeys) && writeResult.rejectedKeys.length > 0)
+          ? `Storage write rejected keys: ${writeResult.rejectedKeys.join(', ')}`
+          : (writeResult?.detail || writeResult?.error || 'Storage write failed.');
+        throw new Error(rejectedDetail);
       }
     } else if (storageApi?.set) {
       await storageApi.set(deltaUpdates);
@@ -539,8 +582,11 @@ async function importHomebaseState(file) {
     currentBackupTransaction.state = 'verify_result';
     if (storageApi?.get) {
       const readBack = await storageApi.get(deltaKeys);
+
       for (const k of deltaKeys) {
-        if (readBack[k] === undefined && deltaUpdates[k] !== undefined) {
+        const expected = deltaUpdates[k];
+        const actual = readBack ? readBack[k] : undefined;
+        if (!areValuesEquivalent(actual, expected)) {
           throw new Error(`Write verification failed for key: ${k}`);
         }
       }

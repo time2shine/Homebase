@@ -465,16 +465,45 @@
    * @param {*} b
    * @returns {boolean}
    */
-  function areValuesIdentical(a, b) {
+  function areValuesIdentical(a, b, visited) {
     if (typeof window !== 'undefined' && typeof window.areValuesIdentical === 'function') {
-      return window.areValuesIdentical(a, b);
+      return window.areValuesIdentical(a, b, visited);
     }
     if (a === b) return true;
+    if (typeof a === 'number' && typeof b === 'number' && Number.isNaN(a) && Number.isNaN(b)) return true;
     if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+
+    const aIsArr = Array.isArray(a);
+    const bIsArr = Array.isArray(b);
+    if (aIsArr !== bIsArr) return false;
+
+    if (!visited) visited = new Set();
+    if (visited.has(a) || visited.has(b)) return false;
+    visited.add(a);
+    visited.add(b);
+
     try {
-      return JSON.stringify(a) === JSON.stringify(b);
-    } catch (_) {
-      return false;
+      if (aIsArr) {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+          if (!areValuesIdentical(a[i], b[i], visited)) return false;
+        }
+        return true;
+      }
+
+      const keysA = Object.keys(a);
+      const keysB = Object.keys(b);
+      if (keysA.length !== keysB.length) return false;
+
+      for (let i = 0; i < keysA.length; i++) {
+        const key = keysA[i];
+        if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+        if (!areValuesIdentical(a[key], b[key], visited)) return false;
+      }
+      return true;
+    } finally {
+      visited.delete(a);
+      visited.delete(b);
     }
   }
 

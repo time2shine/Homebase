@@ -570,3 +570,257 @@ test('backup-transaction: prototype pollution payload is safely rejected without
   assert.equal({}.polluted, undefined);
   assert.equal(env.context.Object.prototype.polluted, undefined);
 });
+
+test('backup-transaction: storage write reporting rejectedKeys triggers rollback even when old value exists', async () => {
+  const env = createMockEnvironment({
+    appBackgroundDim: 25,
+    appTimeFormatPreference: '12-hour'
+  });
+
+  // Replace HomebaseStorage with a mock setMany reporting rejectedKeys
+  env.context.HomebaseStorage = {
+    ...env.context.HomebaseStorage,
+    setMany: async (items) => {
+      return {
+        success: true,
+        writtenKeys: ['appTimeFormatPreference'],
+        rejectedKeys: ['appBackgroundDim'],
+        count: 1
+      };
+    }
+  };
+
+  const backupPayload = {
+    schema: 'homebase.export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageLocal: {
+      appBackgroundDim: 80,
+      appTimeFormatPreference: '24-hour'
+    }
+  };
+
+  await assert.rejects(
+    async () => {
+      await env.HomebaseBackup.importState({
+        text: async () => JSON.stringify(backupPayload)
+      });
+    },
+    { message: 'Import failed. Previous settings safely restored.' }
+  );
+
+  // Old values restored and transaction marked rolled_back
+  assert.equal(env.localData.appBackgroundDim, 25);
+  assert.equal(env.localData.appTimeFormatPreference, '12-hour');
+  assert.equal(env.HomebaseBackup.getBackupTransactionState().state, 'rolled_back');
+});
+
+test('backup-transaction: write reporting success but retaining incorrect value fails verification and rolls back', async () => {
+  const env = createMockEnvironment({
+    appBackgroundDim: 20
+  });
+
+  // Mock storage.set to simulate a silent write failure or stale cache where value doesn't persist
+  env.context.browser.storage.local.set = async (items) => {
+    // Silently do nothing or keep old value
+  };
+
+  const backupPayload = {
+    schema: 'homebase.export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageLocal: {
+      appBackgroundDim: 70
+    }
+  };
+
+  await assert.rejects(
+    async () => {
+      await env.HomebaseBackup.importState({
+        text: async () => JSON.stringify(backupPayload)
+      });
+    },
+    { message: 'Import failed. Previous settings safely restored.' }
+  );
+
+  // Verified old value was preserved and transaction rolled back
+  assert.equal(env.localData.appBackgroundDim, 20);
+  assert.equal(env.HomebaseBackup.getBackupTransactionState().state, 'rolled_back');
+});
+
+test('backup-transaction: successful import with supported normalization and schema migration', async () => {
+  const env = createMockEnvironment({
+    appBackgroundDim: 15,
+    schemaVersion: 2
+  });
+
+  // Set up mock migrations to upgrade version 1 -> 2
+  env.context.CURRENT_SCHEMA_VERSION = 2;
+  env.context.HomebaseMigrations.CURRENT_SCHEMA_VERSION = 2;
+  env.HomebaseMigrations.runSchemaMigrations = async () => {
+    env.localData.schemaVersion = 2;
+    return { status: 'success', fromVersion: 1, targetVersion: 2 };
+  };
+
+  const backupPayload = {
+    schema: 'homebase.export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageLocal: {
+      schemaVersion: 1,
+      appBackgroundDim: 65,
+      homebaseLastUsedFolderId: 'folder-abc',
+      todoItems: [{ id: 't1', text: 'Task 1', done: false }]
+    }
+  };
+
+  await env.HomebaseBackup.importState({
+    text: async () => JSON.stringify(backupPayload)
+  });
+
+  // Normalized legacy key, updated dim, and migrated schema version
+  assert.equal(env.localData.appBackgroundDim, 65);
+  assert.equal(env.localData.lastUsedBookmarkFolderId, 'folder-abc');
+  assert.equal(env.localData.schemaVersion, 2);
+  assert.equal(env.HomebaseBackup.getBackupTransactionState().state, 'committed');
+});
+
+test('backup-transaction: verification failure triggers rollback restoring prior values and removing new keys', async () => {
+  const env = createMockEnvironment(
+    {
+      appBackgroundDim: 30,
+      appTimeFormatPreference: '12-hour'
+    },
+    {
+      initialLocalStorage: {
+        'fast-bg-dim': '30',
+        'fast-time-format': '12-hour'
+      }
+    }
+  );
+
+  const backupPayload = {
+    schema: 'homebase.export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageLocal: {
+      appBackgroundDim: 85,
+      appTimeFormatPreference: '24-hour',
+      newFeatureKey: 'new_value_that_should_be_removed'
+    }
+  };
+
+  // Simulate write applying partially in storage, but then failing verification on appBackgroundDim
+  let readCallCount = 0;
+  const originalGet = env.context.browser.storage.local.get;
+  env.context.browser.storage.local.get = async (keys) => {
+    readCallCount++;
+    const res = await originalGet(keys);
+    // On the verification readBack call (after set), return mismatched value for appBackgroundDim
+    if (readCallCount >= 2 && Array.isArray(keys) && keys.includes('appBackgroundDim')) {
+      return {
+        ...res,
+        appBackgroundDim: 999 // Corrupted or unexpected mismatch
+      };
+    }
+    return res;
+  };
+
+  await assert.rejects(
+    async () => {
+      await env.HomebaseBackup.importState({
+        text: async () => JSON.stringify(backupPayload)
+      });
+    },
+    { message: 'Import failed. Previous settings safely restored.' }
+  );
+
+  // Verify prior values restored
+  assert.equal(env.localData.appBackgroundDim, 30);
+  assert.equal(env.localData.appTimeFormatPreference, '12-hour');
+  // Verify newly introduced key was removed
+  assert.equal(env.localData.newFeatureKey, undefined);
+  // Verify fast mirrors restored
+  assert.equal(env.localStorageStore.get('fast-bg-dim'), '30');
+  assert.equal(env.localStorageStore.get('fast-time-format'), '12-hour');
+  assert.equal(env.HomebaseBackup.getBackupTransactionState().state, 'rolled_back');
+});
+
+test('backup-transaction: equivalent object settings with different property ordering (e.g. Chromium sorted keys) succeed without false delta or verification failure', async () => {
+  // Simulate an object setting whose properties in storage are in alphabetical order
+  // (as returned by Chromium LevelDB / base::Value::Dict), while candidate normalization
+  // or incoming backup has a different property insertion order.
+  const initialWallpaperAlphabetical = {
+    id: 'wp_nature_1',
+    posterUrl: 'https://example.com/nature.jpg',
+    title: 'Forest Mist',
+    type: 'video',
+    videoUrl: 'https://example.com/forest.mp4'
+  };
+
+  const env = createMockEnvironment(
+    {
+      appBackgroundDim: 80,
+      wallpaperSelection: initialWallpaperAlphabetical,
+      schemaVersion: 1
+    },
+    {
+      initialLocalStorage: {
+        'fast-bg-dim': '80'
+      }
+    }
+  );
+
+  // Incoming backup has dim 65, and wallpaperSelection with properties in a different order
+  const incomingWallpaperReordered = {
+    id: 'wp_nature_1',
+    title: 'Forest Mist',
+    type: 'video',
+    videoUrl: 'https://example.com/forest.mp4',
+    posterUrl: 'https://example.com/nature.jpg'
+  };
+
+  const backupPayload = {
+    schema: 'homebase.export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageLocal: {
+      appBackgroundDim: 65,
+      wallpaperSelection: incomingWallpaperReordered,
+      schemaVersion: 1
+    }
+  };
+
+  // Ensure storage returns alphabetical keys on read (like Chromium's base::Value::Dict)
+  const originalGet = env.context.browser.storage.local.get;
+  env.context.browser.storage.local.get = async (keys) => {
+    const raw = await originalGet(keys);
+    if (!raw) return raw;
+    const sortedRes = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const sortedObj = {};
+        for (const prop of Object.keys(v).sort()) {
+          sortedObj[prop] = v[prop];
+        }
+        sortedRes[k] = sortedObj;
+      } else {
+        sortedRes[k] = v;
+      }
+    }
+    return sortedRes;
+  };
+
+  await env.HomebaseBackup.importState({
+    text: async () => JSON.stringify(backupPayload)
+  });
+
+  const txState = env.HomebaseBackup.getBackupTransactionState();
+  assert.equal(txState.state, 'committed');
+  assert.equal(txState.deltaKeys.length, 1);
+  assert.equal(txState.deltaKeys[0], 'appBackgroundDim');
+  assert.equal(env.localData.appBackgroundDim, 65);
+  assert.equal(env.localStorageStore.get('fast-bg-dim'), '65');
+  assert.equal(env.calls.dialogs[0]?.title, 'Import complete');
+});
+

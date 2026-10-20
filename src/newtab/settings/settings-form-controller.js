@@ -1087,7 +1087,7 @@
           if (typeof globalScope.showCustomDialog === 'function') {
             globalScope.showCustomDialog(
               'Backup started',
-              'Homebase backup download has started.\n\nUploaded wallpapers and videos are not included.'
+              'Homebase backup download has started.\n\nBrowser bookmarks and uploaded wallpaper/video files are not included.'
             );
           }
         } catch (err) {

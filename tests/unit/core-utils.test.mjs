@@ -169,10 +169,26 @@ test('areValuesIdentical() - deep equality check across primitives, arrays, and 
   assert.strictEqual(areValuesIdentical([1, 2], [1, 2]), true);
   assert.strictEqual(areValuesIdentical([1, 2], [2, 1]), false);
   assert.strictEqual(areValuesIdentical({ a: 1, b: 2 }, { a: 1, b: 2 }), true);
+  assert.strictEqual(areValuesIdentical({ a: 1, b: 2 }, { b: 2, a: 1 }), true);
+  assert.strictEqual(areValuesIdentical({ id: 'wp', title: 'Test', posterUrl: 'https://example.com/p.jpg' }, { id: 'wp', posterUrl: 'https://example.com/p.jpg', title: 'Test' }), true);
+  assert.strictEqual(areValuesIdentical({ a: { b: 1, c: 2 } }, { a: { c: 2, b: 1 } }), true);
+  assert.strictEqual(areValuesIdentical([{ a: 1, b: 2 }], [{ b: 2, a: 1 }]), true);
   assert.strictEqual(areValuesIdentical({ a: 1, b: 2 }, { a: 1, b: 3 }), false);
+  assert.strictEqual(areValuesIdentical({ a: 1, b: 2 }, { a: 1 }), false);
+  assert.strictEqual(areValuesIdentical({ a: 1 }, { a: 1, b: 2 }), false);
+  assert.strictEqual(areValuesIdentical({ a: 1, b: 2 }, { a: 1, c: 2 }), false);
+  assert.strictEqual(areValuesIdentical({ a: undefined }, { b: undefined }), false);
+  assert.strictEqual(areValuesIdentical([1, 2], { 0: 1, 1: 2 }), false);
   assert.strictEqual(areValuesIdentical({ a: 1 }, null), false);
   assert.strictEqual(areValuesIdentical(null, { a: 1 }), false);
   assert.strictEqual(areValuesIdentical({ a: 1 }, 123), false);
+
+  // Circular reference guard
+  const circA = {};
+  circA.self = circA;
+  const circB = {};
+  circB.self = circB;
+  assert.strictEqual(areValuesIdentical(circA, circB), false);
 });
 
 test('clampNumber() - numeric bounds enforcement with fallback', () => {

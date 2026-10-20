@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.0.3',
-  date: '2026-10-20',
+  version: '1.0.4',
+  date: '2026-10-21',
   items: [
     {
       type: 'IMPROVED',
-      title: 'Wallpaper visibility & tab lifecycle',
-      desc: 'Live wallpapers pause automatically on background tabs, preloading is optimized, and interrupted crossfades recover cleanly on tab return.'
+      title: 'Search keyboard accessibility',
+      desc: 'Combobox ARIA semantics and accessible suggestions with PageDown/PageUp category navigation, plus keyboard access to search engine buttons in Edge and Firefox.'
     },
     {
       type: 'IMPROVED',
-      title: 'Performance Mode & appearance preferences',
-      desc: 'Preserves saved Transparent and Custom bookmark styles across modes with transactional Save and Cancel settings persistence.'
+      title: 'Bookmark & Settings keyboard navigation',
+      desc: 'Keyboard activation and visible focus outlines for bookmark tiles, with focus trapping, section rescue, and nested modal isolation in Settings.'
     },
     {
       type: 'FIX',
-      title: 'Settings layout & browser tips',
-      desc: 'Constrained Settings dialog scrolling, stabilized toggle switches, and aligned tips to browser capabilities.'
+      title: 'Backup import verification',
+      desc: 'Order-independent value comparison prevents false verification failures and ensures reliable settings restoration across all browsers.'
     }
   ]
 };

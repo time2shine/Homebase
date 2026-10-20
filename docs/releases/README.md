@@ -8,6 +8,11 @@ This directory contains formal release preparation reports, release notes, packa
 
 | Version | Release Date | Cycle | Primary Theme | Package Assets |
 |:---:|:---:|:---:|---|---|
+| [**v1.0.4**](file:///c:/Users/Administrator/Desktop/Homebase/docs/release/v1.0.4-release-notes.md) | October 21, 2026 | Maintenance | Search, Bookmark & Settings Accessibility, Backup Import Fix | Chrome ZIP, Firefox ZIP, Edge ZIP |
+| [**v1.0.3**](file:///c:/Users/Administrator/Desktop/Homebase/docs/release/v1.0.3-release-notes.md) | October 20, 2026 | Maintenance | Wallpaper Lifecycle & Crossfade, Performance Mode, Settings Layout | Chrome ZIP, Firefox ZIP, Edge ZIP |
+| [**v1.0.2**](file:///c:/Users/Administrator/Desktop/Homebase/docs/release/v1.0.2-release-notes.md) | October 16, 2026 | Maintenance | Bookmark Styling, Transparent Mode Default, Folder Resolution | Chrome ZIP, Firefox ZIP, Edge ZIP |
+| [**v1.0.1**](file:///c:/Users/Administrator/Desktop/Homebase/docs/release/v1.0.1-release-notes.md) | October 14, 2026 | Maintenance | Settings Transactional Behavior & Live Preview | Chrome ZIP, Firefox ZIP |
+| [**v1.0.0**](file:///c:/Users/Administrator/Desktop/Homebase/docs/release/v1.0.0-release-notes.md) | October 13, 2026 | [Cycle 13](file:///c:/Users/Administrator/Desktop/Homebase/docs/cycles/cycle-13/) | Runtime Diagnostics, Error Boundary & Widget Lifecycle | Chrome ZIP, Firefox ZIP |
 | [**v0.17.0**](file:///c:/Users/Administrator/Desktop/Homebase/docs/releases/v0.17.0/) | October 9, 2026 | [Cycle 12](file:///c:/Users/Administrator/Desktop/Homebase/docs/cycles/cycle-12/) | Bookmark Drag Architecture Upgrade | Chrome ZIP, Firefox ZIP |
 | [**v0.16.0**](file:///c:/Users/Administrator/Desktop/Homebase/docs/releases/v0.16.0/) | October 2026 | [Cycle 11](file:///c:/Users/Administrator/Desktop/Homebase/docs/cycles/cycle-11/) | Modularization & Settings Architecture | Chrome ZIP, Firefox ZIP |
 

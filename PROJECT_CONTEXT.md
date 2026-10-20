@@ -1,8 +1,8 @@
 # Homebase — Project Context & Repository Knowledge Base
 
 **Project:** Homebase (Multi-browser Manifest V3 Dashboard Extension)  
-**Source Version:** `1.0.3` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
-**GitHub Release / Tag:** `v1.0.3` (commit `1d140f1`, October 20, 2026)  
+**Source Version:** `1.0.4` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
+**GitHub Release / Tag:** `v1.0.4` (October 21, 2026)  
 **Recorded Store Status (All Browsers):** See [Section 2.1](#21-published-store-releases)  
 **Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
 **Repository:** [https://github.com/time2shine/Homebase](https://github.com/time2shine/Homebase)  
@@ -179,14 +179,19 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Release Baseline**: Branch `main`, commit `1d140f1` (`release: prepare Homebase v1.0.3`, tag `v1.0.3`, October 20, 2026).
-- **Current Objective**: Track browser store review and publication progress for Homebase v1.0.3.
+- **Release Baseline**: Branch `main`, commit `f77da5d` (`fix(search): add keyboard access to engine selector`, October 21, 2026), building on tag `v1.0.3` (commit `1d140f1`, October 20, 2026).
+- **Current Objective**: Publication of Homebase v1.0.4 release package.
 - **Published Store Release Status**: All browser store publication statuses, review states, reporting dates, and verification records are centralized exclusively in [Section 2.1 — Published Store Releases](#21-published-store-releases).
-- **Release Preparation (v1.0.3 — October 20, 2026)**:
+- **Release Preparation (v1.0.4 — October 21, 2026)**:
+  - Scope: Backup import verification and LevelDB key-ordering fix, bookmark and folder keyboard activation and visible focus outlines, Settings modal focus containment, opener restoration, and nested dialog isolation, search suggestion combobox and listbox accessibility (Phase 1), and search engine selector keyboard accessibility with roving tabindex for Edge and Firefox (Phase 2, preserving Chrome default search).
+  - Packaged Archives: `dist/homebase-chrome-1.0.4.zip`, `dist/homebase-firefox-1.0.4.zip`, `dist/homebase-edge-1.0.4.zip`.
+  - Manual Verification State: User confirmed manual testing passed for: backup import flow across Chrome, Edge, and Firefox (October 20, 2026); bookmark keyboard activation and visible focus (October 20, 2026); Settings dialog focus trapping and Escape isolation (October 20, 2026); search suggestion combobox navigation (October 20, 2026); and search engine selector keyboard navigation and modifier pass-through (October 21, 2026). On October 21, 2026, the user confirmed that packaged release-candidate manual checks completed successfully across backup restoration, bookmark keyboard activation, Settings focus management/Escape handling, search suggestions, and browser-specific search. (Specific browser coverage for bookmarks, settings, and search was not explicitly stated; testing across all three target browsers is not claimed. Live screen-reader announcements, high-contrast themes, and live IME input remain explicitly unverified).
+  - Store Status Distinction: Store publication status remains strictly separate from release preparation; see [Section 2.1](#21-published-store-releases) for canonical store publication and review statuses. Preparation and packaging of v1.0.4 packages does not alter store submission states.
+- **Release History (v1.0.3 — October 20, 2026)**:
   - Scope: Wallpaper tab visibility lifecycle, interrupted crossfade recovery, Performance Mode appearance preservation, transactional settings persistence, settings layout & dialog scrolling fixes, and browser-specific tips filtering.
   - Packaged Archives: `dist/homebase-chrome-1.0.3.zip`, `dist/homebase-firefox-1.0.3.zip`, `dist/homebase-edge-1.0.3.zip`.
-  - Manual Verification State: User confirmed manual checks passed in Chrome, Edge, and Firefox on October 20, 2026 (exact browser versions, benchmark measurements, or comprehensive matrix details were not specified and are not invented).
-  - Store Status Distinction: Store publication status remains strictly separate from release preparation; see [Section 2.1](#21-published-store-releases) for canonical store publication and review statuses. Preparation and packaging of v1.0.3 packages does not alter store submission states.
+  - Manual Verification State: User confirmed manual checks passed in Chrome, Edge, and Firefox on October 20, 2026.
+  - Store Status Distinction: Version 1.0.3 is live on Firefox AMO and under review on Chrome Web Store and Edge Add-ons (see [Section 2.1](#21-published-store-releases)).
 - **Search Keyboard Accessibility (Phase 1, October 20, 2026)**:
   - Accessible Name & Initial Markup: In `src/new-tab.html`, added explicit engine-aware `aria-label="Search with Google"`, `role="combobox"`, `aria-autocomplete="list"`, `aria-expanded="false"`, `aria-haspopup="listbox"`, and `aria-controls="search-results-panel"` to `#search-input`. Added `role="listbox"` and `aria-label="Search suggestions"` to `#search-results-panel`. Added `role="group"` with accessible labels to `#bookmark-results-container` and `#suggestion-results-container`. In `scripts/build.mjs`, Chrome HTML customization preserves `aria-label="Search the web"` and placeholder `"Search the web"` while adding combobox attributes. In `src/newtab/search/search-ui-controller.js`, `updateSearchUI` updates `aria-label` to engine-aware `"Search with [Engine]"` in Edge/Firefox and neutral `"Search the web"` in Chrome.
   - Combobox & Listbox Semantics & Calculator Copy: In `src/newtab/search/search-results-renderer.js`, `setupOptionItem` assigns `role="option"`, `tabindex="-1"`, `aria-selected="false"`, and unique monotonically generated IDs (`search-result-opt-...`) to all result items across bookmarks, history, calculations, bangs, and suggestions. Headers receive `role="presentation"` and `aria-hidden="true"`. The calculator option receives an explicit accessible name communicating its action (`[result] ([expression]) - Copy to clipboard`), and its nested copy button is given `tabindex="-1"` and `aria-hidden="true"` to prevent invalid nested interactive tab stops inside the option. Activating the calculator option via Enter or clicking anywhere on the option item executes the copy action and updates the button state.

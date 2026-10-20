@@ -99,9 +99,12 @@ async function customizeTargetHtml(targetDir, target) {
 
   const bodyNeedle = '<body class="preload bookmarks-booting">';
   const containerNeedle = '<div class="search-container">';
-  const inputNeedle = '<input type="text" id="search-input" placeholder="Search" autofocus autocomplete="off">';
+  const inputNeedle = '<input type="text" id="search-input" placeholder="Search" aria-label="Search with Google" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-haspopup="listbox" aria-controls="search-results-panel" autofocus autocomplete="off">';
+  const fallbackInputNeedle = '<input type="text" id="search-input" placeholder="Search" autofocus autocomplete="off">';
 
-  if (!html.includes(bodyNeedle) || !html.includes(containerNeedle) || !html.includes(inputNeedle)) {
+  const targetNeedle = html.includes(inputNeedle) ? inputNeedle : fallbackInputNeedle;
+
+  if (!html.includes(bodyNeedle) || !html.includes(containerNeedle) || !html.includes(targetNeedle)) {
     throw new Error("Failed to customize Chrome new-tab.html: target markers not found.");
   }
 
@@ -114,8 +117,8 @@ async function customizeTargetHtml(targetDir, target) {
     '<div class="search-container browser-default-search">'
   );
   html = html.replace(
-    inputNeedle,
-    '<input type="text" id="search-input" placeholder="Search the web" aria-label="Search the web" autofocus autocomplete="off">'
+    targetNeedle,
+    '<input type="text" id="search-input" placeholder="Search the web" aria-label="Search the web" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-haspopup="listbox" aria-controls="search-results-panel" autofocus autocomplete="off">'
   );
 
   await fs.writeFile(htmlPath, html, "utf8");

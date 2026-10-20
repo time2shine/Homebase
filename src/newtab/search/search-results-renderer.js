@@ -28,10 +28,28 @@
     return null;
   }
 
+  let nextOptionId = 0;
+
+  function setupOptionItem(item) {
+    if (!item || typeof item.setAttribute !== 'function') return item;
+    item.setAttribute('role', 'option');
+    item.setAttribute('tabindex', '-1');
+    item.setAttribute('aria-selected', 'false');
+    if (!item.id) {
+      nextOptionId = (nextOptionId + 1) % 1000000;
+      item.id = `search-result-opt-${nextOptionId}`;
+    }
+    return item;
+  }
+
   function createSectionHeader(title, options = {}) {
     if (typeof document === 'undefined') return null;
     const header = document.createElement('div');
     header.className = 'result-header';
+    if (typeof header.setAttribute === 'function') {
+      header.setAttribute('role', 'presentation');
+      header.setAttribute('aria-hidden', 'true');
+    }
     if (options && options.externalSuggestions) {
       header.dataset.externalSuggestions = 'true';
     }
@@ -55,6 +73,13 @@
     const item = document.createElement('div');
     item.className = 'result-item calc-item';
     item.dataset.copy = displayResult;
+    setupOptionItem(item);
+    const accessibleLabel = expression
+      ? `${displayResult} (${expression}) - Copy to clipboard`
+      : `${displayResult} - Copy to clipboard`;
+    if (typeof item.setAttribute === 'function') {
+      item.setAttribute('aria-label', accessibleLabel);
+    }
 
     const left = document.createElement('div');
     left.className = 'calc-left';
@@ -83,6 +108,10 @@
     copyBtn.className = 'calc-copy';
     copyBtn.dataset.copy = displayResult;
     copyBtn.textContent = 'Copy';
+    if (typeof copyBtn.setAttribute === 'function') {
+      copyBtn.setAttribute('tabindex', '-1');
+      copyBtn.setAttribute('aria-hidden', 'true');
+    }
 
     item.appendChild(left);
     item.appendChild(copyBtn);
@@ -99,6 +128,7 @@
     button.type = 'button';
     button.className = 'result-item';
     button.dataset.url = bookmarkUrl;
+    setupOptionItem(button);
 
     const favicon = document.createElement('img');
     favicon.className = 'result-favicon';
@@ -130,6 +160,7 @@
     button.type = 'button';
     button.className = 'result-item';
     button.dataset.bangInsert = `${bangCode} `;
+    setupOptionItem(button);
 
     const badge = document.createElement('span');
     badge.className = 'bang-badge';
@@ -158,6 +189,10 @@
 
     const item = document.createElement('div');
     item.className = 'result-item';
+    setupOptionItem(item);
+    if (typeof item.setAttribute === 'function') {
+      item.setAttribute('aria-disabled', 'true');
+    }
     const info = document.createElement('div');
     info.className = 'result-item-info';
     info.style.justifyContent = 'center';
@@ -178,6 +213,7 @@
     button.type = 'button';
     button.className = 'result-item result-item-history';
     button.dataset.url = url;
+    setupOptionItem(button);
 
     const icon = createSvgIcon('historyClock');
     if (icon) {
@@ -209,6 +245,7 @@
     directButton.type = 'button';
     directButton.className = 'result-item result-item-suggestion';
     directButton.dataset.url = searchUrl;
+    setupOptionItem(directButton);
 
     const directIcon = createSvgIcon('search');
     if (directIcon) {
@@ -238,6 +275,7 @@
     button.type = 'button';
     button.className = 'result-item result-item-suggestion';
     button.dataset.url = suggestionUrl;
+    setupOptionItem(button);
 
     const icon = createSvgIcon('search');
     if (icon) {
@@ -519,6 +557,7 @@
   function updatePanelVisibility(options = {}) {
     const panel = options.panel;
     const widget = options.widget;
+    const input = options.input || (typeof document !== 'undefined' && typeof document.getElementById === 'function' ? document.getElementById('search-input') : null);
     const topContainer = options.topContainer || options.bookmarkContainer;
     const bottomContainer = options.bottomContainer || options.suggestionContainer;
 
@@ -534,9 +573,18 @@
     if (shouldOpen) {
       if (panel && panel.classList) panel.classList.remove('hidden');
       if (widget && widget.classList) widget.classList.add('results-open');
+      if (input && typeof input.setAttribute === 'function') {
+        input.setAttribute('aria-expanded', 'true');
+      }
     } else {
       if (panel && panel.classList) panel.classList.add('hidden');
       if (widget && widget.classList) widget.classList.remove('results-open');
+      if (input && typeof input.setAttribute === 'function') {
+        input.setAttribute('aria-expanded', 'false');
+        if (typeof input.removeAttribute === 'function') {
+          input.removeAttribute('aria-activedescendant');
+        }
+      }
     }
     return shouldOpen;
   }

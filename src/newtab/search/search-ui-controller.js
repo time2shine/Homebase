@@ -375,6 +375,9 @@
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
       searchInput.placeholder = `Search with ${engine.name}`;
+      if (typeof searchInput.setAttribute === 'function') {
+        searchInput.setAttribute('aria-label', `Search with ${engine.name}`);
+      }
     }
 
     const searchSelect = document.getElementById('search-select');
@@ -522,6 +525,16 @@
     const searchResultsPanel = document.getElementById('search-results-panel');
     if (searchResultsPanel) {
       searchResultsPanel.classList.add('hidden');
+    }
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      if (typeof searchInput.setAttribute === 'function') {
+        searchInput.setAttribute('aria-expanded', 'false');
+      }
+      if (typeof searchInput.removeAttribute === 'function') {
+        searchInput.removeAttribute('aria-activedescendant');
+      }
     }
 
     const searchWidget = document.querySelector('.widget-search');

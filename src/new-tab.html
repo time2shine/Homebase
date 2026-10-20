@@ -711,7 +711,7 @@
 
             <form id="search-form" autocomplete="off">
 
-              <input type="text" id="search-input" placeholder="Search" autofocus autocomplete="off">
+              <input type="text" id="search-input" placeholder="Search" aria-label="Search with Google" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-haspopup="listbox" aria-controls="search-results-panel" autofocus autocomplete="off">
 
             </form>
 
@@ -721,11 +721,11 @@
 
         
 
-        <div id="search-results-panel" class="hidden">
+        <div id="search-results-panel" class="hidden" role="listbox" aria-label="Search suggestions">
 
-          <div id="bookmark-results-container"></div>
+          <div id="bookmark-results-container" role="group" aria-label="Bookmarks and calculations"></div>
 
-          <div id="suggestion-results-container"></div>
+          <div id="suggestion-results-container" role="group" aria-label="Search suggestions and history"></div>
 
         </div>
 

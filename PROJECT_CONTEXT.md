@@ -41,18 +41,18 @@ Centralized tracking for all browser extension stores. To prevent duplicate or d
 - **Official Listing**: [Firefox Add-ons (AMO) — Homebase New Tab Dashboard](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/)
 - **Version History**: [Firefox Add-ons Version History](https://addons.mozilla.org/en-US/firefox/addon/homebase-new-tab-dashboard/versions/)
 - **Status**: Live / Publicly Available.
-- **Published Store Version**: `1.0.3`
-- **Updated / Verified Date**: October 20, 2026
-- **Evidence & Verification**: User reported Mozilla accepted v1.0.3 on October 20, 2026. Independently verified publicly available on October 20, 2026 via official Mozilla Add-ons API v5 (`https://addons.mozilla.org/api/v5/addons/addon/homebase-new-tab-dashboard/`), which lists current version `1.0.3` (`status: public`, reviewed `2026-10-19T18:37:12Z`), and verified direct public download of the signed XPI package (`https://addons.mozilla.org/firefox/downloads/file/5140626/homebase_new_tab_dashboard-1.0.3.xpi` returning HTTP `200 OK`). (Direct HTML fetches to the web listing page return a Cloudflare client challenge to non-browsers, but the official AMO REST API and public XPI package confirm active public availability).
+- **Published Store Version**: `1.0.4`
+- **Updated / Verified Date**: October 21, 2026
+- **Evidence & Verification**: User reported on October 21, 2026 that version 1.0.4 was approved and is publicly available on Firefox Add-ons (AMO). (User-confirmed status; not independently verified via automated check or store API query in this step). Previous version 1.0.3 was independently verified on October 20, 2026 via AMO API v5 and direct signed XPI package download.
 
 #### Google Chrome (Chrome Web Store)
 - **Official Listing URL**: [Chrome Web Store — Homebase](https://chromewebstore.google.com/detail/homebase/ejfdeilhncacmmbdfmgpolpoldpllbmc)
-- **Status**: Live published version is `1.0.2`; Version `1.0.3` is under review.
+- **Status**: Live published version is `1.0.2`; Version `1.0.4` is under review.
 - **Published Store Version**: `1.0.2`
-- **Submission Status**: Version `1.0.3`: Under review (user-reported October 20, 2026).
-- **Updated Date**: October 18, 2026 (Live listing updated); October 20, 2026 (v1.0.3 under-review report recorded).
-- **Evidence & Verification**: User confirmed live listing on October 18, 2026 (verified from public Chrome Web Store listing metadata: Version `1.0.2`, Updated `October 18, 2026`). User reported v1.0.3 submitted and under review on October 20, 2026.
-- **Version Distinction Note**: The live published store package `1.0.2` reflects the release package submitted on October 17, 2026; submitted version `1.0.3` is currently under review by the Chrome Web Store team.
+- **Submission Status**: Version `1.0.4`: Under review (user-reported October 21, 2026).
+- **Updated Date**: October 18, 2026 (Live listing verified); October 21, 2026 (v1.0.4 under-review report recorded).
+- **Evidence & Verification**: User confirmed live listing on October 18, 2026 (verified from public Chrome Web Store listing metadata: Version `1.0.2`, Updated `October 18, 2026`). User reported on October 21, 2026 that version 1.0.4 was submitted and is under review by the Chrome Web Store team (user-confirmed status; not independently verified).
+- **Version Distinction Note**: The live published store package `1.0.2` reflects the release package submitted on October 17, 2026; pending version `1.0.4` (superseding pending version 1.0.3) is currently under review by the Chrome Web Store team.
 
 #### Microsoft Edge (Microsoft Edge Add-ons)
 - **Status**: Version `1.0.2`: In review (re-confirmed by user on October 20, 2026).
@@ -179,8 +179,8 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Release Baseline**: Branch `main`, commit `f77da5d` (`fix(search): add keyboard access to engine selector`, October 21, 2026), building on tag `v1.0.3` (commit `1d140f1`, October 20, 2026).
-- **Current Objective**: Publication of Homebase v1.0.4 release package.
+- **Release Baseline**: Branch `main`, commit `b55803f` (`release: prepare Homebase v1.0.4`, October 21, 2026), tag `v1.0.4`.
+- **Current Objective**: Multi-browser store publication tracking for Homebase v1.0.4.
 - **Published Store Release Status**: All browser store publication statuses, review states, reporting dates, and verification records are centralized exclusively in [Section 2.1 — Published Store Releases](#21-published-store-releases).
 - **Release Preparation (v1.0.4 — October 21, 2026)**:
   - Scope: Backup import verification and LevelDB key-ordering fix, bookmark and folder keyboard activation and visible focus outlines, Settings modal focus containment, opener restoration, and nested dialog isolation, search suggestion combobox and listbox accessibility (Phase 1), and search engine selector keyboard accessibility with roving tabindex for Edge and Firefox (Phase 2, preserving Chrome default search).
@@ -191,7 +191,7 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
   - Scope: Wallpaper tab visibility lifecycle, interrupted crossfade recovery, Performance Mode appearance preservation, transactional settings persistence, settings layout & dialog scrolling fixes, and browser-specific tips filtering.
   - Packaged Archives: `dist/homebase-chrome-1.0.3.zip`, `dist/homebase-firefox-1.0.3.zip`, `dist/homebase-edge-1.0.3.zip`.
   - Manual Verification State: User confirmed manual checks passed in Chrome, Edge, and Firefox on October 20, 2026.
-  - Store Status Distinction: Version 1.0.3 is live on Firefox AMO and under review on Chrome Web Store and Edge Add-ons (see [Section 2.1](#21-published-store-releases)).
+  - Store Status Distinction: For active multi-browser store publication and review statuses across all platforms, see [Section 2.1](#21-published-store-releases).
 - **Search Keyboard Accessibility (Phase 1, October 20, 2026)**:
   - Accessible Name & Initial Markup: In `src/new-tab.html`, added explicit engine-aware `aria-label="Search with Google"`, `role="combobox"`, `aria-autocomplete="list"`, `aria-expanded="false"`, `aria-haspopup="listbox"`, and `aria-controls="search-results-panel"` to `#search-input`. Added `role="listbox"` and `aria-label="Search suggestions"` to `#search-results-panel`. Added `role="group"` with accessible labels to `#bookmark-results-container` and `#suggestion-results-container`. In `scripts/build.mjs`, Chrome HTML customization preserves `aria-label="Search the web"` and placeholder `"Search the web"` while adding combobox attributes. In `src/newtab/search/search-ui-controller.js`, `updateSearchUI` updates `aria-label` to engine-aware `"Search with [Engine]"` in Edge/Firefox and neutral `"Search the web"` in Chrome.
   - Combobox & Listbox Semantics & Calculator Copy: In `src/newtab/search/search-results-renderer.js`, `setupOptionItem` assigns `role="option"`, `tabindex="-1"`, `aria-selected="false"`, and unique monotonically generated IDs (`search-result-opt-...`) to all result items across bookmarks, history, calculations, bangs, and suggestions. Headers receive `role="presentation"` and `aria-hidden="true"`. The calculator option receives an explicit accessible name communicating its action (`[result] ([expression]) - Copy to clipboard`), and its nested copy button is given `tabindex="-1"` and `aria-hidden="true"` to prevent invalid nested interactive tab stops inside the option. Activating the calculator option via Enter or clicking anywhere on the option item executes the copy action and updates the button state.
@@ -264,4 +264,4 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
   - Automated Measurement Status: Documented in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md) ("The attempted automated setup did not reliably load and measure the installed extension; no automated performance results were obtained.").
   - Standardized Manual Protocol: Documented 8-run alternating manual measurement protocol in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md).
 - **Working Tree Changes**: Reviewed changes staged and committed upon user authorization.
-- **Last Updated Date**: October 20, 2026
+- **Last Updated Date**: October 21, 2026

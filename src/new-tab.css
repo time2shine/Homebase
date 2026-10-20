@@ -1114,6 +1114,15 @@ body.bookmarks-booting .bookmark-folder-tabs-container {
   cursor: pointer;
 }
 
+.bookmark-item:focus {
+  outline: none;
+}
+
+.bookmark-item:focus-visible {
+  outline: 2px solid #2ca5ff;
+  outline-offset: 2px;
+}
+
 #bookmarks-grid .bookmark-item,
 #bookmarks-grid .bookmark-item * {
   user-select: none;

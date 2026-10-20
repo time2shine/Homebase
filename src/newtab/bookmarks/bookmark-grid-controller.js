@@ -558,8 +558,16 @@
 
     item.dataset.bookmarkId = bookmarkNode.id || '';
     item.dataset.isFolder = 'false';
+    if (typeof item.setAttribute === 'function') {
+      item.setAttribute('role', 'link');
+      item.setAttribute('tabindex', '0');
+    }
 
     const title = bookmarkNode.title || ' ';
+    if (typeof item.setAttribute === 'function') {
+      item.setAttribute('aria-label', title.trim() || 'Bookmark');
+    }
+
     const iconWrapper = document.createElement('div');
     iconWrapper.className = 'bookmark-icon-wrapper';
     renderBookmarkIconInto(iconWrapper, bookmarkNode);
@@ -578,6 +586,15 @@
     item.className = 'bookmark-item';
     item.dataset.bookmarkId = folderNode.id || '';
     item.dataset.isFolder = 'true';
+    if (typeof item.setAttribute === 'function') {
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+    }
+
+    const title = folderNode.title || '';
+    if (typeof item.setAttribute === 'function') {
+      item.setAttribute('aria-label', title.trim() || 'Folder');
+    }
 
     const wrapper = document.createElement('div');
     wrapper.className = 'bookmark-icon-wrapper';
@@ -598,6 +615,11 @@
     item.href = '#';
     item.className = 'bookmark-item';
     item.dataset.backTargetId = parentId || '';
+    if (typeof item.setAttribute === 'function') {
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+      item.setAttribute('aria-label', 'Back');
+    }
     item.innerHTML = `
       <div class="bookmark-icon-wrapper back-icon-wrapper">
         <img src="icons/back.svg" alt="Go back" class="back-icon" />
@@ -618,13 +640,37 @@
     if (!el || !node) return;
     const recyclingType = node.isBackButton ? 'back' : (node.children ? 'folder' : 'bookmark');
     el.dataset.recyclingType = recyclingType;
-    el.dataset.bookmarkId = node.id || '';
+
+    const previousId = el.dataset.bookmarkId || '';
+    const nextId = node.id || '';
+
+    // If focused element is recycled to represent a different bookmark node, blur it
+    // to avoid leaving focus on a different bookmark without user interaction.
+    if (typeof document !== 'undefined' && document.activeElement === el && previousId && previousId !== nextId) {
+      if (typeof el.blur === 'function') {
+        el.blur();
+      }
+    }
+
+    el.dataset.bookmarkId = nextId;
 
     if (node.isBackButton) {
       el.dataset.backTargetId = node.parentId || '';
       delete el.dataset.isFolder;
+      if (typeof el.setAttribute === 'function') {
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('aria-label', 'Back');
+      }
     } else {
-      el.dataset.isFolder = node.children ? 'true' : 'false';
+      const isFolder = node.children ? 'true' : 'false';
+      el.dataset.isFolder = isFolder;
+      if (typeof el.setAttribute === 'function') {
+        el.setAttribute('role', isFolder === 'true' ? 'button' : 'link');
+        el.setAttribute('tabindex', '0');
+        const fallbackName = isFolder === 'true' ? 'Folder' : 'Bookmark';
+        el.setAttribute('aria-label', (node.title || '').trim() || fallbackName);
+      }
     }
 
     const span = el.querySelector('span');
@@ -1933,22 +1979,17 @@
   }
 
   // --- Grid Click Event Delegation ---
+  // --- Grid Click & Keyboard Event Delegation ---
   let isGridClickDelegationBound = false;
+  let isGridKeydownDelegationBound = false;
 
   /**
-   * Handles click events delegated on the bookmarks grid.
-   * Manages back-button navigation, folder exploration, and bookmark URL launching.
+   * Activates a bookmark grid item (navigates back, enters folder, or launches bookmark URL).
+   * Shared by mouse click and keyboard activation handlers.
    *
-   * @param {MouseEvent} e - The click event
+   * @param {HTMLElement} item - The target bookmark-item element
    */
-  function handleGridClick(e) {
-    if (!e || !e.target) return;
-
-    if (e.target.classList.contains('grid-item-rename-input') || (e.target.closest && e.target.closest('.grid-item-rename-input'))) {
-      return;
-    }
-
-    const item = e.target.closest('.bookmark-item');
+  function activateGridItem(item) {
     if (!item) return;
 
     const isDragging = (typeof window !== 'undefined' && window.isGridDragging) ||
@@ -1964,7 +2005,6 @@
       (typeof window !== 'undefined' && typeof window.findBookmarkNodeById === 'function' ? window.findBookmarkNodeById : null);
 
     if (item.classList.contains('back-button')) {
-      e.preventDefault();
       const parentId = item.dataset.backTargetId;
       if (!tree || !tree[0] || !findNode) return;
       const parentNode = findNode(tree[0], parentId);
@@ -1977,8 +2017,6 @@
       }
       return;
     }
-
-    e.preventDefault();
 
     const nodeId = item.dataset.bookmarkId;
     if (!nodeId || !tree || !tree[0] || !findNode) return;
@@ -2035,13 +2073,145 @@
   }
 
   /**
-   * Idempotently binds click event delegation on the bookmarks grid.
+   * Determines whether the event target is an interactive or editable control nested within a tile.
+   * Excludes inputs, textareas, buttons, selects, links, contenteditable nodes, and custom roles.
+   *
+   * @param {HTMLElement} target - The event target
+   * @param {HTMLElement} item - The parent bookmark-item
+   * @returns {boolean}
+   */
+  function isNestedInteractiveOrEditable(target, item) {
+    if (!target || target === item) return false;
+
+    let curr = target;
+    while (curr && curr !== item) {
+      const tagName = curr.tagName ? curr.tagName.toUpperCase() : '';
+      if (
+        tagName === 'INPUT' ||
+        tagName === 'TEXTAREA' ||
+        tagName === 'BUTTON' ||
+        tagName === 'SELECT' ||
+        tagName === 'A'
+      ) {
+        return true;
+      }
+
+      if (curr.isContentEditable) {
+        return true;
+      }
+
+      if (typeof curr.getAttribute === 'function') {
+        const ce = curr.getAttribute('contenteditable');
+        if (ce === 'true' || ce === '') return true;
+        const role = curr.getAttribute('role');
+        if (role === 'textbox' || role === 'button' || role === 'link') return true;
+      }
+
+      if (curr.classList && typeof curr.classList.contains === 'function' && curr.classList.contains('grid-item-rename-input')) {
+        return true;
+      }
+
+      curr = curr.parentElement || curr.parentNode;
+    }
+
+    return false;
+  }
+
+  /**
+   * Handles click events delegated on the bookmarks grid.
+   * Manages back-button navigation, folder exploration, and bookmark URL launching.
+   *
+   * @param {MouseEvent} e - The click event
+   */
+  function handleGridClick(e) {
+    if (!e || !e.target) return;
+
+    if (e.target.classList && typeof e.target.classList.contains === 'function' &&
+        (e.target.classList.contains('grid-item-rename-input') || (e.target.closest && e.target.closest('.grid-item-rename-input')))) {
+      return;
+    }
+
+    const item = e.target.closest ? e.target.closest('.bookmark-item') : null;
+    if (!item) return;
+
+    if (isNestedInteractiveOrEditable(e.target, item)) {
+      return;
+    }
+
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    activateGridItem(item);
+  }
+
+  /**
+   * Handles keyboard activation (Enter for bookmarks, Enter/Space for folders & back button).
+   * Prevents repeated activation when keys are held down (handling e.repeat), avoids scrolling
+   * when Space is pressed or held on a folder/back tile, and excludes nested interactive/editable controls.
+   *
+   * @param {KeyboardEvent} e - The keydown event
+   */
+  function handleGridKeydown(e) {
+    if (!e || !e.target) return;
+
+    if (e.target.classList && typeof e.target.classList.contains === 'function' &&
+        (e.target.classList.contains('grid-item-rename-input') || (e.target.closest && e.target.closest('.grid-item-rename-input')))) {
+      return;
+    }
+
+    const item = e.target.closest ? e.target.closest('.bookmark-item') : null;
+    if (!item || (item.classList && typeof item.classList.contains === 'function' && item.classList.contains('is-renaming'))) {
+      return;
+    }
+
+    // Restrict tile activation to the tile itself or non-interactive contents;
+    // explicitly exclude all nested interactive/editable controls.
+    if (isNestedInteractiveOrEditable(e.target, item)) {
+      return;
+    }
+
+    const isFolder = item.dataset && item.dataset.isFolder === 'true';
+    const isBackButton = item.classList && typeof item.classList.contains === 'function' && item.classList.contains('back-button');
+
+    if (e.key === 'Enter') {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (e.repeat) return;
+      activateGridItem(item);
+    } else if (e.key === ' ' || e.key === 'Spacebar') {
+      if (isFolder || isBackButton) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (e.repeat) return;
+        activateGridItem(item);
+      }
+    }
+  }
+
+  /**
+   * Idempotently binds keydown event delegation on the bookmarks grid.
+   *
+   * @param {HTMLElement} [gridEl] - Optional specific grid element
+   */
+  function setupGridKeydownDelegation(gridEl = null) {
+    const targetGrid = gridEl || getGridElement();
+    if (!targetGrid) return;
+
+    if (targetGrid._hasGridKeydownDelegation) {
+      return;
+    }
+
+    targetGrid.addEventListener('keydown', handleGridKeydown);
+    targetGrid._hasGridKeydownDelegation = true;
+    isGridKeydownDelegationBound = true;
+  }
+
+  /**
+   * Idempotently binds click and keyboard event delegation on the bookmarks grid.
    *
    * @param {HTMLElement} [gridEl] - Optional specific grid element
    */
   function setupGridClickDelegation(gridEl = null) {
     const targetGrid = gridEl || getGridElement();
     if (!targetGrid) return;
+
+    setupGridKeydownDelegation(targetGrid);
 
     if (targetGrid._hasGridClickDelegation) {
       return;
@@ -2095,8 +2265,12 @@
     showGridItemRenameInput,
     setupBookmarkFolderAddTooltip,
     createFolderTabs,
+    isNestedInteractiveOrEditable,
+    activateGridItem,
     handleGridClick,
-    setupGridClickDelegation
+    handleGridKeydown,
+    setupGridClickDelegation,
+    setupGridKeydownDelegation
   };
 
   // --- Global Window Export ---
@@ -2129,8 +2303,12 @@
     window.findRenderedGridItemById = findRenderedGridItemById;
     window.patchActiveGridMetadataItems = patchActiveGridMetadataItems;
     window.handleBookmarkGridStorageChange = handleStorageChange;
+    window.isNestedInteractiveOrEditable = isNestedInteractiveOrEditable;
+    window.activateGridItem = activateGridItem;
     window.handleGridClick = handleGridClick;
+    window.handleGridKeydown = handleGridKeydown;
     window.setupGridClickDelegation = setupGridClickDelegation;
+    window.setupGridKeydownDelegation = setupGridKeydownDelegation;
     window.updateVirtualGrid = updateVirtualGrid;
     window.initVirtualizer = initVirtualizer;
     window.disableVirtualizer = disableVirtualizer;

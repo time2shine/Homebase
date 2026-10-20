@@ -129,6 +129,158 @@
     targetEl.appendChild(fallback);
   }
 
+  function selectSearchEngine(engineId) {
+    const engines = getSearchEngines();
+    const engine = engines.find((e) => e.id === engineId);
+    if (!engine) return;
+
+    updateSearchUI(engine.id);
+
+    const selector = document.getElementById('search-engine-selector');
+    if (selector) {
+      selector.classList.remove('expanded');
+      selector.classList.add('suppress-hover');
+    }
+
+    if (getRememberPreference()) {
+      if (typeof setCurrentSearchEngine === 'function') {
+        setCurrentSearchEngine(engine);
+      } else if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.setCurrentSearchEngine) {
+        HomebaseSearchStorage.setCurrentSearchEngine(engine);
+      }
+    }
+
+    const input = document.getElementById('search-input');
+    if (input && typeof input.focus === 'function') {
+      input.focus();
+    }
+  }
+
+  function syncSelectorRovingTabindex(containerEl, targetEngineId) {
+    const container = containerEl || (typeof document !== 'undefined' ? document.getElementById('search-engine-selector') : null);
+    if (!container || typeof container.querySelectorAll !== 'function') return;
+    const buttons = Array.from(container.querySelectorAll('.engine-icon-btn'));
+    if (buttons.length === 0) return;
+
+    const current = getCurrentEngine();
+    const effectiveTargetId = targetEngineId || (current ? current.id : null);
+    const targetBtn = (effectiveTargetId && buttons.find(b => b.dataset?.engineId === effectiveTargetId)) || buttons[0];
+
+    buttons.forEach(btn => {
+      if (typeof btn.setAttribute === 'function') {
+        btn.setAttribute('tabindex', btn === targetBtn ? '0' : '-1');
+      }
+    });
+  }
+
+  function setFocusedEngineButton(buttons, targetIndex) {
+    buttons.forEach((btn, idx) => {
+      if (idx === targetIndex) {
+        if (typeof btn.setAttribute === 'function') {
+          btn.setAttribute('tabindex', '0');
+        }
+        if (typeof btn.focus === 'function') {
+          btn.focus();
+        }
+      } else {
+        if (typeof btn.setAttribute === 'function') {
+          btn.setAttribute('tabindex', '-1');
+        }
+      }
+    });
+  }
+
+  function handleSelectorKeydown(e) {
+    if (!e) return;
+    const container = typeof document !== 'undefined' ? document.getElementById('search-engine-selector') : null;
+    if (!container) return;
+    const list = typeof container.querySelector === 'function' ? container.querySelector('.search-engine-list') : null;
+    if (!list) return;
+
+    const buttons = Array.from(list.querySelectorAll('.engine-icon-btn'));
+    if (buttons.length === 0) return;
+
+    const currentTarget = e.target && typeof e.target.closest === 'function' ? e.target.closest('.engine-icon-btn') : null;
+    if (!currentTarget) return;
+
+    const currentIndex = buttons.indexOf(currentTarget);
+    if (currentIndex === -1) return;
+
+    const hasModifier = Boolean(e.altKey || e.ctrlKey || e.metaKey || e.shiftKey);
+
+    switch (e.key) {
+      case 'ArrowRight': {
+        if (hasModifier) break;
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        const nextIndex = (currentIndex + 1) % buttons.length;
+        setFocusedEngineButton(buttons, nextIndex);
+        break;
+      }
+
+      case 'ArrowLeft': {
+        if (hasModifier) break;
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        const prevIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+        setFocusedEngineButton(buttons, prevIndex);
+        break;
+      }
+
+      case 'Home': {
+        if (hasModifier) break;
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        setFocusedEngineButton(buttons, 0);
+        break;
+      }
+
+      case 'End': {
+        if (hasModifier) break;
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        setFocusedEngineButton(buttons, buttons.length - 1);
+        break;
+      }
+
+      case 'Enter':
+      case ' ':
+      case 'Spacebar': {
+        if (e.altKey || e.ctrlKey || e.metaKey) break;
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (e.repeat) return;
+        const engineId = currentTarget.dataset ? currentTarget.dataset.engineId : null;
+        if (engineId) {
+          selectSearchEngine(engineId);
+        }
+        break;
+      }
+
+      case 'Escape': {
+        if (e.altKey || e.ctrlKey || e.metaKey) break;
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (container.classList) {
+          container.classList.remove('expanded');
+          container.classList.add('suppress-hover');
+        }
+        syncSelectorRovingTabindex(container);
+        updateSearchSelectorPosition();
+        const input = typeof document !== 'undefined' ? document.getElementById('search-input') : null;
+        if (input && typeof input.focus === 'function') {
+          input.focus();
+        }
+        break;
+      }
+
+      case 'Tab': {
+        // Tab / Shift+Tab leaves normally; focusout collapses
+        break;
+      }
+    }
+  }
+
   function ensureEngineIconExists(engine) {
     if (!engine) return;
     const container = document.getElementById('search-engine-selector');
@@ -139,33 +291,22 @@
     let btn = list.querySelector(`.engine-icon-btn[data-engine-id="${engine.id}"]`);
     if (btn) return;
 
-    btn = document.createElement('div');
+    btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'engine-icon-btn';
     btn.dataset.engineId = engine.id;
     btn.style.setProperty('--engine-color', engine.color || '#333');
+    if (typeof btn.setAttribute === 'function') {
+      btn.setAttribute('aria-label', engine.name || engine.id);
+      btn.setAttribute('aria-pressed', 'false');
+      btn.setAttribute('tabindex', '-1');
+    }
 
     buildSearchEngineIconContent(btn, engine);
 
     btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      updateSearchUI(engine.id);
-
-      const selector = document.getElementById('search-engine-selector');
-      if (selector) {
-        selector.classList.remove('expanded');
-        selector.classList.add('suppress-hover');
-      }
-
-      if (getRememberPreference()) {
-        if (typeof setCurrentSearchEngine === 'function') {
-          setCurrentSearchEngine(engine);
-        } else if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.setCurrentSearchEngine) {
-          HomebaseSearchStorage.setCurrentSearchEngine(engine);
-        }
-      }
-
-      const input = document.getElementById('search-input');
-      if (input) input.focus();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+      selectSearchEngine(engine.id);
     });
 
     list.appendChild(btn);
@@ -204,6 +345,9 @@
     if (container) {
       container.replaceChildren();
       container.style.display = 'none';
+      if (typeof container.setAttribute === 'function') {
+        container.setAttribute('aria-hidden', 'true');
+      }
     }
 
     const divider = document.querySelector('.search-input-divider');
@@ -236,6 +380,15 @@
     const container = document.getElementById('search-engine-selector');
     if (!container) return;
 
+    if (typeof container.setAttribute === 'function') {
+      container.setAttribute('role', 'group');
+      container.setAttribute('aria-label', 'Search engines');
+    }
+
+    const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+    const wasFocused = Boolean(activeEl && typeof container.contains === 'function' && container.contains(activeEl));
+    const focusedEngineId = wasFocused && activeEl ? (activeEl.dataset?.engineId || activeEl.getAttribute?.('data-engine-id')) : null;
+
     const suppressHydrationAnimation = options.animate === false || container.classList.contains('is-instant-fixed');
     if (suppressHydrationAnimation) {
       container.style.transition = 'none';
@@ -262,43 +415,33 @@
     const current = getCurrentEngine();
 
     activeEngines.forEach(engine => {
-      const btn = document.createElement('div');
+      const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = 'engine-icon-btn';
       btn.dataset.engineId = engine.id;
       btn.style.setProperty('--engine-color', engine.color || '#333');
 
-      if (current && current.id === engine.id) {
+      const isActive = Boolean(current && current.id === engine.id);
+      if (isActive) {
         btn.classList.add('active');
+      }
+
+      if (typeof btn.setAttribute === 'function') {
+        btn.setAttribute('aria-label', engine.name || engine.id);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       }
 
       buildSearchEngineIconContent(btn, engine);
 
-      if (suppressHydrationAnimation) {
+      if (suppressHydrationAnimation && typeof btn.querySelectorAll === 'function') {
         btn.querySelectorAll('svg, img').forEach(icon => {
           icon.style.animation = 'none';
         });
       }
 
       btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        updateSearchUI(engine.id);
-
-        const selector = document.getElementById('search-engine-selector');
-        if (selector) {
-          selector.classList.remove('expanded');
-          selector.classList.add('suppress-hover');
-        }
-
-        if (getRememberPreference()) {
-          if (typeof setCurrentSearchEngine === 'function') {
-            setCurrentSearchEngine(engine);
-          } else if (typeof HomebaseSearchStorage !== 'undefined' && HomebaseSearchStorage.setCurrentSearchEngine) {
-            HomebaseSearchStorage.setCurrentSearchEngine(engine);
-          }
-        }
-
-        const input = document.getElementById('search-input');
-        if (input) input.focus();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        selectSearchEngine(engine.id);
       });
 
       list.appendChild(btn);
@@ -307,14 +450,60 @@
     container.appendChild(list);
     container.classList.remove('is-instant-fixed');
 
-    if (container.dataset.mouseleaveBound !== '1') {
-      container.addEventListener('mouseleave', () => {
-        container.classList.remove('suppress-hover');
-      });
-      container.dataset.mouseleaveBound = '1';
+    const allButtons = Array.from(list.querySelectorAll('.engine-icon-btn'));
+    let focusTarget = null;
+
+    if (wasFocused && focusedEngineId) {
+      focusTarget = allButtons.find(b => (b.dataset?.engineId || b.getAttribute?.('data-engine-id')) === focusedEngineId) || null;
     }
 
-    updateSearchSelectorPosition();
+    if (wasFocused && !focusTarget && allButtons.length > 0) {
+      focusTarget = (current && allButtons.find(b => (b.dataset?.engineId || b.getAttribute?.('data-engine-id')) === current.id)) || allButtons[0];
+    }
+
+    const defaultRovingBtn = (current && allButtons.find(b => (b.dataset?.engineId || b.getAttribute?.('data-engine-id')) === current.id)) || allButtons[0];
+    const initialTabIndexBtn = focusTarget || defaultRovingBtn;
+
+    allButtons.forEach(btn => {
+      if (typeof btn.setAttribute === 'function') {
+        btn.setAttribute('tabindex', btn === initialTabIndexBtn ? '0' : '-1');
+      }
+    });
+
+    if (container.dataset.eventsBound !== '1') {
+      container.addEventListener('mouseleave', () => {
+        if (container.classList) container.classList.remove('suppress-hover');
+      });
+
+      container.addEventListener('focusin', () => {
+        if (container.classList) {
+          container.classList.remove('suppress-hover');
+          container.classList.add('expanded');
+        }
+      });
+
+      container.addEventListener('focusout', (e) => {
+        const nextTarget = e.relatedTarget;
+        if (nextTarget && typeof container.contains === 'function' && container.contains(nextTarget)) {
+          return;
+        }
+        if (container.classList) container.classList.remove('expanded');
+        syncSelectorRovingTabindex(container);
+        updateSearchSelectorPosition();
+      });
+
+      container.addEventListener('keydown', handleSelectorKeydown);
+      container.dataset.eventsBound = '1';
+    }
+
+    if (wasFocused && focusTarget) {
+      if (container.classList) container.classList.add('expanded');
+      if (typeof focusTarget.focus === 'function') {
+        focusTarget.focus();
+      }
+    } else {
+      updateSearchSelectorPosition();
+    }
 
     if (suppressHydrationAnimation) {
       void container.offsetWidth;
@@ -401,11 +590,28 @@
         list.style.transition = 'none';
       }
 
+      const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+      const selectorHasFocus = Boolean(activeEl && typeof container.contains === 'function' && container.contains(activeEl));
+
       buttons.forEach(btn => {
-        if (btn.dataset.engineId === engine.id) {
+        const isActive = (btn.dataset?.engineId || btn.getAttribute?.('data-engine-id')) === engine.id;
+        if (isActive) {
           btn.classList.add('active');
+          if (typeof btn.setAttribute === 'function') {
+            btn.setAttribute('aria-pressed', 'true');
+            btn.setAttribute('tabindex', '0');
+          }
+          if (selectorHasFocus && typeof btn.focus === 'function') {
+            btn.focus();
+          }
         } else {
           btn.classList.remove('active');
+          if (typeof btn.setAttribute === 'function') {
+            btn.setAttribute('aria-pressed', 'false');
+            if (!selectorHasFocus) {
+              btn.setAttribute('tabindex', '-1');
+            }
+          }
         }
       });
 
@@ -969,6 +1175,9 @@
     ensureEngineIconExists,
     updateSearchSelectorPosition,
     renderSearchEngineSelector,
+    selectSearchEngine,
+    handleSelectorKeydown,
+    syncSelectorRovingTabindex,
     populateSearchOptions,
     updateSearchUI,
     preconnectToSearchEngine,

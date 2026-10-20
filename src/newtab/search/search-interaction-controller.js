@@ -428,6 +428,12 @@
     const inSearchInput = input && typeof input.contains === 'function' && input.contains(target);
     const inSearchResults = panel && typeof panel.contains === 'function' && panel.contains(target);
     const inSearchWrapper = wrapper && typeof wrapper.contains === 'function' && wrapper.contains(target);
+    const selectorEl = typeof document !== 'undefined' ? document.getElementById('search-engine-selector') : null;
+    const inEngineSelector = selectorEl && typeof selectorEl.contains === 'function' && selectorEl.contains(target);
+
+    if (inEngineSelector) {
+      return false;
+    }
 
     return Boolean(
       (inSearchWidget || inSearchInput || inSearchResults) &&
@@ -1049,8 +1055,10 @@
     const isElementTarget = isElementOrObject(target);
     const widget = getSearchWidget();
     const inSearchWidget = isElementTarget && widget && typeof widget.contains === 'function' && widget.contains(target);
+    const selectorEl = typeof document !== 'undefined' ? document.getElementById('search-engine-selector') : null;
+    const inEngineSelector = isElementTarget && selectorEl && typeof selectorEl.contains === 'function' && selectorEl.contains(target);
 
-    if (e.key === 'Enter' && inSearchWidget) {
+    if (e.key === 'Enter' && inSearchWidget && !inEngineSelector) {
       if (e.repeat) {
         if (typeof e.preventDefault === 'function') e.preventDefault();
         return;
@@ -1089,7 +1097,7 @@
     }
 
     if (!isSearchKeyboardContext(e)) {
-      if (e.key === 'Escape' && inSearchWidget) {
+      if (e.key === 'Escape' && inSearchWidget && !inEngineSelector) {
         const input = getSearchInput();
         if (input) input.value = '';
       }

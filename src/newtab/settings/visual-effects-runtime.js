@@ -35,6 +35,9 @@ function applyGlassStyle(styleId) {
       ${styleData.css}
       transition: all 0.3s ease, transform 0.2s ease, opacity 0.2s ease !important;
     }
+    .context-menu.glass-box {
+      transition: none !important;
+    }
   `;
 }
 

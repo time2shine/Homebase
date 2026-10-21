@@ -490,3 +490,20 @@ test('Context Menu Controller - Edit folder falls back to folderId when node is 
   assert.equal(id, 'f-999');
 });
 
+test('Context Menu Controller - repeated show at distant positions updates coordinates immediately', () => {
+  const env = createContextMenuTestEnvironment();
+  const ctrl = env.sandbox.window.HomebaseContextMenuController;
+  const menu = env.createMockMenu('bookmark-grid-blank-menu', 200, 150);
+
+  ctrl.show('bookmark-grid-blank-menu', 100, 100);
+  assert.equal(menu.style.left, '100px');
+  assert.equal(menu.style.top, '100px');
+  assert.equal(menu.classList.contains('hidden'), false);
+
+  // Rapidly reopen / reposition at distant position B
+  ctrl.show('bookmark-grid-blank-menu', 800, 500);
+  assert.equal(menu.style.left, '800px');
+  assert.equal(menu.style.top, '500px');
+  assert.equal(menu.classList.contains('hidden'), false);
+});
+

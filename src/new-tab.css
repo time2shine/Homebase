@@ -1,4 +1,4 @@
-﻿/* Apply border-box to all elements so padding doesn't break layouts */
+/* Apply border-box to all elements so padding doesn't break layouts */
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -171,6 +171,7 @@ body.ready .dock {
   background-color: #ffffff;           /* white background */
   color: #000000;                      /* default text color */
   border: 1px solid rgba(0, 0, 0, 0.15);
+  transition: none !important;
 }
 
 /* Buttons inside the menu */
@@ -3600,6 +3601,7 @@ input:checked + .slider:before {
   flex-direction: column;
   gap: 4px;
   min-width: 140px;
+  transition: none !important;
 }
 
 .menu-item {

@@ -179,9 +179,13 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Release Baseline**: Branch `main`, commit `b55803f` (`release: prepare Homebase v1.0.4`, October 21, 2026), tag `v1.0.4`.
-- **Current Objective**: Multi-browser store publication tracking for Homebase v1.0.4.
+- **Release Baseline**: Branch `main`, commit `ba85f49` (`docs: update Firefox and Chrome v1.0.4 store status`, October 21, 2026), building on tag `v1.0.4` (commit `b55803f`, October 21, 2026).
+- **Current Objective**: Maintenance & usability improvements on main following v1.0.4 release.
 - **Published Store Release Status**: All browser store publication statuses, review states, reporting dates, and verification records are centralized exclusively in [Section 2.1 — Published Store Releases](#21-published-store-releases).
+- **Context Menu Instant Repositioning (October 21, 2026)**:
+  - Scope: Context menus across empty grid space (`#bookmark-grid-blank-menu`), bookmark tiles (`#bookmark-icon-menu`), subfolder tiles (`#bookmark-grid-folder-menu`), and folder tabs (`#bookmark-folder-menu`) now reposition instantly without visibly sliding or animating between right-click locations.
+  - Implementation: Added `transition: none !important;` to `.context-menu` and `.context-menu.glass-box` in `src/new-tab.css` and inside dynamic glass style `<style id="dynamic-glass-style">` in `src/newtab/settings/visual-effects-runtime.js` to prevent inheriting the `all 0.3s ease` glass transition. In `src/newtab/core/context-menu-controller.js`, updated `reposition()` to set `menuEl.style.left` and `menuEl.style.top` before restoring visibility. Added regression test in `tests/unit/context-menu-controller.test.mjs` verifying consecutive distant repositioning.
+  - Verification & Boundaries: User reported manual checks passed on October 21, 2026 (specific browser coverage was not stated; testing across all three target browsers or live reduced-motion preferences is not claimed). Automated checks verified: separate syntax checks (`node --check`) for all modified JS files, static invariant check (`node scripts/check-newtab-static.mjs`), 18 unit tests passing in `tests/unit/context-menu-controller.test.mjs`, and local unpacked builds (`npm.cmd run build` -> `dist/chrome`, `dist/firefox`, `dist/edge`; release ZIPs preserved).
 - **Release Preparation (v1.0.4 — October 21, 2026)**:
   - Scope: Backup import verification and LevelDB key-ordering fix, bookmark and folder keyboard activation and visible focus outlines, Settings modal focus containment, opener restoration, and nested dialog isolation, search suggestion combobox and listbox accessibility (Phase 1), and search engine selector keyboard accessibility with roving tabindex for Edge and Firefox (Phase 2, preserving Chrome default search).
   - Packaged Archives: `dist/homebase-chrome-1.0.4.zip`, `dist/homebase-firefox-1.0.4.zip`, `dist/homebase-edge-1.0.4.zip`.

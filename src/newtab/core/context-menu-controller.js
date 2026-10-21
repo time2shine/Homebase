@@ -69,11 +69,11 @@
     const top = Math.min(Math.max(clientY, margin), maxTop);
 
     if (menuEl.style) {
+      menuEl.style.left = `${left}px`;
+      menuEl.style.top = `${top}px`;
       menuEl.style.visibility = prevVisibility;
       menuEl.style.display = prevDisplay;
       menuEl.style.pointerEvents = prevPointerEvents;
-      menuEl.style.left = `${left}px`;
-      menuEl.style.top = `${top}px`;
     }
 
     if (opts.show === true && menuEl.classList) {

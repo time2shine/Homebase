@@ -432,6 +432,164 @@
   }
 
   // --- URL Validation & Candidates Discovery ---
+  function isPrivateOrLocalIpv4(o1, o2, o3, o4) {
+    // 10.0.0.0/8 (RFC 1918)
+    if (o1 === 10) return true;
+    // 172.16.0.0/12 (RFC 1918)
+    if (o1 === 172 && o2 >= 16 && o2 <= 31) return true;
+    // 192.168.0.0/16 (RFC 1918)
+    if (o1 === 192 && o2 === 168) return true;
+    // 127.0.0.0/8 (Loopback RFC 1122)
+    if (o1 === 127) return true;
+    // 169.254.0.0/16 (Link-local RFC 3927)
+    if (o1 === 169 && o2 === 254) return true;
+    // 0.0.0.0/8 ("This host on this network" RFC 1122)
+    if (o1 === 0) return true;
+    // 100.64.0.0/10 (Shared address space / Carrier-grade NAT RFC 6598)
+    if (o1 === 100 && o2 >= 64 && o2 <= 127) return true;
+    // 192.0.0.0/24 (IETF Protocol Assignments RFC 6890)
+    if (o1 === 192 && o2 === 0 && o3 === 0) return true;
+    // 192.0.2.0/24 (TEST-NET-1 RFC 5737)
+    if (o1 === 192 && o2 === 0 && o3 === 2) return true;
+    // 198.51.100.0/24 (TEST-NET-2 RFC 5737)
+    if (o1 === 198 && o2 === 51 && o3 === 100) return true;
+    // 203.0.113.0/24 (TEST-NET-3 RFC 5737)
+    if (o1 === 203 && o2 === 0 && o3 === 113) return true;
+    // 198.18.0.0/15 (Benchmarking RFC 2544)
+    if (o1 === 198 && (o2 === 18 || o2 === 19)) return true;
+    // 224.0.0.0/4 (Multicast RFC 5771) & 240.0.0.0/4 (Reserved / Limited Broadcast RFC 1112/919)
+    if (o1 >= 224) return true;
+    return false;
+  }
+
+  function isLocalOrPrivateHost(hostOrUrl) {
+    if (!hostOrUrl || typeof hostOrUrl !== 'string') return false;
+    let host = hostOrUrl.trim().toLowerCase();
+    if (!host) return false;
+
+    // Extract hostname if a full URL or protocol was passed
+    if (host.includes('://')) {
+      try {
+        host = new URL(host).hostname.toLowerCase();
+      } catch (_) {
+        return false;
+      }
+    } else {
+      // Might be a raw host, host:port, path, or IPv6 bracketed / unbracketed
+      try {
+        let candidate = host;
+        if (candidate.includes('/')) {
+          candidate = candidate.split('/')[0];
+        }
+        // If candidate is unbracketed IPv6 (has 2 or more colons and no brackets)
+        if ((candidate.match(/:/g) || []).length >= 2 && !candidate.startsWith('[')) {
+          candidate = `[${candidate}]`;
+        }
+        host = new URL(`http://${candidate}`).hostname.toLowerCase();
+      } catch (_) {
+        // Fallback: strip port/path manually if URL constructor fails
+        const slashIdx = host.indexOf('/');
+        if (slashIdx !== -1) host = host.slice(0, slashIdx);
+        if (host.startsWith('[')) {
+          const closeIdx = host.indexOf(']');
+          if (closeIdx !== -1) host = host.slice(0, closeIdx + 1);
+        } else if ((host.match(/:/g) || []).length === 1) {
+          // only strip colon if single colon (port number on IPv4/domain)
+          const colonIdx = host.indexOf(':');
+          host = host.slice(0, colonIdx);
+        }
+      }
+    }
+
+    // Strip brackets if IPv6
+    let rawHost = host;
+    if (rawHost.startsWith('[') && rawHost.endsWith(']')) {
+      rawHost = rawHost.slice(1, -1);
+    }
+
+    // 1. Localhost and subdomains (.localhost)
+    if (rawHost === 'localhost' || rawHost.endsWith('.localhost')) {
+      return true;
+    }
+
+    // 2. Local mDNS (.local) and "local"
+    if (rawHost === 'local' || rawHost.endsWith('.local')) {
+      return true;
+    }
+
+    // 3. Single-label intranet names (e.g. "router", "nas", "intranet", "corp")
+    // Must not contain a dot and must not be an IPv6 address (contain colon)
+    if (!rawHost.includes('.') && !rawHost.includes(':')) {
+      return true;
+    }
+
+    // 4. IPv4 check
+    const ipv4Match = rawHost.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+      const o1 = Number(ipv4Match[1]);
+      const o2 = Number(ipv4Match[2]);
+      const o3 = Number(ipv4Match[3]);
+      const o4 = Number(ipv4Match[4]);
+      if (o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255) {
+        return isPrivateOrLocalIpv4(o1, o2, o3, o4);
+      }
+      return false;
+    }
+
+    // 5. IPv6 check
+    if (rawHost.includes(':')) {
+      // Loopback & Unspecified
+      if (rawHost === '::1' || rawHost === '::') return true;
+      const allZeroLoopback = /^0*(:0*)*:0*1$/;
+      const allZero = /^0*(:0*)*$/;
+      if (allZeroLoopback.test(rawHost) || allZero.test(rawHost)) return true;
+
+      // IPv4-mapped IPv6:
+      // Dotted format: ::ffff:192.168.0.1
+      const mappedDottedMatch = rawHost.match(/^::ffff:(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/i);
+      if (mappedDottedMatch) {
+        const o1 = Number(mappedDottedMatch[1]);
+        const o2 = Number(mappedDottedMatch[2]);
+        const o3 = Number(mappedDottedMatch[3]);
+        const o4 = Number(mappedDottedMatch[4]);
+        if (o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255) {
+          return isPrivateOrLocalIpv4(o1, o2, o3, o4);
+        }
+        return false;
+      }
+
+      // WHATWG URL-normalized hex format: ::ffff:c0a8:a0 or ::ffff:c0a8:1
+      const mappedHexMatch = rawHost.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+      if (mappedHexMatch) {
+        const g1 = parseInt(mappedHexMatch[1], 16);
+        const g2 = parseInt(mappedHexMatch[2], 16);
+        const o1 = (g1 >> 8) & 0xff;
+        const o2 = g1 & 0xff;
+        const o3 = (g2 >> 8) & 0xff;
+        const o4 = g2 & 0xff;
+        return isPrivateOrLocalIpv4(o1, o2, o3, o4);
+      }
+
+      // Unique Local Address (ULA) fc00::/7 (0xfc00 to 0xfdff)
+      // Link-local unicast fe80::/10 (0xfe80 to 0xfebf)
+      const firstColonIdx = rawHost.indexOf(':');
+      if (firstColonIdx > 0) {
+        const firstGroupStr = rawHost.slice(0, firstColonIdx);
+        if (/^[0-9a-f]{1,4}$/i.test(firstGroupStr)) {
+          const firstGroup = parseInt(firstGroupStr, 16);
+          if (firstGroup >= 0xfc00 && firstGroup <= 0xfdff) {
+            return true;
+          }
+          if (firstGroup >= 0xfe80 && firstGroup <= 0xfebf) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
   function isValidTargetUrl(rawUrl) {
     if (typeof rawUrl !== 'string') return false;
     try {
@@ -442,7 +600,7 @@
       if (!hostname || !hostname.includes('.')) return false;
       if (/\s/.test(hostname)) return false;
       if (hostname.endsWith('.')) return false;
-      if (hostname === 'localhost') return false;
+      if (isLocalOrPrivateHost(hostname)) return false;
       return true;
     } catch (err) {
       return false;
@@ -459,7 +617,7 @@
   }
 
   function buildCandidates(rawUrl, size = FAVICON_SIZE_PX) {
-    if (!isValidTargetUrl(rawUrl)) return [];
+    if (!isValidTargetUrl(rawUrl) || isLocalOrPrivateHost(rawUrl)) return [];
     try {
       const parsed = new URL(rawUrl);
       const origin = parsed.origin;
@@ -475,7 +633,7 @@
   // --- High-Level Favicon Resolution ---
   async function getUrlForRawUrl(rawUrl) {
     try {
-      if (!isValidTargetUrl(rawUrl)) return null;
+      if (!isValidTargetUrl(rawUrl) || isLocalOrPrivateHost(rawUrl)) return null;
       const domainKey = getDomainKey(rawUrl);
       if (!domainKey) return null;
       const cached = getResolvedUrl(domainKey);
@@ -608,7 +766,7 @@
     onAbort,
     acceptCandidate
   }) {
-    if (!domainKey) {
+    if (!domainKey || isLocalOrPrivateHost(domainKey)) {
       if (onFailed) onFailed();
       return;
     }
@@ -788,6 +946,9 @@
     isValidTargetUrl,
     getDomainKey,
     buildCandidates,
+    isLocalOrPrivateHost,
+    isLocalOrPrivateTarget: isLocalOrPrivateHost,
+    isPrivateOrLocalIpv4,
 
     // Aliases
     isValidFaviconTargetUrl: isValidTargetUrl,
@@ -872,5 +1033,7 @@
     window.buildFaviconCandidates = buildCandidates;
     window.getFaviconUrlForRawUrl = getUrlForRawUrl;
     window.resolveFaviconForImageTarget = resolveForImageTarget;
+    window.isLocalOrPrivateHost = isLocalOrPrivateHost;
+    window.isLocalOrPrivateTarget = isLocalOrPrivateHost;
   }
 })();

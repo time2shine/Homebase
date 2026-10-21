@@ -309,6 +309,22 @@
       return;
     }
 
+    const isLocalOrPrivateFn = (typeof isLocalOrPrivateTarget === 'function') ? isLocalOrPrivateTarget :
+      (typeof isLocalOrPrivateHost === 'function') ? isLocalOrPrivateHost :
+      (typeof window !== 'undefined' && window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.isLocalOrPrivateHost === 'function') ?
+      window.HomebaseFaviconPipeline.isLocalOrPrivateHost :
+      (typeof window !== 'undefined' && typeof window.isLocalOrPrivateHost === 'function') ?
+      window.isLocalOrPrivateHost : null;
+
+    if (isLocalOrPrivateFn && isLocalOrPrivateFn(bookmarkNode.url)) {
+      clearBookmarkImages(wrapper);
+      wrapper.style.backgroundColor = '';
+      showFallbackNow('local-private-target');
+      wrapper.dataset.iconKey = nextKey;
+      delete wrapper.dataset.faviconDomain;
+      return;
+    }
+
     const getDomainKeyFn = (typeof getDomainKeyFromUrl === 'function') ? getDomainKeyFromUrl :
       (typeof window !== 'undefined' && window.HomebaseFaviconPipeline && typeof window.HomebaseFaviconPipeline.getDomainKeyFromUrl === 'function') ?
       window.HomebaseFaviconPipeline.getDomainKeyFromUrl : (u) => { try { return new URL(u).hostname.toLowerCase(); } catch (e) { return null; } };

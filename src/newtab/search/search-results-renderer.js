@@ -504,6 +504,18 @@
         return;
       }
 
+      const isLocalOrPrivateFn = typeof globalScope.isLocalOrPrivateHost === 'function'
+        ? globalScope.isLocalOrPrivateHost
+        : (typeof isLocalOrPrivateHost === 'function'
+          ? isLocalOrPrivateHost
+          : (typeof globalScope.HomebaseFaviconPipeline?.isLocalOrPrivateHost === 'function'
+            ? globalScope.HomebaseFaviconPipeline.isLocalOrPrivateHost
+            : null));
+      if (isLocalOrPrivateFn && isLocalOrPrivateFn(rawUrl)) {
+        hideImg();
+        return;
+      }
+
       const domainKeyFn = typeof globalScope.getDomainKeyFromUrl === 'function'
         ? globalScope.getDomainKeyFromUrl
         : (typeof getDomainKeyFromUrl === 'function' ? getDomainKeyFromUrl : null);

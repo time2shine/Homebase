@@ -154,6 +154,11 @@ function createMockElement(tagName = 'div', id = '') {
 }
 
 function matchesSelector(node, selector) {
+  if (selector.includes('[data-favicon-raw-url]')) {
+    const cls = selector.replace('[data-favicon-raw-url]', '').replace(/^\./, '');
+    const hasClass = cls ? (node.classList && node.classList.contains(cls)) : true;
+    return hasClass && Boolean(node.dataset && node.dataset.faviconRawUrl);
+  }
   if (selector.startsWith('.')) {
     const cls = selector.slice(1);
     return node.classList && node.classList.contains(cls);
@@ -165,9 +170,6 @@ function matchesSelector(node, selector) {
   if (selector.startsWith('button.')) {
     const cls = selector.replace('button.', '');
     return node.tagName === 'BUTTON' && node.classList && node.classList.contains(cls);
-  }
-  if (selector.includes('[data-favicon-raw-url]')) {
-    return Boolean(node.dataset && node.dataset.faviconRawUrl);
   }
   return false;
 }
@@ -427,3 +429,34 @@ test('search-results-renderer: renderTopResults and renderBottomResults skip ref
   assert.strictEqual(secondRender.mounted, false);
   assert.strictEqual(secondRender.unchanged, true);
 });
+
+test('search-results-renderer: hydrateFavicons hides images for local/private bookmark URLs without resolution', () => {
+  const { renderer, doc, sandbox } = setupTestEnvironment();
+
+  let resolveCalls = 0;
+  sandbox.resolveFaviconForImageTarget = () => {
+    resolveCalls += 1;
+  };
+  sandbox.isLocalOrPrivateHost = (rawUrl) => {
+    return rawUrl.includes('192.168.') || rawUrl.includes('localhost');
+  };
+
+  const container = doc.createElement('div');
+  const bookmarkItem = renderer.createBookmarkItem({
+    title: '192',
+    url: 'http://192.168.0.160:1111/'
+  });
+  container.appendChild(bookmarkItem);
+
+  const faviconImg = bookmarkItem.querySelector('.result-favicon');
+  assert.ok(faviconImg);
+  assert.equal(faviconImg.dataset.faviconRawUrl, 'http://192.168.0.160:1111/');
+
+  renderer.hydrateFavicons(container);
+
+  // For private IP, hideImg() was called: style.display is 'none'
+  assert.equal(faviconImg.style.display, 'none');
+  // External resolution was never called
+  assert.equal(resolveCalls, 0);
+});
+

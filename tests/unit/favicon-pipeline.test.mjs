@@ -598,3 +598,277 @@ test('favicon-pipeline: unusable cached icon while offline revokes object URL an
   // Confirms the unusable object URL was revoked
   assert.ok(env.revokedUrls.length > 0);
 });
+
+test('favicon-pipeline: isLocalOrPrivateHost classifies local, private IPv4/IPv6, intranet, and public near-matches', () => {
+  const env = createPipelineTestEnvironment();
+  const c = env.sandbox.HomebaseFaviconPipeline;
+
+  // Reported URL and host
+  assert.equal(c.isLocalOrPrivateHost('http://192.168.0.160:1111/'), true);
+  assert.equal(c.isLocalOrPrivateHost('192.168.0.160'), true);
+  assert.equal(c.isLocalOrPrivateHost('http://192.168.1.1/'), true);
+
+  // Private IPv4 ranges
+  assert.equal(c.isLocalOrPrivateHost('10.0.0.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('http://10.255.255.255:8080/path'), true);
+  assert.equal(c.isLocalOrPrivateHost('172.16.0.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('172.31.255.255'), true);
+  assert.equal(c.isLocalOrPrivateHost('192.168.100.5'), true);
+  assert.equal(c.isLocalOrPrivateHost('127.0.0.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('http://127.0.0.2:3000'), true);
+  assert.equal(c.isLocalOrPrivateHost('169.254.1.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('0.0.0.0'), true);
+  assert.equal(c.isLocalOrPrivateHost('100.64.0.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('100.127.255.255'), true);
+  assert.equal(c.isLocalOrPrivateHost('192.0.2.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('198.51.100.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('203.0.113.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('224.0.0.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('255.255.255.255'), true);
+
+  // Non-decimal / URL-normalized representations
+  assert.equal(c.isLocalOrPrivateHost('127.1'), true);
+  assert.equal(c.isLocalOrPrivateHost('2130706433'), true);
+  assert.equal(c.isLocalOrPrivateHost('http://127.1'), true);
+
+  // Public IPv4 near-matches (MUST be false)
+  assert.equal(c.isLocalOrPrivateHost('192.169.0.1'), false);
+  assert.equal(c.isLocalOrPrivateHost('172.15.255.255'), false);
+  assert.equal(c.isLocalOrPrivateHost('172.32.0.1'), false);
+  assert.equal(c.isLocalOrPrivateHost('100.63.255.255'), false);
+  assert.equal(c.isLocalOrPrivateHost('100.128.0.0'), false);
+  assert.equal(c.isLocalOrPrivateHost('8.8.8.8'), false);
+  assert.equal(c.isLocalOrPrivateHost('1.1.1.1'), false);
+  assert.equal(c.isLocalOrPrivateHost('http://93.184.216.34/'), false);
+
+  // Localhost & subdomains
+  assert.equal(c.isLocalOrPrivateHost('localhost'), true);
+  assert.equal(c.isLocalOrPrivateHost('http://localhost:3000'), true);
+  assert.equal(c.isLocalOrPrivateHost('app.localhost'), true);
+  assert.equal(c.isLocalOrPrivateHost('sub.domain.localhost'), true);
+
+  // Public domains containing localhost/local (MUST be false)
+  assert.equal(c.isLocalOrPrivateHost('localhost.example.com'), false);
+  assert.equal(c.isLocalOrPrivateHost('mylocalhost.com'), false);
+  assert.equal(c.isLocalOrPrivateHost('notlocalhost.org'), false);
+  assert.equal(c.isLocalOrPrivateHost('local.com'), false);
+  assert.equal(c.isLocalOrPrivateHost('mylocal.net'), false);
+  assert.equal(c.isLocalOrPrivateHost('google.com'), false);
+  assert.equal(c.isLocalOrPrivateHost('github.com'), false);
+
+  // .local mDNS names and single-label intranet names
+  assert.equal(c.isLocalOrPrivateHost('printer.local'), true);
+  assert.equal(c.isLocalOrPrivateHost('my-nas.local'), true);
+  assert.equal(c.isLocalOrPrivateHost('local'), true);
+  assert.equal(c.isLocalOrPrivateHost('router'), true);
+  assert.equal(c.isLocalOrPrivateHost('nas'), true);
+  assert.equal(c.isLocalOrPrivateHost('http://intranet:8080/dashboard'), true);
+
+  // IPv6 local, link-local, and ULA
+  assert.equal(c.isLocalOrPrivateHost('http://[::1]:8080/'), true);
+  assert.equal(c.isLocalOrPrivateHost('[::1]'), true);
+  assert.equal(c.isLocalOrPrivateHost('::1'), true);
+  assert.equal(c.isLocalOrPrivateHost('[::]'), true);
+  assert.equal(c.isLocalOrPrivateHost('http://[fe80::1ff:fe23:4567:890a]/'), true);
+  assert.equal(c.isLocalOrPrivateHost('fe80::1'), true);
+  assert.equal(c.isLocalOrPrivateHost('febf::1'), true);
+  assert.equal(c.isLocalOrPrivateHost('fc00::1'), true);
+  assert.equal(c.isLocalOrPrivateHost('fdff::1'), true);
+  assert.equal(c.isLocalOrPrivateHost('fd12:3456:789a::1'), true);
+
+  // IPv6 prefix boundary regression tests (classification tests; negative examples are not claimed reachable)
+  assert.equal(c.isLocalOrPrivateHost('fc::1'), false, 'fc::1 (short group 00fc) must not match fc00::/7');
+  assert.equal(c.isLocalOrPrivateHost('fd::1'), false, 'fd::1 (short group 00fd) must not match fc00::/7');
+  assert.equal(c.isLocalOrPrivateHost('fe8::1'), false, 'fe8::1 (short group 0fe8) must not match fe80::/10');
+  assert.equal(c.isLocalOrPrivateHost('fec0::1'), false, 'fec0::1 must not match the fe80-febf link-local range');
+
+  // IPv4-mapped IPv6
+  assert.equal(c.isLocalOrPrivateHost('http://[::ffff:192.168.0.160]:1111/'), true);
+  assert.equal(c.isLocalOrPrivateHost('[::ffff:192.168.0.160]'), true);
+  assert.equal(c.isLocalOrPrivateHost('::ffff:192.168.0.160'), true);
+  assert.equal(c.isLocalOrPrivateHost('[::ffff:c0a8:a0]'), true);
+  assert.equal(c.isLocalOrPrivateHost('http://[::ffff:7f00:1]:3000/'), true);
+  assert.equal(c.isLocalOrPrivateHost('[::ffff:7f00:1]'), true);
+  assert.equal(c.isLocalOrPrivateHost('http://[::ffff:8.8.8.8]/'), false);
+  assert.equal(c.isLocalOrPrivateHost('[::ffff:808:808]'), false);
+
+  // Public IPv6 (MUST be false)
+  assert.equal(c.isLocalOrPrivateHost('http://[2001:4860:4860::8888]/'), false);
+  assert.equal(c.isLocalOrPrivateHost('2606:4700:4700::1111'), false);
+  assert.equal(c.isLocalOrPrivateHost('[2607:f8b0:4005:805::200e]'), false);
+});
+
+test('favicon-pipeline: isValidTargetUrl, getDomainKey, and buildCandidates reject local and private targets', async () => {
+  const env = createPipelineTestEnvironment();
+  const c = env.sandbox.HomebaseFaviconPipeline;
+
+  const localUrls = [
+    'http://192.168.0.160:1111/',
+    'http://127.0.0.1:8080/app',
+    'http://10.0.0.1/admin',
+    'http://172.16.0.1/',
+    'http://localhost:3000',
+    'http://printer.local/',
+    'http://router/login'
+  ];
+
+  for (const url of localUrls) {
+    assert.equal(c.isValidTargetUrl(url), false, `isValidTargetUrl should be false for ${url}`);
+    assert.equal(c.getDomainKey(url), '', `getDomainKey should be empty for ${url}`);
+    assert.equal(c.buildCandidates(url).length, 0, `buildCandidates should be empty for ${url}`);
+    const resolvedUrl = await c.getUrlForRawUrl(url);
+    assert.equal(resolvedUrl, null, `getUrlForRawUrl should return null for ${url}`);
+  }
+
+  // Public sites remain valid and generate candidate provider URLs
+  const publicUrl = 'https://example.com/page';
+  assert.equal(c.isValidTargetUrl(publicUrl), true);
+  assert.equal(c.getDomainKey(publicUrl), 'example.com');
+  const candidates = c.buildCandidates(publicUrl);
+  assert.ok(candidates.length > 0);
+  assert.ok(candidates[0].includes('t2.gstatic.com'));
+});
+
+test('favicon-pipeline: resolveForImageTarget bypasses cached provider placeholders for local/private targets', async () => {
+  const env = createPipelineTestEnvironment({ isOnline: true });
+  const c = env.sandbox.HomebaseFaviconPipeline;
+
+  // Simulate an old cached Google globe icon previously written for 192.168.0.160
+  const legacyCacheKey = c.cacheKeyFor('192.168.0.160', 48);
+  env.mockCacheStorage.set(legacyCacheKey, new env.MockResponse({ size: 128 }, { status: 200 }));
+  c.setResolvedEntry('192.168.0.160', 'https://t2.gstatic.com/faviconV2?url=http%3A%2F%2F192.168.0.160%3A1111', {
+    cached: true,
+    cacheKey: legacyCacheKey
+  });
+
+  let onResolvedCalled = false;
+  let onFailedCalled = false;
+  const img = {
+    dataset: {},
+    src: '',
+    complete: true,
+    naturalWidth: 16
+  };
+
+  await c.resolveForImageTarget({
+    img,
+    domainKey: '192.168.0.160',
+    candidates: ['https://t2.gstatic.com/faviconV2?url=http%3A%2F%2F192.168.0.160%3A1111&size=48'],
+    onResolved: () => { onResolvedCalled = true; },
+    onFailed: () => { onFailedCalled = true; },
+    onNegativeCacheHit: () => {}
+  });
+
+  // Must NOT resolve or load the old cached globe
+  assert.equal(onResolvedCalled, false, 'onResolved must NOT be called for private IP');
+  assert.equal(onFailedCalled, true, 'onFailed must be called immediately');
+  assert.equal(img.src, '', 'img.src must not be populated with remote or cached URL');
+});
+
+test('favicon-pipeline: recycled bookmark tile displays stable letter fallback for local/private address', () => {
+  // Load bookmark-grid-controller into sandbox
+  const env = createPipelineTestEnvironment();
+  const gridScriptPath = path.join(rootDir, 'src/newtab/bookmarks/bookmark-grid-controller.js');
+  const gridScriptCode = fs.readFileSync(gridScriptPath, 'utf8');
+
+  // Set up mock DOM elements
+  class MockDOMElement {
+    constructor(tagName, className = '') {
+      this.tagName = tagName.toUpperCase();
+      this.className = className;
+      this.children = [];
+      this.parentNode = null;
+      this.dataset = {};
+      this.style = {};
+      this.textContent = '';
+      this._classList = new Set(className ? className.split(/\s+/).filter(Boolean) : []);
+      this.classList = {
+        add: (...cls) => cls.forEach(c => this._classList.add(c)),
+        remove: (...cls) => cls.forEach(c => this._classList.delete(c)),
+        contains: (c) => this._classList.has(c)
+      };
+    }
+    appendChild(child) {
+      if (child) {
+        child.parentNode = this;
+        this.children.push(child);
+      }
+      return child;
+    }
+    querySelector(selector) {
+      if (selector === '.bookmark-fallback-icon') {
+        return this.children.find(c => c.className && c.className.includes('bookmark-fallback-icon')) || null;
+      }
+      if (selector === 'img.bookmark-img.loaded') {
+        return this.children.find(c => c.tagName === 'IMG' && c.classList.contains('loaded')) || null;
+      }
+      return null;
+    }
+    querySelectorAll(selector) {
+      if (selector === 'img.bookmark-img') {
+        return this.children.filter(c => c.tagName === 'IMG' && (c.className.includes('bookmark-img') || c.classList.contains('bookmark-img')));
+      }
+      return [];
+    }
+    remove() {
+      if (this.parentNode && this.parentNode.children) {
+        const idx = this.parentNode.children.indexOf(this);
+        if (idx !== -1) {
+          this.parentNode.children.splice(idx, 1);
+        }
+      }
+    }
+  }
+
+  env.sandbox.document = {
+    createElement: (tag) => new MockDOMElement(tag)
+  };
+  env.sandbox.bookmarkMetadata = {};
+  env.sandbox.appBookmarkFallbackColorPreference = '#00b8d4';
+
+  vm.runInContext(gridScriptCode, env.context);
+
+  const renderBookmarkIconInto = env.sandbox.renderBookmarkIconInto;
+  assert.equal(typeof renderBookmarkIconInto, 'function');
+
+  // Scenario 1: Recycled wrapper tile that previously held a loaded image from a public bookmark
+  const wrapper = new MockDOMElement('div', 'bookmark-icon-wrapper');
+  wrapper.dataset.iconKey = 'bookmark|https://google.com/|G||cleared:false|#00b8d4|';
+  wrapper.dataset.faviconDomain = 'google.com';
+
+  const staleImg = new MockDOMElement('img', 'bookmark-img loaded');
+  staleImg.src = 'https://t2.gstatic.com/faviconV2?url=https%3A%2F%2Fgoogle.com';
+  wrapper.appendChild(staleImg);
+
+  // Now render local bookmark "192" into this recycled wrapper
+  const bookmark192 = {
+    id: 'bookmark-192',
+    title: '192',
+    url: 'http://192.168.0.160:1111/'
+  };
+
+  renderBookmarkIconInto(wrapper, bookmark192);
+
+  // Stale image must be removed
+  const remainingImages = wrapper.querySelectorAll('img.bookmark-img');
+  assert.equal(remainingImages.length, 0, 'Recycled image must be removed');
+
+  // Fallback icon must be present with class show-fallback and letter '1'
+  const fallback = wrapper.querySelector('.bookmark-fallback-icon');
+  assert.ok(fallback, 'Fallback element must exist');
+  assert.ok(fallback.classList.contains('show-fallback'), 'show-fallback class must be active');
+  assert.equal(fallback.textContent, '1', 'Fallback letter must match title first letter "1"');
+  assert.equal(wrapper.style.backgroundColor, '#00b8d4', 'Fallback color must be applied');
+
+  // Scenario 2: User sets custom icon for a local bookmark
+  env.sandbox.bookmarkMetadata['bookmark-192'] = {
+    icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=='
+  };
+
+  const customWrapper = new MockDOMElement('div', 'bookmark-icon-wrapper');
+  renderBookmarkIconInto(customWrapper, bookmark192);
+
+  const customImg = customWrapper.children.find(c => c.tagName === 'IMG');
+  assert.ok(customImg, 'Custom icon image must be created when metadata.icon exists');
+  assert.equal(customImg.src, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==');
+});

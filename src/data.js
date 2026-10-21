@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.0.4',
-  date: '2026-10-21',
+  version: '1.0.5',
+  date: '2026-10-22',
   items: [
     {
-      type: 'IMPROVED',
-      title: 'Search keyboard accessibility',
-      desc: 'Combobox ARIA semantics and accessible suggestions with PageDown/PageUp category navigation, plus keyboard access to search engine buttons in Edge and Firefox.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Bookmark & Settings keyboard navigation',
-      desc: 'Keyboard activation and visible focus outlines for bookmark tiles, with focus trapping, section rescue, and nested modal isolation in Settings.'
+      type: 'FIX',
+      title: 'Context menu repositioning',
+      desc: 'Right-clicking repositioned menus moves instantly without sliding transitions across the dashboard.'
     },
     {
       type: 'FIX',
-      title: 'Backup import verification',
-      desc: 'Order-independent value comparison prevents false verification failures and ensures reliable settings restoration across all browsers.'
+      title: 'Offline favicon persistence',
+      desc: 'Previously loaded favicons remain available offline across browser restarts and page reloads.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Local address icon privacy',
+      desc: 'Local and private network addresses display stable letter fallbacks without external provider requests.'
     }
   ]
 };

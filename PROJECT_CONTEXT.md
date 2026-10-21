@@ -1,8 +1,8 @@
 # Homebase — Project Context & Repository Knowledge Base
 
 **Project:** Homebase (Multi-browser Manifest V3 Dashboard Extension)  
-**Source Version:** `1.0.4` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
-**GitHub Release / Tag:** `v1.0.4` (October 21, 2026)  
+**Source Version:** `1.0.5` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
+**GitHub Release / Tag:** `v1.0.5` (October 22, 2026)  
 **Recorded Store Status (All Browsers):** See [Section 2.1](#21-published-store-releases)  
 **Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
 **Repository:** [https://github.com/time2shine/Homebase](https://github.com/time2shine/Homebase)  
@@ -179,9 +179,15 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Release Baseline**: Tag `v1.0.4` (commit `b55803f`, October 21, 2026).
-- **Current Objective**: Maintenance & usability improvements on main following v1.0.4 release.
+- **Release Baseline**: Tag `v1.0.5` (October 22, 2026), building on tag `v1.0.4` (commit `b55803f`, October 21, 2026).
+- **Current Objective**: Multi-browser store publication tracking for Homebase v1.0.5.
 - **Published Store Release Status**: All browser store publication statuses, review states, reporting dates, and verification records are centralized exclusively in [Section 2.1 — Published Store Releases](#21-published-store-releases).
+- **Release Preparation & Publication (v1.0.5 — October 22, 2026)**:
+  - Scope: Context menus reposition instantly without sliding transitions across the dashboard, cached favicons persist reliably for offline use via HTTPS-shaped cache keys, bookmarks and search results with local or private network addresses use stable letter fallbacks without external provider requests or stale provider placeholder loops, and IPv6 ULA/link-local classification uses exact numeric group boundaries.
+  - Packaged Archives: `dist/homebase-chrome-1.0.5.zip` (SHA-256 `eda48e1a2fa9d6e508643d1b1c6738ca81c40fa3c5c8499aa466823bc4965509`), `dist/homebase-firefox-1.0.5.zip` (SHA-256 `bde3973f5d4216adde0848d1a8a37e319588521619af5347c22cbcdd82c40903`), `dist/homebase-edge-1.0.5.zip` (SHA-256 `b89917c722132e868b11c01947dde3d4ce461b5c7f1c2fdc0457b1caf6355207`). Older v1.0.4 release archives preserved in `dist/`.
+  - Manual Verification State: User reported release-candidate manual PASS on October 22, 2026 across context menu instant repositioning, offline favicon persistence across reload, and local bookmark address fallback. Specific browser coverage was not explicitly named in the confirmation; testing across all three target browsers is not claimed or invented. The original intermittent transparency on local bookmarks was not reproduced in test environments; its exact cause was not proven, though immediate fallback presentation and stale image clearing mitigate potential visual artifacts. Previous isolated manual checks also passed on October 21, 2026 (context menu repositioning, offline favicon persistence) and October 22, 2026 (local address fallback).
+  - Automated Verification: Full 4-stage test pipeline passed (syntax validation across all JS files, static invariant checks with 633 unique declarations across 76 deferred scripts, 689 unit tests, and headless Edge CDP smoke test).
+  - Store Status Distinction: Store publication status remains strictly separate from release preparation; see [Section 2.1](#21-published-store-releases) for canonical store publication and review statuses. Preparation and packaging of v1.0.5 packages does not alter store submission states.
 - **Local & Private Address Favicon Fallback (October 22, 2026)**:
   - Scope: Local and private bookmark addresses (e.g. `http://192.168.0.160:1111/`, `localhost`, single-label intranet hosts, `.local` mDNS, private IPv4/IPv6 ranges) display stable letter/generic fallbacks without leaking addresses to external favicon providers or returning previously cached provider placeholders.
   - Implementation:

@@ -2,6 +2,16 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v1.0.5 — 2026-10-22
+
+### Improved
+- **Local & Private Address Favicon Fallback & Privacy**: Bookmark and search results with local or private network hostnames (IPv4 RFC 1918, loopback, link-local, CGNAT, test-nets, multicast/broadcast, `localhost`, `.local` mDNS, single-label intranet names, and exact IPv6 ULA/link-local boundaries) display stable letter/generic fallbacks without sending address queries to external favicon providers or returning cached placeholders. Explicit custom icons remain supported.
+- **IPv6 Classification Exact Boundaries**: Validated IPv6 ULA (`0xfc00`–`0xfdff`) and link-local unicast (`0xfe80`–`0xfebf`) ranges using exact numeric boundary parsing on the first 16-bit group, preventing short-group false matches and excluding deprecated site-local addresses.
+
+### Fixed
+- **Context Menu Instant Repositioning**: Right-clicking consecutive targets across empty grid space, bookmark tiles, subfolders, and folder tabs repositions the context menu immediately without sliding or transition animations across the dashboard.
+- **Offline Favicon Persistence**: Resolved persistent favicon caching failures caused by extension-scheme cache keys rejecting in browser `CacheStorage`. Favicon cache operations now use normalized HTTPS-shaped local identifiers (`https://favicons.homebase.local/`), preserving cached icons across offline reloads and restarts.
+
 ## v1.0.4 — 2026-10-21
 
 ### Improved

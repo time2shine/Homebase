@@ -44,15 +44,33 @@ function createPipelineTestEnvironment(options = {}) {
   const mockCache = {
     match: async (key) => mockCacheStorage.get(key) || null,
     put: async (key, res) => {
+      if (typeof key === 'string' && !key.startsWith('http:') && !key.startsWith('https:')) {
+        throw new TypeError("Request scheme 'chrome-extension' is unsupported");
+      }
       mockCacheStorage.set(key, res);
       return true;
     },
     delete: async (key) => mockCacheStorage.delete(key)
   };
 
+  class MockResponse {
+    constructor(blob, init = {}) {
+      this.blobData = blob || { size: 100 };
+      this.status = init.status || 200;
+      this.ok = this.status >= 200 && this.status < 300;
+    }
+    async blob() {
+      return this.blobData;
+    }
+    clone() {
+      return new MockResponse(this.blobData, { status: this.status });
+    }
+  }
+
   const sandbox = {
     console,
     window: null,
+    Response: MockResponse,
     navigator: {
       onLine: isOnline
     },
@@ -86,6 +104,8 @@ function createPipelineTestEnvironment(options = {}) {
     revokedUrls,
     createdUrls,
     observedElements,
+    mockCacheStorage,
+    MockResponse,
     triggerIntersection: (entries) => {
       if (observerCallback) {
         observerCallback(entries);
@@ -451,4 +471,130 @@ test('favicon-pipeline: resolveForImageTarget immediately resolves from in-memor
 
   assert.equal(resolvedUrl, 'https://cached-domain.com/fav.png');
   assert.equal(resolvedOpts.fromCache, true);
+});
+
+test('favicon-pipeline: cacheKeyFor generates valid https URL key and normalizes legacy keys', () => {
+  const c = createPipelineTestEnvironment().sandbox.HomebaseFaviconPipeline;
+
+  const key = c.cacheKeyFor('google.com', 48);
+  assert.equal(key, 'https://favicons.homebase.local/google.com@48');
+  assert.ok(key.startsWith('https://'));
+
+  const normalizedLegacy = c.normalizeCacheKey('/favicons/google.com@48');
+  assert.equal(normalizedLegacy, 'https://favicons.homebase.local/google.com@48');
+
+  const normalizedHttps = c.normalizeCacheKey('https://example.com/icon.png');
+  assert.equal(normalizedHttps, 'https://example.com/icon.png');
+});
+
+test('favicon-pipeline: writeIconToCache enforces HTTP(S) scheme and writes to cache without throwing', async () => {
+  const env = createPipelineTestEnvironment();
+  const c = env.sandbox.HomebaseFaviconPipeline;
+
+  const key = c.cacheKeyFor('google.com', 48);
+  const resp = new env.MockResponse({ size: 100 }, { status: 200 });
+
+  const success = await c.writeIconToCache(key, resp);
+  assert.equal(success, true);
+  assert.ok(env.mockCacheStorage.has(key));
+
+  const cached = await c.readIconFromCache(key);
+  assert.ok(cached);
+});
+
+test('favicon-pipeline: persistent cache hit after a fresh page instance while offline', async () => {
+  const env = createPipelineTestEnvironment({ isOnline: false });
+  const c = env.sandbox.HomebaseFaviconPipeline;
+
+  // Verify in-memory cache is NOT warmed (fresh instance)
+  assert.equal(c.getResolvedEntry('google.com'), null);
+
+  // Pre-populate persistent CacheStorage with a cached response
+  const key = c.cacheKeyFor('google.com', 48);
+  env.mockCacheStorage.set(key, new env.MockResponse({ size: 256 }, { status: 200 }));
+
+  let resolvedUrl = null;
+  let resolvedMeta = null;
+  let negativeHit = false;
+  let failed = false;
+
+  const img = {
+    dataset: {},
+    complete: true,
+    naturalWidth: 48
+  };
+
+  await c.resolveForImageTarget({
+    img,
+    domainKey: 'google.com',
+    candidates: ['https://t2.gstatic.com/faviconV2?url=https%3A%2F%2Fgoogle.com&size=48'],
+    onResolved: (url, meta) => {
+      resolvedUrl = url;
+      resolvedMeta = meta;
+    },
+    onNegativeCacheHit: () => { negativeHit = true; },
+    onFailed: () => { failed = true; }
+  });
+
+  assert.ok(resolvedUrl && resolvedUrl.startsWith('blob:'));
+  assert.equal(resolvedMeta.fromCache, true);
+  assert.equal(resolvedMeta.sourceAlreadySet, true);
+  assert.equal(negativeHit, false);
+  assert.equal(failed, false);
+});
+
+test('favicon-pipeline: offline cache miss triggers onNegativeCacheHit and records negative cache', async () => {
+  const env = createPipelineTestEnvironment({ isOnline: false });
+  const c = env.sandbox.HomebaseFaviconPipeline;
+
+  // Fresh instance, cache is empty
+  assert.equal(c.getResolvedEntry('uncached.com'), null);
+
+  let negativeHit = false;
+  let resolvedUrl = null;
+
+  await c.resolveForImageTarget({
+    img: { dataset: {} },
+    domainKey: 'uncached.com',
+    candidates: ['https://t2.gstatic.com/faviconV2?url=https%3A%2F%2Funcached.com&size=48'],
+    onResolved: (url) => { resolvedUrl = url; },
+    onNegativeCacheHit: () => { negativeHit = true; }
+  });
+
+  assert.equal(resolvedUrl, null);
+  assert.equal(negativeHit, true);
+  // Negative cache was populated for the domain
+  assert.ok(c.getState().negativeCacheSize > 0);
+});
+
+test('favicon-pipeline: unusable cached icon while offline revokes object URL and falls back', async () => {
+  const env = createPipelineTestEnvironment({ isOnline: false });
+  const c = env.sandbox.HomebaseFaviconPipeline;
+
+  // Pre-populate persistent cache with a response for a domain
+  const key = c.cacheKeyFor('corrupted.com', 48);
+  env.mockCacheStorage.set(key, new env.MockResponse({ size: 10 }, { status: 200 }));
+
+  let resolvedUrl = null;
+  let negativeHit = false;
+
+  const img = {
+    dataset: {},
+    complete: true,
+    naturalWidth: 2 // too small, rejected by acceptCandidate
+  };
+
+  await c.resolveForImageTarget({
+    img,
+    domainKey: 'corrupted.com',
+    candidates: ['https://t2.gstatic.com/faviconV2?url=https%3A%2F%2Fcorrupted.com&size=48'],
+    acceptCandidate: (testImg) => testImg.naturalWidth >= 6,
+    onResolved: (url) => { resolvedUrl = url; },
+    onNegativeCacheHit: () => { negativeHit = true; }
+  });
+
+  assert.equal(resolvedUrl, null);
+  assert.equal(negativeHit, true);
+  // Confirms the unusable object URL was revoked
+  assert.ok(env.revokedUrls.length > 0);
 });

@@ -12,6 +12,7 @@
   const FAVICON_RESOLVED_CACHE_LIMIT = 300;
   const MAX_CONCURRENT_FAVICON_TASKS = 6;
   const FAVICON_CACHE_NAME = 'favicons-v1';
+  const FAVICON_CACHE_KEY_PREFIX = 'https://favicons.homebase.local/';
   const FAVICON_OBSERVER_ROOT_MARGIN = '250px';
   const FAVICON_OBSERVER_THRESHOLD = 0.01;
 
@@ -162,8 +163,21 @@
     return null;
   }
 
+  function normalizeCacheKey(key) {
+    if (!key || typeof key !== 'string') return '';
+    if (key.startsWith('http://') || key.startsWith('https://')) {
+      return key;
+    }
+    if (key.startsWith('/favicons/')) {
+      return `${FAVICON_CACHE_KEY_PREFIX}${key.slice('/favicons/'.length)}`;
+    }
+    return `${FAVICON_CACHE_KEY_PREFIX}${encodeURIComponent(key)}`;
+  }
+
   function cacheKeyFor(domainKey, size = FAVICON_SIZE_PX) {
-    return `/favicons/${domainKey}@${size}`;
+    if (!domainKey) return '';
+    const effectiveSize = Number.isInteger(size) && size > 0 ? size : FAVICON_SIZE_PX;
+    return `${FAVICON_CACHE_KEY_PREFIX}${encodeURIComponent(domainKey)}@${effectiveSize}`;
   }
 
   async function readIconFromCache(cacheKey) {
@@ -171,7 +185,13 @@
     try {
       const cache = await getFaviconCache();
       if (!cache) return null;
-      const cached = await cache.match(cacheKey);
+      const normalizedKey = normalizeCacheKey(cacheKey);
+      let cached = await cache.match(normalizedKey);
+      if (!cached && normalizedKey !== cacheKey) {
+        try {
+          cached = await cache.match(cacheKey);
+        } catch (_) {}
+      }
       return cached || null;
     } catch (err) {
       return null;
@@ -183,7 +203,8 @@
     try {
       const cache = await getFaviconCache();
       if (!cache) return false;
-      await cache.put(cacheKey, response);
+      const normalizedKey = normalizeCacheKey(cacheKey);
+      await cache.put(normalizedKey, response);
       return true;
     } catch (err) {
       return false;
@@ -310,9 +331,8 @@
         finalize(false, false);
       };
       setObjectUrlForImage(img, objectUrl);
-      if (img.complete) {
-        const accepted = (img.naturalWidth === undefined || img.naturalWidth > 0) &&
-          (typeof acceptCandidate === 'function' ? acceptCandidate(img) : true);
+      if (img.complete && img.naturalWidth > 0) {
+        const accepted = typeof acceptCandidate === 'function' ? acceptCandidate(img) : true;
         finalize(accepted, false);
       }
     });
@@ -830,6 +850,8 @@
     resolveFaviconFromNetwork,
     getFaviconCache,
     cacheKeyFor,
+    normalizeCacheKey,
+    normalizeFaviconCacheKey: normalizeCacheKey,
     readIconFromCache,
     writeIconToCache,
     responseToObjectURL,

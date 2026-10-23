@@ -1,8 +1,8 @@
 # Homebase — Project Context & Repository Knowledge Base
 
 **Project:** Homebase (Multi-browser Manifest V3 Dashboard Extension)  
-**Source Version:** `1.0.5` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
-**GitHub Release / Tag:** `v1.0.5` (October 22, 2026)  
+**Source Version:** `1.0.6` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
+**GitHub Release / Tag:** `v1.0.6` (October 23, 2026)  
 **Recorded Store Status (All Browsers):** See [Section 2.1](#21-published-store-releases)  
 **Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
 **Repository:** [https://github.com/time2shine/Homebase](https://github.com/time2shine/Homebase)  
@@ -55,11 +55,12 @@ Centralized tracking for all browser extension stores. To prevent duplicate or d
 - **Version Distinction Note**: The live published store package `1.0.2` reflects the release package submitted on October 17, 2026; pending version `1.0.4` (superseding pending version 1.0.3) is currently under review by the Chrome Web Store team.
 
 #### Microsoft Edge (Microsoft Edge Add-ons)
-- **Status**: Version `1.0.2`: In review (re-confirmed by user on October 20, 2026).
-- **Evidence**: User-provided Partner Center confirmation, recorded 2026-10-17 and re-confirmed still under review on October 20, 2026.
+- **Official Listing**: [Microsoft Edge Add-ons — Homebase](https://microsoftedge.microsoft.com/addons/detail/homebase/dijijjeindmmhldjnmljieoiiibeojba)
+- **Status**: Live / Publicly Available.
+- **Published Store Version**: Unverified (do not infer the published Edge version without verification).
+- **Updated / Verified Date**: October 22, 2026
 - **Product ID**: `9de86c5a-b20f-4d2f-a019-77c7ed6d4e25`
-- **Public Listing URL**: Not yet available. Partner Center dashboard states it will be available once published.
-- **Reminder**: Record the official public URL here after publication. Do not construct or guess a store URL.
+- **Evidence & Verification**: User reported on October 22, 2026 that Homebase is live and publicly available on Microsoft Edge Add-ons at listing URL `https://microsoftedge.microsoft.com/addons/detail/homebase/dijijjeindmmhldjnmljieoiiibeojba`. (User-confirmed live status; the exact published store version has not been verified or inferred without official confirmation).
 
 #### Store Version Verification Rule
 When the latest published version for any store is needed, check the official listing (and version history where available). Record the verified version, verification date, and evidence source. If access fails or status cannot be verified directly, retain the last known value and mark it unverified/stale.
@@ -107,7 +108,7 @@ Homebase/
 │   ├── check-newtab-static.mjs       # Static invariant & declaration collision checker
 │   └── smoke-newtab-file.mjs         # Headless browser smoke test runner
 ├── tests/                            # Automated test specifications
-│   └── unit/                         # Native node:test specifications (367 passing tests)
+│   └── unit/                         # Native node:test specifications (708 passing tests)
 ├── docs/                             # Project documentation, plans, and reports
 │   ├── README.md                     # Central documentation directory index
 │   ├── architecture/                 # Permanent system architectural specifications
@@ -179,9 +180,46 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 
 ## 7. Current Handoff
 
-- **Release Baseline**: Tag `v1.0.5` (October 22, 2026), building on tag `v1.0.4` (commit `b55803f`, October 21, 2026).
-- **Current Objective**: Multi-browser store publication tracking for Homebase v1.0.5.
+- **Release Baseline**: Tag `v1.0.6` (October 23, 2026), building on tag `v1.0.5` (commit `6e12868`, October 22, 2026).
+- **Current Objective**: Release preparation and publication of Homebase v1.0.6 containing the reviewed wallpaper poster optimization and startup bottleneck mitigation.
 - **Published Store Release Status**: All browser store publication statuses, review states, reporting dates, and verification records are centralized exclusively in [Section 2.1 — Published Store Releases](#21-published-store-releases).
+- **Release Preparation & Publication (v1.0.6 — October 23, 2026)**:
+  - Scope: Off-thread wallpaper poster encoding via `canvasToDataUrlAsync`, validated cached poster reuse, forced regeneration correctness, authoritative extension storage isolation, opaque string revisions without relational ordering assumptions, and explicit storage success contracts with partial mirror invalidation.
+  - Packaged Archives:
+    - `dist/homebase-chrome-1.0.6.zip` (3,471,316 bytes, SHA-256 `591b6936ac9acd1d0d732a4df96bc131d23878001807d3b4bff390b0b261d7ba`)
+    - `dist/homebase-firefox-1.0.6.zip` (3,471,476 bytes, SHA-256 `8795993521b5d9693abf33b57b67580d426ce94eb755d49a41f5f4c9fc6c467c`)
+    - `dist/homebase-edge-1.0.6.zip` (3,471,349 bytes, SHA-256 `6a2bc59f3b15e4c9acf0fd9009079199444333c0f9d204ec15d54b1525a24c5f`)
+    - Older v1.0.5 and v1.0.4 release archives preserved in `dist/`.
+  - Performance Verification & Measurements:
+    - Automated Unit Tests: 708/708 passing repository tests (19/19 in `tests/unit/wallpaper-poster-generation.test.mjs`, 72/72 across wallpaper subsystem).
+    - Final Startup Profile Recordings: Independently inspected across nine runs (three runs each for static wallpaper, live wallpaper, and Performance Mode).
+    - Zero Main-Thread Tasks > 50 ms: All nine recordings exhibited zero main-thread tasks exceeding 50 ms.
+    - Median Startup-Ready Times: static wallpaper 162.8 ms, live video wallpaper 152.9 ms, Performance Mode 167.9 ms.
+    - Longest Tasks: static wallpaper 25.95 ms, live video wallpaper 20.98 ms, Performance Mode 23.53 ms.
+    - Boundaries & Scope Limitations: These recordings verify the recorded startup scenarios; they do not claim coverage of uncached generation, every browser, or all hardware configurations.
+    - Preserved Manual Verification Scope: Previous manual check confirmations remain as recorded; release authorization does not constitute confirmation that additional manual checks passed.
+  - Automated Verification: Full 4-stage test pipeline passed (syntax validation across all JS files, static invariant checks with 647 unique declarations across 76 deferred scripts, 708 unit tests, and headless Edge CDP smoke test).
+  - Store Status Distinction: Store publication status remains strictly separate from release preparation; see [Section 2.1](#21-published-store-releases) for canonical store publication and review statuses. Preparation and packaging of v1.0.6 packages does not alter store submission states.
+- **Wallpaper Startup-Poster Optimization (October 22-23, 2026)**:
+  - Scope: Optimize dashboard startup-poster generation and reuse to eliminate synchronous main-thread long tasks caused by `canvas.toDataURL()` in `src/newtab/wallpaper/wallpaper-controller.js`.
+  - Diagnosed Cause:
+    - Repeated Scheduling: `primeWallpaperBackground()` (evaluated synchronously on load) calls `setWallpaperFallbackPoster()`, which schedules `cacheAppliedWallpaperPoster()`. Then `ensureDailyWallpaper()` (scheduled on idle from `new-tab.js`) calls `applyWallpaperByType()`, which unconditionally called `setWallpaperFallbackPoster()` before checking `unchanged`, triggering a second poster generation task. In addition, `cacheAppliedWallpaperPoster()` lacked an early check for whether an existing cached poster data URL was already valid for the stored target URL, forcing a complete re-decode and re-encode on every dashboard launch.
+    - Size-Limit Downscaling Retries: `createStartupPosterDataUrl(blob)` iterates candidate dimensions `[1280, 960, 720]`. When the 1280px candidate exceeded `TARGET_STARTUP_POSTER_DATA_URL_LENGTH` (240,000 characters), it looped to 960px, running a second full conversion within the same invocation.
+    - Synchronous Main-Thread Blocking: `createOptimizedPosterDataUrl()` synchronously executed `canvas.toDataURL('image/webp', quality)`, blocking the main thread for 55–82 ms per conversion as observed in user-supplied startup profile traces.
+  - Implementation & Correctness Hardening:
+    - Cached Poster Reuse & Identity Separation: Added `isValidStartupPosterDataUrl(dataUrl)` (`type === 'string'`, starts with `data:image/`, length <= 240,000). Removed early placeholder writing of `cachedAppliedPosterUrl` during pending generation, ensuring committed output identity is kept separate from in-flight generation identity. Storage remains untouched while generation is pending, preventing a newly written poster URL from making an old poster data URL appear valid in `preload.js` or across tabs.
+    - Persisted Encoding Version & Source Revision: In `src/newtab/core/schema-validator.js`, added `cachedAppliedPosterEncodingVersion` and `cachedAppliedPosterRevision`. In `src/newtab/wallpaper/wallpaper-storage.js`, added getter/setter/clear methods and bundle commit function `setCachedAppliedPosterBundle()`. (Note: writes are batched within extension storage, but extension storage and `localStorage` are separate decoupled systems and not atomic across each other). In `cacheAppliedWallpaperPoster`, validates persisted encoding version against `targetEncodingVersion` (comparing only caller options with a constant was insufficient) and stored revision against `targetRevision`.
+    - Authoritative Store Isolation: `readStoredBundle` inspects extension storage exclusively when available. Missing or cleared fields in extension storage are never backfilled or resurrected from `localStorage` mirrors.
+    - Forced Regeneration Invariant: Prevented `forceRegenerate` requests from being defeated by the final reuse branch; forced generation commits newly generated output under the current URL and revision.
+    - Opaque Revision Support & Intervening Change Detection: Removed numeric ordering assumptions (`>`). Distinguishes initial committed state, requested identity, and intervening changes, cleanly allowing sequential old-to-new updates while aborting on conflicting intervening revisions.
+    - Explicit Persistence Outcomes & Mirror Invalidation: `setCachedAppliedPosterBundle` evaluates `HomebaseStorage.setMany` / `browser.storage.local.set` success contracts before updating mirrors. If `localStorage` mirror writes fail partway, all poster keys in `localStorage` are cleared immediately, preventing `preload.js` from accepting mismatched or partial mirrors.
+    - Asynchronous Off-Thread Encoding: Added `canvasToDataUrlAsync(canvas, type, quality)` using `canvas.toBlob()` and `FileReader.readAsDataURL()`, with fallback to `canvas.toDataURL()` if `toBlob` is unavailable or errors. Updated `createOptimizedPosterDataUrl` to await `canvasToDataUrlAsync` in both `createImageBitmap` and `Image` paths, removing synchronous canvas encoding from the main thread.
+    - Caller Deduplication: In `applyWallpaperByType`, only calls `setWallpaperFallbackPoster()` when `!unchanged`.
+    - Boundaries & Invariants Preserved: `src/preload.js` and `src/instant_load.js` remain completely untouched; their cache contract (`cachedAppliedPosterDataUrl` length <= 250,000, `cachedAppliedPosterUrl`) is strictly preserved. Manifests, versions, release archives, and store records remain untouched.
+  - Automated Regression Tests:
+    - Added `tests/unit/wallpaper-poster-generation.test.mjs` with 19 behavioral unit tests covering all 5 review points and performance invariants.
+    - All 72 wallpaper subsystem unit tests pass (`tests/unit/wallpaper-*.test.mjs`).
+    - Full 4-stage pipeline passes: syntax validation, static invariant checks (647 unique top-level declarations across 76 deferred scripts, zero collisions), all 708 repository unit tests pass, and Edge browser smoke test passes. Local unpacked builds refreshed (`dist/chrome`, `dist/firefox`, `dist/edge`).
 - **Release Preparation & Publication (v1.0.5 — October 22, 2026)**:
   - Scope: Context menus reposition instantly without sliding transitions across the dashboard, cached favicons persist reliably for offline use via HTTPS-shaped cache keys, bookmarks and search results with local or private network addresses use stable letter fallbacks without external provider requests or stale provider placeholder loops, and IPv6 ULA/link-local classification uses exact numeric group boundaries.
   - Packaged Archives: `dist/homebase-chrome-1.0.5.zip` (SHA-256 `eda48e1a2fa9d6e508643d1b1c6738ca81c40fa3c5c8499aa466823bc4965509`), `dist/homebase-firefox-1.0.5.zip` (SHA-256 `bde3973f5d4216adde0848d1a8a37e319588521619af5347c22cbcdd82c40903`), `dist/homebase-edge-1.0.5.zip` (SHA-256 `b89917c722132e868b11c01947dde3d4ce461b5c7f1c2fdc0457b1caf6355207`). Older v1.0.4 release archives preserved in `dist/`.

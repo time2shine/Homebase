@@ -12,6 +12,8 @@ const FAVORITES_KEY = 'galleryFavorites';
 const CACHED_APPLIED_VIDEO_URL_KEY = 'cachedAppliedVideoUrl';
 const CACHED_APPLIED_POSTER_URL_KEY = 'cachedAppliedPosterUrl';
 const CACHED_APPLIED_POSTER_DATA_URL_KEY = 'cachedAppliedPosterDataUrl';
+const CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY = 'cachedAppliedPosterEncodingVersion';
+const CACHED_APPLIED_POSTER_REVISION_KEY = 'cachedAppliedPosterRevision';
 const CACHED_APPLIED_POSTER_CACHE_KEY = 'cachedAppliedPoster';
 
 const WALLPAPER_POOL_KEY = 'wallpaperPoolIds';
@@ -502,16 +504,21 @@ async function setCachedAppliedPosterDataUrl(dataUrl) {
 }
 
 /**
- * Clears the cached applied poster data URL and synchronous mirror.
+ * Clears the cached applied poster data URL, version, revision, and synchronous mirrors.
  *
  * @returns {Promise<void>}
  */
 async function clearCachedAppliedPosterDataUrl() {
+  const keys = [
+    CACHED_APPLIED_POSTER_DATA_URL_KEY,
+    CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY,
+    CACHED_APPLIED_POSTER_REVISION_KEY
+  ];
   try {
     if (typeof window !== 'undefined' && window.HomebaseStorage && typeof window.HomebaseStorage.remove === 'function') {
-      await window.HomebaseStorage.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+      await window.HomebaseStorage.remove(keys);
     } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
-      await browser.storage.local.remove(CACHED_APPLIED_POSTER_DATA_URL_KEY);
+      await browser.storage.local.remove(keys);
     }
   } catch (err) {
     console.warn('Failed to clear cached applied poster data url', err);
@@ -520,8 +527,168 @@ async function clearCachedAppliedPosterDataUrl() {
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('cachedAppliedPosterDataUrl');
+      localStorage.removeItem('cachedAppliedPosterEncodingVersion');
+      localStorage.removeItem('cachedAppliedPosterRevision');
     }
   } catch (e) {}
+}
+
+/**
+ * Retrieves the cached applied poster encoding version.
+ * Reads from authoritative extension storage first; falls back to localStorage only when extension storage is unavailable.
+ *
+ * @returns {Promise<number>}
+ */
+async function getCachedAppliedPosterEncodingVersion() {
+  try {
+    if (typeof window !== 'undefined' && window.HomebaseStorage && typeof window.HomebaseStorage.get === 'function') {
+      const val = await window.HomebaseStorage.get(CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY, 0);
+      return typeof val === 'number' && Number.isInteger(val) && val >= 0 ? val : 0;
+    }
+    if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      const stored = await browser.storage.local.get(CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY);
+      const val = stored && stored[CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY];
+      return typeof val === 'number' && Number.isInteger(val) && val >= 0 ? val : 0;
+    }
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      const stored = await new Promise((resolve) => chrome.storage.local.get(CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY, resolve));
+      const val = stored && stored[CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY];
+      return typeof val === 'number' && Number.isInteger(val) && val >= 0 ? val : 0;
+    }
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('cachedAppliedPosterEncodingVersion');
+      return raw ? (parseInt(raw, 10) || 0) : 0;
+    }
+    return 0;
+  } catch (err) {
+    return 0;
+  }
+}
+
+/**
+ * Retrieves the cached applied poster source revision.
+ * Reads from authoritative extension storage first; falls back to localStorage only when extension storage is unavailable.
+ *
+ * @returns {Promise<number|string>}
+ */
+async function getCachedAppliedPosterRevision() {
+  try {
+    if (typeof window !== 'undefined' && window.HomebaseStorage && typeof window.HomebaseStorage.get === 'function') {
+      const val = await window.HomebaseStorage.get(CACHED_APPLIED_POSTER_REVISION_KEY, 0);
+      return val !== undefined && val !== null ? val : 0;
+    }
+    if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      const stored = await browser.storage.local.get(CACHED_APPLIED_POSTER_REVISION_KEY);
+      const val = stored && stored[CACHED_APPLIED_POSTER_REVISION_KEY];
+      return val !== undefined && val !== null ? val : 0;
+    }
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      const stored = await new Promise((resolve) => chrome.storage.local.get(CACHED_APPLIED_POSTER_REVISION_KEY, resolve));
+      const val = stored && stored[CACHED_APPLIED_POSTER_REVISION_KEY];
+      return val !== undefined && val !== null ? val : 0;
+    }
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('cachedAppliedPosterRevision');
+      return raw !== null && raw !== undefined ? raw : 0;
+    }
+    return 0;
+  } catch (err) {
+    return 0;
+  }
+}
+
+/**
+ * Commits an applied poster bundle to authoritative storage and updates localStorage mirrors.
+ * If authoritative storage write fails, mirrors are not touched and returns false.
+ * If mirror writes fail partway, cleans up localStorage mirrors to prevent mismatched preload data.
+ *
+ * @param {Object} bundle
+ * @param {string} [bundle.url='']
+ * @param {string} [bundle.dataUrl='']
+ * @param {number} [bundle.encodingVersion=0]
+ * @param {number|string} [bundle.revision=0]
+ * @returns {Promise<boolean>} True if authoritative storage write succeeded
+ */
+async function setCachedAppliedPosterBundle(bundle = {}) {
+  const url = typeof bundle.url === 'string' ? bundle.url : '';
+  const dataUrl = typeof bundle.dataUrl === 'string' ? bundle.dataUrl : '';
+  const encodingVersion = typeof bundle.encodingVersion === 'number' && Number.isInteger(bundle.encodingVersion) && bundle.encodingVersion >= 0
+    ? bundle.encodingVersion
+    : 0;
+  const revision = (typeof bundle.revision === 'number' && Number.isFinite(bundle.revision) && bundle.revision >= 0) ||
+    (typeof bundle.revision === 'string' && bundle.revision.length <= 128)
+    ? bundle.revision
+    : 0;
+
+  const payload = {
+    [CACHED_APPLIED_POSTER_URL_KEY]: url,
+    [CACHED_APPLIED_POSTER_DATA_URL_KEY]: dataUrl,
+    [CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY]: encodingVersion,
+    [CACHED_APPLIED_POSTER_REVISION_KEY]: revision
+  };
+
+  let writeSuccess = false;
+
+  try {
+    if (typeof window !== 'undefined' && window.HomebaseStorage && typeof window.HomebaseStorage.setMany === 'function') {
+      const res = await window.HomebaseStorage.setMany(payload);
+      writeSuccess = Boolean(res && res.success && (!res.rejectedKeys || res.rejectedKeys.length === 0));
+    } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+      await browser.storage.local.set(payload);
+      writeSuccess = true;
+    } else if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await new Promise((resolve, reject) => {
+        chrome.storage.local.set(payload, () => {
+          if (chrome.runtime && chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve();
+        });
+      });
+      writeSuccess = true;
+    } else if (typeof localStorage !== 'undefined') {
+      // Pure localStorage fallback environment (e.g. mock unit tests without extension storage)
+      writeSuccess = true;
+    }
+  } catch (err) {
+    console.warn('Failed to commit applied poster bundle to authoritative storage', err);
+    writeSuccess = false;
+  }
+
+  // If authoritative storage write failed, do NOT report success or write mirrors
+  if (!writeSuccess) {
+    return false;
+  }
+
+  // Update synchronous localStorage mirrors
+  if (typeof localStorage !== 'undefined') {
+    try {
+      // Write dataUrl first as it is the largest payload and most likely to encounter QuotaExceededError
+      if (dataUrl) localStorage.setItem('cachedAppliedPosterDataUrl', dataUrl);
+      else localStorage.removeItem('cachedAppliedPosterDataUrl');
+
+      if (url) localStorage.setItem('cachedAppliedPosterUrl', url);
+      else localStorage.removeItem('cachedAppliedPosterUrl');
+
+      if (encodingVersion) localStorage.setItem('cachedAppliedPosterEncodingVersion', String(encodingVersion));
+      else localStorage.removeItem('cachedAppliedPosterEncodingVersion');
+
+      if (revision !== 0 && revision !== '0' && revision !== '') {
+        localStorage.setItem('cachedAppliedPosterRevision', String(revision));
+      } else {
+        localStorage.removeItem('cachedAppliedPosterRevision');
+      }
+    } catch (mirrorErr) {
+      console.warn('Failed to update localStorage poster mirrors', mirrorErr);
+      // Invalidate the preload image mirror so it cannot be accepted under a mismatched URL
+      try {
+        localStorage.removeItem('cachedAppliedPosterDataUrl');
+        localStorage.removeItem('cachedAppliedPosterUrl');
+        localStorage.removeItem('cachedAppliedPosterEncodingVersion');
+        localStorage.removeItem('cachedAppliedPosterRevision');
+      } catch (_) {}
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -530,11 +697,17 @@ async function clearCachedAppliedPosterDataUrl() {
  * @returns {Promise<void>}
  */
 async function clearAppliedPosterMetadata() {
+  const keys = [
+    CACHED_APPLIED_POSTER_URL_KEY,
+    CACHED_APPLIED_POSTER_DATA_URL_KEY,
+    CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY,
+    CACHED_APPLIED_POSTER_REVISION_KEY
+  ];
   try {
     if (typeof window !== 'undefined' && window.HomebaseStorage && typeof window.HomebaseStorage.remove === 'function') {
-      await window.HomebaseStorage.remove([CACHED_APPLIED_POSTER_URL_KEY, CACHED_APPLIED_POSTER_DATA_URL_KEY]);
+      await window.HomebaseStorage.remove(keys);
     } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
-      await browser.storage.local.remove([CACHED_APPLIED_POSTER_URL_KEY, CACHED_APPLIED_POSTER_DATA_URL_KEY]);
+      await browser.storage.local.remove(keys);
     }
   } catch (err) {
     console.warn('Failed to clear applied poster metadata', err);
@@ -544,6 +717,8 @@ async function clearAppliedPosterMetadata() {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('cachedAppliedPosterUrl');
       localStorage.removeItem('cachedAppliedPosterDataUrl');
+      localStorage.removeItem('cachedAppliedPosterEncodingVersion');
+      localStorage.removeItem('cachedAppliedPosterRevision');
     }
   } catch (e) {}
 }
@@ -1353,6 +1528,8 @@ if (typeof window !== 'undefined') {
   window.CACHED_APPLIED_VIDEO_URL_KEY = CACHED_APPLIED_VIDEO_URL_KEY;
   window.CACHED_APPLIED_POSTER_URL_KEY = CACHED_APPLIED_POSTER_URL_KEY;
   window.CACHED_APPLIED_POSTER_DATA_URL_KEY = CACHED_APPLIED_POSTER_DATA_URL_KEY;
+  window.CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY = CACHED_APPLIED_POSTER_ENCODING_VERSION_KEY;
+  window.CACHED_APPLIED_POSTER_REVISION_KEY = CACHED_APPLIED_POSTER_REVISION_KEY;
   window.CACHED_APPLIED_POSTER_CACHE_KEY = CACHED_APPLIED_POSTER_CACHE_KEY;
 
   window.WALLPAPER_POOL_KEY = WALLPAPER_POOL_KEY;
@@ -1411,6 +1588,9 @@ if (typeof window !== 'undefined') {
   window.getCachedAppliedPosterDataUrl = getCachedAppliedPosterDataUrl;
   window.setCachedAppliedPosterDataUrl = setCachedAppliedPosterDataUrl;
   window.clearCachedAppliedPosterDataUrl = clearCachedAppliedPosterDataUrl;
+  window.getCachedAppliedPosterEncodingVersion = getCachedAppliedPosterEncodingVersion;
+  window.getCachedAppliedPosterRevision = getCachedAppliedPosterRevision;
+  window.setCachedAppliedPosterBundle = setCachedAppliedPosterBundle;
   window.clearAppliedPosterMetadata = clearAppliedPosterMetadata;
 
   window.getWallpaperPool = getWallpaperPool;
@@ -1501,6 +1681,9 @@ if (typeof window !== 'undefined') {
     getCachedAppliedPosterDataUrl,
     setCachedAppliedPosterDataUrl,
     clearCachedAppliedPosterDataUrl,
+    getCachedAppliedPosterEncodingVersion,
+    getCachedAppliedPosterRevision,
+    setCachedAppliedPosterBundle,
     clearAppliedPosterMetadata,
     getWallpaperPool,
     setWallpaperPool,

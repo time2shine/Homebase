@@ -342,8 +342,8 @@ window.HomebaseGallery = (() => {
     return hydrateFromMyWallpapers(ensured);
   }
 
-  function applyWallpaperByType(selection, type = 'video') {
-    return callContextCallback('applyWallpaperByType', selection, type);
+  function applyWallpaperByType(selection, type = 'video', options = {}) {
+    return callContextCallback('applyWallpaperByType', selection, type, options);
   }
 
   async function loadWallpaperTypePreference() {
@@ -453,8 +453,8 @@ window.HomebaseGallery = (() => {
     return callContextCallback('applyWallpaperBackground', posterUrl);
   }
 
-  function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
-    return callContextCallback('setWallpaperFallbackPoster', posterUrl, posterCacheKey);
+  function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '', options = {}) {
+    return callContextCallback('setWallpaperFallbackPoster', posterUrl, posterCacheKey, options);
   }
 
   function clearBackgroundVideos() {
@@ -488,8 +488,8 @@ window.HomebaseGallery = (() => {
     return null;
   }
 
-  async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
-    return callContextCallback('cacheAppliedWallpaperPoster', posterUrl, posterCacheKey);
+  async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '', options = {}) {
+    return callContextCallback('cacheAppliedWallpaperPoster', posterUrl, posterCacheKey, options);
   }
 
   function isPerformanceModeEnabled() {
@@ -1741,7 +1741,7 @@ window.HomebaseGallery = (() => {
           // Show the new wallpaper immediately using a cached/data poster and avoid touching gallery code paths.
           // Ensure the guard inside applyWallpaperBackground doesn't block blob/http updates when the current bg is a data URL.
           applyWallpaperBackground('');
-          setWallpaperFallbackPoster(quickPoster, posterKey);
+          setWallpaperFallbackPoster(quickPoster, posterKey, opts);
           applyWallpaperBackground(quickPoster);
           clearBackgroundVideos();
           if (!preserveType && wallpaperTypeToggle) wallpaperTypeToggle.checked = true;
@@ -1769,7 +1769,7 @@ window.HomebaseGallery = (() => {
         }
     
         if (desiredType === 'static') {
-          applyWallpaperByType(hydratedSelection, 'static');
+          applyWallpaperByType(hydratedSelection, 'static', opts);
           scheduleIdleTask(() => cacheAppliedWallpaperVideo(hydratedSelection), 'cacheAppliedWallpaperVideo');
           scheduleIdleTask(async () => {
             try {
@@ -1807,7 +1807,11 @@ window.HomebaseGallery = (() => {
                 }
                 return; // Skip expensive data URL for huge posters.
               }
-              await cacheAppliedWallpaperPoster(hydratedSelection.posterUrl, hydratedSelection.posterCacheKey || hydratedSelection.posterUrl || '');
+              await cacheAppliedWallpaperPoster(
+                hydratedSelection.posterUrl,
+                hydratedSelection.posterCacheKey || hydratedSelection.posterUrl || '',
+                opts
+              );
             } catch (err) {
               // ignore poster caching errors
             }
@@ -1828,7 +1832,7 @@ window.HomebaseGallery = (() => {
           }
           resetButton();
         } else {
-          applyWallpaperByType(hydratedSelection, desiredType);
+          applyWallpaperByType(hydratedSelection, desiredType, opts);
           scheduleIdleTask(() => cacheAppliedWallpaperVideo(hydratedSelection), 'cacheAppliedWallpaperVideo');
           resetButton();
         }

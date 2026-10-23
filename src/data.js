@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.0.5',
-  date: '2026-10-22',
+  version: '1.0.6',
+  date: '2026-10-23',
   items: [
     {
-      type: 'FIX',
-      title: 'Context menu repositioning',
-      desc: 'Right-clicking repositioned menus moves instantly without sliding transitions across the dashboard.'
-    },
-    {
-      type: 'FIX',
-      title: 'Offline favicon persistence',
-      desc: 'Previously loaded favicons remain available offline across browser restarts and page reloads.'
+      type: 'IMPROVED',
+      title: 'Wallpaper startup performance',
+      desc: 'Reduced wallpaper startup work and eliminated main-thread poster encoding delays for faster dashboard loading.'
     },
     {
       type: 'IMPROVED',
-      title: 'Local address icon privacy',
-      desc: 'Local and private network addresses display stable letter fallbacks without external provider requests.'
+      title: 'Cached poster reuse',
+      desc: 'Reuses validated startup wallpaper posters seamlessly without unnecessary re-encoding on launch.'
+    },
+    {
+      type: 'FIX',
+      title: 'Reliable poster updates',
+      desc: 'Ensures wallpaper updates and forced regenerations reliably refresh and commit current poster artwork.'
     }
   ]
 };

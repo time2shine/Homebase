@@ -2,6 +2,15 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v1.0.6 — 2026-10-23
+
+### Improved
+- **Wallpaper Startup Performance**: Reduced dashboard startup overhead by eliminating synchronous canvas encoding (`canvas.toDataURL()`) on the main thread and deferring poster data URL encoding off-thread via `canvasToDataUrlAsync`.
+- **Cached Startup Poster Reuse**: Validates existing cached wallpaper posters against target URL, encoding version, and source revision before encoding, enabling instant reuse and avoiding redundant re-encodings on startup.
+
+### Fixed
+- **Reliable Poster Updates & Forced Regeneration**: Forced wallpaper regeneration requests now reliably commit newly generated output rather than returning stale cached output. Aligned cache keys with persistent upload identifiers and source revisions, isolated authoritative extension storage from partial mirrors, supported opaque string revisions without relational numeric assumptions, and safeguarded against partial `localStorage` mirror failures.
+
 ## v1.0.5 — 2026-10-22
 
 ### Improved

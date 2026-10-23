@@ -101,6 +101,20 @@ const SCHEMA_DEFINITIONS = {
     validate: (val) => typeof val === 'string',
     sanitize: (val, fallback = true) => (typeof val === 'string' ? val.slice(0, 4096) : (fallback ? '' : undefined))
   },
+  cachedAppliedPosterEncodingVersion: {
+    default: 0,
+    validate: (val) => typeof val === 'number' && Number.isInteger(val) && val >= 0,
+    sanitize: (val, fallback = true) => (typeof val === 'number' && Number.isInteger(val) && val >= 0 ? val : (fallback ? 0 : undefined))
+  },
+  cachedAppliedPosterRevision: {
+    default: 0,
+    validate: (val) => (typeof val === 'number' && Number.isFinite(val) && val >= 0) || (typeof val === 'string' && val.length <= 128),
+    sanitize: (val, fallback = true) => {
+      if (typeof val === 'number' && Number.isFinite(val) && val >= 0) return val;
+      if (typeof val === 'string') return val.slice(0, 128);
+      return fallback ? 0 : undefined;
+    }
+  },
   cachedAppliedVideoUrl: {
     default: '',
     validate: (val) => typeof val === 'string' && val.length <= 4096,

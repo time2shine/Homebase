@@ -8,6 +8,7 @@
 const TARGET_STARTUP_POSTER_DATA_URL_LENGTH = 240000;
 const STARTUP_POSTER_MAX_DIM_SEQUENCE = [1280, 960, 720];
 const STARTUP_POSTER_QUALITY_SEQUENCE = [0.76, 0.68, 0.6];
+const STARTUP_POSTER_ENCODING_VERSION = 1;
 const DAILY_ROTATION_SEEN_DELAY_MS = 8000;
 
 const VIDEOS_JSON_URL = 'https://pub-552ebdc4e1414c8594cec0ac58404459.r2.dev/manifest.json';
@@ -22,6 +23,12 @@ const NEXT_WALLPAPER_TOOLTIP_LOADING = 'Downloading...';
 // --- Shared & Operational State ---
 let videosManifestPromise = null;
 let pendingDailyRotationTimer = null;
+let activePosterGenerationPromise = null;
+let activePosterGenerationTarget = '';
+let activePosterGenerationRevision = 0;
+let activePosterGenerationEncodingVersion = STARTUP_POSTER_ENCODING_VERSION;
+let activePosterGenerationForced = false;
+let activePosterGenerationToken = 0;
 
 let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
 let backgroundVideoSourceLoadPromise = Promise.resolve();
@@ -175,6 +182,81 @@ async function checkBatteryStatus() {
 
 // --- Pure Helpers: Poster Generation & Encoding ---
 /**
+ * Validates whether a cached startup poster data URL is usable.
+ * Checks type, data:image header, and size limit.
+ *
+ * @param {*} dataUrl
+ * @returns {boolean}
+ */
+function isValidStartupPosterDataUrl(dataUrl) {
+  if (typeof dataUrl !== 'string' || !dataUrl) return false;
+  if (!dataUrl.startsWith('data:image/')) return false;
+  if (dataUrl.length > TARGET_STARTUP_POSTER_DATA_URL_LENGTH) return false;
+  return true;
+}
+
+/**
+ * Asynchronously converts a canvas to a data URL using canvas.toBlob() and FileReader,
+ * removing synchronous encoding from the normal generation path.
+ * Falls back to canvas.toDataURL() if toBlob is unavailable or fails.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {string} [type='image/webp']
+ * @param {number} [quality=0.8]
+ * @returns {Promise<string>}
+ */
+function canvasToDataUrlAsync(canvas, type = 'image/webp', quality = 0.8) {
+  if (!canvas) return Promise.resolve('');
+
+  return new Promise((resolve) => {
+    if (typeof canvas.toBlob === 'function') {
+      try {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            try {
+              resolve(typeof canvas.toDataURL === 'function' ? canvas.toDataURL(type, quality) : '');
+            } catch (_) {
+              resolve('');
+            }
+            return;
+          }
+
+          if (typeof FileReader !== 'undefined') {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              resolve(typeof reader.result === 'string' ? reader.result : '');
+            };
+            reader.onerror = () => {
+              try {
+                resolve(typeof canvas.toDataURL === 'function' ? canvas.toDataURL(type, quality) : '');
+              } catch (_) {
+                resolve('');
+              }
+            };
+            reader.readAsDataURL(blob);
+          } else {
+            try {
+              resolve(typeof canvas.toDataURL === 'function' ? canvas.toDataURL(type, quality) : '');
+            } catch (_) {
+              resolve('');
+            }
+          }
+        }, type, quality);
+        return;
+      } catch (err) {
+        // toBlob threw synchronously; fall back
+      }
+    }
+
+    try {
+      resolve(typeof canvas.toDataURL === 'function' ? canvas.toDataURL(type, quality) : '');
+    } catch (_) {
+      resolve('');
+    }
+  });
+}
+
+/**
  * Creates a resized/compressed Data URL specifically for instant startup cache.
  * Keeps the file within localStorage limits (~5MB) without affecting the actual high-res wallpaper.
  */
@@ -220,7 +302,7 @@ async function createOptimizedPosterDataUrl(blob, options = {}) {
       bitmap.close();
     }
 
-    return canvas.toDataURL('image/webp', quality);
+    return await canvasToDataUrlAsync(canvas, 'image/webp', quality);
   }
 
   // Fallback for browsers/contexts where createImageBitmap was unavailable or failed
@@ -228,7 +310,7 @@ async function createOptimizedPosterDataUrl(blob, options = {}) {
     const objectUrl = URL.createObjectURL(blob);
     const img = new Image();
 
-    img.onload = () => {
+    img.onload = async () => {
       URL.revokeObjectURL(objectUrl);
 
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
@@ -246,7 +328,8 @@ async function createOptimizedPosterDataUrl(blob, options = {}) {
       }
 
       ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/webp', quality));
+      const dataUrl = await canvasToDataUrlAsync(canvas, 'image/webp', quality);
+      resolve(dataUrl);
     };
 
     img.onerror = () => {
@@ -574,88 +657,373 @@ async function cacheAppliedWallpaperVideo(selection) {
   }
 }
 
-async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
+async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '', options = {}) {
   try {
     if (!posterUrl) {
-      await clearAppliedPosterMetadata();
+      activePosterGenerationToken += 1;
+      activePosterGenerationTarget = '';
+      activePosterGenerationRevision = 0;
+      activePosterGenerationEncodingVersion = STARTUP_POSTER_ENCODING_VERSION;
+      activePosterGenerationForced = false;
+      activePosterGenerationPromise = null;
+
+      if (typeof clearAppliedPosterMetadata === 'function') {
+        await clearAppliedPosterMetadata();
+      } else if (typeof window !== 'undefined' && typeof window.clearAppliedPosterMetadata === 'function') {
+        await window.clearAppliedPosterMetadata();
+      }
+
       const posterKey = typeof CACHED_APPLIED_POSTER_CACHE_KEY !== 'undefined'
         ? CACHED_APPLIED_POSTER_CACHE_KEY
         : 'cachedAppliedPoster';
-      await deleteCachedObject(posterKey);
-      return;
+      if (typeof deleteCachedObject === 'function') {
+        await deleteCachedObject(posterKey);
+      } else if (typeof window !== 'undefined' && typeof window.deleteCachedObject === 'function') {
+        await window.deleteCachedObject(posterKey);
+      }
+      return '';
     }
 
     let urlToStore = posterUrl;
+    if (posterUrl.startsWith('blob:') && posterCacheKey && !posterCacheKey.startsWith('blob:')) {
+      urlToStore = posterCacheKey;
+    }
 
-    if (isRemoteHttpUrl(posterUrl)) {
-      await cacheAsset(posterUrl);
-    } else if (posterUrl.startsWith('blob:')) {
-      if (posterCacheKey && !posterCacheKey.startsWith('blob:')) {
-        urlToStore = posterCacheKey;
+    const targetEncodingVersion = typeof options.encodingVersion === 'number'
+      ? options.encodingVersion
+      : STARTUP_POSTER_ENCODING_VERSION;
+    const targetRevision = (options.sourceRevision !== undefined ? options.sourceRevision : options.revision) || 0;
+    const forceRegenerate = Boolean(options.force || options.forceRegenerate);
+
+    // Coalescing check:
+    // Can only join in-flight work if:
+    // 1. Target URL matches
+    // 2. Neither the request nor the in-flight task is forced
+    // 3. Source revision matches exactly
+    // 4. Encoding version matches exactly
+    if (
+      activePosterGenerationPromise &&
+      activePosterGenerationTarget === urlToStore &&
+      !forceRegenerate &&
+      !activePosterGenerationForced &&
+      String(activePosterGenerationRevision) === String(targetRevision) &&
+      activePosterGenerationEncodingVersion === targetEncodingVersion
+    ) {
+      return activePosterGenerationPromise;
+    }
+
+    // New or superseded task: register monotonic token and active parameters
+    const currentToken = ++activePosterGenerationToken;
+    activePosterGenerationTarget = urlToStore;
+    activePosterGenerationRevision = targetRevision;
+    activePosterGenerationEncodingVersion = targetEncodingVersion;
+    activePosterGenerationForced = forceRegenerate;
+
+    const readStoredBundle = async () => {
+      let storedUrl = '';
+      let storedDataUrl = '';
+      let storedEncodingVersion = 0;
+      let storedRevision = 0;
+      let hasAuthoritativeStore = false;
+
+      if (typeof window !== 'undefined' && window.HomebaseStorage && typeof window.HomebaseStorage.getMany === 'function') {
+        hasAuthoritativeStore = true;
+        const stored = await window.HomebaseStorage.getMany([
+          'cachedAppliedPosterUrl',
+          'cachedAppliedPosterDataUrl',
+          'cachedAppliedPosterEncodingVersion',
+          'cachedAppliedPosterRevision'
+        ]);
+        storedUrl = typeof stored.cachedAppliedPosterUrl === 'string' ? stored.cachedAppliedPosterUrl : '';
+        storedDataUrl = typeof stored.cachedAppliedPosterDataUrl === 'string' ? stored.cachedAppliedPosterDataUrl : '';
+        storedEncodingVersion = typeof stored.cachedAppliedPosterEncodingVersion === 'number' && Number.isInteger(stored.cachedAppliedPosterEncodingVersion) && stored.cachedAppliedPosterEncodingVersion >= 0
+          ? stored.cachedAppliedPosterEncodingVersion
+          : 0;
+        storedRevision = stored.cachedAppliedPosterRevision !== undefined && stored.cachedAppliedPosterRevision !== null
+          ? stored.cachedAppliedPosterRevision
+          : 0;
+      } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+        hasAuthoritativeStore = true;
+        const stored = await browser.storage.local.get([
+          'cachedAppliedPosterUrl',
+          'cachedAppliedPosterDataUrl',
+          'cachedAppliedPosterEncodingVersion',
+          'cachedAppliedPosterRevision'
+        ]);
+        storedUrl = stored && typeof stored.cachedAppliedPosterUrl === 'string' ? stored.cachedAppliedPosterUrl : '';
+        storedDataUrl = stored && typeof stored.cachedAppliedPosterDataUrl === 'string' ? stored.cachedAppliedPosterDataUrl : '';
+        storedEncodingVersion = stored && typeof stored.cachedAppliedPosterEncodingVersion === 'number' && Number.isInteger(stored.cachedAppliedPosterEncodingVersion) && stored.cachedAppliedPosterEncodingVersion >= 0
+          ? stored.cachedAppliedPosterEncodingVersion
+          : 0;
+        storedRevision = stored && stored.cachedAppliedPosterRevision !== undefined && stored.cachedAppliedPosterRevision !== null
+          ? stored.cachedAppliedPosterRevision
+          : 0;
+      } else if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        hasAuthoritativeStore = true;
+        const stored = await new Promise((resolve) => {
+          chrome.storage.local.get([
+            'cachedAppliedPosterUrl',
+            'cachedAppliedPosterDataUrl',
+            'cachedAppliedPosterEncodingVersion',
+            'cachedAppliedPosterRevision'
+          ], resolve);
+        });
+        storedUrl = stored && typeof stored.cachedAppliedPosterUrl === 'string' ? stored.cachedAppliedPosterUrl : '';
+        storedDataUrl = stored && typeof stored.cachedAppliedPosterDataUrl === 'string' ? stored.cachedAppliedPosterDataUrl : '';
+        storedEncodingVersion = stored && typeof stored.cachedAppliedPosterEncodingVersion === 'number' && Number.isInteger(stored.cachedAppliedPosterEncodingVersion) && stored.cachedAppliedPosterEncodingVersion >= 0
+          ? stored.cachedAppliedPosterEncodingVersion
+          : 0;
+        storedRevision = stored && stored.cachedAppliedPosterRevision !== undefined && stored.cachedAppliedPosterRevision !== null
+          ? stored.cachedAppliedPosterRevision
+          : 0;
       }
-    }
 
-    if (isRemoteHttpUrl(urlToStore)) {
-      await cacheAsset(urlToStore);
-    }
+      // If an authoritative store is present, NEVER fill missing fields from localStorage.
+      // Only read from localStorage if NO authoritative extension store exists.
+      if (!hasAuthoritativeStore && typeof localStorage !== 'undefined') {
+        storedUrl = localStorage.getItem('cachedAppliedPosterUrl') || '';
+        storedDataUrl = localStorage.getItem('cachedAppliedPosterDataUrl') || '';
+        const rawV = localStorage.getItem('cachedAppliedPosterEncodingVersion');
+        storedEncodingVersion = rawV ? (parseInt(rawV, 10) || 0) : 0;
+        const rawR = localStorage.getItem('cachedAppliedPosterRevision');
+        storedRevision = rawR !== null && rawR !== undefined ? rawR : 0;
+      }
 
-    // Store the URL placeholder
-    await setCachedAppliedPosterUrl(urlToStore);
+      return {
+        url: storedUrl,
+        dataUrl: storedDataUrl,
+        encodingVersion: storedEncodingVersion,
+        revision: storedRevision
+      };
+    };
+
+    const commitStoredBundle = async (bundle) => {
+      if (typeof setCachedAppliedPosterBundle === 'function') {
+        return await setCachedAppliedPosterBundle(bundle);
+      } else if (typeof window !== 'undefined' && typeof window.setCachedAppliedPosterBundle === 'function') {
+        return await window.setCachedAppliedPosterBundle(bundle);
+      }
+
+      const payload = {
+        cachedAppliedPosterUrl: bundle.url || '',
+        cachedAppliedPosterDataUrl: bundle.dataUrl || '',
+        cachedAppliedPosterEncodingVersion: bundle.encodingVersion || 0,
+        cachedAppliedPosterRevision: bundle.revision !== undefined ? bundle.revision : 0
+      };
+
+      let writeSuccess = false;
+      try {
+        if (typeof window !== 'undefined' && window.HomebaseStorage && typeof window.HomebaseStorage.setMany === 'function') {
+          const res = await window.HomebaseStorage.setMany(payload);
+          writeSuccess = Boolean(res && res.success && (!res.rejectedKeys || res.rejectedKeys.length === 0));
+        } else if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+          await browser.storage.local.set(payload);
+          writeSuccess = true;
+        } else if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          await new Promise((resolve, reject) => {
+            chrome.storage.local.set(payload, () => {
+              if (chrome.runtime && chrome.runtime.lastError) reject(chrome.runtime.lastError);
+              else resolve();
+            });
+          });
+          writeSuccess = true;
+        } else if (typeof localStorage !== 'undefined') {
+          writeSuccess = true;
+        }
+      } catch (_) {
+        writeSuccess = false;
+      }
+
+      if (!writeSuccess) {
+        return false;
+      }
+
+      if (typeof localStorage !== 'undefined') {
+        try {
+          if (bundle.dataUrl) localStorage.setItem('cachedAppliedPosterDataUrl', bundle.dataUrl);
+          else localStorage.removeItem('cachedAppliedPosterDataUrl');
+
+          if (bundle.url) localStorage.setItem('cachedAppliedPosterUrl', bundle.url);
+          else localStorage.removeItem('cachedAppliedPosterUrl');
+
+          if (bundle.encodingVersion) localStorage.setItem('cachedAppliedPosterEncodingVersion', String(bundle.encodingVersion));
+          else localStorage.removeItem('cachedAppliedPosterEncodingVersion');
+
+          if (bundle.revision !== undefined && bundle.revision !== 0 && bundle.revision !== '0') {
+            localStorage.setItem('cachedAppliedPosterRevision', String(bundle.revision));
+          } else {
+            localStorage.removeItem('cachedAppliedPosterRevision');
+          }
+        } catch (_) {
+          try {
+            localStorage.removeItem('cachedAppliedPosterDataUrl');
+            localStorage.removeItem('cachedAppliedPosterUrl');
+            localStorage.removeItem('cachedAppliedPosterEncodingVersion');
+            localStorage.removeItem('cachedAppliedPosterRevision');
+          } catch (__) {}
+        }
+      }
+
+      return true;
+    };
 
     const cacheKeyToUse = posterCacheKey || posterUrl;
 
-    // Defer poster encoding so Apply stays responsive; work runs when the browser is idle.
-    const posterDataTaskState = { phase: 0, dataUrl: '' };
-
-    const runChunked = typeof scheduleIdleChunkedTask === 'function'
-      ? scheduleIdleChunkedTask
-      : (typeof window !== 'undefined' && typeof window.scheduleIdleChunkedTask === 'function'
-          ? window.scheduleIdleChunkedTask
-          : null);
-
-    if (runChunked) {
-      runChunked('posterDataUrlGeneration', async (state = posterDataTaskState) => {
-        try {
-          if (state.phase === 0) {
-            const storedUrl = await getCachedAppliedPosterUrl();
-            if (storedUrl !== urlToStore) {
-              return { done: true, state: { ...state, phase: 3 } }; // Race guard: applied poster changed before we started.
-            }
-            return { done: false, state: { ...state, phase: 1 } };
-          }
-
-          if (state.phase === 1) {
-            let dataUrl = '';
-            const blob = await resolvePosterBlob(urlToStore, cacheKeyToUse);
-            if (blob && blob.size > 0) {
-              dataUrl = await createStartupPosterDataUrl(blob);
-            }
-            return { done: false, state: { ...state, dataUrl, phase: 2 } };
-          }
-
-          if (state.phase === 2) {
-            const latestUrl = await getCachedAppliedPosterUrl();
-            if (latestUrl !== urlToStore) {
-              return { done: true, state: { ...state, phase: 3 } }; // Race guard: poster switched while encoding.
-            }
-
-            if (state.dataUrl && state.dataUrl.length <= TARGET_STARTUP_POSTER_DATA_URL_LENGTH) {
-              await setCachedAppliedPosterDataUrl(state.dataUrl);
-            } else {
-              await clearCachedAppliedPosterDataUrl();
-            }
-            return { done: true, state: { ...state, phase: 3 } };
-          }
-
-          return { done: true, state };
-        } catch (e) {
-          console.warn('Failed to generate data URL for poster', e);
-          return { done: true, state: { ...state, phase: 3 } };
+    const task = (async () => {
+      try {
+        if (activePosterGenerationToken !== currentToken) {
+          return '';
         }
-      }, posterDataTaskState);
-    }
+
+        // Fast-path: Check existing storage WITHOUT updating cachedAppliedPosterUrl early.
+        // Keeps committed output identity separate from pending generation identity.
+        const initialStored = await readStoredBundle();
+        if (activePosterGenerationToken !== currentToken) {
+          return '';
+        }
+
+        const isStableSource = urlToStore && !urlToStore.startsWith('blob:');
+        const isUrlMatch = initialStored.url === urlToStore;
+        const isDataUrlValid = isValidStartupPosterDataUrl(initialStored.dataUrl);
+        const isVersionMatch = initialStored.encodingVersion === targetEncodingVersion;
+        const isRevisionMatch = String(initialStored.revision) === String(targetRevision);
+
+        if (isStableSource && !forceRegenerate && isUrlMatch && isDataUrlValid && isVersionMatch && isRevisionMatch) {
+          return initialStored.dataUrl;
+        }
+
+        let blob = null;
+        const resolveFn = (typeof window !== 'undefined' && typeof window.resolvePosterBlob === 'function')
+          ? window.resolvePosterBlob
+          : (typeof resolvePosterBlob === 'function' ? resolvePosterBlob : null);
+        if (resolveFn) {
+          blob = await resolveFn(urlToStore, cacheKeyToUse);
+        }
+
+        if (activePosterGenerationToken !== currentToken) {
+          return '';
+        }
+
+        let dataUrl = '';
+        if (blob && blob.size > 0) {
+          const createPosterFn = (typeof window !== 'undefined' && typeof window.createStartupPosterDataUrl === 'function')
+            ? window.createStartupPosterDataUrl
+            : (typeof createStartupPosterDataUrl === 'function' ? createStartupPosterDataUrl : null);
+          if (createPosterFn) {
+            dataUrl = await createPosterFn(blob);
+          }
+        }
+
+        if (activePosterGenerationToken !== currentToken) {
+          return '';
+        }
+
+        // Recheck ownership after awaited encoding and after reading current storage state
+        const latestStored = await readStoredBundle();
+        if (activePosterGenerationToken !== currentToken) {
+          return '';
+        }
+
+        // Cross-tab and concurrent ownership validation:
+        // 1. If another tab changed storage to a different wallpaper while we were generating, abort.
+        if (latestStored.url !== initialStored.url && latestStored.url !== urlToStore) {
+          return '';
+        }
+
+        // 2. Intervening change analysis:
+        // Check if another tab modified storage while we were generating.
+        const hasInterveningChange =
+          latestStored.url !== initialStored.url ||
+          String(latestStored.revision) !== String(initialStored.revision) ||
+          latestStored.encodingVersion !== initialStored.encodingVersion ||
+          latestStored.dataUrl !== initialStored.dataUrl;
+
+        if (hasInterveningChange) {
+          // If storage currently holds urlToStore:
+          if (latestStored.url === urlToStore) {
+            // If another tab committed an encoding version newer than target, abort
+            if (latestStored.encodingVersion > targetEncodingVersion) {
+              return '';
+            }
+
+            // Did the intervening tab commit the exact target revision we are generating?
+            const interveningMatchesTarget = String(latestStored.revision) === String(targetRevision);
+            if (interveningMatchesTarget) {
+              // Another tab completed the exact target revision.
+              // If NOT forced and output is valid, reuse it:
+              if (!forceRegenerate && latestStored.encodingVersion === targetEncodingVersion && isValidStartupPosterDataUrl(latestStored.dataUrl)) {
+                return latestStored.dataUrl;
+              }
+              // If forceRegenerate is true, proceed to commit our newly generated output.
+            } else {
+              // The intervening tab committed a revision that differs from both initialStored and our target.
+              // Our work is stale and must not overwrite the newer intervening revision.
+              return '';
+            }
+          }
+        }
+
+        if (isValidStartupPosterDataUrl(dataUrl)) {
+          const committed = await commitStoredBundle({
+            url: urlToStore,
+            dataUrl,
+            encodingVersion: targetEncodingVersion,
+            revision: targetRevision
+          });
+          if (!committed) {
+            return '';
+          }
+          if (activePosterGenerationToken !== currentToken) {
+            return '';
+          }
+          return dataUrl;
+        } else {
+          // Output was oversized or invalid; if this target is still current, clear stale dataUrl
+          if (latestStored.url === urlToStore) {
+            await commitStoredBundle({
+              url: urlToStore,
+              dataUrl: '',
+              encodingVersion: 0,
+              revision: 0
+            });
+          }
+          return '';
+        }
+      } catch (e) {
+        console.warn('Failed to generate data URL for poster', e);
+        if (activePosterGenerationToken === currentToken) {
+          try {
+            const currentStored = await readStoredBundle();
+            if (activePosterGenerationToken === currentToken) {
+              // Ensure stale failure cannot wipe out a valid poster already committed by another tab
+              if (currentStored.url === urlToStore && !isValidStartupPosterDataUrl(currentStored.dataUrl)) {
+                await commitStoredBundle({
+                  url: urlToStore,
+                  dataUrl: '',
+                  encodingVersion: 0,
+                  revision: 0
+                });
+              }
+            }
+          } catch (_) {}
+        }
+        return '';
+      } finally {
+        if (activePosterGenerationPromise === task) {
+          activePosterGenerationPromise = null;
+          activePosterGenerationTarget = '';
+          activePosterGenerationRevision = 0;
+          activePosterGenerationEncodingVersion = STARTUP_POSTER_ENCODING_VERSION;
+          activePosterGenerationForced = false;
+        }
+      }
+    })();
+
+    activePosterGenerationPromise = task;
+    return await task;
   } catch (err) {
     console.warn('Failed to cache applied wallpaper poster', err);
+    return '';
   }
 }
 
@@ -663,7 +1031,7 @@ async function cacheAppliedWallpaperPoster(posterUrl, posterCacheKey = '') {
 // Video Lifecycle & Playback Pipeline
 // ===============================================
 
-function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
+function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '', options = {}) {
   const poster = posterUrl || 'assets/fallback.webp';
 
   // Avoid repainting when preload already drew a stable data URL and we'd swap to blob/http.
@@ -681,9 +1049,9 @@ function setWallpaperFallbackPoster(posterUrl = '', posterCacheKey = '') {
     : (typeof window !== 'undefined' && typeof window.scheduleIdleTask === 'function' ? window.scheduleIdleTask : null);
 
   if (runIdle) {
-    runIdle(() => cacheAppliedWallpaperPoster(poster, posterCacheKey).catch(() => {}), 'cacheAppliedWallpaperPoster');
+    runIdle(() => cacheAppliedWallpaperPoster(poster, posterCacheKey, options).catch(() => {}), 'cacheAppliedWallpaperPoster');
   } else {
-    setTimeout(() => cacheAppliedWallpaperPoster(poster, posterCacheKey).catch(() => {}), 1);
+    setTimeout(() => cacheAppliedWallpaperPoster(poster, posterCacheKey, options).catch(() => {}), 1);
   }
 }
 
@@ -1237,7 +1605,7 @@ function cleanupUnusedObjectUrls(currentSelection) {
   }
 }
 
-function applyWallpaperByType(selection, type = 'video') {
+function applyWallpaperByType(selection, type = 'video', options = {}) {
   if (!selection) return;
 
   const finalType = type === 'static' ? 'static' : 'video';
@@ -1246,14 +1614,23 @@ function applyWallpaperByType(selection, type = 'video') {
   const video = finalType === 'video' ? (selection.videoUrl || '') : '';
   const videoStartSequence = ++wallpaperVideoStartSequence;
 
-  setWallpaperFallbackPoster(poster, posterCacheKey);
+  const sourceRevision = (options && (options.sourceRevision !== undefined ? options.sourceRevision : options.revision)) ||
+    selection.sourceRevision || selection.revision || 0;
+  const posterOptions = { sourceRevision, ...options };
 
   const unchanged =
     lastAppliedWallpaper &&
     lastAppliedWallpaper.id === (selection.id || null) &&
     lastAppliedWallpaper.poster === poster &&
     lastAppliedWallpaper.video === video &&
-    lastAppliedWallpaper.type === finalType;
+    lastAppliedWallpaper.type === finalType &&
+    String(lastAppliedWallpaper.sourceRevision || 0) === String(sourceRevision) &&
+    !options.forceRegenerate &&
+    !options.force;
+
+  if (!unchanged) {
+    setWallpaperFallbackPoster(poster, posterCacheKey, posterOptions);
+  }
 
   currentWallpaperSelection = selection;
   cleanupUnusedObjectUrls(selection);
@@ -1274,7 +1651,8 @@ function applyWallpaperByType(selection, type = 'video') {
       id: selection.id || null,
       poster,
       video: '',
-      type: finalType
+      type: finalType,
+      sourceRevision
     };
     updateSettingsPreview(selection, finalType);
     return;
@@ -1321,7 +1699,8 @@ function applyWallpaperByType(selection, type = 'video') {
         id: selection.id || null,
         poster,
         video,
-        type: finalType
+        type: finalType,
+        sourceRevision
       };
     };
 
@@ -2113,6 +2492,8 @@ if (typeof window !== 'undefined') {
   window.warmGalleryPosterHydration = warmGalleryPosterHydration;
   window.cacheAppliedWallpaperVideo = cacheAppliedWallpaperVideo;
   window.cacheAppliedWallpaperPoster = cacheAppliedWallpaperPoster;
+  window.isValidStartupPosterDataUrl = isValidStartupPosterDataUrl;
+  window.canvasToDataUrlAsync = canvasToDataUrlAsync;
 
   // Video Lifecycle function bindings
   window.setWallpaperFallbackPoster = setWallpaperFallbackPoster;
@@ -2169,6 +2550,8 @@ window.HomebaseWallpaperController = {
   fetchGalleryManifestWithTimeout,
 
   // Pure Helpers: Poster Encoding & Snapshots
+  isValidStartupPosterDataUrl,
+  canvasToDataUrlAsync,
   createOptimizedPosterDataUrl,
   createStartupPosterDataUrl,
   buildVideoPosterFromFile,
@@ -2241,7 +2624,21 @@ window.HomebaseWallpaperController = {
   getInitialWallpaperState: () => initialWallpaperState,
   setInitialWallpaperState: (val) => { initialWallpaperState = val || {}; },
   getActiveCrossfadeTransition: () => activeCrossfadeTransition,
-  getLastAppliedWallpaper: () => lastAppliedWallpaper
+  getLastAppliedWallpaper: () => lastAppliedWallpaper,
+  getActivePosterGenerationToken: () => activePosterGenerationToken,
+  getActivePosterGenerationTarget: () => activePosterGenerationTarget,
+  getActivePosterGenerationRevision: () => activePosterGenerationRevision,
+  getActivePosterGenerationEncodingVersion: () => activePosterGenerationEncodingVersion,
+  getActivePosterGenerationForced: () => activePosterGenerationForced,
+  getActivePosterGenerationPromise: () => activePosterGenerationPromise,
+  resetActivePosterGenerationState: () => {
+    activePosterGenerationPromise = null;
+    activePosterGenerationTarget = '';
+    activePosterGenerationRevision = 0;
+    activePosterGenerationEncodingVersion = STARTUP_POSTER_ENCODING_VERSION;
+    activePosterGenerationForced = false;
+    activePosterGenerationToken = 0;
+  }
 };
 
 setupWallpaperVisibilityListener();

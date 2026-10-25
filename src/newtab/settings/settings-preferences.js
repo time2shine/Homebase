@@ -530,7 +530,7 @@ function handleSettingsStorageChange(changes, area) {
       }
     } catch (e) {}
     if (typeof applySidebarVisibility === 'function') {
-      applySidebarVisibility(nextSidebar);
+      applySidebarVisibility(nextSidebar, { persist: false });
     }
     if (typeof applyWidgetVisibility === 'function') {
       applyWidgetVisibility();

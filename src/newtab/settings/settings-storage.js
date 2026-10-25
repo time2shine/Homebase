@@ -324,7 +324,7 @@
         setTodo(storedShowTodo, { persist: false, applyVisibility: false, updateUI: false });
       }
       if (typeof applySidebarVisibility === 'function') {
-        applySidebarVisibility(storedShowSidebar);
+        applySidebarVisibility(storedShowSidebar, { persist: false });
       }
       if (typeof applyWidgetVisibility === 'function') {
         applyWidgetVisibility();
@@ -515,7 +515,7 @@
           }
         } catch (e) {}
         if (typeof applySidebarVisibility === 'function') {
-          applySidebarVisibility(val !== false);
+          applySidebarVisibility(val !== false, { persist: false });
         }
         if (typeof applyWidgetVisibility === 'function') {
           applyWidgetVisibility();

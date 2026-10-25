@@ -2,6 +2,12 @@
 
 All notable changes to Homebase will be documented in this file.
 
+## v1.0.7 — 2026-10-26
+
+### Fixed
+- **Multi-Tab Startup & Sidebar Storage Write Loop**: Resolved a critical issue where having multiple Homebase tabs open in Firefox (e.g. three tabs, even when opened slowly) caused new tabs to stall or become unresponsive during startup (stuck at bookmarks loading with unresponsive search and buttons). Eliminated an uncontrolled cross-tab storage write loop on `appShowSidebar` between startup hydration and incoming storage change events by strictly applying non-persisting updates during initial load and incoming sync.
+- **Wallpaper Tab Switching & Playback Lifecycle**: Fixed playback race conditions and potential media stalls when switching between active and background tabs. Background video source loading is cleanly deferred until the tab becomes visible, pending source loads settle immediately upon tab hide without waiting for animation frames, and playback resumption is strictly validated against sequence tokens and current wallpaper selection to prevent duplicate playback setups or stale media resumes.
+
 ## v1.0.6 — 2026-10-23
 
 ### Improved

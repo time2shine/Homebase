@@ -1,8 +1,8 @@
 # Homebase — Project Context & Repository Knowledge Base
 
 **Project:** Homebase (Multi-browser Manifest V3 Dashboard Extension)  
-**Source Version:** `1.0.6` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
-**GitHub Release / Tag:** `v1.0.6` (October 23, 2026)  
+**Source Version:** `1.0.7` (`package.json`, manifests, `src/data.js`, `src/CHANGELOG.md`)  
+**GitHub Release / Tag:** `v1.0.6` (October 23, 2026; `v1.0.7` in preparation)  
 **Recorded Store Status (All Browsers):** See [Section 2.1](#21-published-store-releases)  
 **Active Development Cycle:** None active / ad-hoc task execution (historical cycles archived in `docs/cycles/`)  
 **Repository:** [https://github.com/time2shine/Homebase](https://github.com/time2shine/Homebase)  
@@ -181,10 +181,27 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
 ## 7. Current Handoff
 
 - **Release Baseline**: Tag `v1.0.6` (October 23, 2026), building on tag `v1.0.5` (commit `6e12868`, October 22, 2026).
-- **Current Objective**: Finalize and push reviewed post-v1.0.6 fixes for the cross-tab sidebar storage write loop and wallpaper cancelled-load settlement & playback resumption.
+- **Current Objective**: Prepare and package Homebase v1.0.7 containing the reviewed cross-tab sidebar storage write loop fix and wallpaper lifecycle resumption improvements.
 - **Published Store Release Status**: All browser store publication statuses, review states, reporting dates, and verification records are centralized exclusively in [Section 2.1 — Published Store Releases](#21-published-store-releases).
+- **Release Preparation (v1.0.7 — October 26, 2026)**:
+  - Scope: Multi-tab startup reliability (elimination of cross-tab sidebar storage write cascades) and video wallpaper playback lifecycle hardening (immediate cancellation settlement and guarded playback resumption across tab switches).
+  - Plain-Language Summary:
+    - Multi-Tab Startup Reliability: Fixed an issue where having multiple Homebase tabs open in Firefox (e.g. three tabs, even when opened slowly) caused new tabs to freeze during startup (stuck at bookmarks loading with unresponsive search and buttons). Eliminated an uncontrolled cross-tab storage write cascade on `appShowSidebar` between startup hydration and incoming storage change events by applying explicit non-persisting updates during initial load and incoming sync.
+    - Wallpaper Tab Switching: Enhanced video wallpaper playback when switching tabs, ensuring smooth pause and clean resumption without background stutter, duplicate playback setups, or stale media resumes.
+  - Packaged Archives:
+    - `dist/homebase-chrome-1.0.7.zip` (3,472,887 bytes, SHA-256 `9da91cfacec0f2d8695fe3ce051fb5d1340a39c344c1a976beb70e624bc78296`)
+    - `dist/homebase-firefox-1.0.7.zip` (3,473,046 bytes, SHA-256 `7c0aa6a418b5ec7b3eeef28a89a218d7e49eacaaab1dea002ff703668aa602e8`)
+    - `dist/homebase-edge-1.0.7.zip` (3,472,919 bytes, SHA-256 `db0d6b27fdc30da866d5bc9d011bf8e945cf05f4cfb0ddebfe0768c2ca4cad65`)
+    - Older release archives (`dist/*-1.0.6.zip`, `dist/*-1.0.5.zip`, `dist/*-1.0.4.zip`) are preserved intact in `dist/`.
+  - Manual Verification State: User confirmed manual checklist PASS across all three target browsers (**Mozilla Firefox**, **Google Chrome**, and **Microsoft Edge**) on October 25–26, 2026:
+    - Three open Homebase tabs remain responsive without freezing or startup delays.
+    - Search input, autocomplete suggestions, and interactive buttons respond immediately.
+    - Sidebar visibility toggle Save persists correctly across reload, and Cancel properly restores the prior setting without persisting preview changes.
+    - Live video wallpaper resumes cleanly when returning to the tab.
+  - Automated Verification: Full 4-stage test pipeline passed (syntax validation across all JS files, static invariant checks with 652 unique declarations across 76 deferred scripts, 720 unit tests, and headless Edge CDP smoke test).
+  - Store Status Distinction: Store publication status remains strictly separate from release preparation; see [Section 2.1](#21-published-store-releases) for canonical store publication and review statuses. Preparation and packaging of v1.0.7 packages does not alter store submission states.
 - **Cross-Tab Sidebar Storage Feedback Loop & Multi-Tab Startup Stall Fix (October 24-26, 2026)**:
-  - Symptom & Concrete Root Cause: Opening a 3rd Homebase tab in Firefox caused the tab to become unresponsive (body stalled at `preload bookmarks-booting`, typing in Search worked natively but autocomplete did not appear, Enter key reloaded the page, button clicks were unresponsive, video did not play, and `browser.storage.local.get` timed out >3000ms across all open tabs). The concrete root cause was identified as an infinite cross-tab storage write cascade on `appShowSidebar`. During startup, `loadSettingsStorage()` read `storedShowSidebar` and called `applySidebarVisibility(storedShowSidebar)` without `{ persist: false }`, writing `appShowSidebar` to `browser.storage.local`. In Firefox, `storage.onChanged` fires across open tabs; `handleSettingsStorageChange` in `src/newtab/settings/settings-preferences.js` received `changes[APP_SHOW_SIDEBAR_KEY]` and called `applySidebarVisibility(nextSidebar)` without `{ persist: false }`, writing `appShowSidebar` right back to storage. Between two open tabs, this created an exponential write ping-pong (>6,450 writes in seconds) that ballooned in-flight storage queue depth to over 1,550 pending requests, starving Tab 3's initial storage reads in `loadFolderMetadata` / `loadBookmarks` and stalling `initializePage()` before event listeners (`setupDockNavigation`, `setupLazySettingsButton`, `setupSearch`) could attach. (This storage feedback loop was the sole root cause of the startup stall; wallpaper lifecycle improvements did not cause or fix this stall).
+  - Symptom & Concrete Root Cause: Having three Homebase tabs open in Firefox (even when opened slowly) caused the 3rd tab to become unresponsive (body stalled at `preload bookmarks-booting`, typing in Search worked natively but autocomplete did not appear, Enter key reloaded the page, button clicks were unresponsive, video did not play, and `browser.storage.local.get` timed out >3000ms across all open tabs). The concrete root cause was identified as an infinite cross-tab storage write cascade on `appShowSidebar`. During startup, `loadSettingsStorage()` read `storedShowSidebar` and called `applySidebarVisibility(storedShowSidebar)` without `{ persist: false }`, writing `appShowSidebar` to `browser.storage.local`. In Firefox, `storage.onChanged` fires across open tabs; `handleSettingsStorageChange` in `src/newtab/settings/settings-preferences.js` received `changes[APP_SHOW_SIDEBAR_KEY]` and called `applySidebarVisibility(nextSidebar)` without `{ persist: false }`, writing `appShowSidebar` right back to storage. Between two open tabs, this created an exponential write ping-pong (>6,450 writes in seconds) that ballooned in-flight storage queue depth to over 1,550 pending requests, starving Tab 3's initial storage reads in `loadFolderMetadata` / `loadBookmarks` and stalling `initializePage()` before event listeners (`setupDockNavigation`, `setupLazySettingsButton`, `setupSearch`) could attach. (This storage feedback loop was the sole root cause of the startup stall; wallpaper lifecycle improvements did not cause or fix this stall).
   - Minimal Fix:
     1. Passed `{ persist: false }` to `applySidebarVisibility` in `handleSettingsStorageChange` in `src/newtab/settings/settings-preferences.js` (aligning it with all other widget preference handlers to break `onChanged` feedback loops).
     2. Passed `{ persist: false }` to `applySidebarVisibility` in `loadSettingsStorage` and `updateSettingsState` in `src/newtab/settings/settings-storage.js` to avoid read-to-write feedback and redundant writes.
@@ -193,7 +210,7 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
     - Added 4 focused regression tests in `tests/unit/sidebar-storage-lifecycle.test.mjs` verifying: (1) initial settings load applies sidebar visibility with zero writebacks; (2) incoming `storage.onChanged` updates UI with zero writebacks; (3) user sidebar change followed by Save persists correctly after live preview; and (4) Cancel restores prior setting without persisting the preview.
     - Automated test suite: 720/720 tests pass across all 4 stages.
   - Manual Verification State: User confirmed manual checklist PASS in Firefox on October 25-26, 2026:
-    - Multi-Tab Startup: Opening 3+ tabs in rapid succession starts up smoothly and reaches interactive state without hanging or stalling at `preload bookmarks-booting`.
+    - Multi-Tab Startup: Three open Homebase tabs start up smoothly and remain responsive without hanging or stalling at `preload bookmarks-booting` (even when opened slowly).
     - Search & Buttons: Typing in search displays autocomplete suggestions, Enter navigates correctly without raw page reload, and buttons (dock, settings, etc.) respond immediately to clicks.
     - Sidebar Save/Reload & Cancel: Toggling sidebar visibility in Settings and clicking Save persists correctly across page reload; clicking Cancel properly restores the previous setting and discards the preview without persisting.
     - Verification Boundary: Manual testing was performed and confirmed by the user in Firefox. Manual testing in Chrome and Edge was NOT performed or claimed in this cycle.
@@ -358,5 +375,5 @@ Tasks are scoped proportionally (Tier A: Visual Fix, Tier B: Behaviour Change, T
   - User-Reported Testing (October 18, 2026): Informal user-reported observations in a live setup recorded Performance Mode OFF idle CPU generally around 1–4% and Performance Mode ON idle CPU generally around 0.02–1.3%. User repeated the comparison with similar results; findings suggest reduced idle CPU in the tested setup. Exact browser/version, sample timing, and complete repeated-run data were not supplied and are not invented. No claims made of precise percentage savings, faster startup, or GPU/battery improvements.
   - Automated Measurement Status: Documented in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md) ("The attempted automated setup did not reliably load and measure the installed extension; no automated performance results were obtained.").
   - Standardized Manual Protocol: Documented 8-run alternating manual measurement protocol in [`docs/performance-mode-impact.md`](docs/performance-mode-impact.md).
-- **Working Tree Changes**: Reviewed changes committed; working tree clean. Unpacked targets rebuilt (`dist/chrome`, `dist/firefox`, `dist/edge`).
+- **Working Tree Changes**: Homebase v1.0.7 release candidate prepared with synchronized manifests, package metadata, release notes, changelog, and ZIP packages (`dist/homebase-*-1.0.7.zip`); uncommitted, awaiting release commit authorization.
 - **Last Updated Date**: October 26, 2026

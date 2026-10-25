@@ -147,23 +147,23 @@ const GLASS_STYLES = [
 ];
 
 const WHATS_NEW = {
-  version: '1.0.6',
-  date: '2026-10-23',
+  version: '1.0.7',
+  date: '2026-10-26',
   items: [
     {
-      type: 'IMPROVED',
-      title: 'Wallpaper startup performance',
-      desc: 'Reduced wallpaper startup work and eliminated main-thread poster encoding delays for faster dashboard loading.'
-    },
-    {
-      type: 'IMPROVED',
-      title: 'Cached poster reuse',
-      desc: 'Reuses validated startup wallpaper posters seamlessly without unnecessary re-encoding on launch.'
+      type: 'FIX',
+      title: 'Multi-tab startup reliability',
+      desc: 'Fixed an issue where having multiple Homebase tabs open could cause new tabs to stall or become unresponsive.'
     },
     {
       type: 'FIX',
-      title: 'Reliable poster updates',
-      desc: 'Ensures wallpaper updates and forced regenerations reliably refresh and commit current poster artwork.'
+      title: 'Wallpaper tab switching',
+      desc: 'Enhanced video wallpaper playback when switching tabs, ensuring smooth pause and clean resumption without background stutter.'
+    },
+    {
+      type: 'IMPROVED',
+      title: 'Settings storage efficiency',
+      desc: 'Eliminated background storage write cascades on sidebar visibility to ensure instant startup across open tabs.'
     }
   ]
 };

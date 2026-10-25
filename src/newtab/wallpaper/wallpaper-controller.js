@@ -33,11 +33,92 @@ let activePosterGenerationToken = 0;
 let lastAppliedWallpaper = { id: null, poster: '', video: '', type: '' };
 let backgroundVideoSourceLoadPromise = Promise.resolve();
 let backgroundVideoSourceLoadGeneration = 0;
+let pendingSourceLoadOperation = null;
 let wallpaperVideoStartSequence = 0;
+let wallpaperResumeSequence = 0;
 let backgroundVideoCrossfadeSetupKey = '';
 let videoPlaybackController = null;
 let backgroundCrossfadeTimeout = null;
 let activeCrossfadeTransition = null;
+
+function createSourceLoadOperation(generation) {
+  let settled = false;
+  const tasks = [];
+  const scheduledHandles = [];
+
+  const operation = {
+    generation,
+    get settled() {
+      return settled;
+    },
+    registerHandle: (type, id) => {
+      if (settled) {
+        try {
+          if (type === 'raf' && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(id);
+          } else if (type === 'timeout' && typeof clearTimeout === 'function') {
+            clearTimeout(id);
+          }
+        } catch (_) {}
+        return;
+      }
+      scheduledHandles.push({ type, id });
+    },
+    unregisterHandle: (id) => {
+      const idx = scheduledHandles.findIndex((h) => h.id === id);
+      if (idx !== -1) {
+        scheduledHandles.splice(idx, 1);
+      }
+    },
+    addTaskCompletion: (completeFn) => {
+      if (settled) {
+        try { completeFn(); } catch (_) {}
+        return;
+      }
+      tasks.push(completeFn);
+    },
+    cancelAndSettle: () => {
+      if (settled) return;
+      settled = true;
+      if (pendingSourceLoadOperation === operation) {
+        pendingSourceLoadOperation = null;
+      }
+      while (scheduledHandles.length > 0) {
+        const handle = scheduledHandles.pop();
+        try {
+          if (handle.type === 'raf' && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(handle.id);
+          } else if (handle.type === 'timeout' && typeof clearTimeout === 'function') {
+            clearTimeout(handle.id);
+          }
+        } catch (_) {}
+      }
+      while (tasks.length > 0) {
+        const complete = tasks.shift();
+        try {
+          complete();
+        } catch (_) {}
+      }
+    },
+    finishIfCurrent: () => {
+      if (settled) return;
+      settled = true;
+      if (pendingSourceLoadOperation === operation) {
+        pendingSourceLoadOperation = null;
+      }
+    }
+  };
+
+  return operation;
+}
+
+function cancelPendingSourceLoadOperation() {
+  if (pendingSourceLoadOperation) {
+    const op = pendingSourceLoadOperation;
+    op.cancelAndSettle();
+  }
+}
+
 
 let galleryHydrationWarmPromise = null;
 
@@ -445,6 +526,7 @@ function buildVideoPosterFromFile(file) {
 
 // --- Pure Helpers: UI Controls & Playback Cleanup ---
 function cleanupBackgroundPlayback() {
+  cancelPendingSourceLoadOperation();
   backgroundVideoSourceLoadGeneration += 1;
   backgroundVideoCrossfadeSetupKey = '';
 
@@ -1137,6 +1219,18 @@ async function ensurePlayableSelection(selection) {
   return selection;
 }
 
+function getMediaElementSourceSrc(videoEl) {
+  try {
+    const source = videoEl.querySelector('source');
+    if (source) {
+      return (typeof source.getAttribute === 'function' ? source.getAttribute('src') : source.src) || '';
+    }
+    return (typeof videoEl.getAttribute === 'function' ? videoEl.getAttribute('src') : videoEl.src) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 async function setBackgroundVideoSources(videoUrl, posterUrl = '') {
   const isPerf = typeof isPerformanceModeEnabled === 'function' ? isPerformanceModeEnabled() : false;
   if (isPerf) return;
@@ -1150,9 +1244,9 @@ async function setBackgroundVideoSources(videoUrl, posterUrl = '') {
     const videoUpdates = videos.map((v) => {
       try {
         const source = v.querySelector('source');
-        const currentSrc = source ? (source.getAttribute('src') || '') : (v.getAttribute('src') || '');
+        const currentSrc = getMediaElementSourceSrc(v);
         const desiredPoster = posterUrl || '';
-        const needsUpdate = currentSrc !== videoUrl || v.poster !== desiredPoster;
+        const needsUpdate = currentSrc !== videoUrl || v.poster !== desiredPoster || v.readyState === 0;
         return { v, source, desiredPoster, needsUpdate };
       } catch (e) {
         return { v, source: null, desiredPoster: posterUrl || '', needsUpdate: false };
@@ -1167,13 +1261,61 @@ async function setBackgroundVideoSources(videoUrl, posterUrl = '') {
       return;
     }
 
+    // If document is hidden, keep the poster visible but defer video loading into DOM
+    if (typeof document !== 'undefined' && document.hidden) {
+      cancelPendingSourceLoadOperation();
+      videoUpdates.forEach(({ v, desiredPoster }) => {
+        try {
+          if (desiredPoster && v.poster !== desiredPoster) {
+            v.poster = desiredPoster;
+          }
+        } catch (e) {}
+      });
+      if (typeof recordStartupPerfEvent === 'function') {
+        recordStartupPerfEvent('newtab:video-source-load-deferred-hidden');
+      }
+      return;
+    }
+
+    cancelPendingSourceLoadOperation();
     const loadGeneration = ++backgroundVideoSourceLoadGeneration;
+    const operation = createSourceLoadOperation(loadGeneration);
+    pendingSourceLoadOperation = operation;
+
     const loadTasks = videoUpdates.map(({ v, source, desiredPoster, needsUpdate }, index) => {
       return new Promise((resolve) => {
         if (!needsUpdate) {
           resolve();
           return;
         }
+
+        let taskSettled = false;
+        let currentHandle = null;
+        let currentHandleType = null;
+
+        const clearTaskHandle = () => {
+          if (currentHandle !== null) {
+            operation.unregisterHandle(currentHandle);
+            try {
+              if (currentHandleType === 'raf' && typeof cancelAnimationFrame === 'function') {
+                cancelAnimationFrame(currentHandle);
+              } else if (currentHandleType === 'timeout' && typeof clearTimeout === 'function') {
+                clearTimeout(currentHandle);
+              }
+            } catch (_) {}
+            currentHandle = null;
+            currentHandleType = null;
+          }
+        };
+
+        const settleTask = () => {
+          if (taskSettled) return;
+          taskSettled = true;
+          clearTaskHandle();
+          resolve();
+        };
+
+        operation.addTaskCompletion(settleTask);
 
         try {
           try { v.pause(); } catch (e) {}
@@ -1188,8 +1330,15 @@ async function setBackgroundVideoSources(videoUrl, posterUrl = '') {
 
           const loadVideo = () => {
             try {
+              clearTaskHandle();
               const currentPerf = typeof isPerformanceModeEnabled === 'function' ? isPerformanceModeEnabled() : false;
-              if (loadGeneration === backgroundVideoSourceLoadGeneration && !currentPerf) {
+              const isHidden = typeof document !== 'undefined' && document.hidden;
+              if (
+                !operation.settled &&
+                loadGeneration === backgroundVideoSourceLoadGeneration &&
+                !currentPerf &&
+                !isHidden
+              ) {
                 try {
                   v.load();
                   if (typeof recordStartupPerfEvent === 'function') {
@@ -1199,26 +1348,41 @@ async function setBackgroundVideoSources(videoUrl, posterUrl = '') {
                 try { v.currentTime = 0; } catch (e) {}
               }
             } finally {
-              resolve();
+              settleTask();
             }
           };
 
           if (typeof document !== 'undefined' && document.hidden) {
-            setTimeout(loadVideo, 0);
+            settleTask();
           } else if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(loadVideo);
+            currentHandleType = 'raf';
+            currentHandle = requestAnimationFrame(() => {
+              operation.unregisterHandle(currentHandle);
+              currentHandle = null;
+              if (taskSettled || operation.settled) return;
+              currentHandleType = 'raf';
+              currentHandle = requestAnimationFrame(loadVideo);
+              operation.registerHandle('raf', currentHandle);
             });
+            operation.registerHandle('raf', currentHandle);
           } else {
-            setTimeout(loadVideo, 0);
+            currentHandleType = 'timeout';
+            currentHandle = setTimeout(loadVideo, 0);
+            operation.registerHandle('timeout', currentHandle);
           }
         } catch (e) {
-          resolve();
+          settleTask();
         }
       });
     });
 
-    backgroundVideoSourceLoadPromise = Promise.all(loadTasks).then(() => undefined).catch(() => undefined);
+    backgroundVideoSourceLoadPromise = Promise.all(loadTasks)
+      .then(() => {
+        operation.finishIfCurrent();
+      })
+      .catch(() => {
+        operation.finishIfCurrent();
+      });
 
     await backgroundVideoSourceLoadPromise;
     if (typeof recordStartupPerfEvent === 'function') {
@@ -1239,6 +1403,7 @@ function startBackgroundVideosAfterSourceLoad(sourceLoadPromise, startSequence, 
 
       if (startSequence !== wallpaperVideoStartSequence) return;
       if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
       if (!current || (current.id || null) !== selectionId) return;
       if ((current.posterUrl || '') !== poster) return;
       if (finalType === 'video' && (current.videoUrl || '') !== video) return;
@@ -1255,17 +1420,8 @@ function startBackgroundVideosAfterSourceLoad(sourceLoadPromise, startSequence, 
       if (crossfadeKey === backgroundVideoCrossfadeSetupKey) {
         const activeVideo = document.querySelector('.background-video.is-active');
         if (activeVideo && activeVideo.paused) {
-          if (typeof document !== 'undefined' && document.hidden) {
-            activeVideo.dataset.wasPlaying = 'true';
-            return;
-          }
           activeVideo.play().catch(() => {});
         }
-        return;
-      }
-
-      if (typeof document !== 'undefined' && document.hidden) {
-        startBackgroundVideos();
         return;
       }
 
@@ -1285,6 +1441,7 @@ function startBackgroundVideosAfterSourceLoad(sourceLoadPromise, startSequence, 
 function waitForWallpaperReady(selection, type = 'video') {
   return new Promise((resolve) => {
     if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) return resolve();
+    if (typeof document !== 'undefined' && document.hidden) return resolve();
     if (!selection) return resolve();
 
     const finalType = type === 'static' ? 'static' : 'video';
@@ -1319,6 +1476,7 @@ function waitForWallpaperReady(selection, type = 'video') {
     activeVideo.addEventListener('error', onError);
   });
 }
+
 
 function setupBackgroundVideoCrossfade() {
   if (typeof isPerformanceModeEnabled === 'function' && isPerformanceModeEnabled()) {
@@ -1740,6 +1898,7 @@ function applyWallpaperByType(selection, type = 'video', options = {}) {
 }
 
 function clearBackgroundVideos() {
+  cancelPendingSourceLoadOperation();
   backgroundVideoSourceLoadGeneration += 1;
   backgroundVideoCrossfadeSetupKey = '';
   if (lastAppliedWallpaper) {
@@ -1801,6 +1960,9 @@ function updateSettingsPreview(selection, type = 'video') {
 async function resumeWallpaperPlaybackIfEligible() {
   if (typeof document === 'undefined' || document.hidden) return false;
 
+  const resumeSequence = ++wallpaperResumeSequence;
+  const startSequence = wallpaperVideoStartSequence;
+
   const isPerfMode = typeof isPerformanceModeEnabled === 'function'
     ? isPerformanceModeEnabled()
     : (typeof window !== 'undefined' && typeof window.isPerformanceModeEnabled === 'function'
@@ -1823,11 +1985,13 @@ async function resumeWallpaperPlaybackIfEligible() {
     : (typeof window !== 'undefined' && window.appBatteryOptimizationPreference);
   if (batteryPref) {
     const isDischarging = await checkBatteryStatus();
+    if (resumeSequence !== wallpaperResumeSequence || (typeof document !== 'undefined' && document.hidden)) {
+      return false;
+    }
     if (isDischarging) {
       cleanupBackgroundPlayback();
       return false;
     }
-    if (typeof document !== 'undefined' && document.hidden) return false;
     const isPerfAfterBattery = typeof isPerformanceModeEnabled === 'function'
       ? isPerformanceModeEnabled()
       : (typeof window !== 'undefined' && typeof window.isPerformanceModeEnabled === 'function'
@@ -1846,16 +2010,6 @@ async function resumeWallpaperPlaybackIfEligible() {
   const poster = current.posterUrl || '';
   const video = current.videoUrl || '';
   const crossfadeKey = `${selectionId || ''}|${video}|${poster}`;
-
-  if (
-    !lastAppliedWallpaper ||
-    lastAppliedWallpaper.id !== selectionId ||
-    lastAppliedWallpaper.poster !== poster ||
-    lastAppliedWallpaper.video !== video ||
-    lastAppliedWallpaper.type !== 'video'
-  ) {
-    return false;
-  }
 
   if (backgroundVideoCrossfadeSetupKey === crossfadeKey) {
     if (activeCrossfadeTransition && typeof activeCrossfadeTransition.finish === 'function') {
@@ -1902,6 +2056,49 @@ async function resumeWallpaperPlaybackIfEligible() {
     }
   }
 
+  const videos = Array.from(document.querySelectorAll('.background-video'));
+  if (!videos.length) return false;
+
+  const needsSourceUpdate = videos.some((v) => {
+    const currentSrc = getMediaElementSourceSrc(v);
+    return currentSrc !== video || v.readyState === 0;
+  });
+
+  if (needsSourceUpdate) {
+    await setBackgroundVideoSources(video, poster);
+  }
+
+  const currentNow = currentWallpaperSelection || null;
+  const currentTypeNow = (lastAppliedWallpaper && lastAppliedWallpaper.type) || wallpaperTypePreference;
+  const isPerfModeNow = typeof isPerformanceModeEnabled === 'function'
+    ? isPerformanceModeEnabled()
+    : (typeof window !== 'undefined' && typeof window.isPerformanceModeEnabled === 'function'
+        ? window.isPerformanceModeEnabled()
+        : false);
+  const isHiddenNow = typeof document !== 'undefined' && document.hidden;
+
+  if (
+    resumeSequence !== wallpaperResumeSequence ||
+    startSequence !== wallpaperVideoStartSequence ||
+    isHiddenNow ||
+    isPerfModeNow ||
+    !currentNow ||
+    (currentNow.id || null) !== selectionId ||
+    (currentNow.videoUrl || '') !== video ||
+    (currentNow.posterUrl || '') !== poster ||
+    currentTypeNow === 'static'
+  ) {
+    return false;
+  }
+
+  lastAppliedWallpaper = {
+    id: selectionId,
+    poster,
+    video,
+    type: 'video',
+    sourceRevision: (currentNow && (currentNow.sourceRevision || currentNow.revision)) || (lastAppliedWallpaper && lastAppliedWallpaper.sourceRevision) || 0
+  };
+
   startBackgroundVideos();
   if (setupBackgroundVideoCrossfade()) {
     if (typeof recordStartupPerfEvent === 'function') {
@@ -1919,10 +2116,13 @@ function handleWallpaperVisibilityChange() {
   const videos = document.querySelectorAll('.background-video');
 
   if (document.hidden) {
+    cancelPendingSourceLoadOperation();
+    backgroundVideoSourceLoadGeneration += 1;
+    wallpaperResumeSequence += 1;
     videos.forEach((v) => {
       if (!v.paused) {
         v.dataset.wasPlaying = 'true';
-        v.pause();
+        try { v.pause(); } catch (e) {}
       }
     });
   } else {
@@ -2631,6 +2831,9 @@ window.HomebaseWallpaperController = {
   getActivePosterGenerationEncodingVersion: () => activePosterGenerationEncodingVersion,
   getActivePosterGenerationForced: () => activePosterGenerationForced,
   getActivePosterGenerationPromise: () => activePosterGenerationPromise,
+  getWallpaperResumeSequence: () => wallpaperResumeSequence,
+  getPendingSourceLoadOperation: () => pendingSourceLoadOperation,
+  cancelPendingSourceLoadOperation,
   resetActivePosterGenerationState: () => {
     activePosterGenerationPromise = null;
     activePosterGenerationTarget = '';

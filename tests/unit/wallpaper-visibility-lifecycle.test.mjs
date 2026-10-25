@@ -216,6 +216,7 @@ function createWallpaperVisibilityEnvironment(options = {}) {
     setTimeout: envSetTimeout,
     clearTimeout: envClearTimeout,
     requestAnimationFrame: envRAF,
+    cancelAnimationFrame: envClearTimeout,
     Image: class {
       constructor() {
         envSetTimeout(() => {
@@ -936,6 +937,295 @@ test('15. Transition ownership: delayed callback from interrupted transition A c
   assert.equal(videos[1].paused, false, 'Next loop: videos[1] is playing');
   assert.equal(videos.filter((v) => v.classList.contains('is-active')).length, 1, 'Exactly one video active in next loop');
 });
+
+test('16. Markup coverage: background video elements do not declare autoplay', () => {
+  const htmlPath = path.join(rootDir, 'src/new-tab.html');
+  const html = fs.readFileSync(htmlPath, 'utf8');
+
+  const videoTagMatches = html.match(/<video[^>]*class=["'][^"']*background-video[^"']*["'][^>]*>/gi) || [];
+  assert.ok(videoTagMatches.length >= 2, 'Must find at least 2 background-video elements in new-tab.html');
+
+  for (const tag of videoTagMatches) {
+    assert.equal(
+      /\bautoplay\b/i.test(tag),
+      false,
+      `Video element "${tag}" must not declare the autoplay attribute so the wallpaper controller is the single canonical owner of playback`
+    );
+    assert.equal(
+      /\bmuted\b/i.test(tag),
+      true,
+      `Video element "${tag}" must declare muted`
+    );
+    assert.equal(
+      /\bplaysinline\b/i.test(tag),
+      true,
+      `Video element "${tag}" must declare playsinline`
+    );
+    assert.equal(
+      /\bpreload=["']none["']/i.test(tag),
+      true,
+      `Video element "${tag}" must declare preload="none"`
+    );
+  }
+});
+
+test('17. Tab becomes hidden before scheduled source loading executes: load aborted and resumes cleanly on visible', async () => {
+  const env = createWallpaperVisibilityEnvironment({
+    initialHidden: false,
+    initialType: 'video',
+    initialSelection: { id: 'wp-sunset', videoUrl: 'sunset.mp4', posterUrl: 'sunset.webp' }
+  });
+
+  const { videos } = env;
+
+  // Trigger a new wallpaper source load
+  const p = env.context.setBackgroundVideoSources('sunset2.mp4', 'sunset2.webp');
+
+  // Immediately hide document before scheduled rAF runs
+  env.setDocumentHidden(true);
+
+  await p;
+  await new Promise((r) => setTimeout(r, 30));
+
+  // Assert: While hidden, videos must not be loading or playing
+  videos.forEach((v) => {
+    assert.equal(v.paused, true, 'Videos must remain paused while hidden');
+    assert.equal(v.playCalls, 0, 'No play calls while hidden');
+  });
+
+  // Now return to the tab: Hidden -> Visible
+  env.setDocumentHidden(false);
+  await new Promise((r) => setTimeout(r, 50));
+
+  // Active video should be playing the current eligible wallpaper
+  const activeVideo = videos.find((v) => v.classList.contains('is-active'));
+  assert.ok(activeVideo, 'Active video must exist after returning to tab');
+  assert.equal(activeVideo.paused, false, 'Active video must resume playback on visible');
+  assert.ok(activeVideo.playCalls >= 1, 'Active video must have called play()');
+});
+
+test('18. Tab starts hidden and later becomes visible: source loading deferred until visible', async () => {
+  const env = createWallpaperVisibilityEnvironment({
+    initialHidden: true,
+    initialType: 'video',
+    initialSelection: { id: 'wp-hidden-start', videoUrl: 'hidden.mp4', posterUrl: 'hidden.webp' }
+  });
+
+  const { videos } = env;
+  await new Promise((r) => setTimeout(r, 30));
+
+  // While hidden, no video elements should have loaded media or started playing
+  videos.forEach((v, idx) => {
+    assert.equal(v.paused, true, `Video ${idx} must be paused while hidden`);
+    assert.equal(v.playCalls, 0, `Video ${idx} must have 0 play calls while hidden`);
+  });
+
+  // Now become visible
+  env.setDocumentHidden(false);
+  await new Promise((r) => setTimeout(r, 50));
+
+  // Active video should now be loaded and playing
+  const activeVideo = videos.find((v) => v.classList.contains('is-active'));
+  assert.ok(activeVideo, 'Active video must be set up after becoming visible');
+  assert.equal(activeVideo.paused, false, 'Active video must be playing after becoming visible');
+  assert.ok(activeVideo.playCalls >= 1, 'Active video must have called play()');
+});
+
+test('19. Rapid repeated hide/show during initialization: settles cleanly with exactly 1 active playback', async () => {
+  const env = createWallpaperVisibilityEnvironment({
+    initialHidden: false,
+    initialType: 'video',
+    initialSelection: { id: 'wp-rapid-init', videoUrl: 'rapid.mp4', posterUrl: 'rapid.webp' }
+  });
+
+  const { videos } = env;
+
+  // Toggle hide/show rapidly during early initialization
+  for (let i = 0; i < 5; i++) {
+    env.setDocumentHidden(true);
+    await new Promise((r) => setTimeout(r, 5));
+    env.setDocumentHidden(false);
+    await new Promise((r) => setTimeout(r, 5));
+  }
+
+  // Allow final visible state to settle
+  await new Promise((r) => setTimeout(r, 60));
+
+  const activeVideos = videos.filter((v) => v.classList.contains('is-active'));
+  assert.equal(activeVideos.length, 1, 'Exactly one active video in DOM after rapid hide/show cycles');
+  assert.equal(activeVideos[0].paused, false, 'The single active video must be playing');
+});
+
+test('20. Selection or Performance Mode changes while loading is pending', async () => {
+  // Part A: Selection change while loading is pending
+  const envA = createWallpaperVisibilityEnvironment({
+    initialHidden: false,
+    initialType: 'video',
+    initialSelection: { id: 'wp-first', videoUrl: 'first.mp4', posterUrl: 'first.webp' },
+    useControlledTimers: true
+  });
+
+  // Immediately apply a second selection while first is pending
+  envA.context.applyWallpaperByType(
+    { id: 'wp-second', videoUrl: 'second.mp4', posterUrl: 'second.webp' },
+    'video'
+  );
+
+  await envA.flushMicrotasks();
+  envA.advanceTimers(20);
+  await envA.flushMicrotasks();
+
+  // Current selection in controller must be wp-second, and wp-first must not play
+  assert.equal(
+    envA.context.HomebaseWallpaperController.getCurrentWallpaperSelection().id,
+    'wp-second',
+    'Current wallpaper selection should be wp-second'
+  );
+
+  // Part B: Performance Mode enabled while loading is pending
+  const envB = createWallpaperVisibilityEnvironment({
+    initialHidden: false,
+    initialType: 'video',
+    initialSelection: { id: 'wp-perf-pending', videoUrl: 'perf.mp4', posterUrl: 'perf.webp' },
+    useControlledTimers: true
+  });
+
+  // Turn ON Performance Mode immediately
+  envB.setPerformanceMode(true);
+  await envB.flushMicrotasks();
+  envB.advanceTimers(20);
+  await envB.flushMicrotasks();
+
+  // All videos must be paused with 0 play calls
+  envB.videos.forEach((v, idx) => {
+    assert.equal(v.paused, true, `Video ${idx} must stay paused in Performance Mode`);
+    assert.equal(v.playCalls, 0, `Video ${idx} must have 0 play calls in Performance Mode`);
+  });
+});
+
+test('21. No duplicate playback setup after resuming', async () => {
+  const env = createWallpaperVisibilityEnvironment({
+    initialHidden: false,
+    initialType: 'video',
+    initialSelection: { id: 'wp-no-dup', videoUrl: 'nodup.mp4', posterUrl: 'nodup.webp' }
+  });
+
+  const { videos } = env;
+  await new Promise((r) => setTimeout(r, 40));
+
+  const activeVideo = videos.find((v) => v.classList.contains('is-active'));
+  assert.ok(activeVideo, 'Initial active video exists');
+  const basePlayCalls = activeVideo.playCalls;
+
+  // Transition to hidden
+  env.setDocumentHidden(true);
+  assert.equal(activeVideo.paused, true, 'Active video paused on hide');
+
+  // Resume to visible
+  env.setDocumentHidden(false);
+  await new Promise((r) => setTimeout(r, 30));
+
+  // Assert: activeVideo.play() called exactly once on resume
+  assert.equal(activeVideo.playCalls, basePlayCalls + 1, 'play() called exactly once without duplicate setup');
+  assert.equal(videos.filter((v) => v.classList.contains('is-active')).length, 1, 'Still exactly one active video');
+});
+
+test('22. Explicit cancellation settles source-load operation immediately on hide without flushing animation frames', async () => {
+  const env = createWallpaperVisibilityEnvironment({
+    initialHidden: false,
+    initialType: 'video',
+    initialSelection: { id: 'wp-settle-test', videoUrl: 'settle.mp4', posterUrl: 'settle.webp' },
+    useControlledTimers: true
+  });
+
+  // Let initial setup settle
+  await env.settleInitialPlayback();
+
+  // Record initial load calls
+  const initialLoadCalls = env.videos.reduce((sum, v) => sum + v.loadCalls, 0);
+
+  let settled = false;
+  // Start a new source-load operation that requires DOM updates
+  const sourceLoadPromise = env.context.HomebaseWallpaperController.setBackgroundVideoSources('new-source.mp4', 'new-poster.webp')
+    .then(() => {
+      settled = true;
+    });
+
+  // At this point, animation frame has been scheduled but timers/frames have NOT advanced
+  assert.equal(settled, false, 'Operation must be pending before animation frames fire');
+  assert.equal(env.videos.reduce((sum, v) => sum + v.loadCalls, 0), initialLoadCalls, 'No v.load() called before rAF executes');
+
+  // Hide the document BEFORE animation frames execute.
+  // Crucially: do NOT flush or advance animation frames while hidden!
+  env.setDocumentHidden(true);
+
+  // The canceled operation must settle immediately without requiring animation frames to flush
+  await sourceLoadPromise;
+  assert.equal(settled, true, 'Canceled operation must settle immediately upon hide');
+
+  // Verify that NO video load was performed
+  assert.equal(env.videos.reduce((sum, v) => sum + v.loadCalls, 0), initialLoadCalls, 'Canceled operation must perform no video load');
+
+  // Even if animation frames or timers are later flushed after the fact, video load must STILL not occur
+  env.advanceTimers(100);
+  await env.flushMicrotasks();
+  assert.equal(env.videos.reduce((sum, v) => sum + v.loadCalls, 0), initialLoadCalls, 'Flushing later must still perform no video load for canceled operation');
+});
+
+test('23. Switching wallpaper A to B while A resume awaits source loading: A must not overwrite B state or start stale playback', async () => {
+  const env = createWallpaperVisibilityEnvironment({
+    initialHidden: false,
+    initialType: 'video',
+    initialSelection: { id: 'wp-A', videoUrl: 'video-A.mp4', posterUrl: 'poster-A.webp' },
+    useControlledTimers: true
+  });
+
+  await env.settleInitialPlayback();
+
+  // Tab becomes hidden
+  env.setDocumentHidden(true);
+
+  // Invalidate readyState on videos to guarantee A's resume requires source update
+  env.videos.forEach((v) => {
+    v.readyState = 0;
+  });
+
+  // Tab becomes visible. This starts resumeWallpaperPlaybackIfEligible() for wallpaper A.
+  // With controlled timers active, setBackgroundVideoSources() schedules rAF without firing,
+  // leaving A suspended at `await setBackgroundVideoSources(video, poster)`.
+  env.setDocumentHidden(false);
+  await env.flushMicrotasks();
+
+  // While A's resume is awaiting source loading, switch active wallpaper from A to B
+  const selectionB = { id: 'wp-B', videoUrl: 'video-B.mp4', posterUrl: 'poster-B.webp' };
+  env.context.applyWallpaperByType(selectionB, 'video');
+
+  // Advance timers so all pending scheduling completes (settles A and completes B flow)
+  env.advanceTimers(100);
+  await env.flushMicrotasks();
+  env.advanceTimers(100);
+  await env.flushMicrotasks();
+
+  // Verify that current selection is B
+  const currentSel = env.context.HomebaseWallpaperController.getCurrentWallpaperSelection();
+  assert.equal(currentSel.id, 'wp-B', 'Current selection must remain B');
+
+  // Verify that lastAppliedWallpaper was NOT overwritten by A
+  const lastApplied = env.context.HomebaseWallpaperController.getLastAppliedWallpaper();
+  assert.equal(lastApplied.id, 'wp-B', 'lastAppliedWallpaper must be B, not overwritten by A');
+  assert.equal(lastApplied.video, 'video-B.mp4', 'lastAppliedWallpaper video must be B');
+
+  // Verify that no video in DOM is playing A's stale video
+  env.videos.forEach((v, idx) => {
+    const source = v.querySelector('source');
+    const src = source ? source.src : v.src;
+    if (!v.paused) {
+      assert.notEqual(src, 'video-A.mp4', `Video ${idx} must not be playing stale video A`);
+    }
+  });
+});
+
+
 
 
 
